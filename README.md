@@ -1,2 +1,133 @@
-# krzos
-Operating System for the KRZ04 Robot
+*******************************************
+KRZOS: Operating System for the KRZ04 Robot
+*******************************************
+
+**KRZOS** provides the core functionality of the *KRZ04 Robot*, a Raspberry
+Pi-based robot OS written in Python 3.
+
+* **Notice**
+    As of 2025-08-30 the KRZ04 project has been retired, with development
+    now focused on its successor, the KRZ04. This repository was previous
+    named "krzos" but has been renamed "krz03-os", with the KRZ04 taking
+    over the krzos repository name.
+
+
+.. figure:: https://service.robots.org.nz/wiki/attach/KRZ04/krz04-model.png
+   :width: 1200px
+   :align: center
+   :alt: A 3D model of the KRZ04 Robot
+
+   The 3D model of the KRZ04 Robot, used to plan the hardware build.
+
+|
+
+Background
+**********
+
+The *KRZOS* library provides essential support designed as the basis of a
+`Behaviour-Based Robot (BBR) <https://en.wikipedia.org/wiki/Behavior-based_robotics>`_.
+This library is relatively "low-level" and, in theory, could be used for any Python 3
+based robot.
+
+
+Functional Description
+**********************
+
+The basic function is for sensors or other data sources to act as "Publishers" in a
+"Publish-Subscribe" model, firing messages onto an asynchronous message bus. Messages
+contain an Event type and a data payload. Subscribers to the message bus can filter
+which event types they are interested in. The flow of messages are thus filtered
+by the Subscribers, who pass on to an Arbitrator messages they have consumed. Once all
+Subscribers have acknowledged a message it is passed to a Garbage Collector (a specialised
+Subscriber).
+
+Subscribers can themselves act upon received messages, though generally these types of
+reactions are typically reflected as direct outputs such as lighting and sound effects,
+or used to monitor sensor thresholds, which upon reaching may themselves publish messages
+to that effect, such as low battery warnings, or high-priority bumper events.
+
+The robot's movement is not controlled by Subscribers but by higher-level Behaviours,
+which are all Subscribers and sometimes even Publishers. Some Behaviours are characterised
+as "servo", meaning they may execute continually (when active) and their effect on the
+robot may be intermixed with other Behaviours. Some Behaviours are "ballistic", meaning
+they take over the complete function of the robot during the duration of their activity,
+like a human reflex action, a hand touching a hot stove.
+
+For example, a Roam (servo) Behaviour may be running, with the robot moving freely across
+the landscape. It subscribes to a DistanceSensorsPublisher which publishes proximity and
+bumper events, and also monitors a MotorControllerPublisher for motor change events. If
+Roam receives a message either indicating a bumper has been triggered or the motors have
+stopped (due to being too close to an obstacle), Roam is suppressed and an Avoid (ballistic)
+Behaviour is released. The robot will begin whatever the Avoid Behaviour entails, perhaps
+stopping, backing up while turning clockwise, then suppressing itself and releasing Roam
+to proceed again on a new trajectory.
+
+
+Software Features
+*****************
+
+* message and event handling
+* an asynchronous message bus that forms the basis of a `Subsumption Architecture <https://en.wikipedia.org/wiki/Subsumption_architecture>`_ [#f1]_, with an "exactly-once' message delivery guarantee
+* YAML-based configuration
+* timestamped, multi-level, colorised [#f2]_ logging
+* written in Python 3 (currently 3.11.2)
+
+.. [#f1] Uses finite state machines, an asynchronous message bus, an arbitrator and controller for task prioritisation.
+.. [#f2] Colorised console output tested only on Unix/Linux operating systems.
+
+
+Hardware Features
+*****************
+
+.. figure:: https://service.robots.org.nz/wiki/attach/KRZ04/krz04-initial.jpg
+   :width: 1200px
+   :align: center
+   :alt: The KRZ04 Robot
+
+   The KRZ04 Robot on its first day.
+
+TBD.
+
+
+Requirements
+************
+
+This library requires Python 3.8.5 or newer. It's currently being written using
+Python 3.11.2. Some portions (modules) of the KRZOS code will only run on a
+Raspberry Pi, though KRZOS Core should function independently of the various Pi
+libraries.
+
+KRZOS requires installation of a number of dependencies (support libraries).
+There is currently no dependency management set up for this project.
+
+TBD.
+
+
+Status
+******
+
+* 2025-08-30: the KRZ03 project is retired, as development is now focused
+  on its successor, the KRZ04.
+
+* 2025-08-29: the shipment of parts from goBILDA arrives.
+
+* 2024-2025: the design begins as a 3D model in OnShape.
+
+
+Support & Liability
+*******************
+
+This project comes with no promise of support or acceptance of liability. Use at
+your own risk.
+
+
+Copyright & License
+*******************
+
+All contents (including software, documentation and images) Copyright 2020-2025
+by Murray Altheim. All rights reserved.
+
+Software and documentation are distributed under the MIT License, see LICENSE
+file included with project.
+
+
