@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+#    usage: kros.py [-h] [--docs] [--configure] [--start] [--motors] [--json] [--gamepad] [--pubs PUBS]
+#            [--subs SUBS] [--behave BEHAVE] [--config-file CONFIG_FILE] [--log] [--level LEVEL]
+#    
+#    Provides command line control of the K-Series Robot OS application.
+#    
+#    options:
+#      -h, --help            show this help message and exit
+#      --docs, -d            show the documentation message and exit
+#      --configure, -c       run configuration (included by -s)
+#      --start, -s           start kros
+#      --motors, -m          enable motors
+#      --json, -j            dump YAML configuration as JSON file
+#      --gamepad, -g         enable bluetooth gamepad control
+#      --tests, -t           execute diagnostic tests prior to starting
+#      --pubs PUBS, -P PUBS  enable publishers as identified by first character
+#      --subs SUBS, -S SUBS  enable subscribers as identified by first character
+#      --behave BEHAVE, -b BEHAVE
+#                            override behaviour configuration (1, y, yes or true, otherwise false)
+#      --config-file CONFIG_FILE, -f CONFIG_FILE
+#                            use alternative configuration file
+#      --log, -L             write log to timestamped file
+#      --level LEVEL, -l LEVEL
+#                            specify logging level 'DEBUG'|'INFO'|'WARN'|'ERROR' (default: 'INFO')
+#    
+#    This script may be executed by krosd (kros daemon) or run directly from the command line.
+#
+
+#kros.py -s -m
+kros.py -s -t
+

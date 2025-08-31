@@ -1,0 +1,113 @@
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+#       YAML configuration for K-Series Robot Operating System (KROS)
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+krosd:
+    application:                          'kros'           # the application to start via daemon ('kros')
+    toggle_pin:                              10            # Rx=8, Tx=10; the GPIO pin connected to the 'enable' toggle switch
+
+kros:
+    arguments:                                             # CLI arguments are copied here (required section)
+        nada:                             False            # nada
+    component:
+        enable_motor_controller:           True            # enable Motor 2040
+        # publishers .......................................
+        # TBD
+        # subscribers ......................................
+        # TBD
+    message_bus:
+        max_age_ms:                        20.0            # maximum age of a message before expiry
+        publish_delay_sec:                 0.05            # publishing delay loop
+        clip_event_list:                  False            # if True clip length of displayed event list
+        clip_length:                         42            # max length of displayed event list
+        loop_freq_hz:                        20            # main loop delay in hz
+        accel_decel_steps:                   50            # determines rate of acceleration/deceleration
+        coasting_steps:                     300            # determines coasting deceleration
+        braking_steps:                       60            # determines braking deceleration
+        stopping_steps:                      10            # determines stopping deceleration
+        pause:                                0.05         # delay on stepping
+        speed_scale:                          5.4          # scaling to apply to the motor's speed to match its real-world speed
+        enable_pid:                        True            # initial enable state for PID controller, otherwise direct drive
+    publisher:
+        system:
+            publish_delay_sec:               30.0          # publishing delay loop
+            current_threshold:                6.0          # alarm over current
+            battery_threshold:               10.0          # alarm under voltage
+            regulator_5v_threshold:           4.85         # alarm under voltage
+            regulator_3v3_threshold:          3.2          # alarm under voltage
+            temperature_threshold:           60.0          # alarm over temperature
+        queue:
+            loop_freq_hz:                    20            # polling loop frequency (Hz)
+    subscriber:
+        # TBD
+    hardware:
+        battery:
+            enable_battery_messaging:     False            # if True we enable low battery messages to be sent
+            enable_regulator_messaging:    True            # if True we enable low regulator messages to be sent
+            battery_channel:                  1            # AD channel for raw battery voltage
+            regulator_channel:                2            # AD channel for regulated 3V3
+            raw_battery_threshold:        11.00            # raw and 5v regulator thresholds set from known measurements:
+            low_regulator_threshold:       3.10            # low regulator threshold
+            loop_delay_sec:                  60            # sample loop delay (sec)
+        button:                                            # GPIO or IO Expander-based simple button or switch
+            i2c_address:                   0x18            # I2C address of the IO Expander (if used)
+            impl:                    'gpiozero'            # either 'gpio', 'lpgio', 'gpiod', 'ioe', 'gpiozero' or 'pigpio'
+            edge_detect:              'falling'            # either 'falling', 'rising' or 'both'
+            momentary:                     True            # button or toggle?
+            pin:                             26            # default GPIO or IO Expander pin used
+            led_pin:                         13            # GPIO pin for LED on wait()
+        devices:                                           # set of availale i2c devices
+          - address:                       0x0C
+            name:        "Digital Potentiometer"
+            required:                      True
+          - address:                       0x0F
+            name:               "Rotary Encoder"
+            required:                      True
+          - address:                       0x10
+            name:                  "PA1010D GPS"
+            required:                     False
+          - address:                       0x18
+            name:                  "IO Expander"
+            required:                     False
+          - address:                       0x1D
+            name:             "LSM303D eCompass"
+            required:                     False
+          - address:                       0x23
+            name:    "LTR-559 Light & Proximity"
+            required:                     False
+          - address:                       0x28
+            name:         "MPU9250 + BMP280 IMU"
+            required:                     False
+          - address:                       0x29
+            name:           "VL53L1X or VL53L5X"
+            required:                     False
+          - address:                       0x38
+            name:                "HT0740 Switch"
+            required:                     False
+          - address:                       0x44
+            name:                       "TinyFX"
+            required:                      True
+          - address:                       0x48
+            name:                  "ADS1015 ADC"
+            required:                      True
+          - address:                       0x49
+            name:          "AS7262 Spectrometer"
+            required:                     False
+          - address:                       0x69
+            name:                 "ICM20948 IMU"
+            required:                      True
+          - address:                       0x74
+            name:     "Starboard 5x5 RGB Matrix"
+            required:                      True
+          - address:                       0x75
+            name:        "Starboard 11x7 Matrix"
+            required:                     False
+          - address:                       0x77
+            name:          "Port 5x5 RGB Matrix"
+            required:                      True
+
+#EOF

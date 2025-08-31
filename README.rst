@@ -100,7 +100,25 @@ libraries.
 KRZOS requires installation of a number of dependencies (support libraries).
 There is currently no dependency management set up for this project.
 
-TBD.
+
+First::
+
+  sudo apt install python3-pip
+
+then:
+
+* sphinx:       https://www.sphinx-doc.org/en/master/index.html
+    with:         sudo apt-get install python3-sphinx
+* pytest:       https://docs.pytest.org/en/stable/getting-started.html
+    with:         sudo apt install python3-pytest
+* numpy:        https://numpy.org/
+    with:         sudo apt install python3-numpy
+* psutil:       https://pypi.org/project/psutil/
+    with:         sudo apt install python3-psutil
+* pyyaml:       https://pypi.org/project/PyYAML/
+    with:         sudo apt install python3-yaml
+* colorama:     https://pypi.org/project/colorama/
+    with:         sudo apt install python3-colorama
 
 
 Status
