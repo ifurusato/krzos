@@ -152,6 +152,7 @@ class VL53L0X:
             self._i2c.open(bus=self._i2c_bus)
             self._configure_i2c_library_functions()
             self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
+            return True # added to force wait for value
         else:
             raise Exception('no ToF library available.')
 
@@ -204,7 +205,7 @@ class VL53L0X:
 
     def stop_ranging(self):
         """Stop VL53L0X ToF Sensor Ranging"""
-        self._log.info('⛔ stop ranging sensor at 0x{:02X}…'.format(self._i2c_address))
+        self._log.info('stop ranging sensor at 0x{:02X}…'.format(self._i2c_address))
         self._tof_library.stopRanging(self._dev)
 
     def get_distance(self):

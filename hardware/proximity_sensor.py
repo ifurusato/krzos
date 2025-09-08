@@ -83,6 +83,13 @@ class ProximitySensor(object):
         return self._i2c_address
 
     @property
+    def xshut_pin(self):
+        '''
+        Returns the sensor's configured XSHUT pin.
+        '''
+        return self._xshut_pin
+
+    @property
     def enabled(self):
         '''
         Returns whether the sensor is enabled.
@@ -119,10 +126,6 @@ class ProximitySensor(object):
         GPIO.output(self._xshut_pin, GPIO.HIGH)
         time.sleep(self._startup_delay_s)
 
-    def _shutdown(self):
-        self._log.info('sensor {} ({}) shutting down.'.format(self._label, self._id))
-        GPIO.output(self._xshut_pin, GPIO.LOW)
-
     def get_distance(self):
         '''
         Retrieves the distance reading from the sensor.
@@ -146,18 +149,33 @@ class ProximitySensor(object):
         Opens the sensor's ranging object.
         '''
         self._log.info(Fore.MAGENTA + 'opening sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
-        self._tof.open()
+        _ = self._tof.open()
+
+    def _shutdown(self):
+        self._log.info('sensor {} ({}) shutting down.'.format(self._label, self._id))
+        GPIO.output(self._xshut_pin, GPIO.LOW)
 
     def stop(self):
         '''
-        Stops ranging and shuts down the sensor.
+        Stops ranging.
         '''
-        self._log.info(Fore.MAGENTA + '⛔ shutting down sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
+        self._log.info(Fore.MAGENTA + 'shutting down sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
         if self._tof:
             self._tof.stop_ranging()
-            self._log.info(Fore.MAGENTA + '⛔ stop ranging called on sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
-            self._tof.close()
-        self._shutdown()
+            self._log.info(Fore.MAGENTA + 'stop ranging called on sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
+
+    def close(self):
+        '''
+        Stops ranging and shuts down the sensor.
+        '''
+        try:
+            self.stop()
+            self._shutdown()
+            if self._tof:
+                self._tof.close()
+            self._enabled = False
+        except Exception as e:
+            self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._label, self._i2c_address, e))
 
     def __str__(self):
         return "Sensor(id={}, label={}, i2c_address=0x{:02X}, xshut_pin={}, enabled={})".format(

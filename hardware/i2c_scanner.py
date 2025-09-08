@@ -125,6 +125,9 @@ class I2CScanner:
 #                               self._log.warning('{0} on address {1}'.format(e, hex(address)))
                         except Exception as e: # exception if read_byte fails
                             self._log.error('{0} error on address {1}'.format(e, hex(address)))
+                        finally:
+                            if _bus:
+                                _bus.close()
                 self._log.info('scanning complete.')
             except ImportError:
                 self._log.warning('import error, unable to initialise: this script requires smbus2. Scan will return an empty result.')

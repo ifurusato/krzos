@@ -10,6 +10,8 @@
 # modified: 2025-09-08
 #
 
+import threading
+import asyncio
 import time
 import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
@@ -19,7 +21,10 @@ from core.logger import Logger, Level
 from hardware.i2c_scanner import I2CScanner
 from hardware.proximity_sensor import ProximitySensor
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class Radiozoa(object):
+    SENSOR_COUNT = 8
+    POLL_INTERVAL_S = 0.05  # 50ms
     '''
     Manages an array of VL53L0X proximity sensors as implemented on the Radiozoa board.
     '''
@@ -38,8 +43,27 @@ class Radiozoa(object):
         self._cfg_devices = self._cfg_vl53l0x.get('devices')
         self._active_sensors = []
         self._enabled = False
+        self._closing = False
+        self._closed  = False
         self._disable_delay_s = 0.5
+        self._callback: Optional[Callable[[List[Optional[int]]], None]] = None
+        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # internal state for distance readings, always length 8.
+        self._distances = [None for _ in range(self.SENSOR_COUNT)]
+        self._distances_lock = threading.Lock()
+        # asyncio polling members
+        self._polling_thread = None
+        self._polling_loop = None
+        self._polling_task = None
+        self._polling_stop_event = threading.Event()
         self._log.info('ready.')
+
+    def set_callback(self, callback=None):
+        '''
+        Registers a callback to be called after every polling cycle.
+        The callback receives the latest distances list as its only argument.
+        '''
+        self._callback = callback
 
     def enable(self):
         if self._enabled:
@@ -48,26 +72,100 @@ class Radiozoa(object):
             self.disable_all_sensors()
             self._enabled = self._setup()
 
+    def _start_polling(self):
+        '''
+        Starts the background polling thread and asyncio event loop.
+        '''
+        self._polling_stop_event.clear()
+        def run_loop():
+            self._polling_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._polling_loop)
+            self._polling_task = self._polling_loop.create_task(self._poll_sensors())
+            try:
+                self._polling_loop.run_forever()
+            finally:
+                self._polling_loop.close()
+        self._polling_thread = threading.Thread(target=run_loop, daemon=True)
+        self._polling_thread.start()
+        self._log.info('background polling started.')
+
+    async def _poll_sensors(self):
+        '''
+        Coroutine to poll all sensors at regular intervals and update the internal distances list.
+        '''
+        while not self._polling_stop_event.is_set():
+            distances = [None for _ in range(self.SENSOR_COUNT)]
+            # Map sensors to their config order
+            sorted_keys = sorted(self._cfg_devices.keys())
+            sensor_map = {sensor.id: sensor for sensor in self._active_sensors}
+            for idx, sensor_id in enumerate(sorted_keys):
+                sensor_config = self._cfg_devices[sensor_id]
+                enabled = sensor_config.get('enabled', False)
+                sensor = sensor_map.get(sensor_id)
+                if enabled and sensor is not None and sensor.enabled:
+                    try:
+                        distance = sensor.get_distance()
+                        distances[idx] = distance
+                    except Exception as e:
+                        self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.local, e))
+                        distances[idx] = None
+                else:
+                    distances[idx] = None
+            with self._distances_lock:
+                self._distances = distances
+            # execute user callback
+            if self._callback:
+                try:
+                    self._callback(list(distances))
+                except Exception as e:
+                    self._log.warning(f"Callback raised {type(e).__name__}: {e}")
+            await asyncio.sleep(self.POLL_INTERVAL_S)
+
+    def get_distances(self, cardinals=None):
+        '''
+        Returns the latest distance readings for the specified cardinal directions, or all eight
+        if no argument.
+
+        Args:
+            cardinals (list of Cardinal, optional): List of Cardinal enum values to select readings.
+                                                   If None, returns all eight sensor readings.
+        Returns:
+            list: List of distances (or None for disabled/unavailable sensors), order matches argument.
+        '''
+        with self._distances_lock:
+            if cardinals is None:
+                # Return all eight distances
+                return list(self._distances)
+            else:
+                # Return only those specified by Cardinal enum values, in argument order
+                indices = [c.value[0] for c in cardinals]
+                return [self._distances[i] if 0 <= i < self.SENSOR_COUNT else None for i in indices]
+
     def disable_all_sensors(self):
-        """
-        Sets all XSHUT pins low to disable all VL53L0X devices.
-        """
+        '''
+        Disable all VL53L0X devices.
+        '''
+        _i2c_addresses = {}
+        for sensor in self._active_sensors:
+            self._log.debug('closing sensor {}…'.format(sensor.label))
+            sensor.close()
+            _i2c_addresses[sensor.i2c_address] = sensor.xshut_pin
+        _='''
         self._log.info('Disabling all VL53L0X sensors (setting XSHUT pins LOW)...')
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         # iterate through all devices in config, regardless of 'enabled'
-        _i2c_addresses = {}
         for sensor_config in self._cfg_devices.values():
             label = sensor_config.get('label')
             xshut_pin = sensor_config.get('xshut')
             i2c_address = sensor_config.get('i2c_address')
-            _i2c_addresses[i2c_address] = xshut_pin
             if xshut_pin is None:
                 raise Exception('no XSHUT pin configured for sensor {}.'.format(label))
             GPIO.setup(xshut_pin, GPIO.OUT)
             GPIO.output(xshut_pin, GPIO.LOW)
             self._log.info(Style.DIM + "disable sensor {} via XSHUT pin {}".format(label, xshut_pin))
         time.sleep(1.0) # wait to ensure sensors shut down
+        '''
         self._confirm_clean_bus(_i2c_addresses)
 
     def _confirm_clean_bus(self, i2c_addresses):
@@ -126,6 +224,8 @@ class Radiozoa(object):
                             _label, _sensor_id, _i2c_address, _xshut))
             self._log.info('sensors ready.')
 #           self.print_configuration()
+            if self._enabled:
+                self._start_polling()
             return True
         except Exception as e:
             self._log.error('{} raised setting up sensors: {}'.format(type(e).__name__, e))
@@ -160,35 +260,47 @@ class Radiozoa(object):
                 self._log.debug('start ranging sensor {}…'.format(sensor.id))
                 sensor.start_ranging()
 
-    def get_all_distances(self):
-        '''
-        Retrieves the distance from all active sensors.
-
-        Returns:
-            list: A list of dictionaries with sensor_id and distance.
-        '''
-#       self._log.debug('get all distances from {} active sensors…'.format(len(self._active_sensors)))
-        distances = []
-        for sensor in self._active_sensors:
-            distances.append({
-                'id': sensor.id,
-                'label': sensor.label,
-                'distance': sensor.get_distance()
-            })
-        return distances
-
     def _stop_ranging(self):
         '''
         Stops ranging and shuts down all active sensors.
         '''
-        self._log.info('⛔ stop ranging…')
+        self._log.info('stop ranging…')
         for sensor in self._active_sensors:
             sensor.stop()
 
+    def _stop_polling(self):
+        '''
+        Stops the polling thread and asyncio loop.
+        '''
+        self._polling_stop_event.set()
+        if self._polling_loop:
+            self._polling_loop.call_soon_threadsafe(self._polling_loop.stop)
+        if self._polling_thread:
+            self._polling_thread.join(timeout=2)
+        self._polling_thread = None
+        self._polling_loop   = None
+        self._polling_task   = None
+        self._log.info('background polling stopped.')
+
     def close(self):
-        self._log.info('closing…')
-        self._stop_ranging()
-        self.disable_all_sensors()
-        self._log.info('closed.')
+        if self._closing:
+            self._log.warning('already closing…')
+        elif self._closed:
+            self._log.warning('already closed.')
+        else:
+            self._closing = True
+            self._log.info('closing…')
+            try:
+                self._stop_ranging()
+                self._stop_polling()
+                self.disable_all_sensors()
+                GPIO.cleanup()
+                self._closed = True
+                self._log.info('closed.')
+            except Exception as e:
+                self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.local, e))
+            finally:
+                if not self._closed:
+                    self._log.warning('did not close properly, left in ambiguous state.')
 
 #EOF

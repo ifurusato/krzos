@@ -10,6 +10,7 @@
 # modified: 2025-09-08
 #
 
+import signal
 import time
 from colorama import Fore, Style
 
@@ -18,6 +19,63 @@ from core.config_loader import ConfigLoader
 from hardware.radiozoa import Radiozoa
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+from colorama import Fore, Style
+
+# thresholds in millimeters
+CLOSE_THRESHOLD = 100
+NEAR_THRESHOLD  = 200
+MID_THRESHOLD   = 600
+FAR_THRESHOLD   = 1000
+# Out of range: >= FAR_THRESH or None/<=0
+
+def color_for_distance(dist):
+    match dist:
+        case d if d is None or d <= 0:
+            return Fore.BLACK
+        case d if d < CLOSE_THRESHOLD:
+            return Fore.MAGENTA
+        case d if d < NEAR_THRESHOLD:
+            return Fore.RED
+        case d if d < MID_THRESHOLD:
+            return Fore.YELLOW
+        case d if d < FAR_THRESHOLD:
+            return Fore.GREEN
+        case _:
+            return Fore.BLACK
+
+def print_distances(distances):
+    '''
+    Callback to print distance values from all eight sensors, with colorized output
+    based on thresholds for "close", "near", "mid", "far" and "out of range".
+    '''
+    msg = "["
+    for i, dist in enumerate(distances):
+        color = color_for_distance(dist)
+        if dist is not None and dist > 0:
+            msg += f" {color}{dist:>4}mm{Style.RESET_ALL}"
+        else:
+            msg += f" {color}None{Style.RESET_ALL}"
+        if i < len(distances)-1:
+            msg += ","
+    msg += " ]"
+    print(msg)
+
+def print_distances_simple(distances):
+    '''
+    Callback to print distance values from all eight sensors.
+    '''
+    msg = "["
+    for i, dist in enumerate(distances):
+        if dist is not None and dist > 0:
+            msg += " {:>4}mm".format(dist)
+        else:
+            msg += "  None"
+        if i < len(distances)-1:
+            msg += ","
+    msg += " ]"
+    print(msg)
+
 def main():
     '''
     Main function to demonstrate the Radiozoa class.
@@ -35,31 +93,22 @@ def main():
         _log.info('instantiating sensor array…')
         radiozoa = Radiozoa(config)
         radiozoa.enable()
-        _log.info('setting up sensor array…')
         if radiozoa.enabled:
             _log.info('start ranging…')
             radiozoa.start_ranging()
+            radiozoa.set_callback(print_distances)
         else:
             raise Exception("unable to start ranging due to startup errors.")
-        if radiozoa._active_sensors:
-            timing = radiozoa._active_sensors[0].tof.get_timing()
-            if timing < 20000:
-                timing = 20000
-            _log.info("timing {} ms".format(timing/1000))
-            for count in range(1, RANGE):
-                distances = radiozoa.get_all_distances()
-                for reading in distances:
-                    sensor_id = reading.get('id')
-                    label     = reading.get('label')
-                    distance  = reading.get('distance')
-                    if distance > 0:
-                        _log.info("[{:04d}] sensor {} ({})\t {}mm, {}cm".format(count, label, sensor_id, distance, (distance / 10)))
-                    else:
-                        _log.warning("[{:04d}] sensor {} ({})\t error".format(count, label, sensor_id))
-                    if not enabled:
-                        break
-                time.sleep(timing / 1000000.00)
-                
+
+        _log.info(Fore.GREEN + 'Radiozoa enabled; waiting for sensor callbacks (Ctrl-C to exit)…')
+        # keep alive with signal.pause() if available
+        try:
+            signal.pause()
+        except AttributeError:
+            # signal.pause() is not available on Windows; fallback to sleep loop
+            while True:
+                time.sleep(1)
+
     except KeyboardInterrupt:
         _log.info('Ctrl-C caught, exiting…')
         enabled = False

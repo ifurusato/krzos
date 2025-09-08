@@ -7,7 +7,7 @@ kros:
       devices:
         '0':
           label:      'N0'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x50
           xshut:       21    # grey:red
         '1':
