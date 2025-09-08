@@ -1,0 +1,47 @@
+# configuration for the VL53L0X Proximity Sensor Array
+
+kros:
+  hardware:
+    vl53l0x:
+      i2c_bus_number: 0  # use alternate I2C bus 0
+      devices:
+        '0':
+          label:      'N0'
+          enabled:     False
+          i2c_address: 0x50
+          xshut:       21    # grey:red
+        '1':
+          label:      'NE1'
+          enabled:     True
+          i2c_address: 0x51
+          xshut:       26    # white:red
+        '2':
+          label:      'E2'
+          enabled:     True
+          i2c_address: 0x52
+          xshut:       20    # grey:green
+        '3':
+          label:      'SE3'
+          enabled:     True
+          i2c_address: 0x53
+          xshut:       19    # white:green
+        '4':
+          label:      'S4'
+          enabled:     True
+          i2c_address: 0x54
+          xshut:       16    # grey:blue
+        '5':
+          label:      'SW5'
+          enabled:     True
+          i2c_address: 0x55
+          xshut:       6    # white:blue
+        '6':
+          label:      'W6'
+          enabled:     True
+          i2c_address: 0x56
+          xshut:       12    # grey:grey
+        '7':
+          label:      'NW7'
+          enabled:     True
+          i2c_address: 0x57
+          xshut:       5    # white:white

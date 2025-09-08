@@ -109,6 +109,7 @@ then:
 
 * sphinx:       https://www.sphinx-doc.org/en/master/index.html
     with:         sudo apt-get install python3-sphinx
+     and:         sudo pip3 install sphinx_rtd_theme --break-system-packages
 * pytest:       https://docs.pytest.org/en/stable/getting-started.html
     with:         sudo apt install python3-pytest
 * numpy:        https://numpy.org/
@@ -119,6 +120,19 @@ then:
     with:         sudo apt install python3-yaml
 * colorama:     https://pypi.org/project/colorama/
     with:         sudo apt install python3-colorama
+
+The Radiozoa board contains eight VL53L0X sensors. This can be connected to the
+default I2C bus 1, or configured to operate on the alternate I2C bus 0 (which is
+the configuration choice set in config.yaml).
+
+In order to enable I2C bus 0 you must add the following to /boot/firmware/config.txt::
+
+    dtparam=i2c_vc=on
+
+This line enables I2C bus 0, which by default uses GPIO 0 (SDA) and GPIO 1 (SCL).
+Note that if you are using any HAT with an EEPROM, such as a Raspberry Pi Sense HAT,
+I2C bus 0 is not available. But because this project uses a lot of GPIO pins required
+by the Sense HAT, they cannot be used together in any case.
 
 
 Status
