@@ -342,7 +342,10 @@ class MessageBus(Component):
         _subscribers = self.subscribers
         self._log.info('starting {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         for _subscriber in _subscribers.values():
-            _subscriber.start()
+            if isinstance(_subscriber, Subscriber):
+                _subscriber.start()
+            else:
+                self._log.warning('unable to start non-subscriber: {}; value: {}'.format(type(_subscriber), _subscriber))
         self._log.info('starting consume loop with {:d} subscriber{}…'.format(
                 len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         self._log.info('start callbacks…')
@@ -368,9 +371,12 @@ class MessageBus(Component):
         _publishers = self.publishers
         self._log.info('enabling {:d} publisher{}…'.format(len(_publishers), '' if len(_publishers) == 1 else 's'))
         for _publisher in _publishers:
-            _publisher.start()
-            if not _publisher.enabled:
-                _publisher.enable()
+            if isinstance(_publisher, Publisher):
+                _publisher.start()
+                if not _publisher.enabled:
+                    _publisher.enable()
+            else:
+                self._log.warning('unable to start non-publisher: {}; value: {}'.format(type(_publisher), _publisher))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_system_status(self):

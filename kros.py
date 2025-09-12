@@ -47,6 +47,9 @@ from core.publisher import Publisher
 from core.queue_publisher import QueuePublisher
 #from hardware.system_publisher import SystemPublisher
 
+from hardware.sound import Sound
+from hardware.player import Player
+
 from core.subscriber import Subscriber, GarbageCollector
 #from hardware.system_subscriber import SystemSubscriber
 from hardware.system import System
@@ -86,10 +89,10 @@ class KROS(Component, FiniteStateMachine):
         self._component_registry          = None
         self._controller                  = None
         self._message_bus                 = None
-#       self._system_publisher            = None
-#       self._system_subscriber           = None
+        self._system_publisher            = None
+        self._system_subscriber           = None
 #       self._task_selector               = None
-#       self._tinyfx                      = None
+        self._tinyfx                      = None
         self._pushbutton                  = None
         self._eyeballs                    = None
         self._killswitch                  = None
@@ -160,12 +163,36 @@ class KROS(Component, FiniteStateMachine):
         self._component_registry = Component.get_registry()
         if self._component_registry is None:
             raise ValueError('no component registry available.')
+        _cfg = self._config['kros'].get('component')
 
         # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         # create subscribers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         # create publishers  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
+        if _enable_tinyfx_controller:
+            if not _i2c_scanner.has_hex_address(['0x44']):
+                raise Exception('tinyfx not available on I2C bus.')
+        
+            from hardware.tinyfx_controller import TinyFxController
+        
+            self._log.info('configure tinyfx controller…')
+            print('creating TinyFX...')
+            self._tinyfx = TinyFxController(self._config)
+            self._tinyfx.enable()
+            self._log.info('instantiate sound player…')
+#           Player.instance(self._tinyfx)
+
+        # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher') or 'g' in _pubs:
+            from gamepad.gamepad_publisher import GamepadPublisher
+            from gamepad.gamepad_controller import GamepadController
+
+            self._gamepad_publisher = GamepadPublisher(self._config, self._message_bus, self._message_factory, exit_on_complete=True, level=self._level)
+#           self._gamepad_controller = GamepadController(self._message_bus, self._level)
 
         # GPIO 21 is reserved for krosd
 
@@ -213,16 +240,18 @@ class KROS(Component, FiniteStateMachine):
 #           self._log.info('enabling system subscriber…')
 #           self._system_subscriber.enable()
 
-#       if self._tinyfx: # turn on running lights
-#           _cfg = self._config.get('kros').get('hardware').get('tinyfx-controller')
-#           _enable_mast_light = _cfg.get('enable_mast_light')
-#           if _enable_mast_light:
-#               self._tinyfx.channel_on(Orientation.MAST)
-#           _enable_nav_light = _cfg.get('enable_nav_lights')
-#           if _enable_nav_light:
-#               self._tinyfx.channel_on(Orientation.PORT)
-#               time.sleep(0.1)
-#               self._tinyfx.channel_on(Orientation.STBD)
+        if self._tinyfx: # turn on running lights
+            if not self._tinyfx.enabled:
+                self._tinyfx.enable()
+            _cfg = self._config.get('kros').get('hardware').get('tinyfx-controller')
+            _enable_mast_light = _cfg.get('enable_mast_light')
+            if _enable_mast_light:
+                self._tinyfx.channel_on(Orientation.MAST)
+            _enable_nav_light = _cfg.get('enable_nav_lights')
+            if _enable_nav_light:
+                self._tinyfx.channel_on(Orientation.PORT)
+                time.sleep(0.1)
+                self._tinyfx.channel_on(Orientation.STBD)
 
 #       PigpiodUtility.ensure_pigpiod_is_running()
 
@@ -238,9 +267,10 @@ class KROS(Component, FiniteStateMachine):
         # print registry of components
         self._component_registry.print_registry()
 
-#       if self._tinyfx:
-#           # instantiate singleton with existing TinyFX
+        if self._tinyfx:
+            # instantiate singleton with existing TinyFX
 #           Player.play(Sound.BEEP)
+            self._tinyfx.play('beep')
 
         # ════════════════════════════════════════════════════════════════════
         # now in main application loop until quit or Ctrl-C…
@@ -339,6 +369,9 @@ class KROS(Component, FiniteStateMachine):
             try:
                 self._log.info('closing…')
                 self._closing = True
+
+                if self._tinyfx:
+                    self._tinyfx.off()
 
                 self._log.info('closing subscribers and publishers…')
                 # closes all components that are not a publisher, subscriber, the message bus or kros itself…

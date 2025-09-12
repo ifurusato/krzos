@@ -9,7 +9,10 @@
 # created:  2025-09-07
 # modified: 2025-09-07
 #
-# as a modification of:
+# As a modification of the library by John Bryan Moore. This adds our own
+# Logger, and doesn't manage smbus itself, instead passing the instance into
+# the constructor, enabling better management of multiple instances.
+#
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # MIT License
 #
@@ -35,20 +38,22 @@
 
 import os
 from ctypes import CDLL, CFUNCTYPE, POINTER, c_int, c_uint, pointer, c_ubyte, c_uint8, c_uint32
-import sysconfig
-import pkg_resources
-SMBUS='smbus2'
-for dist in pkg_resources.working_set:
-    #print(dist.project_name, dist.version)
-    if dist.project_name == 'smbus':
-        break
-    if dist.project_name == 'smbus2':
-        SMBUS='smbus2'
-        break
-if SMBUS == 'smbus':
-    import smbus
-elif SMBUS == 'smbus2':
-    import smbus2 as smbus
+# import sysconfig # we use our own library
+
+# import pkg_resources
+# SMBUS='smbus2'
+# for dist in pkg_resources.working_set:
+#     #print(dist.project_name, dist.version)
+#     if dist.project_name == 'smbus':
+#         break
+#     if dist.project_name == 'smbus2':
+#         SMBUS='smbus2'
+#         break
+# if SMBUS == 'smbus':
+#     import smbus
+# elif SMBUS == 'smbus2':
+#     import smbus2 as smbus
+
 import site
 from colorama import init, Fore, Style
 init()
@@ -96,18 +101,19 @@ _I2C_WRITE_FUNC = CFUNCTYPE(c_int, c_ubyte, c_ubyte, POINTER(c_ubyte), c_ubyte)
 
 class VL53L0X:
     """VL53L0X ToF."""
-    def __init__(self, i2c_bus=1, i2c_address=0x29, tca9548a_num=255, tca9548a_addr=0):
+    def __init__(self, i2c_bus=None, i2c_address=0x29, tca9548a_num=255, tca9548a_addr=0):
         """Initialize the VL53L0X ToF Sensor from ST"""
         self._log = Logger('vl53l0x-0x{:02X}'.format(i2c_address), level=Level.INFO)
-        self._i2c_bus = i2c_bus
+#       self._i2c_bus_number = i2c_bus_number
         self._i2c_address = i2c_address
         self._log.debug('creating sensor at 0x{:02X}…'.format(i2c_address))
         self._tca9548a_num = tca9548a_num
         self._tca9548a_addr = tca9548a_addr
-        self._i2c = smbus.SMBus()
+        self._i2c_bus = i2c_bus
+#       self._i2c_bus = smbus.SMBus()
         self._dev = None
         self._tof_library = None
-        # Resgiter Address
+        # Register Address
         self.ADDR_UNIT_ID_HIGH = 0x16 # Serial number high byte
         self.ADDR_UNIT_ID_LOW = 0x17 # Serial number low byte
         self.ADDR_I2C_ID_HIGH = 0x18 # Write serial number high byte for I2C address unlock
@@ -149,7 +155,7 @@ class VL53L0X:
     def open(self):
         self._log.debug('open sensor at 0x{:02X}'.format(self._i2c_address))
         if self._tof_library:
-            self._i2c.open(bus=self._i2c_bus)
+#           self._i2c_bus.open(bus=self._i2c_bus_number)
             self._configure_i2c_library_functions()
             self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
             return True # added to force wait for value
@@ -157,7 +163,7 @@ class VL53L0X:
             raise Exception('no ToF library available.')
 
     def close(self):
-        self._i2c.close()
+#       self._i2c_bus.close()
         self._dev = None
 
     def _configure_i2c_library_functions(self):
@@ -165,11 +171,10 @@ class VL53L0X:
         def _i2c_read(address, reg, data_p, length):
             ret_val = 0
             result = []
-
             try:
-                result = self._i2c.read_i2c_block_data(address, reg, length)
+                result = self._i2c_bus.read_i2c_block_data(address, reg, length)
             except IOError as e:
-                self._log.warning('{} raised processing I2C bus callback for VL53L0X: {}'.format(type(e), e))
+#               self._log.warning('{} raised processing I2C bus callback for VL53L0X: {}'.format(type(e), e))
                 ret_val = -1
             except Exception as e:
                 raise Vl53l0xError('{} raised processing I2C bus callback for VL53L0X: {}'.format(type(e), e))
@@ -188,10 +193,9 @@ class VL53L0X:
             for index in range(length):
                 data.append(data_p[index])
             try:
-                self._i2c.write_i2c_block_data(address, reg, data)
+                self._i2c_bus.write_i2c_block_data(address, reg, data)
             except IOError:
                 ret_val = -1
-
             return ret_val
 
         # Pass i2c read/write function pointers to VL53L0X library.
@@ -263,17 +267,17 @@ class VL53L0X:
             return
         try:
             self._log.debug('changing address to 0x{:02X}…'.format(new_address))
-            self._i2c.open(bus=self._i2c_bus)
+#           self._i2c_bus.open(bus=self._i2c_bus_number)
             # read value from 0x16,0x17
-            high = self._i2c.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_HIGH)
-            low = self._i2c.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_LOW)
+            high = self._i2c_bus.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_HIGH)
+            low = self._i2c_bus.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_LOW)
             # write value to 0x18,0x19
-            self._i2c.write_byte_data(self._i2c_address, self.ADDR_I2C_ID_HIGH, high)
-            self._i2c.write_byte_data(self._i2c_address, self.ADDR_I2C_ID_LOW, low)
+            self._i2c_bus.write_byte_data(self._i2c_address, self.ADDR_I2C_ID_HIGH, high)
+            self._i2c_bus.write_byte_data(self._i2c_address, self.ADDR_I2C_ID_LOW, low)
             # write new_address to 0x1a
-            self._i2c.write_byte_data(self._i2c_address, self.ADDR_I2C_SEC_ADDR, new_address)
+            self._i2c_bus.write_byte_data(self._i2c_address, self.ADDR_I2C_SEC_ADDR, new_address)
             self._i2c_address = new_address
-            self._i2c.close()
+#           self._i2c_bus.close()
             self._log.info('address changed to 0x{:02X}'.format(new_address))
         except Exception as e:
             self._log.error('{} raised changing address: {}'.format(type(e), e))

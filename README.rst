@@ -100,7 +100,6 @@ libraries.
 KRZOS requires installation of a number of dependencies (support libraries).
 There is currently no dependency management set up for this project.
 
-
 First::
 
   sudo apt install python3-pip
@@ -134,6 +133,18 @@ Note that if you are using any HAT with an EEPROM, such as a Raspberry Pi Sense 
 I2C bus 0 is not available. But because this project uses a lot of GPIO pins required
 by the Sense HAT, they cannot be used together in any case.
 
+You can likely also disable the cups.service, avahi-daemon and other services
+to free up resources:
+
+    #!/bin/bash
+    sudo systemctl disable avahi-daemon
+    sudo systemctl mask avahi-daemon
+    sudo systemctl disable cups.service
+    sudo systemctl mask cups.service
+    sudo systemctl disable triggerhappy.service
+    sudo systemctl mask triggerhappy.service
+    sudo systemctl disable ModemManager.service
+    sudo systemctl mask ModemManager.service
 
 Status
 ******

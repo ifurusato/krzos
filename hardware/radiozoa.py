@@ -10,6 +10,7 @@
 # modified: 2025-09-08
 #
 
+import sys
 import threading
 import asyncio
 import time
@@ -17,14 +18,29 @@ import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
 init()
 
+# import smbus ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+import pkg_resources
+SMBUS='smbus2'
+for dist in pkg_resources.working_set:
+    #print(dist.project_name, dist.version)
+    if dist.project_name == 'smbus':
+        break
+    if dist.project_name == 'smbus2':
+        SMBUS='smbus2'
+        break
+if SMBUS == 'smbus':
+    import smbus
+elif SMBUS == 'smbus2':
+    import smbus2 as smbus
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 from core.logger import Logger, Level
+from core.cardinal import Cardinal
 from hardware.i2c_scanner import I2CScanner
 from hardware.proximity_sensor import ProximitySensor
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class Radiozoa(object):
-    SENSOR_COUNT = 8
-    POLL_INTERVAL_S = 0.05  # 50ms
     '''
     Manages an array of VL53L0X proximity sensors as implemented on the Radiozoa board.
     '''
@@ -36,27 +52,78 @@ class Radiozoa(object):
             config (dict): The configuration dictionary for the sensors.
             level (Level): The logging level.
         '''
-        self._log = Logger('proximity', level=level)
+        self._log = Logger('radiozoa', level=level)
+        self._level = level
+        self._poll_interval = 0.05  # 50ms
+        # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._config = config
-        self._cfg_vl53l0x = config.get('kros').get('hardware').get('vl53l0x')
+        self._cfg_vl53l0x     = config.get('kros').get('hardware').get('vl53l0x')
+        self._cfg_devices     = self._cfg_vl53l0x.get('devices')
+        # GPIO ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
         self._i2c_bus_number = self._cfg_vl53l0x.get('i2c_bus_number')
-        self._cfg_devices = self._cfg_vl53l0x.get('devices')
-        self._active_sensors = []
+        if not isinstance(self._i2c_bus_number, int):
+            raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
+        self._i2c_bus = smbus.SMBus()
+        self._i2c_bus.open(bus=self._i2c_bus_number)
+        self._log.info(Fore.BLUE + 'I2C{} open.'.format(self._i2c_bus_number))
+        # general configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._ioe_i2c_address = '0x{:02X}'.format(self._cfg_vl53l0x.get('ioe_i2c_address'))
+        self._log.info(Fore.BLUE + 'IO Expander address: {}; type: {}'.format(self._ioe_i2c_address, type(self._ioe_i2c_address)))
+        self._default_i2c_address = '0x29' # as string
+        self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
+        self._has_default_i2c_address = self._i2c_scanner.has_hex_address([self._default_i2c_address])
+        self._has_ioe = self._i2c_scanner.has_hex_address([self._ioe_i2c_address])
+        self._ioe = None
+        if self._has_ioe:
+            try:
+                import ioexpander as io
+
+                self._log.info(Fore.BLUE + Style.BRIGHT + 'found IO Expander at {} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
+                self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
+            except Exception as e:
+                self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
+                raise
+        else:
+            self._log.info(Fore.BLUE + Style.DIM + 'did not find IO Expander at {} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
         self._enabled = False
         self._closing = False
         self._closed  = False
-        self._disable_delay_s = 0.5
-        self._callback: Optional[Callable[[List[Optional[int]]], None]] = None
-        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._callback = None
+        # a dict of Cardinal -> ProximitySensor
+        self._sensors = []
+        self._create_sensors()
+        self._sensor_count  = 8 # actually a constant
         # internal state for distance readings, always length 8.
-        self._distances = [None for _ in range(self.SENSOR_COUNT)]
+        self._distances = [None for _ in range(self._sensor_count)]
+        # asyncio support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._distances_lock = threading.Lock()
-        # asyncio polling members
-        self._polling_thread = None
-        self._polling_loop = None
-        self._polling_task = None
         self._polling_stop_event = threading.Event()
+        self._polling_thread = None
+        self._polling_loop   = None
+        self._polling_task   = None
         self._log.info('ready.')
+
+    def _create_sensors(self):
+        '''
+        Creates the list of the eight proximity sensors. Each sensor instantiates
+        initially as shut down. If enabled, upon connection it changes its I2C
+        address and then becomes active.
+        '''
+        for sensor_id, sensor_config in self._cfg_devices.items():
+            _cardinal = Cardinal.from_index(sensor_id)
+            self._log.info('creating sensor ' + Fore.GREEN + '{}'.format(_cardinal.label) + Fore.CYAN + '…')
+            proximity_sensor = ProximitySensor(
+                    cardinal    = _cardinal,
+                    i2c_bus     = self._i2c_bus,
+                    i2c_address = sensor_config.get('i2c_address'),
+                    xshut_pin   = sensor_config.get('xshut'),
+                    ioe         = self._ioe,
+                    enabled     = sensor_config.get('enabled'),
+                    level       = self._level
+            )
+            self._sensors.append(proximity_sensor)
 
     def set_callback(self, callback=None):
         '''
@@ -66,16 +133,32 @@ class Radiozoa(object):
         self._callback = callback
 
     def enable(self):
+        '''
+        Connects with all enabled sensors. If any device shows up at 0x29 this
+        first shuts down all sensors so that they may be brought up individually
+        and their respective I2C addresses changed.
+        If all sensors are successfully connected, sets the enabled flag True.
+        '''
         if self._enabled:
             self._log.warning('already enabled.')
         else:
-            self.disable_all_sensors()
-            self._enabled = self._setup()
+            if self._has_default_i2c_address:
+                self._log.warning('found 0x29, shutting down all sensors.')
+                if not self._disconnect_all_sensors():
+                    self._log.warning('cannot continue: unable to disconnect all sensors.')
+                    self._enabled = False
+                    return
+            else:
+                self._log.info('0x29 not found.')
+            self._enabled = self._connect()
 
     def _start_polling(self):
         '''
         Starts the background polling thread and asyncio event loop.
         '''
+        if not self._enabled:
+            self._log.warning('disabled upon startup: cannot start polling.')
+            return
         self._polling_stop_event.clear()
         def run_loop():
             self._polling_loop = asyncio.new_event_loop()
@@ -94,23 +177,17 @@ class Radiozoa(object):
         Coroutine to poll all sensors at regular intervals and update the internal distances list.
         '''
         while not self._polling_stop_event.is_set():
-            distances = [None for _ in range(self.SENSOR_COUNT)]
-            # Map sensors to their config order
-            sorted_keys = sorted(self._cfg_devices.keys())
-            sensor_map = {sensor.id: sensor for sensor in self._active_sensors}
-            for idx, sensor_id in enumerate(sorted_keys):
-                sensor_config = self._cfg_devices[sensor_id]
-                enabled = sensor_config.get('enabled', False)
-                sensor = sensor_map.get(sensor_id)
-                if enabled and sensor is not None and sensor.enabled:
+            distances = [None for _ in range(self._sensor_count)]
+            for sensor in self._sensors:
+                if sensor.enabled:
                     try:
                         distance = sensor.get_distance()
-                        distances[idx] = distance
+                        distances[sensor.id] = distance
                     except Exception as e:
-                        self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.local, e))
-                        distances[idx] = None
+                        self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.abbrev, e))
+                        distances[sensor.id] = None
                 else:
-                    distances[idx] = None
+                    distances[sensor.id] = None
             with self._distances_lock:
                 self._distances = distances
             # execute user callback
@@ -119,7 +196,7 @@ class Radiozoa(object):
                     self._callback(list(distances))
                 except Exception as e:
                     self._log.warning(f"Callback raised {type(e).__name__}: {e}")
-            await asyncio.sleep(self.POLL_INTERVAL_S)
+            await asyncio.sleep(self._poll_interval)
 
     def get_distances(self, cardinals=None):
         '''
@@ -139,97 +216,60 @@ class Radiozoa(object):
             else:
                 # Return only those specified by Cardinal enum values, in argument order
                 indices = [c.value[0] for c in cardinals]
-                return [self._distances[i] if 0 <= i < self.SENSOR_COUNT else None for i in indices]
+                return [self._distances[i] if 0 <= i < self._sensor_count else None for i in indices]
 
-    def disable_all_sensors(self):
+    def close_sensors(self):
         '''
-        Disable all VL53L0X devices.
+        Close the VL53L0X devices.
         '''
-        _i2c_addresses = {}
-        for sensor in self._active_sensors:
-            self._log.debug('closing sensor {}…'.format(sensor.label))
+        self._log.info('closing {} sensors…'.format(_remaining))
+        for sensor in self._sensors:
             sensor.close()
-            _i2c_addresses[sensor.i2c_address] = sensor.xshut_pin
-        _='''
-        self._log.info('Disabling all VL53L0X sensors (setting XSHUT pins LOW)...')
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
-        # iterate through all devices in config, regardless of 'enabled'
-        for sensor_config in self._cfg_devices.values():
-            label = sensor_config.get('label')
-            xshut_pin = sensor_config.get('xshut')
-            i2c_address = sensor_config.get('i2c_address')
-            if xshut_pin is None:
-                raise Exception('no XSHUT pin configured for sensor {}.'.format(label))
-            GPIO.setup(xshut_pin, GPIO.OUT)
-            GPIO.output(xshut_pin, GPIO.LOW)
-            self._log.info(Style.DIM + "disable sensor {} via XSHUT pin {}".format(label, xshut_pin))
-        time.sleep(1.0) # wait to ensure sensors shut down
+
+    def _connect(self):
         '''
-        self._confirm_clean_bus(_i2c_addresses)
-
-    def _confirm_clean_bus(self, i2c_addresses):
-        _i2c_scanner = I2CScanner(self._config, bus_number=self._i2c_bus_number, level=Level.INFO)
-        for i2c_address, xshut_pin in i2c_addresses.items():
-            _address_str = '0x{:02X}'.format(i2c_address)
-            self._log.info('checking device at {}…'.format(_address_str))
-            if _i2c_scanner.has_hex_address([_address_str]):
-                self._log.warning('sensor at {} still online.'.format(_address_str))
-                self._reset_xshut_pin(xshut_pin, i2c_address)
-            time.sleep(0.5)
-            if _i2c_scanner.has_hex_address([_address_str]):
-                self._log.warning('device remains at {}.'.format(_address_str))
-            else:
-                self._log.info('device clean at {}.'.format(_address_str))
-        self._log.info('all VL53L0X sensors disabled.')
-
-    def _reset_xshut_pin(self, xshut_pin, i2c_address):
-        try:
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'resetting xshut pin {} for device at 0x{:02X}.'.format(xshut_pin, i2c_address))
-            GPIO.setup(xshut_pin, GPIO.OUT)
-            GPIO.output(xshut_pin, GPIO.LOW)
-            time.sleep(0.5)
-        except Exception as e:
-            self._log.error('{} raised resetting xshut pin: {}'.format(type(e).__name__, e))
-
-    def _setup(self):
-        '''
-        Creates and enables each sensor sequentially using the ProximitySensor class.
+        Connects each enabled sensor in sequence.
 
         Returns:
             bool: True if setup was successful for all enabled sensors, False otherwise.
         '''
-        self._log.info(Fore.WHITE + 'setting up sensors…')
+        if self._enabled:
+            self._log.warning('disabled upon startup: cannot connect.')
+            return False
+        self._log.info('connecting sensors…')
         try:
-            for _sensor_id, sensor_config in self._cfg_devices.items():
-                _label       = sensor_config.get('label')
-                _i2c_address = sensor_config.get('i2c_address')
-                _xshut       = sensor_config.get('xshut')
-                _enabled     = sensor_config.get('enabled')
-                # the sensor instantiates as shut down, changes its I2C address and then becomes available if enabled
-                sensor = ProximitySensor(
-                        i2c_bus_number=self._i2c_bus_number,
-                        sensor_id=_sensor_id,
-                        label=_label,
-                        i2c_address=_i2c_address,
-                        xshut_pin=_xshut,
-                        enabled=_enabled
-                )
-                if _enabled:
-                    self._log.info('created sensor {} ({}) at I2C address 0x{:02X} with XSHUT pin {}…'.format(
-                            _label, _sensor_id, _i2c_address, _xshut))
-                    self._active_sensors.append(sensor)
-                else:
-                    self._log.info(Style.DIM + 'created disabled sensor {} ({}) at I2C address 0x{:02X} with XSHUT pin {}…'.format(
-                            _label, _sensor_id, _i2c_address, _xshut))
-            self._log.info('sensors ready.')
-#           self.print_configuration()
-            if self._enabled:
-                self._start_polling()
+            for sensor in self._sensors:
+                self._log.info('connecting sensor {} ({}) at I2C address 0x{:02X} with XSHUT pin {}…'.format(
+                        sensor.label, sensor.id, sensor.i2c_address, sensor.xshut_pin))
+                active = sensor.connect(self._i2c_scanner)
+                if not active:
+                    self._log.info(Fore.WHITE + 'sensor {} inactive.'.format(sensor.abbrev))
+            self._log.info('sensors connected and ready.')
             return True
         except Exception as e:
-            self._log.error('{} raised setting up sensors: {}'.format(type(e).__name__, e))
-            self.stop_ranging()
+            self._log.error('{} raised connecting sensors: {}'.format(type(e).__name__, e))
+            return False
+
+    def _disconnect_all_sensors(self):
+        self._log.info(Fore.WHITE + 'disconnecting sensors…')
+        for sensor in self._sensors:
+            sensor.shutdown()
+        time.sleep(1)
+        # now check to see that all sensors are offline
+        remaining = []
+        for sensor_id, sensor_config in self._cfg_devices.items():
+            cardinal = Cardinal.from_index(sensor_id)
+            i2c_address = '0x{:02X}'.format(sensor_config.get('i2c_address'))
+            self._log.info('checking availability of sensor {} at I2C address {}…'.format(cardinal.label, i2c_address) + Fore.CYAN + '…')
+            if self._i2c_scanner.has_hex_address([i2c_address]):
+                remaining.append(i2c_address)
+                self._log.warning('found sensor {} at address {}.'.format(cardinal.label, i2c_address))
+            else:
+                self._log.info('did not find sensor {} at address {}.'.format(cardinal.label, i2c_address))
+        if len(remaining) == 0:
+            return True
+        else:
+            self._log.warning('cannot continue: sensor {} still online.'.format(remaining))
             return False
 
     def print_configuration(self):
@@ -252,12 +292,25 @@ class Radiozoa(object):
         Starts the ranging process for all active sensors.
         '''
         self._log.info(Fore.GREEN + 'start ranging…')
-        if self._active_sensors:
-            for sensor in self._active_sensors:
-                self._log.debug('opening sensor {}…'.format(sensor.id))
+        for sensor in self._sensors:
+            self._log.info('opening sensor {}…'.format(sensor.abbrev))
+            if sensor.enabled:
                 sensor.open()
-            for sensor in self._active_sensors:
-                self._log.debug('start ranging sensor {}…'.format(sensor.id))
+        time.sleep(0.5)
+        self._start_polling()
+        # confirm all sensors are available and active
+        for sensor in self._sensors:
+            self._log.info('checking availability of sensor {}…'.format(sensor.abbrev))
+            if sensor.enabled:
+                if sensor.active:
+                    self._log.info('sensor {} is active.'.format(sensor.abbrev))
+                else:
+                    raise Exception('sensor {} is inactive.'.format(sensor.abbrev))
+            else:
+                self._log.info('sensor {} disabled.'.format(sensor.abbrev))
+        for sensor in self._sensors:
+            self._log.info('start ranging sensor {}…'.format(sensor.abbrev))
+            if sensor.enabled:
                 sensor.start_ranging()
 
     def _stop_ranging(self):
@@ -265,8 +318,8 @@ class Radiozoa(object):
         Stops ranging and shuts down all active sensors.
         '''
         self._log.info('stop ranging…')
-        for sensor in self._active_sensors:
-            sensor.stop()
+        for sensor in self._sensors:
+            sensor.stop_ranging()
 
     def _stop_polling(self):
         '''
@@ -283,6 +336,7 @@ class Radiozoa(object):
         self._log.info('background polling stopped.')
 
     def close(self):
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'close ……………………………………………………………………………………………………………………………………………………………………………………… ')
         if self._closing:
             self._log.warning('already closing…')
         elif self._closed:
@@ -293,14 +347,19 @@ class Radiozoa(object):
             try:
                 self._stop_ranging()
                 self._stop_polling()
-                self.disable_all_sensors()
-                GPIO.cleanup()
+#               self.close_sensors()
+
+                self._log.info(Fore.WHITE + Style.BRIGHT + 'closing smbus ……………………………………………………………………………………………………………………………………………………………………… ')
+                self._i2c_bus.close()
+
                 self._closed = True
                 self._log.info('closed.')
             except Exception as e:
-                self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.local, e))
+                self._log.error("{} raised closing radiozoa: {}".format(type(e), e))
             finally:
                 if not self._closed:
                     self._log.warning('did not close properly, left in ambiguous state.')
+                self._log.info(Fore.WHITE + Style.BRIGHT + 'GPIO cleanup ……………………………………………………………………………………………………………………………………………………………………… ')
+                GPIO.cleanup()
 
 #EOF

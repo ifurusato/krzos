@@ -9,13 +9,21 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
+from core.config_loader import ConfigLoader
+
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 __log = Logger('test-power', level=Level.INFO)
 
 @pytest.mark.unit
 def test_power():
-    IN0_MINIMUM = 11.5   # e.g., in0/ref: 11.953v
-    IN1_MINIMUM =  3.25  # e.g., in1/ref:  3.302v
-    IN2_MINIMUM =  5.0   # e.g., in2/ref:  5.028v
+
+    _config = ConfigLoader().configure('config.yaml')
+    _cfg = _config['kros'].get('hardware').get('battery')
+
+    _12v_battery_min = _cfg.get('low_12v_battery_threshold') # 11.5   e.g., in0/ref: 11.953v
+    _3v3_min = _cfg.get('low_3v3_regulator_threshold')       #  3.25  e.g., in1/ref:  3.302v
+    _5v_min  = _cfg.get('low_5v_regulator_threshold')        #  5.0   e.g., in2/ref:  5.028v
 
     __log.info("testing power supplies…")
     ads1015 = ADS1015()
@@ -35,15 +43,15 @@ def test_power():
 
         # IN0 12V battery
         value_in0 = ads1015.get_compensated_voltage(channel='in0/ref', reference_voltage=reference)
-        assert value_in0 > IN0_MINIMUM, 'measured in0 value less than threshold {}v'.format(IN0_MINIMUM)
+        assert value_in0 > _12v_battery_min, 'measured in0 value less than threshold {}v'.format(_12v_battery_min)
         __log.info("battery (in0): " + Fore.GREEN + "{:6.3f}V".format(value_in0))
 
         value_in1 = ads1015.get_compensated_voltage(channel='in1/ref', reference_voltage=reference)
-        assert value_in1 > IN1_MINIMUM, 'measured in1 value less than threshold {}v'.format(IN1_MINIMUM)
+        assert value_in1 > _3v3_min, 'measured in1 value less than threshold {}v'.format(_3v3_min)
         __log.info("3V3 reg (in1): " + Fore.GREEN + "{:6.3f}V".format(value_in1))
 
         value_in2 = ads1015.get_compensated_voltage(channel='in2/ref', reference_voltage=reference)
-        assert value_in2 > IN2_MINIMUM, 'measured in2 value less than threshold {}v'.format(IN2_MINIMUM)
+        assert value_in2 > _5v_min, 'measured in2 value less than threshold {}v'.format(_5v_min)
         __log.info("5V ref (in2):  " + Fore.GREEN + "{:6.3f}V".format(value_in2))
 
     except Exception as e:

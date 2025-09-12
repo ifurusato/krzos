@@ -76,7 +76,7 @@ class Icm20948(Component):
             self._stbd_rgbmatrix5x5 = self._rgbmatrix.get_rgbmatrix(Orientation.STBD)
         self._counter = itertools.count()
         # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _cfg = config['krzos'].get('hardware').get('icm20948')
+        _cfg = config['kros'].get('hardware').get('icm20948')
         self._verbose            = _cfg.get('verbose')
         self._adjust_trim        = _cfg.get('adjust_trim')
         self._show_console       = _cfg.get('show_console')
@@ -87,7 +87,7 @@ class Icm20948(Component):
         self._pitch_trim = _cfg.get('pitch_trim') # 0.0
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
         # use fixed heading trim value
-        self._fixed_heading_trim = _cfg.get('heading_trim')
+        self._fixed_heading_trim = _cfg.get('heading_trim') # - π
         self._log.info(Fore.GREEN + 'heading trim: {:.2f}'.format(self._fixed_heading_trim))
         self._heading_trim = self._fixed_heading_trim # initial value if adjusting
         self._digital_pot = None

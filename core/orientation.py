@@ -1,36 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2019-12-23
-# modified: 2021-04-22
+# modified: 2025-09-11
 #
-# A collection of navigation/orientation-related enums, including Orientation,
-# Rotation and Cardinal.
+# An enum for expressing different orientations.
 #
 
 from enum import Enum
-from hardware.color import Color
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Orientation(Enum):
-    NONE  = ( 0, "none",          "none")
-    PORT  = ( 1, "port",          "port")
-    CNTR  = ( 2, "center",        "cntr") # same as 'BOTH' when describing motors
-    STBD  = ( 3, "starboard",     "stbd")
-    PSID  = ( 4, "port-side",     "psid")
-    SSID  = ( 5, "stbd-side",     "ssid")
-    PAFT  = ( 6, "port-aft",      "paft")
-    SAFT  = ( 7, "starboard-aft", "saft")
-    MAST  = ( 8, "mast",          "mast")
+    NONE  = (  0, "none",          'NONE',  "none")
+    PORT  = (  1, "port",          'PORT',  "port")
+    STBD  = (  2, "starboard",     'STBD',  "stbd")
+    FWD   = (  3, "fwd",           'NONE',  "fwd")
+    AFT   = (  4, "aft",           'NONE',  "aft")
+    PSID  = (  5, "port-side",     'PORT',  "psid")
+    SSID  = (  6, "stbd-side",     'STBD',  "ssid")
+    PFWD  = (  7, "port-fwd",      'PORT',  "pfwd")
+    SFWD  = (  8, "starboard-fwd", 'STBD',  "sfwd")
+    PAFT  = (  9, "port-aft",      'PORT',  "paft")
+    SAFT  = ( 10, "starboard-aft", 'STBD',  "saft")
+    MAST  = ( 11, "mast",          'NONE',  "mast")
+    PIR   = ( 12, "pir",           'NONE',  "pir")
+    ALL   = ( 13, "all",           'NONE',  "all") # all extant orientations
 
     # ignore the first param since it's already set by __new__
-    def __init__(self, num, name, label):
-        self._name = name
+    def __init__(self, num, name, side, label):
+        self._name  = name
+        self._side  = side
         self._label = label
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -50,6 +54,19 @@ class Orientation(Enum):
         return self._label
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def side(self):
+        '''
+        Return the PORT or STBD side of this orientation, NONE if it does not apply.
+        '''
+        if self._side == 'PORT':
+            return Orientation.PORT
+        if self._side == 'STBD':
+            return Orientation.STBD
+        else:
+            return Orientation.NONE
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def from_label(label):
         '''
@@ -59,85 +76,5 @@ class Orientation(Enum):
             if label == o.label:
                 return o
         return None
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class Rotation(Enum):
-    COUNTER_CLOCKWISE = 0
-    CLOCKWISE         = 1
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class Cardinal(Enum):
-    NORTH     = ( 0, 'north' )
-    NORTHEAST = ( 1, 'north-east' )
-    EAST      = ( 2, 'east' )
-    SOUTHEAST = ( 3, 'south-east' )
-    SOUTH     = ( 4, 'south' )
-    SOUTHWEST = ( 5, 'south-west' )
-    WEST      = ( 6, 'west' )
-    NORTHWEST = ( 7, 'north-west' )
-
-    # ignore the first param since it's already set by __new__
-    def __init__(self, num, display):
-        self._display = display
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def display(self):
-        return self._display
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @staticmethod
-    def get_heading_from_degrees(degrees):
-        '''
-        Provided a heading in degrees return an enumerated cardinal direction.
-        '''
-        _value = round((degrees / 45.0) + 0.5)
-        _array = [ Cardinal.NORTH, Cardinal.NORTHEAST, Cardinal.EAST, Cardinal.SOUTHEAST, Cardinal.SOUTH, Cardinal.SOUTHWEST, Cardinal.WEST, Cardinal.NORTHWEST ]
-        return _array[(_value % 8)];
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @staticmethod
-    def get_heading_from_degrees_old(degrees):
-        '''
-        Provided a heading in degrees return an enumerated cardinal direction.
-        '''
-        if 0 <= degrees <= 67.5:
-            return Cardinal.NORTHEAST
-        elif 67.5  <= degrees <= 112.5:
-            return Cardinal.EAST
-        elif degrees > 337.25 or degrees < 22.5:
-            return Cardinal.NORTH
-        elif 292.5 <= degrees <= 337.25:
-            return Cardinal.NORTHWEST
-        elif 247.5 <= degrees <= 292.5:
-            return Cardinal.WEST
-        elif 202.5 <= degrees <= 247.5:
-            return Cardinal.SOUTHWEST
-        elif 157.5 <= degrees <= 202.5:
-            return Cardinal.SOUTH
-        elif 112.5 <= degrees <= 157.5:
-            return Cardinal.SOUTHEAST
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @staticmethod
-    def get_color_for_direction(value):
-        if value is Cardinal.NORTH:
-            return Color.BLUE
-        elif value is Cardinal.NORTHEAST:
-            return Color.MAGENTA
-        elif value is Cardinal.EAST:
-            return Color.FUCHSIA
-        elif value is Cardinal.SOUTHEAST:
-            return Color.RED
-        elif value is Cardinal.SOUTH:
-            return Color.YELLOW
-        elif value is Cardinal.SOUTHWEST:
-            return Color.GREEN
-        elif value is Cardinal.WEST:
-            return Color.LIGHT_BLUE
-        elif value is Cardinal.NORTHWEST:
-            return Color.CYAN
-        else:
-            return Color.BLACK
 
 #EOF

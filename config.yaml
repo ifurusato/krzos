@@ -16,9 +16,21 @@ kros:
     component:
         enable_motor_controller:           True            # enable Motor 2040
         # publishers .......................................
-        # TBD
+        enable_queue_publisher:            True            # publishes from globally-available queue
+#       enable_distance_publisher:         True            # enable Distance Sensors and Publisher
+        enable_system_publisher:          False            # enable System Publisher
+        enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
+#       enable_imu_publisher:             False            # enable IMU publisher
+#       enable_pir_publisher:              True            # enable PIR publisher
+#       enable_remote_ctrl_publisher:     False            # enable Remote Control Publisher
+#       enable_rtof_publisher:            False            # enable Ranging ToF publisher
+        enable_gamepad_publisher:          True            # enable gamepad support
+#       enable_killswitch:                 True            # enable toggle kill switch
+#       enable_pushbutton:                 True            # enable pushbutton
+#       enable_eyeballs  :                 True            # enable eyeballs
         # subscribers ......................................
-        # TBD
+#       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
+        enable_sound_subscriber:           True            # enable sounds for various events
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -34,12 +46,14 @@ kros:
         enable_pid:                        True            # initial enable state for PID controller, otherwise direct drive
     publisher:
         system:
-            publish_delay_sec:               30.0          # publishing delay loop
+            publish_delay_sec:                0.5          # publishing delay loop
             current_threshold:                6.0          # alarm over current
             battery_threshold:               10.0          # alarm under voltage
             regulator_5v_threshold:           4.85         # alarm under voltage
             regulator_3v3_threshold:          3.2          # alarm under voltage
             temperature_threshold:           60.0          # alarm over temperature
+        gamepad:
+            publish_delay_sec:                0.05         # publishing delay loop
         queue:
             loop_freq_hz:                    20            # polling loop frequency (Hz)
     subscriber:
@@ -50,8 +64,9 @@ kros:
             enable_regulator_messaging:    True            # if True we enable low regulator messages to be sent
             battery_channel:                  1            # AD channel for raw battery voltage
             regulator_channel:                2            # AD channel for regulated 3V3
-            raw_battery_threshold:        11.00            # raw and 5v regulator thresholds set from known measurements:
-            low_regulator_threshold:       3.10            # low regulator threshold
+            low_12v_battery_threshold:     11.5            # low 12v battery threshold
+            low_5v_regulator_threshold:    4.95            # low 5V regulator threshold
+            low_3v3_regulator_threshold:   3.25            # low 3.3V regulator threshold
             loop_delay_sec:                  60            # sample loop delay (sec)
         button:                                            # GPIO or IO Expander-based simple button or switch
             i2c_address:                   0x18            # I2C address of the IO Expander (if used)
@@ -60,6 +75,47 @@ kros:
             momentary:                     True            # button or toggle?
             pin:                             23            # default GPIO or IO Expander pin used
             led_pin:                         13            # GPIO pin for LED on wait()
+        digital_potentiometer:                             # IO Expander-based RGB Potentiometer board
+            i2c_address:                   0x0C            # I²C address for the device
+            brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
+            pin_red:                          1            # red pin
+            pin_green:                        7            # green pin
+            pin_blue:                         2            # blue pin
+        icm20948:
+            i2c_address:                   0x69            # I2C address (default 0x68)
+            poll_rate_hz:                   150            # how often the IMU is polled
+            vertical_mount:                True            # vertical like Pimoroni, or horizontal like Adafruit
+            bench_calibrate:               True            # if true, calibrate the IMU manually while on the rotating bench
+            motion_calibrate:             False            # if true, calibrate the IMU by the robot rotating in place
+            show_console:                  True            # if true, show data on console (same as verbose)
+            show_rgbmatrix5x5:             True            # if true, show heading as color
+            show_rgbmatrix11x7:            True            # if true, show heading as number
+            adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
+            pitch_trim:                    0.0             # pitch trim for level
+            roll_trim:                     4.0             # roll trim for level
+            heading_trim:                  1.55            # heading trim adjustment (in radians) to set north (was 0.15 on MR01)
+            queue_length:                   100            # length of heading data queue
+            stability_threshold:              5.0          # max standard deviation to determine stability
+            cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians)
+#           cardinal_tolerance:               0.0523599    # tolerance to cardinal points (3° in radians)
+            include_accel_gyro:            True            # if true, poll heading data
+            include_heading:               True            # if true, poll accelerometer and gyroscope data
+            play_sound:                    True            # if True, play sound to indicate calibration
+        tinyfx-controller:
+            i2c_address:                   0x44
+            bus_number:                       1
+            pin_1:                           14            # pin on the IO Expander (SCL blue)
+            pin_2:                           12            # pin on the IO Expander (SDA yellow)
+            enable_mast_light:             True            # flashing white mast light
+            enable_nav_lights:             True            # port and starboard running lights
+        player:                                            # Tiny FX sound player
+            verbose:                       True            # verbose messaging
+        gamepad:
+            enabled:                       True
+            device_path:     '/dev/input/event9'           # the path to the bluetooth gamepad on the pi (see find_gamepad.py)
+            loop_delay:                       0.01         # main loop delay was sleep(0.01) or 1/100th second, or 10ms. 50ms is the delay for 20Hz, so 10ms is 5x 20Hz or 100Hz.
+            suppress_horiz_events:         True            # ignore horizontal joystick events
+            loop_freq_hz:                   100            # polling loop frequency (Hz)
         devices:                                           # set of availale i2c devices
           - address:                       0x0C
             name:        "Digital Potentiometer"

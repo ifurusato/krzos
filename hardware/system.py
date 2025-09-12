@@ -23,10 +23,10 @@ class System:
     '''
     A collection of system control/info/statistical methods.
     '''
-    def __init__(self, krzos, level=Level.INFO):
-        global _krzos
+    def __init__(self, kros, level=Level.INFO):
+        global _kros
         self._log = Logger('system', level)
-        self._krzos = krzos
+        self._kros = kros
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -81,8 +81,8 @@ class System:
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_sys_info(self):
-        self._log.info('krzos:  state: ' + Fore.YELLOW + '{}  \t'.format(self._krzos.state.name) \
-                + Fore.CYAN + 'enabled: ' + Fore.YELLOW + '{}'.format(self._krzos.enabled))
+        self._log.info('kros:  state: ' + Fore.YELLOW + '{}  \t'.format(self._kros.state.name) \
+                + Fore.CYAN + 'enabled: ' + Fore.YELLOW + '{}'.format(self._kros.enabled))
         # disk space ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._log.info('root file system:')
         _rootfs = psutil.disk_usage('/')

@@ -7,10 +7,9 @@
 #
 # author:   Murray Altheim
 # created:  2019-12-23
-# modified: 2024-07-15
+# modified: 2025-09-09
 #
 # An enum for expressing the Cardinal directions.
-#
 
 from enum import Enum
 from math import pi as π
@@ -18,21 +17,33 @@ from hardware.color import Color
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Cardinal(Enum):
-    NORTH     = ( 0, 'north',        0, 0.0 )
-    NORTHEAST = ( 1, 'north-east',  45, π * 0.25 )
-    EAST      = ( 2, 'east',        90, π * 0.50 )
-    SOUTHEAST = ( 3, 'south-east', 135, π * 0.75 )
-    SOUTH     = ( 4, 'south',      180, π )
-    SOUTHWEST = ( 5, 'south-west', 225, π * 1.25 )
-    WEST      = ( 6, 'west',       270, π * 1.50 )
-    NORTHWEST = ( 7, 'north-west', 315, π * 1.75 )
-    UNKNOWN   = ( 8, 'unknown',     -1, -1.0 )
+    NORTH     = ( 0, 'N',  'north',        0, 0.0 )
+    NORTHEAST = ( 1, 'NE', 'north-east',  45, π * 0.25 )
+    EAST      = ( 2, 'E',  'east',        90, π * 0.50 )
+    SOUTHEAST = ( 3, 'SE', 'south-east', 135, π * 0.75 )
+    SOUTH     = ( 4, 'S',  'south',      180, π )
+    SOUTHWEST = ( 5, 'SW', 'south-west', 225, π * 1.25 )
+    WEST      = ( 6, 'W',  'west',       270, π * 1.50 )
+    NORTHWEST = ( 7, 'NW', 'north-west', 315, π * 1.75 )
+    UNKNOWN   = ( 8, 'U',  'unknown',     -1, -1.0 )
 
     # ignore the first param since it's already set by __new__
-    def __init__(self, num, label, degrees, radians):
-        self._label = label
+    def __init__(self, num, abbrev, label, degrees, radians):
+        self._id      = num
+        self._abbrev  = abbrev
+        self._label   = label
         self._degrees = degrees
         self._radians = radians
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def id(self):
+        return self._id
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def abbrev(self):
+        return self._abbrev
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -54,6 +65,19 @@ class Cardinal(Enum):
         Return the compass angle in radians.
         '''
         return self._radians
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @staticmethod
+    def from_index(index):
+        '''
+        Return the Cardinal enumeration by its index number, or UNKNOWN if not found.
+        '''
+        if not isinstance(index, int):
+            raise TypeError('from_index: expected int argument not {}'.format(type(index)))
+        for cardinal in Cardinal:
+            if cardinal.id == index:
+                return cardinal
+        return Cardinal.UNKNOWN
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod

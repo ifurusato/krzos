@@ -1,35 +1,62 @@
-#!/usr/bin/env python3 # -*- coding: utf-8 -*-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2020-02-21
-# modified: 2021-10-31
+# modified: 2025-04-21
 #
 
 from enum import Enum
 
-from core.direction import Direction
+from core.directive import Directive
 from core.speed import Speed
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Group(Enum):
-    NONE       =  0
-    SYSTEM     =  1
-    MACRO      =  2
-    GAMEPAD    =  3
-    STOP       =  4
-    BUMPER     =  5
-    INFRARED   =  6
-    VELOCITY   =  7
-    THETA      =  8
-    CHADBURN   =  9
-    BEHAVIOUR  = 10
-    CLOCK      = 11
-    EXPERIMENT = 12
-    OTHER      = 13
+    #             num   name
+    NONE       = (  0, "none" )
+    SYSTEM     = (  1, "system" )
+    MACRO      = (  2, "macro" )
+    GAMEPAD    = (  3, "gamepad" )
+    STOP       = (  4, "stop" )
+    MOTOR      = (  5, "motor" )
+    BUMPER     = (  6, "bumper" )
+    INFRARED   = (  7, "infrared" )
+    IMU        = (  8, "imu" )
+    PIR        = (  9, "pir" )
+    VELOCITY   = ( 10, "velocity" )
+    THETA      = ( 11, "theta" )
+    CHADBURN   = ( 12, "chadburn" )
+    BEHAVIOUR  = ( 13, "behaviour" )
+    IDLE       = ( 14, "idle" )
+    CLOCK      = ( 15, "clock" )
+    EXPERIMENT = ( 16, "experiment" )
+    REMOTE     = ( 17, "remote" )
+    OTHER      = ( 18, "other" )
+
+    def __new__(cls, *args, **kwds):
+        obj = object.__new__(cls)
+        obj._value_ = args[0]
+        return obj
+
+    # ignore the first param since it's already set by __new__
+    def __init__(self, num, name):
+        self._num  = num
+        self._name = name
+
+    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def num(self):
+        return self._num
+
+    @property
+    def name(self):
+        return self._name
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Event(Enum):
@@ -42,46 +69,105 @@ class Event(Enum):
     Messages are prioritised by their Event type, where the priority operates
     in reverse-order: the smaller the number the higher the priority.
     '''
-    # name                     n   label                  priority   group
-    # misc events ...........................................................................
+    # name                     n   name                   priority   group
+    # misc events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     NOOP                   = ( 0, "no operation",            1000,   Group.NONE )
 
-    # system events .........................................................................
+    # system events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     SHUTDOWN               = ( 10, "shutdown",                  1,   Group.SYSTEM )
     BATTERY_LOW            = ( 11, "battery low",               1,   Group.SYSTEM )
-    HIGH_TEMPERATURE       = ( 12, "high temperature",          1,   Group.SYSTEM )
-    COLLISION_DETECT       = ( 13, "collision detect",          2,   Group.SYSTEM )
+    REGULATOR_5V_LOW       = ( 12, "regulator 5v low",          1,   Group.SYSTEM )
+    REGULATOR_3V3_LOW      = ( 13, "regulator 3.3v low",        1,   Group.SYSTEM )
+    HIGH_TEMPERATURE       = ( 14, "high temperature",          1,   Group.SYSTEM )
+    OVER_CURRENT           = ( 15, "over current",              1,   Group.SYSTEM )
+    NO_CONNECTION          = ( 16, "no gamepad connection",     1,   Group.SYSTEM )
+    DISCONNECTED           = ( 17, "gamepad disconnected",      1,   Group.SYSTEM )
 
-    # lambda events .........................................................................
+    # lambda events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     MACRO                  = ( 20, "macro script",              5,   Group.MACRO ) # with script ID as value
     LAMBDA                 = ( 21, "lambda function",           5,   Group.MACRO ) # with lambda as value
 
-    # gamepad events ........................................................................
-    GAMEPAD                = ( 40, "gamepad",                  10,   Group.GAMEPAD )
+    # gamepad events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    GAMEPAD                = ( 30, "gamepad",                  10,   Group.GAMEPAD )
 
-    # stopping and halting ..................................................................
-    STOP                   = ( 50, "stop",                     12,   Group.STOP )
-    HALT                   = ( 51, "halt",                     13,   Group.STOP )
-    BRAKE                  = ( 52, "brake",                    14,   Group.STOP )
-    STANDBY                = ( 53, "standby",                  15,   Group.STOP )
-    BUTTON                 = ( 54, "button",                   16,   Group.STOP )
+    A_BUTTON               = ( 31, "a-cross",                  10,   Group.GAMEPAD)
+    B_BUTTON               = ( 32, "b-circle",                 10,   Group.GAMEPAD)
+    X_BUTTON               = ( 33, "x-triangle",               10,   Group.GAMEPAD)
+    Y_BUTTON               = ( 34, "y-square",                 10,   Group.GAMEPAD)
 
-    # bumper ................................................................................
-    BUMPER_MAST            = ( 110, "mast bumper",             40,   Group.BUMPER )
-    BUMPER_PAFT            = ( 111, "port aft bumper",         43,   Group.BUMPER )
-    BUMPER_PORT            = ( 112, "port bumper",             42,   Group.BUMPER )
-    BUMPER_CNTR            = ( 113, "center bumper",           41,   Group.BUMPER )
-    BUMPER_STBD            = ( 114, "starboard bumper",        42,   Group.BUMPER )
-    BUMPER_SAFT            = ( 115, "starboard aft bumper",    44,   Group.BUMPER )
+    L1_BUTTON              = ( 35, "l1",                       10,   Group.GAMEPAD)
+    L2_BUTTON              = ( 36, "l2",                       10,   Group.GAMEPAD) # unassigned
+    R1_BUTTON              = ( 37, "r1",                       10,   Group.GAMEPAD) # unassigned
+    R2_BUTTON              = ( 38, "r2",                       10,   Group.GAMEPAD)
 
-    # infrared ..............................................................................
-    INFRARED_PSID          = ( 120, "infrared port side",      52,   Group.INFRARED )
-    INFRARED_PORT          = ( 121, "infrared port",           51,   Group.INFRARED )
-    INFRARED_CNTR          = ( 122, "infrared cntr",           50,   Group.INFRARED )
-    INFRARED_STBD          = ( 123, "infrared stbd",           51,   Group.INFRARED )
-    INFRARED_SSID          = ( 124, "infrared stbd side",      52,   Group.INFRARED )
+    START_BUTTON           = ( 39, "start",                    10,   Group.GAMEPAD)
+    SELECT_BUTTON          = ( 40, "select",                   10,   Group.GAMEPAD)
+    HOME_BUTTON            = ( 41, "home",                     10,   Group.GAMEPAD)
 
-    # velocity directives ...................................................................
+    DPAD_HORIZONTAL        = ( 42, "dpad-horizontal",          10,   Group.GAMEPAD)
+    DPAD_LEFT              = ( 43, "dpad-left",                10,   Group.GAMEPAD)
+    DPAD_RIGHT             = ( 44, "dpad-right",               10,   Group.GAMEPAD)
+
+    DPAD_VERTICAL          = ( 45, "dpad-vertical",            10,   Group.GAMEPAD)
+    DPAD_UP                = ( 46, "dpad-up",                  10,   Group.GAMEPAD)
+    DPAD_DOWN              = ( 47, "dpad-down",                10,   Group.GAMEPAD)
+
+    L3_VERTICAL            = ( 48, "l3-vert",                  10,   Group.GAMEPAD)
+    L3_HORIZONTAL          = ( 49, "l3-horz",                  10,   Group.GAMEPAD)
+    R3_VERTICAL            = ( 50, "r3-vert",                  10,   Group.GAMEPAD)
+    R3_HORIZONTAL          = ( 51, "r3-horz",                  10,   Group.GAMEPAD)
+
+    # motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    MOTORS_STOPPED         = ( 54, "motors-stopped",           10,   Group.MOTOR )
+    MOTORS_FORWARD         = ( 55, "motors-forward",           10,   Group.MOTOR )
+    MOTORS_REVERSE         = ( 56, "motors-reverse",           10,   Group.MOTOR )
+    MOTORS_ROTATING        = ( 57, "motors-rotating",          10,   Group.MOTOR )
+
+    # stopping and halting ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    EMERGENCY_STOP         = ( 60, "emergency-stop",            3,   Group.STOP )
+    COLLISION_STOP         = ( 61, "collision-stop",            3,   Group.STOP )
+    STOP                   = ( 62, "stop",                     12,   Group.STOP )
+    HALT                   = ( 63, "halt",                     13,   Group.STOP )
+    BRAKE                  = ( 64, "brake",                    14,   Group.STOP )
+    STANDBY                = ( 65, "standby",                  15,   Group.STOP )
+
+    # remote ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    REMOTE_A               = ( 70, "remote A",                 10,   Group.REMOTE )
+    REMOTE_B               = ( 71, "remote B",                 10,   Group.REMOTE )
+    REMOTE_Y               = ( 72, "remote Y",                 10,   Group.REMOTE )
+    REMOTE_X               = ( 73, "remote X",                 10,   Group.REMOTE )
+    REMOTE_D               = ( 74, "remote D",                 10,   Group.REMOTE )
+    REMOTE_R               = ( 75, "remote R",                 10,   Group.REMOTE )
+    REMOTE_U               = ( 76, "remote U",                 10,   Group.REMOTE )
+    REMOTE_L               = ( 77, "remote L",                 10,   Group.REMOTE )
+
+    # bumper ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    BUMPER_ANY             = ( 110, "any bumper",               4,   Group.BUMPER )
+    BUMPER_MAST            = ( 111, "mast bumper",              4,   Group.BUMPER )
+    BUMPER_PORT            = ( 112, "port bumper",              4,   Group.BUMPER )
+    BUMPER_CNTR            = ( 113, "center bumper",            4,   Group.BUMPER )
+    BUMPER_STBD            = ( 114, "starboard bumper",         4,   Group.BUMPER )
+    BUMPER_PFWD            = ( 115, "port fwd bumper",          4,   Group.BUMPER )
+    BUMPER_PAFT            = ( 116, "port aft bumper",          4,   Group.BUMPER )
+    BUMPER_SFWD            = ( 117, "starboard fwd bumper",     4,   Group.BUMPER )
+    BUMPER_SAFT            = ( 118, "starboard aft bumper",     4,   Group.BUMPER )
+    BUMPER_FOBP            = ( 119, "fwd oblique port",        10,   Group.BUMPER )
+    BUMPER_FOBS            = ( 120, "fwd oblique starboard",   10,   Group.BUMPER )
+
+    # infrared ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    INFRARED_PORT          = ( 130, "infrared port",           51,   Group.INFRARED )
+    INFRARED_CNTR          = ( 131, "infrared cntr",           50,   Group.INFRARED )
+    INFRARED_STBD          = ( 132, "infrared stbd",           51,   Group.INFRARED )
+
+    # imu ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    IMU_OVER_PITCH         = ( 140, "imu over-pitch",          70,   Group.IMU )
+    IMU_OVER_ROLL          = ( 141, "imu over-roll",           70,   Group.IMU )
+
+    # pir ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    PIR_ACTIVE             = ( 150, "pir active",              70,   Group.PIR )
+    PIR_INACTIVE           = ( 151, "pir inactive",            70,   Group.PIR )
+
+    # velocity directives  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     VELOCITY               = ( 200, "velocity",               100,   Group.VELOCITY ) # with value
     PORT_VELOCITY          = ( 201, "port velocity",          100,   Group.VELOCITY ) # with value
     STBD_VELOCITY          = ( 202, "stbd velocity",          100,   Group.VELOCITY ) # with value
@@ -92,7 +178,7 @@ class Event(Enum):
     DECREASE_STBD_VELOCITY = ( 207, "decrease stbd velocity", 100,   Group.VELOCITY ) # step change
     INCREASE_STBD_VELOCITY = ( 208, "increase stbd velocity", 100,   Group.VELOCITY ) # step change
 
-    # theta directives ......................................................................
+    # theta directives  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     THETA                  = ( 300, "theta",                  100,   Group.THETA ) # with value
     PORT_THETA             = ( 301, "port theta",             100,   Group.THETA )
     STBD_THETA             = ( 302, "stbd theta",             100,   Group.THETA )
@@ -101,37 +187,39 @@ class Event(Enum):
     DECREASE_PORT_THETA    = ( 305, "decrease port theta",    100,   Group.THETA )
     INCREASE_STBD_THETA    = ( 306, "increase stbd theta",    100,   Group.THETA )
     DECREASE_STBD_THETA    = ( 307, "decrease stbd theta",    100,   Group.THETA )
-    # port turns ...........
+    # port turns
     TURN_AHEAD_PORT        = ( 310, "turn ahead port",        100,   Group.THETA )
     TURN_TO_PORT           = ( 311, "turn to port",           100,   Group.THETA ) # based on current avg direction
     TURN_ASTERN_PORT       = ( 312, "turn astern port",       100,   Group.THETA )
     SPIN_PORT              = ( 313, "spin port",              100,   Group.THETA )
-    # starboard turns ......
+    # starboard turns
     SPIN_STBD              = ( 320, "spin stbd",              100,   Group.THETA )
     TURN_ASTERN_STBD       = ( 321, "turn astern stbd",       100,   Group.THETA )
     TURN_TO_STBD           = ( 322, "turn to stbd",           100,   Group.THETA ) # based on current avg direction
     TURN_AHEAD_STBD        = ( 323, "turn ahead stbd",        100,   Group.THETA )
 
-    # chadburn event ........................................................................
+    # chadburn events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     # the num values here are fixed, and used in ./hardware/motors
-    # astern ...............
-#   ASTERN                 = ( 400, "astern",                 100,   Group.CHADBURN, Direction.ASTERN ) # with value
-    FULL_ASTERN            = ( 401, "full astern",            100,   Group.CHADBURN, Direction.ASTERN, Speed.FULL )
-    TWO_THIRDS_ASTERN      = ( 402, "two thids astern",       100,   Group.CHADBURN, Direction.ASTERN, Speed.TWO_THIRDS )
-    HALF_ASTERN            = ( 403, "half astern",            100,   Group.CHADBURN, Direction.ASTERN, Speed.HALF )
-    ONE_THIRD_ASTERN       = ( 404, "one third astern",       100,   Group.CHADBURN, Direction.ASTERN, Speed.ONE_THIRD )
-    SLOW_ASTERN            = ( 405, "slow astern",            100,   Group.CHADBURN, Direction.ASTERN, Speed.SLOW )
-    DEAD_SLOW_ASTERN       = ( 406, "dead slow astern",       100,   Group.CHADBURN, Direction.ASTERN, Speed.DEAD_SLOW )
-    # ahead ................
-#   AHEAD                  = ( 410, "ahead",                  100,   Group.CHADBURN, Direction.AHEAD ) # with value
-    FULL_AHEAD             = ( 411, "full ahead",             100,   Group.CHADBURN, Direction.AHEAD, Speed.FULL )
-    TWO_THIRDS_AHEAD       = ( 412, "two thirds ahead",       100,   Group.CHADBURN, Direction.AHEAD, Speed.TWO_THIRDS )
-    HALF_AHEAD             = ( 413, "half ahead",             100,   Group.CHADBURN, Direction.AHEAD, Speed.HALF )
-    ONE_THIRD_AHEAD        = ( 414, "one third ahead",        100,   Group.CHADBURN, Direction.AHEAD, Speed.ONE_THIRD )
-    SLOW_AHEAD             = ( 415, "slow ahead",             100,   Group.CHADBURN, Direction.AHEAD, Speed.SLOW )
-    DEAD_SLOW_AHEAD        = ( 416, "dead slow ahead",        100,   Group.CHADBURN, Direction.AHEAD, Speed.DEAD_SLOW )
+    # astern
+#   ASTERN                 = ( 400, "astern",                 100,   Group.CHADBURN, Directive.ASTERN ) # with value
+    FULL_ASTERN            = ( 401, "full astern",            100,   Group.CHADBURN, Directive.ASTERN, Speed.FULL )
+    TWO_THIRDS_ASTERN      = ( 402, "two thids astern",       100,   Group.CHADBURN, Directive.ASTERN, Speed.TWO_THIRDS )
+    HALF_ASTERN            = ( 403, "half astern",            100,   Group.CHADBURN, Directive.ASTERN, Speed.HALF )
+    ONE_THIRD_ASTERN       = ( 404, "one third astern",       100,   Group.CHADBURN, Directive.ASTERN, Speed.ONE_THIRD )
+    SLOW_ASTERN            = ( 405, "slow astern",            100,   Group.CHADBURN, Directive.ASTERN, Speed.SLOW )
+    DEAD_SLOW_ASTERN       = ( 406, "dead slow astern",       100,   Group.CHADBURN, Directive.ASTERN, Speed.DEAD_SLOW )
+    # stopped
+    STOPPED                = ( 409, "stopped",                100,   Group.CHADBURN, Directive.STOP,   Speed.STOP )
+    # ahead
+#   AHEAD                  = ( 410, "ahead",                  100,   Group.CHADBURN, Directive.AHEAD ) # with value
+    DEAD_SLOW_AHEAD        = ( 411, "dead slow ahead",        100,   Group.CHADBURN, Directive.AHEAD, Speed.DEAD_SLOW )
+    SLOW_AHEAD             = ( 412, "slow ahead",             100,   Group.CHADBURN, Directive.AHEAD, Speed.SLOW )
+    ONE_THIRD_AHEAD        = ( 413, "one third ahead",        100,   Group.CHADBURN, Directive.AHEAD, Speed.ONE_THIRD )
+    HALF_AHEAD             = ( 414, "half ahead",             100,   Group.CHADBURN, Directive.AHEAD, Speed.HALF )
+    TWO_THIRDS_AHEAD       = ( 415, "two thirds ahead",       100,   Group.CHADBURN, Directive.AHEAD, Speed.TWO_THIRDS )
+    FULL_AHEAD             = ( 416, "full ahead",             100,   Group.CHADBURN, Directive.AHEAD, Speed.FULL )
 
-    # high level behaviours .................................................................
+    # high level behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     AVOID                  = ( 500, "avoid",                  150,   Group.BEHAVIOUR )
     MOTION_DETECT          = ( 501, "motion detect",          151,   Group.BEHAVIOUR )
     ROAM                   = ( 502, "roam",                   160,   Group.BEHAVIOUR )
@@ -142,12 +230,14 @@ class Event(Enum):
     EVENT_R1               = ( 507, "cruise",                 164,   Group.BEHAVIOUR ) # R1 Button
     LIGHTS                 = ( 508, "lights",                 165,   Group.BEHAVIOUR ) # R2 Button
     VIDEO                  = ( 509, "video",                  175,   Group.BEHAVIOUR ) # L1 Button
-    IDLE                   = ( 510, "idle",                   180,   Group.BEHAVIOUR ) # A Button
 
-    # clock (> 700) .........................................................................
+    # idle ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    IDLE                   = ( 600, "idle",                   100,   Group.IDLE )
+
+    # clock (> 700) ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     TICK                   = ( 701, "tick",                   700,   Group.CLOCK )
 
-    # experiments (> 800) ...................................................................
+    # experiments (> 800) ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     EXPERIMENT_1           = ( 801, "experiment 1",           800,   Group.EXPERIMENT )
     EXPERIMENT_2           = ( 802, "experiment 2",           800,   Group.EXPERIMENT )
     EXPERIMENT_3           = ( 803, "experiment 3",           800,   Group.EXPERIMENT )
@@ -156,7 +246,7 @@ class Event(Enum):
     EXPERIMENT_6           = ( 806, "experiment 6",           800,   Group.EXPERIMENT )
     EXPERIMENT_7           = ( 807, "experiment 7",           800,   Group.EXPERIMENT )
 
-    # other events (> 900) ..................................................................
+    # other events (> 900) ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     NO_ACTION              = ( 900, "no action",              998,   Group.OTHER )
     RGB                    = ( 909, "rgb",                    999,   Group.OTHER )
     ANY                    = ( 1000, "any",                  1000,   Group.OTHER )
@@ -167,12 +257,12 @@ class Event(Enum):
         return obj
 
     # ignore the first param since it's already set by __new__
-    def __init__(self, num, label, priority, group, direction=None, speed=None):
+    def __init__(self, num, name, priority, group, directive=None, speed=None):
         self._num       = num
-        self._label     = label
+        self._name      = name
         self._priority  = priority
         self._group     = group
-        self._direction = direction
+        self._directive = directive
         self._speed     = speed
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -203,22 +293,8 @@ class Event(Enum):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
-    def is_bumper_event(event):
-        return event.group is Group.BUMPER
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @staticmethod
-    def is_infrared_event(event):
-        return event.group is Group.INFRARED
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @staticmethod
-    def is_ifs_event(event):
-        '''
-        A convenience method that returns True for all bumper and
-        infrared events.
-        '''
-        return Event.is_bumper_event(event) or Event.is_infrared_event(event)
+    def is_clock_event(event):
+        return event.group is Group.CLOCK
 
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -227,8 +303,8 @@ class Event(Enum):
         return self._num
 
     @property
-    def label(self):
-        return self._label
+    def name(self):
+        return self._name
 
     @property
     def priority(self):
@@ -239,8 +315,8 @@ class Event(Enum):
         return self._group
 
     @property
-    def direction(self):
-        return self._direction
+    def directive(self):
+        return self._directive
 
     @property
     def speed(self):

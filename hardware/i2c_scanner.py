@@ -7,84 +7,128 @@
 #
 # author:   altheim
 # created:  2020-02-14
-# modified: 2024-10-31
+# modified: 2025-09-09
 #
-#  Scans the I²C bus, returning a list of devices.
-#
-# see: https://www.raspberrypi.org/forums/viewtopic.php?t=114401
-# see: https://raspberrypi.stackexchange.com/questions/62612/is-there-anyway-to-scan-i2c-using-pure-python-libraries:q
-#
-# If you're getting a "Permission denied" message due to smbus, add the pi user to the i2c group using:
-#
-#  % sudo adduser pi i2c
-#
-# then reboot.
+#  Scans the I²C bus, returning a list of devices. If i2cdetect is available
+#  it is used, otherwise a less reliable Python-native approach is used (a
+#  known error is that this won't find multiple devices occupying the same
+#  address).
 #
 # DeviceNotFound class at bottom.
 #
 
+import re
+import subprocess
 import errno
+import datetime as dt
 from colorama import init, Fore, Style
 init()
 
+# import smbus ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+import pkg_resources
+SMBUS='smbus2'
+for dist in pkg_resources.working_set:
+    if dist.project_name == 'smbus':
+        break
+    if dist.project_name == 'smbus2':
+        SMBUS='smbus2'
+        break
+if SMBUS == 'smbus':
+    import smbus
+elif SMBUS == 'smbus2':
+    import smbus2 as smbus
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 from core.logger import Level, Logger
+from core.config_loader import ConfigLoader
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class I2CScanner:
     '''
     Scans the I²C bus, returning a list of devices.
+
+    If the I2C bus is not supplied it is created.
+
+    Args:
+
+        config:          the application configuration.
+        i2c_bus_number:  the SMBus instance (default 1)
+        i2c_bus:         the optional SMBus instance
+        level:           the logging level
     '''
-    def __init__(self, config, bus_number=1, level=Level.INFO):
+    def __init__(self, config=None, i2c_bus_number=1, i2c_bus=None, level=Level.INFO):
         super().__init__()
-        if not isinstance(bus_number, int):
-            raise ValueError('expected bus number as an int.')
-        elif not isinstance(level, Level):
+        if not isinstance(level, Level):
             raise ValueError('expected log level as a Level enum.')
         self._log = Logger('i2cscan', level=level)
         self._config = config
-        self._bus_number = bus_number # bus number 1 indicates /dev/i2c-1
+        self._i2c_bus_number = i2c_bus_number
+        if i2c_bus is None:
+            self._i2c_bus = smbus.SMBus()
+            self._i2c_bus.open(bus=self._i2c_bus_number)
+        else:
+            self._i2c_bus = i2c_bus
         self._int_list = []
         self._hex_list = []
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def get_hex_addresses(self):
+    def get_hex_addresses(self, force_scan=False):
         '''
         Returns a hexadecimal version of the list.
+
+        Args:
+
+          force_scan:  if True, forces a new scan regardless of the current map
         '''
-        self._scan_addresses()
+        if force_scan or len(self._int_list) == 0:
+            self._scan_addresses()
         return self._hex_list
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def get_int_addresses(self):
+    def get_int_addresses(self, force_scan=False):
         '''
         Returns an integer version of the list.
+
+        Args:
+
+          force_scan:  if True, forces a new scan regardless of the current map
         '''
-        self._scan_addresses()
+        if force_scan or len(self._int_list) == 0:
+            self._scan_addresses()
         return self._int_list
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def has_address(self, addresses):
+    def has_address(self, addresses, force_scan=False):
         '''
         Performs the address scan (if necessary) and returns true if a device
         is available at any of the specified int addresses, the argument a list
         of strings.
+
+        Args:
+
+          force_scan:  if True, forces a new scan regardless of the current map
         '''
-        self._scan_addresses()
+        if force_scan or len(self._int_list) == 0:
+            self._scan_addresses()
         for address in addresses:
             if address in self._int_list:
                 return True
         return False
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def has_hex_address(self, addresses):
+    def has_hex_address(self, addresses, force_scan=False):
         '''
         Performs the address scan (if necessary) and returns true if a device
         is available at any of the specified hexadecimal addresses, the argument
         a list of strings.
+
+        Args:
+
+          force_scan:  if True, forces a new scan regardless of the current map
         '''
-        self._scan_addresses()
+        if force_scan or len(self._int_list) == 0:
+            self._scan_addresses()
         for address in addresses:
-#           address = self.normalise(address)
             if address in self._hex_list:
                 return True
         return False
@@ -97,49 +141,121 @@ class I2CScanner:
         return '0x{}'.format(address[2:].upper())
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _scan_addresses(self):
+    def _scan_addresses(self, timeout=5):
         '''
-        Scans the bus and returns the available device addresses. After being
-        called and populating the int and hex lists, this closes the connection
-        to smbus.
+        Executes i2cdetect as a subprocess and parses its output to return a
+        list of found I2C addresses.
+
+        Args:
+            timeout (int):   the number of seconds to wait before timing out
         '''
-        if len(self._int_list) == 0:
-            self._log.info('scanning I²C address bus…')
-            device_count = 0
-            try:
-                self._log.info('initialising…')
-                from smbus2 import SMBus
-                with SMBus(self._bus_number) as _bus:
-                    self._log.info('scanning…')
-                    for address in range(3, 128):
-                        try:
-                            _bus.write_byte(address, 0)
-                            _hex_address = hex(address)
-                            self._log.debug('found I²C device at 0x{:02X} (hex: {})'.format(address, _hex_address))
-                            self._int_list.append(address)
-                            self._hex_list.append('0x{:02X}'.format(address))
-                            device_count = device_count + 1
-                        except IOError as e:
-                            if e.errno != errno.EREMOTEIO:
-                                self._log.debug('{0} on address {1}'.format(e, hex(address)))
-#                               self._log.warning('{0} on address {1}'.format(e, hex(address)))
-                        except Exception as e: # exception if read_byte fails
-                            self._log.error('{0} error on address {1}'.format(e, hex(address)))
-                        finally:
-                            if _bus:
-                                _bus.close()
-                self._log.info('scanning complete.')
-            except ImportError:
-                self._log.warning('import error, unable to initialise: this script requires smbus2. Scan will return an empty result.')
-            except Exception as e:
-                self._log.warning('{} while initialising I²C bus: scan will return an empty result.'.format(e))
-            if device_count == 1:
-                self._log.info("found one I²C device.".format(device_count))
-            elif device_count > 1:
-                self._log.info("found {:d} I²C devices.".format(device_count))
-            else:
-                self._log.info("found no devices (no smbus available).")
-        return self._int_list
+        self._log.info('scanning I²C address bus {} using i2cdetect…'.format(self._i2c_bus_number))
+        try:
+            output = subprocess.check_output(
+                    ["i2cdetect", "-y", str(self._i2c_bus_number)],
+                    universal_newlines=True,
+                    stderr=subprocess.PIPE,
+                    timeout=timeout)
+            self._log.info(Fore.BLUE + "i2cdetect output:\n\n{}".format(output))
+        except FileNotFoundError:
+            self._log.warning("i2cdetect command not found. Please install i2c-tools.")
+            self._py_scan_addresses()
+            return
+        except subprocess.TimeoutExpired:
+            self._log.error("i2cdetect command timed out after {} seconds.".format(timeout))
+            self._py_scan_addresses()
+            return
+        except subprocess.CalledProcessError as e:
+            self._log.error("error executing i2cdetect: {}".format(e.stderr.strip()))
+            self._py_scan_addresses()
+            return
+        lines = output.strip().split("\n")
+        # Skip the first line as it contains column headers.
+        for line in lines[1:]:
+            parts = line.split()
+            # The first part is the row identifier (e.g., '00:'). Skip it.
+            # The remaining parts are the addresses or '--'.
+            for addr_str in parts[1:]:
+                if addr_str != "--":
+                    _str_value = "0x{}".format(addr_str.upper())
+                    self._log.debug("adding address: '{}'".format(_str_value))
+                    self._hex_list.append(_str_value)
+                    self._int_list.append(int(_str_value, 16))
+        self._log.info('completed scan.')
+
+    def _py_scan_addresses(self, timeout=dt.timedelta(seconds=5)):
+        '''
+        A native Python method that scans the I2C bus, populating the int
+        and hex lists.
+
+        Args:
+            timeout (int):   the number of seconds to wait before timing out
+        '''
+        self._log.warning('scanning I²C address bus using python method…')
+        device_count = 0
+        start_time = dt.datetime.now()
+        try:
+            for address in range(3, 128):
+                if dt.datetime.now() - start_time > timeout:
+                    self._log.error('I2C scan timed out after {} seconds.'.format(timeout.total_seconds()))
+                    break
+                try:
+                    self._i2c_bus.write_byte(address, 0)
+                    _hex_address = hex(address)
+                    _str_value = '0x{:02X}'.format(address)
+                    self._log.info("found I²C device at 0x{:02X} (hex: '{}'; str: '{}')".format(address, _hex_address, _str_value))
+                    self._int_list.append(address)
+                    self._hex_list.append(_str_value)
+                    device_count = device_count + 1
+                except IOError as e:
+                    if e.errno != errno.EREMOTEIO:
+                        self._log.debug('{0} on address {1}'.format(e, hex(address)))
+                except Exception as e: # exception if read_byte fails
+                    self._log.error('{0} error on address {1}'.format(e, hex(address)))
+            self._log.info('scanning complete.')
+        except ImportError:
+            self._log.warning('import error, unable to initialise: this script requires smbus2. Scan will return an empty result.')
+        except Exception as e:
+            self._log.warning('{} while initialising I²C bus: scan will return an empty result.'.format(e))
+        if device_count == 1:
+            self._log.info("found one I²C device.".format(device_count))
+        elif device_count > 1:
+            self._log.info("found {:d} I²C devices.".format(device_count))
+        else:
+            self._log.info("found no devices (no devices are available, or no smbus is available).")
+
+    def x_py_scan_addresses(self):
+        '''
+        Scans the I2C bus, populating the int and hex lists.
+        '''
+        self._log.warning('scanning I²C address bus using python method…')
+        device_count = 0
+        try:
+            for address in range(3, 128):
+                try:
+                    self._i2c_bus.write_byte(address, 0)
+                    _hex_address = hex(address)
+                    _str_value = '0x{:02X}'.format(address)
+                    self._log.info("found I²C device at 0x{:02X} (hex: '{}'; str: '{}')".format(address, _hex_address, _str_value))
+                    self._int_list.append(address)
+                    self._hex_list.append(_str_value)
+                    device_count = device_count + 1
+                except IOError as e:
+                    if e.errno != errno.EREMOTEIO:
+                        self._log.debug('{0} on address {1}'.format(e, hex(address)))
+                except Exception as e: # exception if read_byte fails
+                    self._log.error('{0} error on address {1}'.format(e, hex(address)))
+            self._log.info('scanning complete.')
+        except ImportError:
+            self._log.warning('import error, unable to initialise: this script requires smbus2. Scan will return an empty result.')
+        except Exception as e:
+            self._log.warning('{} while initialising I²C bus: scan will return an empty result.'.format(e))
+        if device_count == 1:
+            self._log.info("found one I²C device.".format(device_count))
+        elif device_count > 1:
+            self._log.info("found {:d} I²C devices.".format(device_count))
+        else:
+            self._log.info("found no devices (no devices are available, or no smbus is available).")
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_device_list(self):
@@ -171,8 +287,11 @@ def main():
 
     level = Level.INFO
     log = Logger('main', level)
-    log.info('scanning for I²C devices…')
-    scanner = I2CScanner(level=Level.INFO)
+    i2c_bus_number = 0
+    log.info('scanning for I²C devices on bus {}…'.format(i2c_bus_number))
+    # read YAML configuration
+    _config = ConfigLoader(Level.INFO).configure()
+    scanner = I2CScanner(config=_config, i2c_bus_number=i2c_bus_number, level=Level.INFO)
 
     _addresses = scanner.get_int_addresses()
     log.info('available I²C device(s):')
@@ -183,11 +302,6 @@ def main():
         for n in range(len(_addresses)):
             address = _addresses[n]
             log.info('device: {0} ({1})'.format(address, hex(address)))
-
-    for i in range(len(_addresses)):
-        print(Fore.CYAN + '-- address: {}'.format(_addresses[i]) + Style.RESET_ALL)
-
-    print('')
 
 if __name__== "__main__":
     main()

@@ -32,9 +32,9 @@ FAR_THRESHOLD   = 1000
 def color_for_distance(dist):
     match dist:
         case d if d is None or d <= 0:
-            return Fore.BLACK
+            return Fore.BLACK + Style.DIM
         case d if d < CLOSE_THRESHOLD:
-            return Fore.MAGENTA
+            return Fore.MAGENTA + Style.BRIGHT
         case d if d < NEAR_THRESHOLD:
             return Fore.RED
         case d if d < MID_THRESHOLD:
@@ -84,23 +84,23 @@ def main():
     RANGE = 1001
     config_file = 'radiozoa_conf.yaml'
     radiozoa = None
-    _log = Logger('main', level=Level.INFO)
+    log = Logger('main', level=Level.INFO)
     try: 
-        _log.info('loading configuration…')
+        log.info('loading configuration…')
         loader = ConfigLoader()
         config = loader.configure(config_file)
         
-        _log.info('instantiating sensor array…')
+        log.info('instantiating sensor array…')
         radiozoa = Radiozoa(config)
         radiozoa.enable()
         if radiozoa.enabled:
-            _log.info('start ranging…')
+            log.info('start ranging…')
             radiozoa.start_ranging()
             radiozoa.set_callback(print_distances)
         else:
             raise Exception("unable to start ranging due to startup errors.")
 
-        _log.info(Fore.GREEN + 'Radiozoa enabled; waiting for sensor callbacks (Ctrl-C to exit)…')
+        log.info(Fore.GREEN + 'Radiozoa enabled; waiting for sensor callbacks (Ctrl-C to exit)…')
         # keep alive with signal.pause() if available
         try:
             signal.pause()
@@ -110,16 +110,17 @@ def main():
                 time.sleep(1)
 
     except KeyboardInterrupt:
-        _log.info('Ctrl-C caught, exiting…')
+        log.info('Ctrl-C caught, exiting…')
         enabled = False
     except Exception as e:
-        _log.info('{} raised during radiozoa processing: {}'.format(type(e).__name__, e))
+        import traceback
+        log.error('{} raised during radiozoa processing: {}\n{}'.format(type(e).__name__, e, traceback.format_exc()))
         enabled = False
     finally:
-        _log.info('finally…')
+        log.info('finally…')
         if radiozoa:
             radiozoa.close()
-        _log.info('complete.')
+        log.info('complete.')
             
 if __name__ == '__main__':
     main()
