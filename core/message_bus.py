@@ -370,7 +370,7 @@ class MessageBus(Component):
     def _enable_publishers(self):
         _publishers = self.publishers
         self._log.info('enabling {:d} publisher{}…'.format(len(_publishers), '' if len(_publishers) == 1 else 's'))
-        for _publisher in _publishers:
+        for _publisher in _publishers.values():
             if isinstance(_publisher, Publisher):
                 _publisher.start()
                 if not _publisher.enabled:

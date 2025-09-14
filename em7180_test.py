@@ -45,14 +45,12 @@ def main():
         _matrix11x7 = Matrix11x7()
         _matrix11x7.set_brightness(_medium_brightness)
 
-        # read YAML configuration
-        _level = Level.INFO
-        _config = ConfigLoader(Level.INFO).configure()
-
         # set up ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _em7180 = Em7180(_config, matrix11x7=_matrix11x7, trim_pot=_trim_pot, level=Level.INFO)
-        _em7180.set_fixed_yaw_trim(148.0) # fixed trim for Pukerua Bay, NZ, determined via observation
+        # fixed trim for Pukerua Bay, NZ, determined via observation
+#       _em7180.set_fixed_yaw_trim(148.0) 
+        _em7180.set_fixed_yaw_trim(136.5) 
         _em7180.set_verbose(False)
 
         while True:

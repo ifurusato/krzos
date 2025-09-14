@@ -35,7 +35,7 @@ def main():
 
         # read YAML configuration
         _config = ConfigLoader(Level.INFO).configure()
-        _irq_clock = IrqClock(_config, Level.INFO)
+        _irq_clock = IrqClock(config=_config, level=Level.INFO)
         _irq_clock.add_callback(ping)
         _irq_clock.enable()
 

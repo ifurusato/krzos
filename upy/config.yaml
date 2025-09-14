@@ -1,0 +1,111 @@
+# STM32H723 YAML configuration for motors 0-3
+#
+# stm32_uart_slave  uart2
+# rp2040_uart_slave uart1
+
+kros:
+  application:
+    verbose:                False      # application-level verbosity
+#   impl:              'stm32h562'
+    impl:              'stm32h723'
+  uart_master:
+    port:           '/dev/serial0'
+    baud_rate:          1_000_000      # 115200 460800 921600
+    use_async_mgr:          False      # sync or async UART manager
+  uart_slave_app:
+    verbose:                False
+    is_pyboard:              True
+    uart_id:                    3      # UART identifier (1-7): 3 on STM32H723, TX=B10, RX=B11
+    irq_freq_hz:              100      # frequency of IRQ external clock
+    irq_timer_number:          15      # identifier for hardware Timer
+    irq_pin_number:           'E4'     # identifier for IRQ output pin
+  pixel:
+    enable:                  True
+    pin:                      'E1'     # pin for NeoPixel
+  display:
+    enable:                  True
+    rotation:                   1      # 1 = landscape, upside down; 3 = landscape, rightside-up
+  motor_controller:
+    use_closed_loop:        False
+    enable_m0:               True      # enable motor M0
+    enable_m1:               True      # enable motor M1
+    enable_m2:               True      # enable motor M2
+    enable_m3:               True      # enable motor M3
+    pwm_timer_number:           5      # PWM timer number
+    pwm_timer_af:               2      # AF for PWM timer
+    rpm_timer_enable:       False      # RPM timer (not currently used)
+    rpm_timer_number:           2      # RPM timer number
+    rpm_timer_frequency:      100      # RPM timer frequency in Hz
+    pwm_frequency:          20000      # frequency for PWM to motors (20-30kHz)
+    log_timer_enable:        True      # log timer enabled? (noisy)
+    log_timer_number:           6      # log timer number
+    log_timer_frequency:        1      # log timer frequency in 20Hz (50ms period)
+    pid_timer_number:           3      # log timer number
+    pid_timer_frequency:      100      # PID timer frequency
+    max_motor_speed:           55      # maximum stated motor speed (RPM)
+    feedforward_gain:         0.99     # feed forward for PID controller
+  slew_limiter:
+    enabled:                False      # use rpm and speed slew limiters
+    max_delta_rpm_per_sec:     30.0    # slew limiter for RPM
+    max_delta_speed_per_sec:   30.0    # slew limiter for speed
+    safe_threshold:            10.0
+  zero_crossing_handler:
+    enabled:                False      # use zero-crossing handler for speed polarity transitions
+    verbose:                False
+  pid:
+      verbose:              False
+      kp:                       0.450  # proportional gain   0.51  (was: 0.60)
+      ki:                       0.030  # integral gain       0.050 (was: 0.050)
+      kd:                       0.001  # derivative gain     0.001 (was: 0.001)
+      enable_deadband:       True      # when True use deadband
+      deadband:               5.0      # the deadband value
+      stop_threshold:         2.0      # below this motor is considered stopped
+      min:                   -100
+      max:                    100
+  motors:                              # configuration for STM32H723
+    motor0:
+      id:                    0
+      name:                "M0"
+      pwm_channel:           1
+      pwm_pin:             'A0'
+      pwm_pin_name:       'PA0'
+      direction_pin:       'D0'
+      direction_pin_name: 'PD0'
+      encoder_pin:         'C6'
+      encoder_pin_name:   'PC6'
+      reverse:            True
+    motor1:
+      id:                    1
+      name:                "M1"
+      pwm_channel:           2
+      pwm_pin:             'A1'
+      pwm_pin_name:       'PA1'
+      direction_pin:       'D1'
+      direction_pin_name: 'PD1'
+      encoder_pin:         'C7'
+      encoder_pin_name:   'PC7'
+      reverse:           False
+    motor2:
+      id:                    2
+      name:                'M2'
+      pwm_channel:           3
+      pwm_pin:             'A2'
+      pwm_pin_name:       'PA2'
+      direction_pin:       'E0'
+      direction_pin_name: 'PE0'
+      encoder_pin:         'B0'
+      encoder_pin_name:   'PB0'
+      reverse:             True
+    motor3:
+      id:                    3
+      name:                'M3'
+      pwm_channel:           4
+      pwm_pin:             'A3'
+      pwm_pin_name:       'PA3'
+      direction_pin:       'D5'
+      direction_pin_name: 'PD5'
+      encoder_pin:         'B1'
+      encoder_pin_name:   'PB1'
+      reverse:           False
+
+#EOF

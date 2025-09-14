@@ -15,6 +15,7 @@ kros:
         nada:                             False            # nada
     component:
         enable_motor_controller:           True            # enable Motor 2040
+        enable_external_clock:             True            # if True use external clock, ignoring loop delay value
         # publishers .......................................
         enable_queue_publisher:            True            # publishes from globally-available queue
 #       enable_distance_publisher:         True            # enable Distance Sensors and Publisher
@@ -101,6 +102,9 @@ kros:
             include_accel_gyro:            True            # if true, poll heading data
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
+        irq_clock:
+            pin:                             18            # GPIO pin connected to an external clock source
+            freq_divider:                    50            # tick divisor for lower frequency callback
         tinyfx-controller:
             i2c_address:                   0x44
             bus_number:                       1
@@ -112,7 +116,7 @@ kros:
             verbose:                       True            # verbose messaging
         gamepad:
             enabled:                       True
-            device_path:     '/dev/input/event9'           # the path to the bluetooth gamepad on the pi (see find_gamepad.py)
+            device_path:     '/dev/input/event7'           # the path to the bluetooth gamepad on the pi (see find_gamepad.py)
             loop_delay:                       0.01         # main loop delay was sleep(0.01) or 1/100th second, or 10ms. 50ms is the delay for 20Hz, so 10ms is 5x 20Hz or 100Hz.
             suppress_horiz_events:         True            # ignore horizontal joystick events
             loop_freq_hz:                   100            # polling loop frequency (Hz)
@@ -153,9 +157,12 @@ kros:
           - address:                       0x49
             name:          "AS7262 Spectrometer"
             required:                     False
+          - address:                       0x28
+            name:                  "MPU9250 IMU"
+            required:                     True
           - address:                       0x69
             name:                 "ICM20948 IMU"
-            required:                      True
+            required:                     False
           - address:                       0x74
             name:     "Starboard 5x5 RGB Matrix"
             required:                      True

@@ -14,22 +14,24 @@ from datetime import datetime as dt
 from colorama import init, Fore, Style
 init()
 
+from core.component import Component
 from core.logger import Logger, Level
 from core.message import Message
 from core.message_bus import MessageBus
 from core.event import Event
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class MessageFactory(object):
+class MessageFactory(Component):
     '''
     A factory for Messages.
     '''
     def __init__(self, message_bus, level=Level.INFO):
         self._log = Logger("msgfactory", level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         if message_bus is None:
             raise ValueError('null message bus argument.')
-#       elif not isinstance(message_bus, MessageBus):
-#           raise ValueError('wrong type for message bus: {}'.format(type(message_bus)))
+        elif not isinstance(message_bus, MessageBus):
+            raise ValueError('wrong type for message bus: {}'.format(type(message_bus)))
         self._message_bus = message_bus
         self._log.info('ready.')
 

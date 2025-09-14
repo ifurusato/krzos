@@ -25,9 +25,6 @@ from rgbmatrix5x5 import RGBMatrix5x5
 from matrix11x7 import Matrix11x7
 from matrix11x7.fonts import font3x5, font5x5, font5x7, font5x7smoothed
 
-import core.globals as globals
-globals.init()
-
 from core.cardinal import Cardinal
 from core.convert import Convert
 from core.component import Component
@@ -93,7 +90,7 @@ class Icm20948(Component):
         self._digital_pot = None
         self._trim_adjust = 0.0
         if self._adjust_trim:
-            _component_registry = globals.get('component-registry')
+            _component_registry = Component.get_registry()
             # configure potentiometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._digital_pot_0x0E = _component_registry.get('digital-pot-0x0E')
             if self._digital_pot_0x0E:

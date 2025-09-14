@@ -82,22 +82,23 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('…')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         FiniteStateMachine.__init__(self, self._log, _name)
-        self._system                      = System(self, level)
+        self._system              = System(self, level)
         self._system.set_nice()
         # configuration…
-        self._config                      = None
-        self._component_registry          = None
-        self._controller                  = None
-        self._message_bus                 = None
-        self._system_publisher            = None
-        self._system_subscriber           = None
-#       self._task_selector               = None
-        self._tinyfx                      = None
-        self._pushbutton                  = None
-        self._eyeballs                    = None
-        self._killswitch                  = None
-        self._started                     = False
-        self._closing                     = False
+        self._config              = None
+        self._component_registry  = None
+        self._controller          = None
+        self._message_bus         = None
+        self._system_publisher    = None
+        self._system_subscriber   = None
+#       self._task_selector       = None
+        self._irq_clock           = None
+        self._tinyfx              = None
+        self._pushbutton          = None
+        self._eyeballs            = None
+        self._killswitch          = None
+        self._started             = False
+        self._closing             = False
         self._log.info('oid: {}'.format(id(self)))
         self._log.info('initialised.')
 
@@ -147,6 +148,16 @@ class KROS(Component, FiniteStateMachine):
         # establish basic subsumption components ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._log.info('configure subsumption components…')
+
+        if _cfg.get('enable_queue_publisher') or 'q' in _pubs:
+            self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
+
+        self._use_external_clock = self._config['kros'].get('component').get('enable_external_clock')
+        if self._use_external_clock:
+            self._log.info('creating external clock…')
+            self._irq_clock = IrqClock(self._config, level=self._level)
+        else:
+            self._irq_clock = None  
 
         self._message_bus = MessageBus(self._config, self._level)
         self._message_factory = MessageFactory(self._message_bus, self._level)
@@ -239,6 +250,10 @@ class KROS(Component, FiniteStateMachine):
 #       if self._system_subscriber:
 #           self._log.info('enabling system subscriber…')
 #           self._system_subscriber.enable()
+
+        if self._irq_clock:
+            self._log.info('enabling external clock…')
+            self._irq_clock.enable()
 
         if self._tinyfx: # turn on running lights
             if not self._tinyfx.enabled:
@@ -343,6 +358,8 @@ class KROS(Component, FiniteStateMachine):
                 self._log.info('disabling while closing…')
             else:
                 self._log.info('disabling…')
+            if self._irq_clock and not self._irq_clock.disabled:
+                self._irq_clock.disable()
             Component.disable(self)
             FiniteStateMachine.disable(self)
             self._log.info('disabled.')
@@ -369,10 +386,10 @@ class KROS(Component, FiniteStateMachine):
             try:
                 self._log.info('closing…')
                 self._closing = True
-
                 if self._tinyfx:
                     self._tinyfx.off()
-
+                if self._irq_clock and not self._irq_clock.closed:
+                    self._irq_clock.close()
                 self._log.info('closing subscribers and publishers…')
                 # closes all components that are not a publisher, subscriber, the message bus or kros itself…
                 for _name in self._component_registry.names:
