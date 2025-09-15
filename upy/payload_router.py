@@ -70,6 +70,7 @@ class PayloadRouter:
             Mode.DIA_PREV:    lambda payload: self._motor_controller.go(payload),        # diagonal reverse to port
             Mode.DIA_SREV:    lambda payload: self._motor_controller.go(payload),        # diagonal reverse to starboard
             Mode.ACK:         lambda payload: self._handle_ack(),                        # acknowledge (for completeness)
+            Mode.EMPTY:       lambda payload: self._handle_empty(),                      # empty or fouled payload (ignore)
             Mode.REQUEST:     lambda payload: self._handle_request(payload),             # request status
             Mode.DISABLE:     lambda payload: self._handle_disable(),                    # mock disable
             Mode.ERROR:       lambda payload: self._handle_error(payload),               # error state
@@ -176,6 +177,10 @@ class PayloadRouter:
 
     def _handle_ack(self):
         self._log.info(Fore.GREEN + 'ACK')
+        pass
+
+    def _handle_empty(self):
+        self._log.info(Fore.GREEN + 'MT')
         pass
 
     def _handle_disable(self):

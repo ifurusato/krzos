@@ -19,6 +19,8 @@ from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 from hardware.i2c_scanner import I2CScanner, DeviceNotFound
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 __log = Logger('test-devices', level=Level.INFO)
 __config = ConfigLoader(level=Level.ERROR).configure()
 __i2c_scanner = I2CScanner(__config, level=Level.ERROR)
@@ -44,6 +46,8 @@ def test_required_devices():
                 __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
             else:
                 __log.warning(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (not found, optional)")
+
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 def main():
     global __log

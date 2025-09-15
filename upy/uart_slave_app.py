@@ -31,6 +31,10 @@ import cwd
 import free
 
 class UartSlaveApp:
+
+    ACK_PAYLOAD   = Payload(Mode.ACK.code, 0.0, 0.0, 0.0, 0.0)
+    EMPTY_PAYLOAD = Payload("MT", 0.0, 0.0, 0.0, 0.0)
+
     def __init__(self):
         _config = ConfigLoader.configure('config.yaml')
         if _config is None:
@@ -116,7 +120,11 @@ class UartSlaveApp:
         try:
             while True:
                 _payload = await self._slave.receive_packet()
-                if isinstance(_payload, Payload):
+                if _payload is None:
+                    if self._verbose:
+                        self._log.warning("empty packet: {} (type: {})".format(_payload, type(_payload)))
+                    await self._slave.send_packet(UartSlaveApp.EMPTY_PAYLOAD)
+                elif isinstance(_payload, Payload):
                     self._tx_count += 1
                     if self._verbose:
                         self._log.info("payload: {}".format(_payload))
@@ -129,22 +137,16 @@ class UartSlaveApp:
                         if timestamp is not None:
                             status_payload = Payload(Mode.ERROR.code, timestamp, code, 0.0, 0.0)
                         else:
-                            status_payload = Payload(Mode.ACK.code, 0.0, 0.0, 0.0, 0.0)
+                            status_payload = UartSlaveApp.ACK_PAYLOAD
                         await self._slave.send_packet(status_payload)
                         self._router.clear_error()
                     else:
                         # route normal command payload (non-blocking)
                         asyncio.create_task(self._router.route(_payload))
                         self._router.route(_payload)
-                        ack_payload = Payload(Mode.ACK.code, 0.0, 0.0, 0.0, 0.0)
-                        await self._slave.send_packet(ack_payload)
-                elif _payload is not None:
-                    if self._verbose:
-                        self._log.warning("unknown packet: {} (type: {})".format(_payload, type(_payload)))
-                    ack_payload = Payload("AK", 0.0, 0.0, 0.0, 0.0)
-                    await self._slave.send_packet(ack_payload)
+                        await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
                 else:
-                    self._log.warning("no valid payload received.")
+                    self._log.warning("no valid payload received: type: {}; value: {}".format(type(_payload), _payload))
         except KeyboardInterrupt:
             self._log.info("Ctrl-C caught, exiting application…")
         except Exception as e:

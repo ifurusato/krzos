@@ -56,8 +56,8 @@ class RotaryEncoderCommandProvider(ValueProvider):
         if mode is None:
             raise ValueError("no mode for hue '{}'".format(hue))
         else:
-            return 'GO'
-#           return mode.code
+#           return 'GO'
+            return mode.code
 
     def close(self):
         self._encoder.off()

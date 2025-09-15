@@ -65,8 +65,9 @@ class UartSlaveBase(Component):
                 if self._buffer and time.ticks_diff(time.ticks_ms(), self._last_rx) > self._timeout_ms:
                     self._log.error("UART RX timeout; clearing buffer…")
                     self._buffer = bytearray()
-                await asyncio.sleep(0) # was 0.005
-                continue
+                await asyncio.sleep(0.005) # was 0.005
+#               continue
+                return None
             # check if buffer starts with SYNC_HEADER (avoid .find if possible)
             if self._buffer.startswith(Payload.SYNC_HEADER):
                 if len(self._buffer) >= Payload.PACKET_SIZE:
@@ -78,11 +79,12 @@ class UartSlaveBase(Component):
                             self._log.info('rx: ' + Fore.GREEN + '{}'.format(_payload))
                         self._led.on()
                         return _payload
-                    except Exception:
+                    except Exception as e:
                         # corrupt packet: remove SYNC_HEADER and resync
                         self._signal_error()
                         self._log.error("packet decode error: {}. resyncing…".format(e))
                         self._buffer = self._buffer[1:]
+#                       self._buffer = bytearray()
                         continue
                 else:
                     # not enough data yet for a full packet

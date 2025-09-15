@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Murray Altheim
+# created:  2025-08-30
+# modified: 2025-09-10
+#
 
 import time
 import sys
 import pytest
-
-from ads1015 import ADS1015
 from colorama import init, Fore, Style
 init()
+
+from ads1015 import ADS1015
 
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
@@ -57,8 +67,20 @@ def test_power():
     except Exception as e:
         __log.error('{} raised in power supply test: {}'.format(type(e), e))
 
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 def main():
-    test_power()
+    global __log
+    """
+    Runs only the marked unit tests within this file when executed directly.
+    """
+    try:
+        pytest.main([__file__, "-m", "unit"])
+        __log.info("test execution complete.")
+    except Exception as e:
+        __log.error("an unexpected error occurred: {}".format(e))
+    finally:
+        __log = None
 
 if __name__ == "__main__":
     main()

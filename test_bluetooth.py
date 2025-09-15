@@ -17,6 +17,8 @@ init()
 
 from core.logger import Logger, Level
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 __log = Logger('test-bluetooth', level=Level.INFO)
 
 @pytest.mark.unit
@@ -31,6 +33,8 @@ def test_bluetooth_state():
         __log.info(Fore.GREEN + "Bluetooth is enabled.")
     except subprocess.CalledProcessError:
         assert False
+
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 def main():
     global __log

@@ -9,9 +9,11 @@ kros:
 #   impl:              'stm32h562'
     impl:              'stm32h723'
   uart_master:
-    port:           '/dev/serial0'
+    port:           '/dev/ttyAMA0'
     baud_rate:          1_000_000      # 115200 460800 921600
     use_async_mgr:          False      # sync or async UART manager
+    tx_timeout_ms:             20      # was 10ms
+    rx_timeout_ms:             37      # was 27ms
   uart_slave_app:
     verbose:                False
     uart_id:                    3      # UART identifier (1-7): 3 on STM32H723, TX=B10, RX=B11

@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-07-04
-# modified: 2025-07-14
+# modified: 2025-09-16
 
 from colorama import Fore, Style
 try:
@@ -97,9 +97,10 @@ Mode.PING        = Mode(11, "PING",      "PN", None,              "ping")
 Mode.IP_ADDRESS  = Mode(12, "IP",        "IP", None,              "ip address")
 Mode.REQUEST     = Mode(13, "REQUEST",   "RS", None,              "request status")
 Mode.ACK         = Mode(14, "ACK",       "AK", None,              "acknowledge")
-Mode.ENABLE      = Mode(15, "ENABLE",    "EN", None,              "enable")
-Mode.DISABLE     = Mode(16, "DISABLE",   "DI", None,              "disable")
-Mode.ERROR       = Mode(17, "ERROR",     "ER", None,              "error")
+Mode.EMPTY       = Mode(15, "MT",        "MT", None,              "empty")
+Mode.ENABLE      = Mode(16, "ENABLE",    "EN", None,              "enable")
+Mode.DISABLE     = Mode(17, "DISABLE",   "DI", None,              "disable")
+Mode.ERROR       = Mode(18, "ERROR",     "ER", None,              "error")
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def main():

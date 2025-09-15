@@ -96,10 +96,12 @@ class Diagnostics:
             self._log.warning("no unit test files found to run.")
             return False
         self._log.info("running unit tests on the following functions:")
+        max_width = max(len(f) for f in files_to_test)
         for _file in files_to_test:
             unit_tests = self._get_marked_tests(_file)
             for test_name in unit_tests:
-                self._log.info("    {}:{}".format(_file, test_name))
+#               self._log.info(Fore.BLUE + "    {}:\t{}".format(_file, test_name))
+                self._log.info(Fore.BLUE + "    {:<{}} {}".format(_file + ":", max_width + 1, test_name))
         try:
             command = [sys.executable, "-m", "pytest", "-s", "-q"]
 #           command = [sys.executable, "-m", "pytest", "-s", "-q", "--log-cli-level=INFO"]
@@ -161,7 +163,7 @@ class Diagnostics:
             elif test_files:
                 self._log.info("found the following unit test files:")
                 for _file in test_files:
-                    self._log.info("    {}".format(_file))
+                    self._log.info(Fore.BLUE + "    {}".format(_file))
                 if run_tests:
                     there_were_errors = self._execute_tests(test_files)
                 else:
