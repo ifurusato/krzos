@@ -37,7 +37,7 @@ kros:
         publish_delay_sec:                 0.05            # publishing delay loop
         clip_event_list:                  False            # if True clip length of displayed event list
         clip_length:                         42            # max length of displayed event list
-        loop_freq_hz:                        20            # main loop delay in hz
+        loop_freq_hz:                        50            # main loop delay in hz
         accel_decel_steps:                   50            # determines rate of acceleration/deceleration
         coasting_steps:                     300            # determines coasting deceleration
         braking_steps:                       60            # determines braking deceleration
@@ -56,7 +56,7 @@ kros:
         gamepad:
             publish_delay_sec:                0.05         # publishing delay loop
         queue:
-            loop_freq_hz:                    20            # polling loop frequency (Hz)
+            loop_freq_hz:                    50            # polling loop frequency (Hz)
     subscriber:
         # TBD
     hardware:

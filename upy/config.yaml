@@ -14,7 +14,6 @@ kros:
     use_async_mgr:          False      # sync or async UART manager
   uart_slave_app:
     verbose:                False
-    is_pyboard:              True
     uart_id:                    3      # UART identifier (1-7): 3 on STM32H723, TX=B10, RX=B11
     irq_freq_hz:              100      # frequency of IRQ external clock
     irq_timer_number:          15      # identifier for hardware Timer

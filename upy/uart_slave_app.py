@@ -25,6 +25,7 @@ from payload_router import PayloadRouter
 from motor_controller import MotorController
 from mode import Mode
 from colors import *
+from stm32_uart_slave import Stm32UartSlave
 
 import cwd
 import free
@@ -36,10 +37,9 @@ class UartSlaveApp:
             raise ValueError('failed to import configuration.')
         _cfg = _config['kros']['uart_slave_app']
         self._uart_id    = _cfg['uart_id'] # on RP2040 this should be 1
-        self._is_pyboard = _cfg['is_pyboard'] 
         self._verbose    = _cfg['verbose']
         self._log = Logger('uart{}_slave'.format(self._uart_id), Level.INFO)
-        self._irq_freq         = _cfg['irq_freq_hz']      # 100Hz
+        self._irq_freq_hz      = _cfg['irq_freq_hz']      # 100Hz
         self._irq_timer_number = _cfg['irq_timer_number'] # 15
         self._irq_pin_number   = _cfg['irq_pin_number']   # 'E4'
         _display_enabled = _config['kros']['display']['enable']
@@ -89,34 +89,12 @@ class UartSlaveApp:
             self._status.off()
         _led.off()
 
-    async def _wait_a_bit(self):
-        _led = Pin(11, Pin.OUT)
-        for _ in range(3):
-            self.rgb()
-            _led.on()
-            await asyncio.sleep_ms(50)
-            if self._status:
-                self._status.off()
-            _led.off()
-            await asyncio.sleep_ms(950)
-        if self._status:
-            self._status.off()
-        _led.off()
-
     async def _setup_uart_slave(self):
-        if self._is_pyboard:
-            from stm32_uart_slave import Stm32UartSlave
-            self._log.info(Fore.WHITE + 'waiting a bit…')
-            await self._pyb_wait_a_bit()
-            self._log.info(Fore.WHITE + 'done waiting.')
-            self._log.info('configuring UART{} slave for STM32 Pyboard…'.format(self._uart_id))
-            self._slave = Stm32UartSlave(uart_id=self._uart_id, baudrate=self._baudrate, status=self._status)
-        else:
-            from rp2040_uart_slave import RP2040UartSlave
-            await self._wait_a_bit()
-            self._log.info('configuring UART{} slave for RP2040…'.format(self._uart_id))
-            self._slave = RP2040UartSlave(uart_id=self._uart_id, baudrate=self._baudrate, status=self._status)
-
+        self._log.info(Fore.WHITE + 'waiting a bit…')
+        await self._pyb_wait_a_bit()
+        self._log.info(Fore.WHITE + 'done waiting.')
+        self._log.info('configuring UART{} slave for STM32 Pyboard…'.format(self._uart_id))
+        self._slave = Stm32UartSlave(uart_id=self._uart_id, baudrate=self._baudrate, status=self._status)
         self._slave.set_verbose(False)
         self._motor_controller.enable()
 #       self._display.ready()
@@ -124,11 +102,11 @@ class UartSlaveApp:
 
     def _start_irq_timer(self):
         '''
-        Starts a 20Hz hardware timer on pin E4, used by the Raspberry Pi.
+        Starts a hardware timer on pin E4, used by the Raspberry Pi.
         '''
-        self._log.info('starting {}Hz hardware timer {} on pin {}…'.format(self._irq_freq, self._irq_timer_number, self._irq_pin_number))
+        self._log.info('starting {}Hz hardware timer {} on pin {}…'.format(self._irq_freq_hz, self._irq_timer_number, self._irq_pin_number))
         _pin_e4 = Pin(self._irq_pin_number, Pin.OUT_PP)
-        self._irq_timer = Timer(self._irq_timer_number, freq=self._irq_freq)
+        self._irq_timer = Timer(self._irq_timer_number, freq=self._irq_freq_hz)
         self._irq_timer.channel(1, Timer.PWM, pin=_pin_e4, pulse_width_percent=50)
 
     async def run(self):
