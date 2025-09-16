@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-06-23
-# modified: 2025-07-15
+# modified: 2025-09-16
 #
 # This is the entry point to the UART slave application.
 
@@ -18,6 +18,7 @@ from colorama import Fore, Style
 
 from logger import Logger, Level
 from config_loader import ConfigLoader
+from datetime import datetime as dt, timedelta
 from payload import Payload
 from pixel import Pixel
 from status import Status
@@ -61,6 +62,9 @@ class UartSlaveApp:
         else:
             self._pixel = None
             self._status = None
+        self._paused     = False
+        self._last_command_time = dt.now()
+        self._timeout_threshold = timedelta(seconds=1)
         self._slave      = None
         self._irq_timer  = None
         self._tx_count   = 0
@@ -119,6 +123,16 @@ class UartSlaveApp:
         self._slave.enable()
         try:
             while True:
+                now = dt.now()
+                print("🍏 now type:", type(now), "now value:", now)
+                # check for timeout and pause motors if needed
+                if not self._paused and now - self._last_command_time > self._timeout_threshold:
+                    self._log.info("no packet received for {}s, stopping motors and entering paused state…".format(
+                            self._timeout_threshold.total_seconds()))
+                    self._router.stop()
+                    self._paused = True
+                    # do not update self._last_command_time here; will update when resuming
+
                 _payload = await self._slave.receive_packet()
                 if _payload is None:
                     if self._verbose:
@@ -128,22 +142,41 @@ class UartSlaveApp:
                     self._tx_count += 1
                     if self._verbose:
                         self._log.info("payload: {}".format(_payload))
-                    if _payload.code == 'PN': # just ping, no routing
-                        await self._slave.send_packet(Payload(Mode.PING.code, *Payload.encode_int(self._tx_count)))
-                    elif _payload.code == 'RS': # request status
+
+                    # any successfully processed packet indicates the UART is working, therefore:
+                    # after a pause, any valid packet resumes the system and resets timeout
+                    if self._paused:
+                        self._log.info(Style.BRIGHT + "received packet after pause, resuming.")
+                        self._paused = False
+
+                    self._last_command_time = now  # Reset timeout for ANY valid packet
+                    # process packet by Mode code:
+                    if _payload.code == Mode.PING.code:
+                        await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
+                    elif _payload.code == Mode.REQUEST.code:
                         self._log.info(Fore.MAGENTA + "request status…")
                         timestamp, code = self._router.get_error_info()
-#                       status_code = "ER" if timestamp is not None else "OK"
                         if timestamp is not None:
                             status_payload = Payload(Mode.ERROR.code, timestamp, code, 0.0, 0.0)
                         else:
                             status_payload = UartSlaveApp.ACK_PAYLOAD
                         await self._slave.send_packet(status_payload)
                         self._router.clear_error()
-                    else:
-                        # route normal command payload (non-blocking)
+                    elif _payload.code == Mode.COLOR.code:
+                        # example non-movement mode, still processed
                         asyncio.create_task(self._router.route(_payload))
-                        self._router.route(_payload)
+                        await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
+                    elif _payload.code == Mode.IP_ADDRESS.code:
+                        # IP address info, if implemented
+                        asyncio.create_task(self._router.route(_payload))
+                        await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
+                    elif _payload.code == Mode.ENABLE.code or _payload.code == Mode.DISABLE.code:
+                        # system enable/disable
+                        asyncio.create_task(self._router.route(_payload))
+                        await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
+                    else:
+                        # all other movement and control modes
+                        asyncio.create_task(self._router.route(_payload))
                         await self._slave.send_packet(UartSlaveApp.ACK_PAYLOAD)
                 else:
                     self._log.warning("no valid payload received: type: {}; value: {}".format(type(_payload), _payload))

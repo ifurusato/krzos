@@ -55,7 +55,7 @@ class PayloadRouter:
             Mode.PING:        lambda payload: self._handle_ping(),                       # ping (shouldn't be here)
             Mode.IP_ADDRESS:  lambda payload: self._display_ip_address(payload.speeds),  # display ip address
             # stopped   
-            Mode.STOP:        lambda payload: self._motor_controller.go(payload),        # stop
+            Mode.STOP:        lambda payload: self._stop(),                              # stop
             # all wheels forward/backward
             Mode.GO:          lambda payload: self._motor_controller.go(payload),        # go forward or reverse
             # rotation (spin in place)
@@ -175,6 +175,10 @@ class PayloadRouter:
         if self._status:
             self._status.rgb(color=rgb)
 
+    def _stop(self):
+        self._log.info("stopping motors via payload router…")
+        self._motor_controller.stop()
+
     def _handle_ack(self):
         self._log.info(Fore.GREEN + 'ACK')
         pass
@@ -196,6 +200,9 @@ class PayloadRouter:
 
     def _handle_ping():
         self._log.warning('ping at payload router.') # should be caught by app
+        self._status.rgb(color=Color.MAGENTA)
+        time.sleep_ms(10)
+        self._status.off()
 
     def _display_ip_address(self, octets):
         ip_string = '.'.join(str(int(x)) for x in octets)

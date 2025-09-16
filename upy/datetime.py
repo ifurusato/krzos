@@ -1,11 +1,19 @@
+#!/micropython
+# -*- coding: utf-8 -*-
+#
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Murray Altheim
+# created:  2025-07-03
+# modified: 2025-09-16
 
 import time
 
 class timedelta:
     def __init__(self, days=0, seconds=0, minutes=0, hours=0):
-        self.total_seconds = (
-            days * 86400 + hours * 3600 + minutes * 60 + seconds
-        )
+        self.total_seconds = (days * 86400 + hours * 3600 + minutes * 60 + seconds)
 
     def __add__(self, other):
         if isinstance(other, datetime):
@@ -19,8 +27,22 @@ class timedelta:
         return timedelta(seconds=self.total_seconds - other.total_seconds)
 
     def __repr__(self):
-        return f"timedelta(seconds={self.total_seconds})"
+        return "timedelta(seconds={})".format(self.total_seconds)
 
+    def __eq__(self, other):
+        return isinstance(other, timedelta) and self.total_seconds == other.total_seconds
+
+    def __lt__(self, other):
+        return isinstance(other, timedelta) and self.total_seconds < other.total_seconds
+
+    def __le__(self, other):
+        return isinstance(other, timedelta) and self.total_seconds <= other.total_seconds
+
+    def __gt__(self, other):
+        return isinstance(other, timedelta) and self.total_seconds > other.total_seconds
+
+    def __ge__(self, other):
+        return isinstance(other, timedelta) and self.total_seconds >= other.total_seconds
 
 class datetime:
     def __init__(self, year, month, day, hour=0, minute=0, second=0):
@@ -31,8 +53,13 @@ class datetime:
         t = time.localtime()
         return cls(*t[:6])
     
+#   def timestamp(self):
+#       return time.mktime(self.struct_time + (0, 0))
+
     def timestamp(self):
-        return time.mktime(self.struct_time + (0, 0))
+        # struct_time: (year, month, day, hour, minute, second, weekday, yearday)
+        # adding is_dst=-1 to make it length 9
+        return time.mktime(self.struct_time + (-1,))
 
     def __add__(self, delta):
         if not isinstance(delta, timedelta):
@@ -62,3 +89,4 @@ class datetime:
     def time(self):
         return self.struct_time[3:6]
 
+#EOF
