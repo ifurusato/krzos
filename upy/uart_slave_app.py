@@ -124,14 +124,12 @@ class UartSlaveApp:
         try:
             while True:
                 now = dt.now()
-                print("🍏 now type:", type(now), "now value:", now)
                 # check for timeout and pause motors if needed
                 if not self._paused and now - self._last_command_time > self._timeout_threshold:
-                    self._log.info("no packet received for {}s, stopping motors and entering paused state…".format(
+                    self._log.info(Fore.YELLOW + "no packet received for {}s, stopping motors and entering paused state…".format(
                             self._timeout_threshold.total_seconds()))
                     self._router.stop()
                     self._paused = True
-                    # do not update self._last_command_time here; will update when resuming
 
                 _payload = await self._slave.receive_packet()
                 if _payload is None:
@@ -146,7 +144,7 @@ class UartSlaveApp:
                     # any successfully processed packet indicates the UART is working, therefore:
                     # after a pause, any valid packet resumes the system and resets timeout
                     if self._paused:
-                        self._log.info(Style.BRIGHT + "received packet after pause, resuming.")
+                        self._log.info(Fore.YELLOW + "received packet after pause, resuming…")
                         self._paused = False
 
                     self._last_command_time = now  # Reset timeout for ANY valid packet

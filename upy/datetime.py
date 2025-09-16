@@ -13,7 +13,10 @@ import time
 
 class timedelta:
     def __init__(self, days=0, seconds=0, minutes=0, hours=0):
-        self.total_seconds = (days * 86400 + hours * 3600 + minutes * 60 + seconds)
+        self._total_seconds = days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+    def total_seconds(self):
+        return self._total_seconds
 
     def __add__(self, other):
         if isinstance(other, datetime):
@@ -24,25 +27,25 @@ class timedelta:
         return self.__add__(other)
 
     def __sub__(self, other):
-        return timedelta(seconds=self.total_seconds - other.total_seconds)
+        return timedelta(seconds=self._total_seconds - other._total_seconds)
 
     def __repr__(self):
-        return "timedelta(seconds={})".format(self.total_seconds)
+        return "timedelta(seconds={})".format(self._total_seconds)
 
     def __eq__(self, other):
-        return isinstance(other, timedelta) and self.total_seconds == other.total_seconds
+        return isinstance(other, timedelta) and self._total_seconds == other._total_seconds
 
     def __lt__(self, other):
-        return isinstance(other, timedelta) and self.total_seconds < other.total_seconds
+        return isinstance(other, timedelta) and self._total_seconds < other._total_seconds
 
     def __le__(self, other):
-        return isinstance(other, timedelta) and self.total_seconds <= other.total_seconds
+        return isinstance(other, timedelta) and self._total_seconds <= other._total_seconds
 
     def __gt__(self, other):
-        return isinstance(other, timedelta) and self.total_seconds > other.total_seconds
+        return isinstance(other, timedelta) and self._total_seconds > other._total_seconds
 
     def __ge__(self, other):
-        return isinstance(other, timedelta) and self.total_seconds >= other.total_seconds
+        return isinstance(other, timedelta) and self._total_seconds >= other._total_seconds
 
 class datetime:
     def __init__(self, year, month, day, hour=0, minute=0, second=0):
@@ -53,24 +56,20 @@ class datetime:
         t = time.localtime()
         return cls(*t[:6])
     
-#   def timestamp(self):
-#       return time.mktime(self.struct_time + (0, 0))
-
     def timestamp(self):
-        # struct_time: (year, month, day, hour, minute, second, weekday, yearday)
-        # adding is_dst=-1 to make it length 9
+        # Use length 9 tuple as required by MicroPython
         return time.mktime(self.struct_time + (-1,))
 
     def __add__(self, delta):
         if not isinstance(delta, timedelta):
             raise TypeError("Can only add timedelta to datetime")
-        new_ts = self.timestamp() + delta.total_seconds
+        new_ts = self.timestamp() + delta.total_seconds()
         t = time.localtime(new_ts)
         return datetime(*t[:6])
 
     def __sub__(self, other):
         if isinstance(other, timedelta):
-            new_ts = self.timestamp() - other.total_seconds
+            new_ts = self.timestamp() - other.total_seconds()
             t = time.localtime(new_ts)
             return datetime(*t[:6])
         elif isinstance(other, datetime):
@@ -81,7 +80,7 @@ class datetime:
         return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(*self.struct_time[:6])
 
     def __repr__(self):
-        return f"datetime({', '.join(map(str, self.struct_time[:6]))})"
+        return "datetime({})".format(", ".join(map(str, self.struct_time[:6])))
 
     def date(self):
         return self.struct_time[:3]

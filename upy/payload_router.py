@@ -55,7 +55,7 @@ class PayloadRouter:
             Mode.PING:        lambda payload: self._handle_ping(),                       # ping (shouldn't be here)
             Mode.IP_ADDRESS:  lambda payload: self._display_ip_address(payload.speeds),  # display ip address
             # stopped   
-            Mode.STOP:        lambda payload: self._stop(),                              # stop
+            Mode.STOP:        lambda payload: self.stop(),                              # stop
             # all wheels forward/backward
             Mode.GO:          lambda payload: self._motor_controller.go(payload),        # go forward or reverse
             # rotation (spin in place)
@@ -175,7 +175,7 @@ class PayloadRouter:
         if self._status:
             self._status.rgb(color=rgb)
 
-    def _stop(self):
+    def stop(self):
         self._log.info("stopping motors via payload router…")
         self._motor_controller.stop()
 
