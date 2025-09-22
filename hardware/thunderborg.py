@@ -467,8 +467,8 @@ class ThunderBorg:
             i2cRecv = self.RawRead(COMMAND_GET_A, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
-        except:
-            self._log.error('failed reading motor 1 drive level.')
+        except Exception as e:
+            self._log.error('{} raised reading motor 1 drive level: {}'.format(type(e), e))
             return None
 
         power = float(i2cRecv[2]) / float(PWM_MAX)
@@ -540,8 +540,8 @@ class ThunderBorg:
             i2cRecv = self.RawRead(COMMAND_GET_B, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
-        except:
-            self._log.error('failed reading motor 2 drive level.')
+        except Exception as e:
+            self._log.error('{} raised reading motor 2 drive level: {}'.format(type(e), e))
             return None
 
         power = float(i2cRecv[2]) / float(PWM_MAX)

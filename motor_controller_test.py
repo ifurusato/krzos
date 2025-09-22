@@ -31,11 +31,12 @@ from hardware.digital_pot import DigitalPotentiometer
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 _orientation = Orientation.SFWD # which motor to test?
-_pot   = None
+_pot         = None
 _start_time  = dt.now()
 
 _log = Logger('test', Level.INFO)
 _motor_controller = None
+ENABLE_MOTORS = False
 
 try:
 
@@ -48,7 +49,7 @@ try:
     _irq_clock = IrqClock(_config, level=Level.INFO)
     _irq_clock.enable()
 
-    _log.info('using analog potentiometer for speed…')
+    _log.info('using digital potentiometer for speed…')
     _pot = DigitalPotentiometer(_config, level=_level)
     _pot.set_output_range(-1.0, 1.0)
 
@@ -60,21 +61,21 @@ try:
     _hz = 20
     _rate = Rate(_hz, Level.ERROR)
 
+
     while True:
 
         _target_speed = _pot.get_scaled_value(False) # values 0.0-1.0
         if isclose(_target_speed, 0.0, abs_tol=0.01):
             _pot.set_black() # only on digital pot
+#           if ENABLE_MOTORS:
             _motor_controller.set_speed(Orientation.PORT, 0.0)
             _motor_controller.set_speed(Orientation.STBD, 0.0)
-#           _motor_controller.set_speed(Orientation.PORT, _target_speed)
-#           _motor_controller.set_speed(Orientation.STBD, _target_speed)
-
             _log.info('target speed: {:.2f}; '.format(_target_speed))
         else:
             _pot.set_rgb(_pot.value) # only on digital pot
-            _motor_controller.set_speed(Orientation.PORT, _target_speed)
-            _motor_controller.set_speed(Orientation.STBD, _target_speed)
+            if ENABLE_MOTORS:
+                _motor_controller.set_speed(Orientation.PORT, _target_speed)
+                _motor_controller.set_speed(Orientation.STBD, _target_speed)
             _log.info('target speed: {:.2f}; '.format(_target_speed))
 
         _rate.wait()

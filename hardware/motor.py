@@ -443,8 +443,6 @@ class Motor(Component):
         elif self._orientation is Orientation.SFWD:
 #           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
             self._tb.SetMotor2(_driving_power)
-#       elif self._orientation is Orientation.PMID:
-#       elif self._orientation is Orientation.SMID:
         elif self._orientation is Orientation.PAFT:
 #           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
             self._tb.SetMotor1(_driving_power)
@@ -516,9 +514,9 @@ class Motor(Component):
         Stops the motor immediately.
         '''
         self.target_speed = 0.0
-        if self._orientation is Orientation.PFWD or self._orientation is Orientation.PMID or self._orientation is Orientation.PAFT:
+        if self._orientation is Orientation.PFWD or self._orientation is Orientation.PAFT:
             self._tb.SetMotor1(0.0)
-        elif self._orientation is Orientation.SFWD or self._orientation is Orientation.SMID or self._orientation is Orientation.SAFT:
+        elif self._orientation is Orientation.SFWD or self._orientation is Orientation.SAFT:
             self._tb.SetMotor2(0.0)
         else:
             raise ValueError('unrecognised orientation.')
@@ -529,9 +527,9 @@ class Motor(Component):
         '''
         Stops the motor entirely.
         '''
-        if self._orientation is Orientation.PFWD or self._orientation is Orientation.PMID or self._orientation is Orientation.PAFT:
+        if self._orientation is Orientation.PFWD or self._orientation is Orientation.PAFT:
             self._tb.SetMotor1Off()
-        elif self._orientation is Orientation.SFWD or self._orientation is Orientation.SMID or self._orientation is Orientation.SAFT:
+        elif self._orientation is Orientation.SFWD or self._orientation is Orientation.SAFT:
             self._tb.SetMotor2Off()
         else:
             raise ValueError('unrecognised orientation.')

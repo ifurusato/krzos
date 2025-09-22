@@ -7,44 +7,31 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-18
-# modified: 2024-06-02
+# modified: 2025-09-22
 #
-# For installing pigpio, see:  http://abyz.me.uk/rpi/pigpio/download.html
+# Refactored to replace pigpio with gpiozero. gpiozero does not require a daemon;
+# it uses RPi.GPIO or similar under the hood.
 #
-# To enable the pigpio daemon on startup:
-# 
-#   sudo systemctl enable pigpiod
-# 
-# or to disable the pigpio daemon on startup:
-# 
-#   sudo systemctl disable pigpiod
-# 
-# or start it immediately:
-# 
-#   sudo systemctl start pigpiod 
-# 
-# To obtain the status of the pigpiod deamon: 
-# 
-#   sudo systemctl status pigpiod 
-# 
+# For installing gpiozero, see:  https://gpiozero.readthedocs.io/en/stable/installing.html
+#
 
 import sys, traceback
 
 try:
-    import pigpio
+    from gpiozero import RotaryEncoder
 except ImportError as ie:
-    print("This script requires the pigpio module.\nInstall with: pip3 install --user pigpio")
-    raise ModuleNotFoundError('pigpio not installed.')
+    print("This script requires the gpiozero module.\nInstall with: pip3 install --user gpiozero")
+    raise ModuleNotFoundError('gpiozero not installed.')
 from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Decoder(object):
     '''
     Class to decode mechanical rotary encoder pulses, implemented
-    using pigpio's pi.callback() method.
+    using gpiozero's RotaryEncoder class.
 
     Decodes the rotary encoder A and B pulses, e.g.:
 
@@ -62,10 +49,10 @@ class Decoder(object):
 
     '''
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __init__(self, orientation, gpio_a, gpio_b, callback, level):
         '''
-        Instantiate the class with the pi and gpios connected to
+        Instantiate the class with the gpios connected to
         rotary encoder contacts A and B. The common contact should
         be connected to ground. The callback is called when the
         rotary encoder is turned. It takes one parameter which is
@@ -95,60 +82,46 @@ class Decoder(object):
         self._gpio_b    = gpio_b
         self._log.debug('pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
         self._callback  = callback
-        self._level_a   = 0
-        self._level_b   = 0
-        self._last_gpio = None
         self._increment = 1
+
         try:
-            _pi = pigpio.pi()
-            if _pi is None:
-                raise Exception('unable to instantiate pigpio.pi().')
-            elif _pi._notify is None:
-                raise Exception('can\'t connect to pigpio daemon; did you start it?')
-            _pi._notify.name = 'pi.callback'
-            self._log.debug('pigpio version {}'.format(_pi.get_pigpio_version()))
-            _pi.set_mode(self._gpio_a, pigpio.INPUT)
-            _pi.set_mode(self._gpio_b, pigpio.INPUT)
-            _pi.set_pull_up_down(self._gpio_a, pigpio.PUD_UP)
-            _pi.set_pull_up_down(self._gpio_b, pigpio.PUD_UP)
-#           _edge = pigpio.RISING_EDGE  # default
-#           _edge = pigpio.FALLING_EDGE
-            _edge = pigpio.EITHER_EDGE
-            self.callback_a = _pi.callback(self._gpio_a, _edge, self._pulse_a)
-            self.callback_b = _pi.callback(self._gpio_b, _edge, self._pulse_b)
+            # gpiozero RotaryEncoder takes pin_a, pin_b as args.
+            self._encoder = RotaryEncoder(self._gpio_a, self._gpio_b, max_steps=0)
+            self._encoder.when_rotated = self._rotated
+            self._last_value = self._encoder.value
             self._log.info('configured {} motor encoder with channel A on pin {}, channel B on pin {}.'.format(orientation.name, self._gpio_a, self._gpio_b))
         except Exception as e:
             self._log.error('error importing and/or configuring Motor: {}'.format(e))
             traceback.print_exc(file=sys.stdout)
             raise Exception('unable to configure decoder.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_reversed(self):
         '''
         If called, sets this encoder for reversed operation.
         '''
         self._increment = -1
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _pulse_a(self, gpio, level, tick):
-        self._level_a = level
-        if level == 1 and self._level_b == 1:
-#           self._log.info('pulse A; level: {}; level_b: {}'.format(level, self._level_b))
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _rotated(self):
+        '''
+        Internal handler called by gpiozero when the encoder is rotated.
+        Calls user callback with +1 or -1 depending on direction.
+        '''
+        step = self._encoder.value - self._last_value
+        if step > 0:
             self._callback(self._increment)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _pulse_b(self, gpio, level, tick):
-        self._level_b = level;
-        if level == 1 and self._level_a == 1:
-#           self._log.info('pulse B; level: {}; level_a: {}'.format(level, self._level_a))
+        elif step < 0:
             self._callback(-1 * self._increment)
+        self._last_value = self._encoder.value
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def cancel(self):
         '''
         Cancel the rotary encoder decoder.
         '''
-        self.callback_a.cancel()
-        self.callback_b.cancel()
+        # gpiozero RotaryEncoder does not have a cancel method,
+        # but we can close it to clean up resources.
+        self._encoder.close()
 
 #EOF

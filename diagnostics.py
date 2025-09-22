@@ -154,7 +154,7 @@ class Diagnostics:
         '''
         Orchestrate the scanning and optional execution of tests.
         '''
-        _start_time = dt.datetime.now()
+        _start_time = time.monotonic()
         try:
             there_were_errors = False
             test_files = self._find_test_files()
@@ -175,7 +175,7 @@ class Diagnostics:
         finally:
             if not there_were_errors:
                 self._led_control.cleanup()
-            _elapsed_ms = int((dt.datetime.now() - _start_time).total_seconds() * 1000)
+            _elapsed_ms = int((time.monotonic() - _start_time) * 1000)
             self._log.info('diagnostics complete: {}ms elapsed.'.format(_elapsed_ms))
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
