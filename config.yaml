@@ -59,6 +59,59 @@ kros:
             loop_freq_hz:                    50            # polling loop frequency (Hz)
     subscriber:
         # TBD
+    motor_controller:
+        loop_freq_hz:                    20                # main loop delay in hz
+        verbose:                          False            # noisy messaging
+        halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
+        brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
+        max_speed:                          100.0          # maximum motor speed (0.0-1.0)
+        rotation_speed:                       0.25         # motor speed when rotating in place
+#       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
+#       use_speed_indicator:              False            # publish RGB events for motor speed indication
+
+    geometry:                                              # robot geometry (e.g., KR01)
+        wheel_diameter:                     104            # wheel diameter (mm)
+        wheel_base:                         148            # wheel base (mm), distance between front and rear axles
+        wheel_track:                        186            # wheel base (mm), distance between left and right wheel centerlines
+        steps_per_rotation:                2774.64         # encoder steps per wheel rotation
+    motor:
+        motor_voltage:                       12            # the voltage rating of the motor
+        motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
+        scale_factor:                         5.0          # a constant multiplier that determines maximum power sent to the motors (7 maxes them out at 0.9)
+        enable_pid_controller:             True            # initial enable state for PID controller, otherwise direct drive
+        enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
+        enable_jerk_limiter:              False            # initial enabled state for jerk limiter
+        thunderborg_fore_address:          0x15            # I²C address for fore thunderborg motor controller
+        thunderborg_aft_address:           0x16            # I²C address for aft thunderborg motor controller
+        odometry:
+            enable_odometry:               True            # if true we enable motor encoders and odometry
+            motor_encoder_sfwd_a:            26            # stbd fwd A channel
+            motor_encoder_sfwd_b:            19            # stbd fwd B channel
+            motor_encoder_pfwd_a:            21            # port fwd A channel
+            motor_encoder_pfwd_b:            20            # port fwd B channel
+            motor_encoder_saft_a:             6            # stbd aft A channel
+            motor_encoder_saft_b:             5            # stbd aft B channel
+            motor_encoder_paft_a:            16            # port aft A channel
+            motor_encoder_paft_b:            12            # port aft B channel
+            reverse_encoder_sfwd:         False            # in case you wire up the encoders backwards
+            reverse_encoder_pfwd:         False            # ditto
+            reverse_encoder_saft:         False            # ditto
+            reverse_encoder_paft:          True            # ditto
+        pid_controller:
+            kp:                               0.05000      # proportional gain
+            ki:                               0.00500      # integral gain
+            kd:                               0.00000      # derivative gain
+            minimum_output:                 -10.0          # lower output limit
+            maximum_output:                  10.0          # upper output limit
+            sample_freq_hz:                  20            # 20Hz equiv to 50ms/0.05s
+            hyst_queue_len:                  20            # size of queue used for running average for hysteresis
+        slew_limiter:
+            minimum_output:                  -1.0          # lower limit of permitted speed output values
+            maximum_output:                   1.0          # upper limit, both should match motor_controller:scale_factor
+            default_rate:               'NORMAL'           # select value of enum: SLOWEST, SLOWER, SLOW, NORMAL, FAST, FASTER, FASTEST
+            hysteresis:                       2.0          # how close do we get to the target speed?
+        jerk_limiter:
+            jerk_tolerance:                  10            # percentage limit of permitted change per iteration
     hardware:
         battery:
             enable_battery_messaging:     False            # if True we enable low battery messages to be sent
@@ -70,7 +123,7 @@ kros:
             low_3v3_regulator_threshold:   3.25            # low 3.3V regulator threshold
             loop_delay_sec:                  60            # sample loop delay (sec)
         button:                                            # GPIO or IO Expander-based simple button or switch
-            i2c_address:                   0x18            # I2C address of the IO Expander (if used)
+            i2c_address:                   0x18            # I²C address of the IO Expander (if used)
             impl:                    'gpiozero'            # either 'gpio', 'lpgio', 'gpiod', 'ioe', 'gpiozero' or 'pigpio'
             edge_detect:              'falling'            # either 'falling', 'rising' or 'both'
             momentary:                     True            # button or toggle?
@@ -83,7 +136,7 @@ kros:
             pin_green:                        7            # green pin
             pin_blue:                         2            # blue pin
         icm20948:
-            i2c_address:                   0x69            # I2C address (default 0x68)
+            i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled
             vertical_mount:                True            # vertical like Pimoroni, or horizontal like Adafruit
             bench_calibrate:               True            # if true, calibrate the IMU manually while on the rotating bench
@@ -103,7 +156,7 @@ kros:
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
         irq_clock:
-            pin:                             18            # GPIO pin connected to an external clock source
+            pin:                             15            # GPIO pin connected to an external clock source
             freq_divider:                    50            # tick divisor for lower frequency callback
         tinyfx-controller:
             i2c_address:                   0x44
@@ -130,6 +183,12 @@ kros:
           - address:                       0x10
             name:                  "PA1010D GPS"
             required:                     False
+          - address:                       0x15
+            name:                "ThunderBorg 1"
+            required:                      True
+          - address:                       0x16
+            name:                "ThunderBorg 2"
+            required:                      True
           - address:                       0x18
             name:                  "IO Expander"
             required:                     False
@@ -160,6 +219,9 @@ kros:
           - address:                       0x28
             name:                  "MPU9250 IMU"
             required:                     True
+          - address:                       0x3C
+            name:                   '1.12" OLED'
+            required:                     False
           - address:                       0x69
             name:                 "ICM20948 IMU"
             required:                     False

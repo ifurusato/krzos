@@ -2,13 +2,13 @@
 
 # -*- coding: utf-8 -*-
 #
-# Portions copyright 2020-2024 by Murray Altheim. All rights reserved. This file
+# Portions copyright 2020-2025 by Murray Altheim. All rights reserved. This file
 # is part of the Robot Operating System project, released under the MIT License.
 # Please see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2024-09-03
-# modified: 2024-09-04
+# modified: 2025-09-04
 #
 
 import sys, traceback

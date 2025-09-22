@@ -181,7 +181,7 @@ class Diagnostics:
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def main():
     _diagnostics = Diagnostics()
-    _diagnostics.run("--run-tests" in sys.argv)
+    _diagnostics.run("--skip-tests" not in sys.argv)
 
 if __name__ == "__main__":
     main()
