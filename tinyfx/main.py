@@ -23,11 +23,11 @@ import itertools
 from colorama import Fore, Style
 
 from tiny_fx import TinyFX
-from picofx import MonoPlayer
-from picofx.mono import StaticFX
-from triofx import TrioFX
-from rgb_blink import RgbBlinkFX
-from i2c_settable_blink import I2CSettableBlinkFX
+#from picofx import MonoPlayer
+#from picofx.mono import StaticFX
+#from triofx import TrioFX
+#from rgb_blink import RgbBlinkFX
+#from i2c_settable_blink import I2CSettableBlinkFX
 from pir import PassiveInfrared
 from sound_dictionary import _sounds
 
@@ -45,7 +45,7 @@ from response import*
 I2C_BUS_ID    = 0
 SDA_PIN       = 16
 SCL_PIN       = 17
-I2C_ADDRESS   = 0x45
+I2C_ADDRESS   = 0x44
 VERBOSE       = False
 ERROR_LIMIT   = 10       # max errors before exiting main loop
 DISPLAY_TYPE  = 'tinyfx' # 'neopixel' | 'ws2812' | 'pico'

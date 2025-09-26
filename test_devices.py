@@ -30,7 +30,7 @@ def test_required_devices():
     '''
     Tests for the required devices for the KRZ04.
     '''
-    _show_optional = False
+    _show_optional = True
     __log.info("testing existence of required and optional devices…")
     _devices = __config['kros'].get('hardware').get('devices')
     for _device in _devices:
@@ -45,7 +45,8 @@ def test_required_devices():
             if found:
                 __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
             else:
-                __log.warning(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (not found, optional)")
+                __log.debug(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (not found, optional)")
+    __log.info(Fore.GREEN + "required devices are available.")
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -55,7 +56,7 @@ def main():
     Runs only the marked unit tests within this file when executed directly.
     """
     try:
-        pytest.main([__file__, "-m", "unit"])
+        pytest.main([__file__, "-m", "unit", "-s"])
         __log.info("test execution complete.")
     except Exception as e:
         __log.error("an unexpected error occurred: {}".format(e))

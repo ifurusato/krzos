@@ -22,19 +22,20 @@ __log = Logger('test-buses', level=Level.INFO)
 
 @pytest.mark.unit
 def test_buses():
-    __log.info("testing if I2C and SPI buses are enabled…")
+    __log.info("testing if I²C and SPI buses are enabled…")
     _i2c_enabled = os.path.exists("/dev/i2c-1")
     _spi_enabled = os.path.exists("/dev/spidev0.0") or os.path.exists("/dev/spidev0.1")
     if _i2c_enabled:
-        __log.info(Fore.GREEN + "I2C is enabled.")
+        __log.info(Fore.GREEN + "I²C is enabled.")
     else:
-        __log.warning("I2C is not enabled.")
+        __log.warning("I²C is not enabled.")
     if _spi_enabled:
         __log.info(Fore.GREEN + "SPI is enabled.")
     else:
         __log.warning("SPI is not enabled.")
     assert _i2c_enabled
     assert _spi_enabled
+    __log.info(Fore.GREEN + "I²C and SPI buses are enabled.")
 
 def main():
     global __log
@@ -42,7 +43,7 @@ def main():
     Runs only the marked unit tests within this file when executed directly.
     """
     try:
-        pytest.main([__file__, "-m", "unit"])
+        pytest.main([__file__, "-m", "unit", "-s"])
         __log.info("test execution complete.")
     except Exception as e:
         __log.error("an unexpected error occurred: {}".format(e))

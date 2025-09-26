@@ -17,21 +17,129 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Level, Logger
+from hardware.ina260_sensor import Ina260
+from ads1015 import ADS1015
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class System:
     '''
     A collection of system control/info/statistical methods.
+    Args:
+
+    config:     the application configuration
+    kros:       optional instance of KROS
+    level:      the log level
     '''
-    def __init__(self, kros, level=Level.INFO):
-        global _kros
+    def __init__(self, config=None, kros=None, level=Level.INFO):
         self._log = Logger('system', level)
         self._kros = kros
+        _cfg = config['kros'].get('hardware').get('system')
+        self._12v_battery_min  = _cfg.get('low_12v_battery_threshold')   # 11.5  e.g., in0/ref: 11.953v
+        self._5v_reg_min       = _cfg.get('low_5v_regulator_threshold')  #  5.0  e.g., in2/ref:  5.028v
+        self._3v3_reg_min      = _cfg.get('low_3v3_regulator_threshold') #  3.25 e.g., in1/ref:  3.302v
+        self._system_current_max = _cfg.get('system_current_max')
+
+
+        self._batt_12v_channel = _cfg.get('battery_12v_channel')
+        self._reg_5v_channel   = _cfg.get('reg_5v_channel')
+        self._reg_3v3_channel  = _cfg.get('reg_3v3_channel')
+        self._log.info("testing power supplies…")
+        self._ads1015 = ADS1015()
+        chip_type = self._ads1015.detect_chip_type()
+        self._log.info("found device:  " + Fore.GREEN + "{}".format(chip_type))
+        self._ads1015.set_mode("single")
+        self._ads1015.set_programmable_gain(2.048)
+        if chip_type == "ADS1015":
+            self._ads1015.set_sample_rate(1600)
+        else:
+            self._ads1015.set_sample_rate(860)
+        self._reference = self._ads1015.get_reference_voltage()
+        self._log.info("reference:     " + Fore.GREEN + "{:6.3f}V".format(self._reference))
+        self._ina260 = Ina260(config, level=level)
         self._log.info('ready.')
+
+    # ADS1015 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def get_voltages(self):
+        '''
+        Return a tuple containing 12V battery voltage, the 5V and 3.3V regulators.
+        '''
+        return self.battery_12v, self.reg_5v, self.reg_3v3
+
+    def get_voltage_thresholds(self):
+        '''
+        Return a tuple containing minimum thresholds of the 12V battery voltage, the 5V and 3.3V regulators.
+        '''
+        return self._12v_battery_min, self._5v_reg_min, self._3v3_reg_min
+
+    def get_battery_12v(self):
+        '''
+        Return the 12V battery voltage.
+        '''
+        return self._ads1015.get_compensated_voltage(channel=self._batt_12v_channel, reference_voltage=self._reference)
+
+    def get_reg_5v(self):
+        '''
+        Return the output of the 5V regulator.
+        '''
+        return self._ads1015.get_compensated_voltage(channel=self._reg_5v_channel, reference_voltage=self._reference)
+
+    def get_reg_3v3(self):
+        '''
+        Return the output of the 3.3V regulator.
+        '''
+        return self._ads1015.get_compensated_voltage(channel=self._reg_3v3_channel, reference_voltage=self._reference)
+
+    def get_battery_12v_min(self):
+        '''
+        Return the minimum threshold of the 12V battery voltage.
+        '''
+        return self._12v_battery_min
+
+    def get_reg_5v_min(self):
+        '''
+        Return the minimum threshold of the 5V regulator.
+        '''
+        return self._5v_reg_min
+
+    def get_reg_3v3_min(self):
+        '''
+        Return the minimum threshold of the 3V3 regulator.
+        '''
+        return self._3v3_reg_min
+
+    # INA260 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def get_system_voltage(self):
+        '''
+        Return the measured system voltage from the INA160.
+        '''
+        return self._ina260.voltage
+
+    def get_system_current(self):
+        '''
+        Return the measured system current from the INA160.
+        '''
+        return self._ina260.current
+
+
+    def get_system_power(self):
+        '''
+        Return the measured system power from the INA160.
+        '''
+        return self._ina260.power
+
+    def get_system_current_max(self):
+        '''
+        Return the maximum system current (threshold).
+        '''
+        return self._system_current_max
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_nice(self):
-        # set KRZOS as high priority process
+        '''
+        Set KROS as high priority process.
+        '''
         self._log.info('setting process as high priority…')
         proc = psutil.Process(os.getpid())
         proc.nice(10)
@@ -80,9 +188,28 @@ class System:
             return None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def get_battery_info(self):
+
+        try:
+            _battery_12v, _reg_5v, _reg_3v3 = self.voltages
+            self._log.info("battery (in0): " + Fore.GREEN + "{:6.3f}V".format(_battery_12v))
+            self._log.info("5V ref (in2):  " + Fore.GREEN + "{:6.3f}V".format(_reg_5v))
+            self._log.info("3V3 reg (in1): " + Fore.GREEN + "{:6.3f}V".format(_reg_3v3))
+
+            assert _battery_12v > self._12v_battery_min, 'measured in0 value less than threshold {}v'.format(self._12v_battery_min)
+            assert _reg_5v      > self._5v_reg_min, 'measured in2 value less than threshold {}v'.format(self._5v_reg_min)
+            assert _reg_3v3     > self._3v3_reg_min, 'measured in1 value less than threshold {}v'.format(self._3v3_reg_min)
+
+            self._log.info(Fore.GREEN + "power supplies are functional.")
+
+        except Exception as e:
+            self._log.error('{} raised in power supply test: {}'.format(type(e), e))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_sys_info(self):
-        self._log.info('kros:  state: ' + Fore.YELLOW + '{}  \t'.format(self._kros.state.name) \
-                + Fore.CYAN + 'enabled: ' + Fore.YELLOW + '{}'.format(self._kros.enabled))
+        if self._kros:
+            self._log.info('kros:  state: ' + Fore.YELLOW + '{}  \t'.format(self._kros.state.name) \
+                    + Fore.CYAN + 'enabled: ' + Fore.YELLOW + '{}'.format(self._kros.enabled))
         # disk space ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._log.info('root file system:')
         _rootfs = psutil.disk_usage('/')

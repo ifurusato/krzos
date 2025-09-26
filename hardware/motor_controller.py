@@ -147,7 +147,6 @@ class MotorController(Component):
                         _motor.modified_speed, _motor.target_speed, _motor.target_speed, _mean))
                 _speeds.append(_motor.target_speed)
 #               _speeds.append(_motor.modified_speed)
-
         elif orientation is Orientation.PORT:
             _speeds.append(self._pfwd_motor.modified_speed)
             _speeds.append(self._paft_motor.modified_speed)
@@ -155,6 +154,19 @@ class MotorController(Component):
             _speeds.append(self._sfwd_motor.modified_speed)
             _speeds.append(self._saft_motor.modified_speed)
         return statistics.fmean(_speeds)
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def set_closed_loop(self, closed_loop):
+        '''
+        Set the motor controller to open or closed loop.
+        '''
+        for _motor in self._all_motors:
+            if closed_loop:
+                _motor.pid_controller.enable()
+                self._log.info('set closed loop control.')
+            else:
+                _motor.pid_controller.disable()
+                self._log.info('set open loop control.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_motors(self):
@@ -210,8 +222,10 @@ class MotorController(Component):
                 self._external_clock.add_callback(self.external_callback_method)
                 for _motor in self._all_motors:
                     _motor.enable()
-#               self.set_speed(Orientation.PORT, 0.0)
-#               self.set_speed(Orientation.STBD, 0.0)
+#               self.set_speed(Orientation.PFWD, 0.0)
+#               self.set_speed(Orientation.SFWD, 0.0)
+#               self.set_speed(Orientation.PAFT, 0.0)
+#               self.set_speed(Orientation.SAFT, 0.0)
             elif not self.loop_is_running:
                 self._start_loop()
             self._log.info('enabled.')
@@ -346,8 +360,11 @@ class MotorController(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_speed(self, orientation, value):
         '''
-        Sets the speed of all motors associated with the port or
-        starboard orientation.
+        Sets the speed of all motors associated with the port or starboard
+        orientation.
+
+        For testing we permit a single SAFT motor, which otherwise is not a
+        particularly good idea.
         '''
         if orientation is Orientation.PORT:
             self._port_speed = self._clamp(value)
@@ -357,6 +374,18 @@ class MotorController(Component):
             self._stbd_speed = self._clamp(value)
             self.set_motor_speed(Orientation.SFWD, self._stbd_speed)
             self.set_motor_speed(Orientation.SAFT, self._stbd_speed)
+        elif orientation is Orientation.PFWD:
+            _speed = self._clamp(value)
+            self.set_motor_speed(Orientation.PFWD, _speed)
+        elif orientation is Orientation.SFWD:
+            _speed = self._clamp(value)
+            self.set_motor_speed(Orientation.SFWD, _speed)
+        elif orientation is Orientation.PAFT:
+            _speed = self._clamp(value)
+            self.set_motor_speed(Orientation.PAFT, _speed)
+        elif orientation is Orientation.SAFT:
+            _speed = self._clamp(value)
+            self.set_motor_speed(Orientation.SAFT, _speed)
         else:
             raise Exception('unsupported orientation {}'.format(orientation.name))
 
@@ -386,14 +415,15 @@ class MotorController(Component):
         if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
             self._pfwd_motor.target_speed = target_speed
         elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
+            self._log.info(Fore.MAGENTA + 'set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
             self._sfwd_motor.target_speed = target_speed
         elif orientation is Orientation.PAFT and self._paft_motor.enabled:
             self._paft_motor.target_speed = target_speed
         elif orientation is Orientation.SAFT and self._saft_motor.enabled:
             self._saft_motor.target_speed = target_speed
         else:
-            self._log.warning('expected a motor orientation, not {}'.format(orientation))
-#           raise TypeError('expected a motor orientation, not {}'.format(orientation))
+#           self._log.warning('expected a motor orientation, not {}'.format(orientation))
+            raise TypeError('expected a motor orientation, not {}'.format(orientation))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   @property

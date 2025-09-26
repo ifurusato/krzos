@@ -23,6 +23,7 @@ from picofx import MonoPlayer
 from picofx.mono import StaticFX
 from triofx import TrioFX
 from rgb_blink import RgbBlinkFX
+from settable import SettableFX
 from i2c_settable_blink import I2CSettableBlinkFX
 from pir import PassiveInfrared
 
@@ -38,33 +39,48 @@ class TinyFxController(Controller):
     '''
     def __init__(self, tinyfx=None, display=None, level=Level.INFO):
         super().__init__(display=display, level=level)
-        self._log = Logger('motor', level)
+        self._log = Logger('tinyfx', level)
         self._tinyfx = tinyfx
         self.player = MonoPlayer(self._tinyfx.outputs) # create a new effect player to control TinyFX's mono outputs
 
-        self.blink_fx     = I2CSettableBlinkFX(1, speed=0.5, phase=0.0, duty=0.015) # ch4
-        self.stbd_trio_fx = TrioFX(2, brightness=0.8) # ch5
-        self.port_trio_fx = TrioFX(3, brightness=0.8) # ch6
+        self._settable_fx  = SettableFX(brightness=1.0)                               # ch3
+        self._blink_fx     = I2CSettableBlinkFX(1, speed=0.5, phase=0.0, duty=0.015)  # ch4
+        self._stbd_trio_fx = TrioFX(2, brightness=0.8)                                # ch5
+        self._port_trio_fx = TrioFX(3, brightness=0.8)                                # ch6
 
-        self.pir_sensor = PassiveInfrared()
+        self._pir_sensor   = PassiveInfrared()
+        self._pir_timer    = Timer()
+        self._pir_timer.init(period=50, mode=Timer.PERIODIC, callback=self._poll_pir)
+        self._pir_triggered = False
 
         # set up the effects to play
         self.player.effects = [
             None, #TrioFX(2, brightness=0.5),  # UNUSED
             None, #TrioFX(3, brightness=1.0),  # UNUSED
-            None, # StaticFX(0.7),
-            self.blink_fx,
-            self.stbd_trio_fx,
-            self.port_trio_fx
+            self._settable_fx,
+            self._blink_fx,
+            self._stbd_trio_fx,
+            self._port_trio_fx
         ]
 
-        self.pir_enabled = False # default disabled
+        self._pir_enabled = False # default disabled
 
         self._log.info("starting player…")
         self.player.start()
 
         self.play('arming-tone')
         self._log.info('ready.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _poll_pir(self, arg):
+        if self._pir_enabled:
+            self._pir_triggered = self._pir_sensor.triggered
+            if self._pir_triggered:
+                self.show_color(COLOR_ORANGE)
+                self._settable_fx.set(True)
+            else:
+                self._settable_fx.set(False)
+                pass # just let blink occur
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def play(self, key):
@@ -76,7 +92,7 @@ class TinyFxController(Controller):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def handle_command(self, command):
         '''
-        Extended async processor for motor-specific commands.
+        Extended async processor for handling commands.
         '''
 #       self._log.debug("handling command: '{}'".format(command))
         try:
@@ -100,19 +116,19 @@ class TinyFxController(Controller):
             elif command == 'ch3':
                 pass
             elif command == 'ch4' or command == 'mast':
-                self.blink_fx.on()
+                self._blink_fx.on()
             elif command == 'ch5' or command == 'stbd':
-                self.stbd_trio_fx.on()
+                self._stbd_trio_fx.on()
             elif command == 'ch6' or command == 'port':
-                self.port_trio_fx.on()
+                self._port_trio_fx.on()
             elif command == 'on':
-                self.blink_fx.on()
-                self.port_trio_fx.on()
-                self.stbd_trio_fx.on()
+                self._blink_fx.on()
+                self._port_trio_fx.on()
+                self._stbd_trio_fx.on()
             elif command == 'off':
-                self.blink_fx.off()
-                self.port_trio_fx.off()
-                self.stbd_trio_fx.off()
+                self._blink_fx.off()
+                self._port_trio_fx.off()
+                self._stbd_trio_fx.off()
 
             # system info ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'flash':
@@ -132,19 +148,22 @@ class TinyFxController(Controller):
 
             # pir ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'pir get':
-                pass
-                if self.pir_sensor.triggered:
-#                   response = RESPONSE_PIR_ACTIVE
+                if self._pir_triggered:
                     self.show_color(COLOR_ORANGE)
+                    self._log.info(Fore.YELLOW + "pir active")
+                    return RESPONSE_PIR_ACTIVE
                 else:
-#                   response = RESPONSE_PIR_IDLE
                     self.show_color(COLOR_VIOLET)
+                    self._log.info(Fore.MAGENTA + "pir idle")
+                    return RESPONSE_PIR_IDLE
             elif command == 'pir on':
-                self.pir_enabled = True
+                self._pir_enabled = True
                 self.show_color(COLOR_GREEN)
+                return RESPONSE_PIR_ON
             elif command == 'pir off':
-                self.pir_enabled = False
+                self._pir_enabled = False
                 self.show_color(COLOR_DARK_GREEN)
+                return RESPONSE_PIR_OFF
 
             # set some colors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'red':

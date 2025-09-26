@@ -66,7 +66,7 @@ class QueuePublisher(Publisher):
         else:
             self._queue.put(message)
             self._log.info('put message \'{}\' ({}) into queue ({:d} {})'.format(
-                    message.event.label, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
+                    message.event.name, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):

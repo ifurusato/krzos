@@ -2,13 +2,13 @@
 
 # -*- coding: utf-8 -*-
 #
-# Portions copyright 2020-2024 by Murray Altheim. All rights reserved. This file
+# Portions copyright 2020-2025 by Murray Altheim. All rights reserved. This file
 # is part of the Robot Operating System project, released under the MIT License.
 # Please see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2024-09-03
-# modified: 2024-09-04
+# modified: 2025-09-22
 #
 
 import sys, traceback
@@ -30,6 +30,7 @@ def main():
     _log = Logger('test', Level.INFO)
     _start_time = dt.now()
     I2C_ADDRESS = 0x0C # was 0x0E
+    INCLUDE_ENV = False
 
     try:
 
@@ -49,8 +50,9 @@ def main():
 
         _em7180 = Em7180(_config, matrix11x7=_matrix11x7, trim_pot=_trim_pot, level=Level.INFO)
         # fixed trim for Pukerua Bay, NZ, determined via observation
-#       _em7180.set_fixed_yaw_trim(148.0) 
-        _em7180.set_fixed_yaw_trim(136.5) 
+#       _em7180.set_fixed_yaw_trim(148.0)
+#       _em7180.set_fixed_yaw_trim(136.5)
+        _em7180.set_fixed_yaw_trim(-83.5)
         _em7180.set_verbose(False)
 
         while True:
@@ -61,6 +63,15 @@ def main():
             _log.info('Yaw: {:+2.2f} '.format(_yaw)
                     + Fore.WHITE + 'Corrected Yaw: {:+2.2f} '.format(_corrected_yaw)
                     + Style.DIM + 'with trim: {:+2.2f}'.format(_yaw_trim))
+
+            if INCLUDE_ENV:
+                _pressure    = _em7180.pressure
+                _temperature = _em7180.temperature
+                _altitude    = _em7180.altitude
+                _log.info(Fore.YELLOW + 'Pressure: {:+2.2f}hPa '.format(_pressure) 
+                        + Fore.GREEN + 'Temperature: {:+2.2f}C '.format(_temperature)
+                        + Fore.MAGENTA + 'Altitude: {:+2.2f}m'.format(_altitude))
+
             time.sleep(.05)
 
     except KeyboardInterrupt:

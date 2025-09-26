@@ -48,7 +48,7 @@ from core.queue_publisher import QueuePublisher
 #from hardware.system_publisher import SystemPublisher
 
 from hardware.sound import Sound
-from hardware.player import Player
+from hardware.irq_clock import IrqClock
 
 from core.subscriber import Subscriber, GarbageCollector
 #from hardware.system_subscriber import SystemSubscriber
@@ -82,8 +82,6 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('…')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         FiniteStateMachine.__init__(self, self._log, _name)
-        self._system              = System(self, level)
-        self._system.set_nice()
         # configuration…
         self._config              = None
         self._component_registry  = None
@@ -119,6 +117,11 @@ class KROS(Component, FiniteStateMachine):
         _config_filename = arguments.config_file
         _filename = _config_filename if _config_filename is not None else 'config.yaml'
         self._config = _loader.configure(_filename)
+        if not isinstance(self._config, dict):
+            raise ValueError('wrong type for config argument: {}'.format(type(name)))
+        # create system monitor
+        self._system = System(config=self._config, kros=self, level=self._level)
+        self._system.set_nice() # set KROS as high priority process
         self._is_raspberry_pi = self._system.is_raspberry_pi()
 
         _i2c_scanner = I2CScanner(self._config, level=Level.INFO)
@@ -149,19 +152,8 @@ class KROS(Component, FiniteStateMachine):
 
         self._log.info('configure subsumption components…')
 
-        if _cfg.get('enable_queue_publisher') or 'q' in _pubs:
-            self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
-
-        self._use_external_clock = self._config['kros'].get('component').get('enable_external_clock')
-        if self._use_external_clock:
-            self._log.info('creating external clock…')
-            self._irq_clock = IrqClock(self._config, level=self._level)
-        else:
-            self._irq_clock = None  
-
         self._message_bus = MessageBus(self._config, self._level)
         self._message_factory = MessageFactory(self._message_bus, self._level)
-
         self._controller = Controller(self._message_bus, self._level)
 
         # JSON configuration dump ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -175,6 +167,16 @@ class KROS(Component, FiniteStateMachine):
         if self._component_registry is None:
             raise ValueError('no component registry available.')
         _cfg = self._config['kros'].get('component')
+
+        if _cfg.get('enable_queue_publisher') or 'q' in _pubs:
+            self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
+
+        self._use_external_clock = _cfg.get('enable_external_clock')
+        if self._use_external_clock:
+            self._log.info('creating external clock…')
+            self._irq_clock = IrqClock(self._config, level=self._level)
+        else:
+            self._irq_clock = None  
 
         # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -193,8 +195,6 @@ class KROS(Component, FiniteStateMachine):
             print('creating TinyFX...')
             self._tinyfx = TinyFxController(self._config)
             self._tinyfx.enable()
-            self._log.info('instantiate sound player…')
-#           Player.instance(self._tinyfx)
 
         # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -283,8 +283,6 @@ class KROS(Component, FiniteStateMachine):
         self._component_registry.print_registry()
 
         if self._tinyfx:
-            # instantiate singleton with existing TinyFX
-#           Player.play(Sound.BEEP)
             self._tinyfx.play('beep')
 
         # ════════════════════════════════════════════════════════════════════

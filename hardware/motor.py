@@ -48,9 +48,12 @@ class Motor(Component):
         3. modified speed:  the target speed of the motor as modified by
                             any lambdas
 
-    :param config:      application configuration
-    :param tb:          reference to the ThunderBorg motor controller
-    :param orientation: motor orientation
+    Args:
+        config:        application configuration
+        tb:            reference to the ThunderBorg motor controller
+        orientation:   motor orientation
+        level:         the logging level
+    "
     :param level:       log level
     '''
     def __init__(self, config, tb, orientation, level=Level.INFO):
@@ -75,6 +78,8 @@ class Motor(Component):
         self._power_clip = lambda n: ( -1.0 * self._motor_power_limit ) if n <= ( -1.0 * self._motor_power_limit ) \
                 else self._motor_power_limit if n >= self._motor_power_limit \
                 else n
+        self._reverse_motor = _cfg.get('reverse_motor_{}'.format(orientation.label))
+        self._log.info('reverse motor: {}'.format(self._reverse_motor))
         self._counter            = itertools.count()
         self.__callbacks         = []
         self.__steps             = 0     # step counter
@@ -87,27 +92,20 @@ class Motor(Component):
         self._jerk_limiter       = None
         self.__speed_lambdas     = {}
         self._verbose            = True
-        # slew limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _enable_slew_limiter     = _cfg.get('enable_slew_limiter')
-        _suppress_slew_limiter   = not _enable_slew_limiter
-        self._slew_limiter       = SlewLimiter(config, orientation, suppressed=_suppress_slew_limiter,
-                enabled=_enable_slew_limiter, level=level)
         # provides closed loop speed feedback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._velocity           = Velocity(config, self, level=level)
         # add callback from motor's update method
         self.add_callback(self._velocity.tick)
         self._velocity.enable()
-        # pid controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _enable_pid_controller   = _cfg.get('enable_pid_controller')
-        _suppress_pid_controller = not _enable_pid_controller
-        self._pid_controller     = PIDController(config, self, suppressed=_suppress_pid_controller,
-                enabled=_enable_pid_controller, level=level)
+        # slew limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        _enable_slew_limiter     = _cfg.get('enable_slew_limiter')
+        self._slew_limiter       = SlewLimiter(config, orientation, suppressed=False, enabled=_enable_slew_limiter, level=level)
         # jerk limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _enable_jerk_limiter     = _cfg.get('enable_jerk_limiter')
-        _suppress_jerk_limiter   = not _enable_jerk_limiter
-#       if not _suppress_jerk_limiter and _enable_jerk_limiter:
-        self._jerk_limiter       = JerkLimiter(config, orientation, suppressed=_suppress_jerk_limiter,
-                enabled=_enable_jerk_limiter, level=level)
+        self._jerk_limiter       = JerkLimiter(config, orientation, suppressed=False, enabled=_enable_jerk_limiter, level=level)
+        # pid controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        _enable_pid_controller   = _cfg.get('enable_pid_controller')
+        self._pid_controller     = PIDController(config, self, suppressed=False, enabled=_enable_pid_controller, level=level)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -124,16 +122,6 @@ class Motor(Component):
         Returns the orientation of this motor.
         '''
         return self._orientation
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#   @property
-#   def speed_multiplier(self):
-#       '''
-#       Returns the speed multiplier used to convert the 0.0-1.0 value to
-#       the value actually sent to the motor.
-#       This is a constant, provided by application configuration.
-#       '''
-#       return self._speed_multiplier
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -212,42 +200,28 @@ class Motor(Component):
                 self._log.info(Fore.GREEN + '    speed multiplier: {}'.format(_lambda))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def remove_limiters(self):
-        '''
-        Used in testing to remove the slew and jerk limiters if they are by
-        default set in configuration.
-        '''
-        self._log.warning('removing motor limiters…')
-        self._slew_limiter = None
-        self._jerk_limiter = None
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def slew_limiter(self):
         '''
         Returns the slew limiter used by this motor.
-        This should be used only for testing or to obtain information, not
-        for control.
         '''
         return self._slew_limiter
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def pid_controller(self):
-        '''
-        Returns the PID controller used by this motor.
-        This should be used only to obtain information, not for control.
-        '''
-        return self._pid_controller
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def jerk_limiter(self):
         '''
         Returns the jerk limiter used by this motor.
-        This should be used only to obtain information, not for control.
         '''
         return self._jerk_limiter
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def pid_controller(self):
+        '''
+        Returns the PID controller used by this motor.
+        '''
+        return self._pid_controller
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -326,17 +300,20 @@ class Motor(Component):
     @max_power_ratio.setter
     def max_power_ratio(self, max_power_ratio):
         self.__max_power_ratio = max_power_ratio
-        self._log.info('maximum power ratio: {:<5.2f}'.format(self.__max_power_ratio))
+        self._log.info('set maximum power ratio: {:<5.2f}'.format(self.__max_power_ratio))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _callback_step_count(self, pulse):
         '''
         This callback is used to capture encoder steps.
         '''
+        
         if self._orientation.side is Orientation.PORT:
             self.__steps = self.__steps + pulse
+            self._log.info(Fore.RED + '_callback_step_count: {}'.format(self.__steps))
         elif self._orientation.side is Orientation.STBD:
             self.__steps = self.__steps - pulse
+            self._log.info(Fore.GREEN + '_callback_step_count: {}'.format(self.__steps))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -382,9 +359,6 @@ class Motor(Component):
         is meant to be called regularly, in a loop.
         '''
         if self.enabled:
-            if not self._pid_controller.is_active: # via PID
-                self._log.warning('pid controller is not active.')
-                return
             for callback in self.__callbacks:
                 callback()
             # we start with the current value of the target speed
@@ -408,11 +382,23 @@ class Motor(Component):
                     # the lambda name was returned; this only should apply to brake, halt and stop.
                     _lambda_name = _returned_value
                     self.remove_speed_multiplier(_lambda_name)
-                    self._pid_controller.set_speed(0.0)
+                    if self._pid_controller.is_active:
+                        self._pid_controller.set_speed(0.0)
                     return
-#           self._log.info('updating {} target speed to: {:<5.2f} (from {:5.2f})'.format(self._orientation.label, self.__modified_target_speed, self.__target_speed))
-            _motor_speed = self.__modified_target_speed * self._scale_factor
-            self._pid_controller.set_speed(_motor_speed)
+            if self._pid_controller.is_active:
+                _motor_speed = self.__modified_target_speed # self._scale_factor
+                if self._orientation is Orientation.SFWD:
+                    self._log.info(Fore.MAGENTA + '😡 CLOSED LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}) with motor speed: {:5.2f}'.format(
+                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed))
+                self._pid_controller.set_speed(_motor_speed)
+            else:
+                _motor_speed = self.__modified_target_speed * self._scale_factor
+                if self._orientation is Orientation.SFWD:
+                    self._log.info(Fore.MAGENTA + '😡 OPEN LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}) with motor speed: {:5.2f}'.format(
+                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed))
+                self.set_motor_power(_motor_speed)
+#               self._log.debug('pid controller is not active.')
+                pass
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_motor_power(self, target_power):
@@ -434,28 +420,58 @@ class Motor(Component):
         # even if disabled or suppressed, JerkLimiter still clips
 #       if self._jerk_limiter:
 #           target_power = self._jerk_limiter.limit(self.get_current_power(), target_power)
+        _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
+
+        # temporary clamp
+#       _driving_power = min(0.5, max(-0.5, _driving_power))
+        _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
+        if self._reverse_motor:
+            _driving_power *= -1.0
+
+        if self._orientation is Orientation.PFWD:
+            if _is_zero:
+                self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor2(0.0)
+            else:
+                self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor2(_driving_power)
+
+        elif self._orientation is Orientation.SFWD:
+            if _is_zero:
+                self._log.info(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor2(0.0)
+            else:
+                self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor2(_driving_power)
+
+        elif self._orientation is Orientation.PAFT:
+            if _is_zero:
+                self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor1(0.0)
+            else:
+                self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor1(_driving_power)
+
+        elif self._orientation is Orientation.SAFT:
+            if _is_zero:
+                self._log.debug(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SAFT motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor1(0.0)
+            else:
+                self._log.debug(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SAFT motor.'.format(target_power, _driving_power))
+                self._tb.SetMotor1(_driving_power)
+
+#       elif self._orientation.side is Orientation.PORT:
+#           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
+#           self._tb.SetMotor2(_driving_power)
+#       elif self._orientation.side is Orientation.STBD:
+#           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
+#           self._tb.SetMotor1(_driving_power)
+        else:
+            raise ValueError('cannot set speed via side.')
+
+        self._last_driving_power = _driving_power
         # keep track of highest-applied target power
         self.__max_applied_power = max(abs(target_power), self.__max_applied_power)
-        _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
-        if self._orientation is Orientation.PFWD:
-#           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
-            self._tb.SetMotor1(_driving_power)
-        elif self._orientation is Orientation.SFWD:
-#           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
-            self._tb.SetMotor2(_driving_power)
-        elif self._orientation is Orientation.PAFT:
-#           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
-            self._tb.SetMotor1(_driving_power)
-        elif self._orientation is Orientation.SAFT:
-#           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SAFT motor.'.format(target_power, _driving_power))
-            self._tb.SetMotor2(_driving_power)
-        elif self._orientation.side is Orientation.PORT:
-#           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
-            self._tb.SetMotor1(_driving_power)
-        elif self._orientation.side is Orientation.STBD:
-#           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
-            self._tb.SetMotor2(_driving_power)
-        self._last_driving_power = _driving_power
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -484,14 +500,14 @@ class Motor(Component):
         '''
         _value = None
         count = 0
-        if self._orientation.side is Orientation.PORT:
+        if self._orientation is Orientation.PAFT or self._orientation is Orientation.SAFT:
             while _value == None and count < 20:
                 count += 1
                 _value = self._tb.GetMotor1()
             if settle_to_zero and (_value == None or isclose(_value, 0.0, abs_tol=1e-1)):
                 _value = 0.0
                 self._tb.SetMotor1(_value)
-        elif self._orientation.side is Orientation.STBD:
+        elif self._orientation is Orientation.PFWD or self._orientation is Orientation.SFWD:
             while _value == None and count < 20:
                 count += 1
                 _value = self._tb.GetMotor2()
@@ -514,9 +530,10 @@ class Motor(Component):
         Stops the motor immediately.
         '''
         self.target_speed = 0.0
-        if self._orientation is Orientation.PFWD or self._orientation is Orientation.PAFT:
+
+        if self._orientation is Orientation.PAFT or self._orientation is Orientation.SAFT:
             self._tb.SetMotor1(0.0)
-        elif self._orientation is Orientation.SFWD or self._orientation is Orientation.SAFT:
+        elif self._orientation is Orientation.PFWD or self._orientation is Orientation.SFWD:
             self._tb.SetMotor2(0.0)
         else:
             raise ValueError('unrecognised orientation.')

@@ -47,12 +47,9 @@ kros:
         enable_pid:                        True            # initial enable state for PID controller, otherwise direct drive
     publisher:
         system:
+            enable_battery_messaging:     False            # if True we enable low battery messages to be sent
+            enable_regulator_messaging:    True            # if True we enable low regulator messages to be sent
             publish_delay_sec:                0.5          # publishing delay loop
-            current_threshold:                6.0          # alarm over current
-            battery_threshold:               10.0          # alarm under voltage
-            regulator_5v_threshold:           4.85         # alarm under voltage
-            regulator_3v3_threshold:          3.2          # alarm under voltage
-            temperature_threshold:           60.0          # alarm over temperature
         gamepad:
             publish_delay_sec:                0.05         # publishing delay loop
         queue:
@@ -60,7 +57,7 @@ kros:
     subscriber:
         # TBD
     motor_controller:
-        loop_freq_hz:                    20                # main loop delay in hz
+        loop_freq_hz:                        20            # main loop delay in hz
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
         brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
@@ -75,14 +72,18 @@ kros:
         wheel_track:                        186            # wheel base (mm), distance between left and right wheel centerlines
         steps_per_rotation:                2774.64         # encoder steps per wheel rotation
     motor:
+        thunderborg_port_address:          0x15            # I²C address for port thunderborg motor controller
+        thunderborg_stbd_address:          0x16            # I²C address for starboard thunderborg motor controller
         motor_voltage:                       12            # the voltage rating of the motor
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
-        scale_factor:                         5.0          # a constant multiplier that determines maximum power sent to the motors (7 maxes them out at 0.9)
+        scale_factor:                         3.0          # a constant multiplier that determines maximum power sent to the motors (7 maxes them out at 0.9)
         enable_pid_controller:             True            # initial enable state for PID controller, otherwise direct drive
         enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
-        thunderborg_fore_address:          0x15            # I²C address for fore thunderborg motor controller
-        thunderborg_aft_address:           0x16            # I²C address for aft thunderborg motor controller
+        reverse_motor_pfwd:               False            # in case you wire up the motors backwards
+        reverse_motor_sfwd:                True            # ditto
+        reverse_motor_paft:               False            # ditto
+        reverse_motor_saft:                True            # ditto
         odometry:
             enable_odometry:               True            # if true we enable motor encoders and odometry
             motor_encoder_sfwd_a:            26            # stbd fwd A channel
@@ -93,10 +94,10 @@ kros:
             motor_encoder_saft_b:             5            # stbd aft B channel
             motor_encoder_paft_a:            16            # port aft A channel
             motor_encoder_paft_b:            12            # port aft B channel
-            reverse_encoder_sfwd:         False            # in case you wire up the encoders backwards
-            reverse_encoder_pfwd:         False            # ditto
-            reverse_encoder_saft:         False            # ditto
-            reverse_encoder_paft:          True            # ditto
+            reverse_encoder_pfwd:         False            # in case you wire up the encoders backwards
+            reverse_encoder_sfwd:          True            # ditto
+            reverse_encoder_paft:         False            # ditto
+            reverse_encoder_saft:          True            # ditto
         pid_controller:
             kp:                               0.05000      # proportional gain
             ki:                               0.00500      # integral gain
@@ -113,14 +114,18 @@ kros:
         jerk_limiter:
             jerk_tolerance:                  10            # percentage limit of permitted change per iteration
     hardware:
-        battery:
-            enable_battery_messaging:     False            # if True we enable low battery messages to be sent
-            enable_regulator_messaging:    True            # if True we enable low regulator messages to be sent
+        system:
             battery_channel:                  1            # AD channel for raw battery voltage
             regulator_channel:                2            # AD channel for regulated 3V3
             low_12v_battery_threshold:     11.5            # low 12v battery threshold
             low_5v_regulator_threshold:    4.95            # low 5V regulator threshold
             low_3v3_regulator_threshold:   3.25            # low 3.3V regulator threshold
+            battery_12v_channel:       'in0/ref'           # ADS1015 channel for 12V
+            reg_5v_channel:            'in2/ref'           # ADS1015 channel for 5V
+            reg_3v3_channel:           'in1/ref'           # ADS1015 channel for 3V3
+            system_current_max:             5.0            # alarm over current
+            temperature_warning:           55.0            # over temperature warning alarm 
+            temperature_error:             65.0            # over temperature error alarm
             loop_delay_sec:                  60            # sample loop delay (sec)
         button:                                            # GPIO or IO Expander-based simple button or switch
             i2c_address:                   0x18            # I²C address of the IO Expander (if used)
@@ -158,6 +163,20 @@ kros:
         irq_clock:
             pin:                             15            # GPIO pin connected to an external clock source
             freq_divider:                    50            # tick divisor for lower frequency callback
+        monitor:
+            i2c_port:                         0
+            i2c_address:                   0x3C
+            contrast:                      0x3F            # 0x-00-0xFF screen brightness
+            update_rate_hz:                   1            # update rate in Hz
+            use_thread:                   False            # if an external clock is not supplied, use a thread for the update loop
+            rotate:                           1            # values 0: 180°; 1: -90°; 2: 0°; 3: 90°
+            permit_callback:               False           # setting True may introduce message timing issues
+            font_size:                       10            # main font size
+            font_size_full:                   8            # font size for bar
+            font_size_message:               15            # message font size
+            font_name:      'Varela-Regular.ttf'           # font family
+        ina260:
+            i2c_address:                   0x40            # I²C address (default 0x40)
         tinyfx-controller:
             i2c_address:                   0x44
             bus_number:                       1
@@ -200,13 +219,16 @@ kros:
             required:                     False
           - address:                       0x28
             name:         "MPU9250 + BMP280 IMU"
-            required:                     False
+            required:                      True
           - address:                       0x29
             name:           "VL53L1X or VL53L5X"
             required:                     False
           - address:                       0x38
             name:                "HT0740 Switch"
             required:                     False
+          - address:                       0x40
+            name:         "INA260 Power Monitor"
+            required:                      True
           - address:                       0x44
             name:                       "TinyFX"
             required:                      True
@@ -216,9 +238,6 @@ kros:
           - address:                       0x49
             name:          "AS7262 Spectrometer"
             required:                     False
-          - address:                       0x28
-            name:                  "MPU9250 IMU"
-            required:                     True
           - address:                       0x3C
             name:                   '1.12" OLED'
             required:                     False

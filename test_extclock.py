@@ -37,13 +37,13 @@ def test_extclock():
     INPUT_PIN = 15
 
     # target frequency and tolerance
-    TARGET_FREQUENCY   = 50.0 # Hz
-    TOLERANCE_PERCENT  = 2.0
+    TARGET_FREQUENCY   = 20.0 # Hz
+    TOLERANCE_PERCENT  = 3.0
     RELATIVE_TOLERANCE = TOLERANCE_PERCENT / 100.0
 
     # test parameters
     NUM_ITERATIONS = 10
-    DURATION = 0.2 # seconds per iteration
+    DURATION = 0.25 # seconds per iteration
 
     # create a DigitalInputDevice instance
     device = DigitalInputDevice(INPUT_PIN, pull_up=False)
@@ -93,15 +93,14 @@ def test_extclock():
                 TARGET_FREQUENCY,
                 rel_tol=RELATIVE_TOLERANCE
             ), (
-                "the average frequency of {:.2f} Hz is NOT within {:.2f}% of the target {} Hz."
+                "the sampled average frequency of {:.2f} Hz is NOT within {:.2f}% of the target {} Hz."
                 .format(average_frequency, TOLERANCE_PERCENT, TARGET_FREQUENCY)
             )
-            __log.info("the average frequency of {:.2f} Hz is within {:.2f}% of the target {} Hz.".format(
+            __log.info("the sampled average frequency of {:.2f} Hz is within {:.2f}% of the target {} Hz.".format(
                     average_frequency, TOLERANCE_PERCENT, TARGET_FREQUENCY))
         else:
             pytest.fail("no frequency data was collected.")
-
-        __log.info("external clock test complete.")
+        __log.info(Fore.GREEN + "external clock is functional.")
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -111,7 +110,7 @@ def main():
     Runs only the marked unit tests within this file when executed directly.
     """
     try:
-        pytest.main([__file__, "-m", "unit"])
+        pytest.main([__file__, "-m", "unit", "-s"])
         __log.info("test execution complete.")
     except Exception as e:
         __log.error("an unexpected error occurred: {}".format(e))

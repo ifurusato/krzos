@@ -18,7 +18,7 @@ from core.component import Component
 from core.orientation import Orientation
 from core.logger import Logger, Level
 from hardware.controller import Controller
-from hardware.response import*
+from tinyfx.response import*
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class TinyFxController(Component):
@@ -146,6 +146,7 @@ class TinyFxController(Component):
         '''
         Sends a string to the TinyFX.
         '''
+        print('🍏 a. send data. ')
         start_time = dt.datetime.now()
         if self._last_send_time:
             elapsed = start_time - self._last_send_time
@@ -164,10 +165,12 @@ class TinyFxController(Component):
             raise ValueError('null response.')
         elif isinstance(_response, Response):
             if _response == RESPONSE_OKAY:
+                print('🍏 b. RESPONSE_OKAY: {}'.format(_response))
                 self._log.info("response: "
                         + Fore.GREEN + "'{}'".format(_response.description)
                         + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
             else:
+                print('🍏 c. response: {}'.format(_response))
                 self._log.warning("response: "
                         + Fore.RED + "'{}'".format(_response.description)
                         + Fore.WHITE + "; {:5.2f}ms elapsed.".format(elapsed_ms))

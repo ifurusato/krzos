@@ -26,7 +26,7 @@ def test_bluetooth_state():
     '''
     Checks if Bluetooth is enabled.
     '''
-    __log.info("testing Bluetooth is enabled…")
+    __log.info("testing if Bluetooth is enabled…")
     try:
         output = subprocess.check_output("sudo systemctl status bluetooth", shell=True).decode()
         assert "active (running)" in output
@@ -42,7 +42,7 @@ def main():
     Runs only the marked unit tests within this file when executed directly.
     """
     try:
-        pytest.main([__file__, "-m", "unit"])
+        pytest.main([__file__, "-m", "unit", "-s"])
         __log.info("test execution complete.")
     except Exception as e:
         __log.error("an unexpected error occurred: {}".format(e))

@@ -21,12 +21,13 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
+from core.component import Component
 from core.event import Event
 from core.message_factory import MessageFactory
 from core.message_bus import MessageBus
 from core.publisher import Publisher
-from hardware.player import Player
 from hardware.sound import Sound
+from hardware.tinyfx_controller import TinyFxController
 from gamepad.gamepad import Gamepad
 from gamepad.gamepad_monitor import GamepadMonitor
 
@@ -47,6 +48,8 @@ class GamepadPublisher(Publisher):
         self._config            = config
         self._level             = level
         self._play_sound        = self._config['kros'].get('play_sound')
+        _component_registry     = Component.get_registry()
+        self._tinyfx = _component_registry.get(TinyFxController.NAME)
         _cfg = self._config['kros'].get('publisher').get('gamepad')
         self._publish_delay_sec = _cfg.get('publish_delay_sec')
         self._gamepad           = None
@@ -88,7 +91,8 @@ class GamepadPublisher(Publisher):
                     time.sleep(0.5)
                     if self._gamepad.has_connection() or _count > 5:
                         if self._play_sound:
-                            Player.instance().play(Sound.SKADOODLE)
+                            self._tinyfx.play(Sound.SKADOODLE)
+#                           Player.instance().play(Sound.SKADOODLE)
                         break
             except ConnectionError as e:
                 self._log.warning('unable to connect to gamepad: {}'.format(e))

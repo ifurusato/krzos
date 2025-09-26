@@ -18,7 +18,7 @@ init()
 
 from core.logger import Logger, Level
 from hardware.payload import Payload 
-from hardware.response import*
+from tinyfx.response import*
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Controller:
@@ -68,6 +68,7 @@ class Controller:
         '''
         Writes the payload argument to the Motor 2040.
         '''
+        print('🍊 a. payload: {}'.format(payload))
         self._last_payload = payload
         now = dt.datetime.now()
         if self._last_send_time:
@@ -79,6 +80,7 @@ class Controller:
                         self._min_send_interval.total_seconds() * 1000
                     )
                 )
+                print('🍊 b. send RESPONSE_SKIPPED')
                 return RESPONSE_SKIPPED
         try:
             # write Payload to I2C bus
@@ -86,20 +88,24 @@ class Controller:
             _data = list(payload.to_bytes())
 #           self._log.debug("data type: {}; data: '{}'".format(type(_data), _data))
             self._i2cbus.write_block_data(self._i2c_address, self._config_register, _data)
-            self._log.debug("payload written: " + Fore.GREEN + "'{}'".format(payload.command))
+            self._log.info("🍊 c. payload written: " + Fore.GREEN + "'{}'".format(payload.command))
 
             # read response Payload from I2C bus
             _response = None
             if self.RESPONSE_32:
                 # read 32-byte response
                 _read_data = self._i2cbus.read_i2c_block_data(self._i2c_address, self._config_register, 32)
+                print('🍊 d. RESPONSE_32; read from {}; data: {}'.format(self._i2c_address, _read_data))
                 # convert list of ints to bytes and create Payload instance
                 try:
                     _response_payload = Payload.from_bytes(bytes(_read_data))
+                    print('🍊 e. response payload: {}'.format(_response_payload))
                     # extract the command string, stripping whitespace
                     _command = _response_payload.command.strip()
+                    print('🍊 f. command: {}'.format(_command))
                     # lookup Response by label or description
                     _response = Response.from_label(_command) or Response.from_description(_command)
+                    print('🍊 g. response: {}'.format(_response))
 #                   self._log.info("payload received: " + Fore.GREEN + "'{}'".format(_response_payload.command) 
 #                           + Fore.CYAN  + " with response: " + Fore.GREEN + "'{}'".format(_response.description))
                 except ValueError as e:
@@ -111,6 +117,7 @@ class Controller:
                 _read_data = self._i2cbus.read_byte_data(self._i2c_address, self._config_register)
                 # convert response byte to Response
                 _response = Response.from_value(_read_data)
+                print('🍊 H. response: {}'.format(_response))
 
             if _response is None:
                 raise ValueError('null response.')
@@ -121,12 +128,15 @@ class Controller:
             else:
                 self._log.warning("response: " + Fore.RED + "'{}'".format(_response.description))
             self._last_send_time = now # update only on success
+            print('🍊 i. return response: {}'.format(_response))
             return _response
         except TimeoutError as te:
             self._log.error("transfer timeout: {}".format(te))
+            print('🍊 E1. return RESPONSE_CONNECTION_ERROR.')
             return RESPONSE_CONNECTION_ERROR
         except Exception as e:
             self._log.error('{} raised writing payload: {}\n{}'.format(type(e), e, traceback.format_exc()))
+            print('🍊 E2. return RESPONSE_RUNTIME_ERROR.')
             return RESPONSE_RUNTIME_ERROR
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

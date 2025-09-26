@@ -29,5 +29,6 @@
 
 #kros.py -s -m
 #kros.py -s -g -t
-kros.py -s -g
+#kros.py -s -g
+kros.py -s
 

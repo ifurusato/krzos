@@ -19,6 +19,7 @@ init()
 from core.logger import Logger, Level
 from hardware.rgb_led import RGBLED
 from hardware.color import Color
+from hardware.backlight import Backlight
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Diagnostics:
@@ -156,6 +157,8 @@ class Diagnostics:
         '''
         _start_time = time.monotonic()
         try:
+            __backlight = Backlight()
+            __backlight.off()
             there_were_errors = False
             test_files = self._find_test_files()
             if not test_files:
@@ -167,7 +170,7 @@ class Diagnostics:
                 if run_tests:
                     there_were_errors = self._execute_tests(test_files)
                 else:
-                    self._log.info(Fore.YELLOW + "diagnostics called without '--run-tests' argument.")
+                    self._log.info(Fore.YELLOW + "diagnostics called with '--skip-tests' argument.")
             else:
                 self._log.warning("no unit test files were found in the current directory.")
         except subprocess.CalledProcessError:

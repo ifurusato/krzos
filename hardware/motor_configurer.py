@@ -49,28 +49,27 @@ class MotorConfigurer(Component):
         self._log.info('motors enabled?\t{}'.format(self._motors_enabled))
         self._max_power_ratio = None
         # Import the ThunderBorg library, then configure and return the motors
-        self._fwd_tb = self._import_thunderborg(Orientation.FWD)
-        self._log.info('configured FWD ThunderBorg at I2C address: 0x{:02X}'.format(self._fwd_tb.I2cAddress))
-        self._aft_tb  = self._import_thunderborg(Orientation.AFT)
-        self._log.info('configured AFT ThunderBorg at I2C address: 0x{:02X}'.format(self._aft_tb.I2cAddress))
+        self._port_tb = self._import_thunderborg(Orientation.PORT)
+        self._log.info('configured PORT ThunderBorg at I2C address: 0x{:02X}'.format(self._port_tb.I2cAddress))
+        self._stbd_tb  = self._import_thunderborg(Orientation.STBD)
+        self._log.info('configured STBD ThunderBorg at I2C address: 0x{:02X}'.format(self._stbd_tb.I2cAddress))
         if self._max_power_ratio is None: # this should have been set by the ThunderBorg code.
             raise ValueError('max_power_ratio not set.')
         # now import motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         try:
             self._log.info('configuring motors…')
             # PFWD "port-pwd" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._pfwd_motor = Motor(self._config, self._fwd_tb, Orientation.PFWD, level)
+            self._pfwd_motor = Motor(self._config, self._port_tb, Orientation.PFWD, level)
             self._pfwd_motor.max_power_ratio = self._max_power_ratio
-            # SFWD "starboard-fwd" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._sfwd_motor = Motor(self._config, self._fwd_tb, Orientation.SFWD, level)
-            self._sfwd_motor.max_power_ratio = self._max_power_ratio
             # PAFT "port-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._paft_motor = Motor(self._config, self._aft_tb, Orientation.PAFT, level)
+            self._paft_motor = Motor(self._config, self._port_tb, Orientation.PAFT, level)
             self._paft_motor.max_power_ratio = self._max_power_ratio
+            # SFWD "starboard-fwd" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            self._sfwd_motor = Motor(self._config, self._stbd_tb, Orientation.SFWD, level)
+            self._sfwd_motor.max_power_ratio = self._max_power_ratio
             # SAFT "starboard-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._saft_motor = Motor(self._config, self._aft_tb, Orientation.SAFT, level)
+            self._saft_motor = Motor(self._config, self._stbd_tb, Orientation.SAFT, level)
             self._saft_motor.max_power_ratio = self._max_power_ratio
-
         except OSError as oe:
             self._log.error('failed to configure motors: {}'.format(oe))
             self._pfwd_motor = None
@@ -156,13 +155,13 @@ class MotorConfigurer(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _import_thunderborg(self, orientation):
         if self._motors_enabled:
-            if orientation is Orientation.FWD:
+            if orientation is Orientation.PORT:
                 self._log.info('configure thunderborg & motors for {} orientation…')
-                _thunderborg_address = self._config['kros'].get('motor').get('thunderborg_fore_address')
-            elif orientation is Orientation.AFT:
-                _thunderborg_address = self._config['kros'].get('motor').get('thunderborg_aft_address')
+                _thunderborg_address = self._config['kros'].get('motor').get('thunderborg_port_address')
+            elif orientation is Orientation.STBD:
+                _thunderborg_address = self._config['kros'].get('motor').get('thunderborg_stbd_address')
             else:
-                raise Exception('expected FWD or AFT orientation.')
+                raise Exception('expected PORT or STBD orientation.')
             self._log.info(Fore.MAGENTA + 'importing ThunderBorg for orientation {} at address 0x{:02X}…'.format(orientation.name, _thunderborg_address))
             try:
                 if self._i2c_scanner.has_address([_thunderborg_address]):
@@ -213,7 +212,7 @@ class MotorConfigurer(Component):
                     self._log.info(Fore.WHITE + Style.BRIGHT + 'voltage in: {:.2f}; motor voltage: {:.2f}; max_power_ratio: {:.2f}'.format(
                             voltage_in, _motor_voltage, self._max_power_ratio))
                 # convert float to ratio format
-                self._log.info(Style.BRIGHT + 'battery level: {:>5.2f}V; motor voltage: {:>5.2f}V; maximum power ratio: {}'.format(voltage_in, _motor_voltage, \
+                self._log.info('battery level: {:>5.2f}V; motor voltage: {:>5.2f}V; maximum power ratio: {}'.format(voltage_in, _motor_voltage, \
                         str(Fraction(self._max_power_ratio).limit_denominator(max_denominator=20)).replace('/',':')))
                 return _tb
             except OSError as e:
@@ -226,26 +225,28 @@ class MotorConfigurer(Component):
         '''
         Turns the motor controller LEDs on or off.
         '''
-        _tb_fwd = self.get_thunderborg(Orientation.FWD)
-        _tb_aft = self.get_thunderborg(Orientation.AFT)
-        if _tb_fwd:
-            _tb_fwd.SetLedShowBattery(enable)
+        _port_tb = self.get_thunderborg(Orientation.PORT)
+        _stbd_tb = self.get_thunderborg(Orientation.STBD)
+        if _port_tb:
+            _port_tb.SetLedShowBattery(enable)
             if not enable:
-                _tb_fwd.SetLeds(0.0, 0.0, 0.0) # black
-        if _tb_aft:
-            _tb_aft.SetLedShowBattery(enable)
+                _port_tb.SetLeds(0.0, 0.0, 0.0) # black
+        if _stbd_tb:
+            _stbd_tb.SetLedShowBattery(enable)
             if not enable:
-                _tb_aft.SetLeds(0.0, 0.0, 0.0) # black
+                _stbd_tb.SetLeds(0.0, 0.0, 0.0) # black
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_thunderborg(self, orientation):
         '''
         Temporary: do not use this brain.
         '''
-        if orientation is Orientation.FWD:
-            return self._fwd_tb
-        elif orientation is Orientation.AFT:
-            return self._aft_tb
+        if orientation is Orientation.PORT:
+            return self._port_tb
+        elif orientation is Orientation.STBD:
+            return self._stbd_tb
+        else:
+            raise ValueError('expected a PORT or STBD orientation.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_motor(self, orientation):

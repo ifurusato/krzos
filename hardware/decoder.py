@@ -108,6 +108,7 @@ class Decoder(object):
         Internal handler called by gpiozero when the encoder is rotated.
         Calls user callback with +1 or -1 depending on direction.
         '''
+#       self._log.debug('_rotated on pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
         step = self._encoder.value - self._last_value
         if step > 0:
             self._callback(self._increment)

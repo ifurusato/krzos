@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-05-19
-# modified: 2025-09-22
+# modified: 2025-09-25
 #
 # This module is designed to communicate with the ThunderBorg. It
 # is largely based on the original PyBorg source but has been
@@ -116,7 +116,7 @@ def ScanForThunderBorg(busNumber = 1):
             i2cRecv = bus.RawRead(COMMAND_GET_ID, I2C_MAX_LEN)
             if len(i2cRecv) == I2C_MAX_LEN:
                 if i2cRecv[1] == I2C_ID_THUNDERBORG:
-                    __log.info('Found ThunderBorg at 0x{:02X}'.format(address))
+                    __log.info('found ThunderBorg at 0x{:02X}'.format(address))
                     found.append(address)
                 else:
                     pass
@@ -127,7 +127,7 @@ def ScanForThunderBorg(busNumber = 1):
         except:
             pass
     if len(found) == 0:
-        __log.warning('No ThunderBorg boards found, is bus #{:d} correct (should be 0 for Rev 1, 1 for Rev 2)'.format(busNumber))
+        __log.warning('no ThunderBorg boards found, is bus #{:d} correct (should be 0 for Rev 1, 1 for Rev 2)'.format(busNumber))
     elif len(found) == 1:
         __log.info('1 ThunderBorg board found')
     else:
@@ -146,19 +146,19 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
     on the device.
     '''
     if newAddress < 0x03:
-        __log.error('Error, I2C addresses below 3 (0x03) are reserved, use an address between 3 (0x03) and 119 (0x77)')
+        __log.error('I2C addresses below 3 (0x03) are reserved, use an address between 3 (0x03) and 119 (0x77)')
         return
     elif newAddress > 0x77:
-        __log.error('Error, I2C addresses above 119 (0x77) are reserved, use an address between 3 (0x03) and 119 (0x77)')
+        __log.error('I2C addresses above 119 (0x77) are reserved, use an address between 3 (0x03) and 119 (0x77)')
         return
     if oldAddress < 0x0:
         found = ScanForThunderBorg(busNumber)
         if len(found) < 1:
-            __log.warning('No ThunderBorg boards found, cannot set a new I2C address!')
+            __log.warning('no ThunderBorg boards found, cannot set a new I2C address!')
             return
         else:
             oldAddress = found[0]
-    __log.info('Changing I2C address from 0x{:02X} to 0x{:02X} (bus #{:d})'.format(oldAddress, newAddress, busNumber))
+    __log.info('changing I2C address from 0x{:02X} to 0x{:02X} (bus #{:d})'.format(oldAddress, newAddress, busNumber))
     bus = ThunderBorg(Level.INFO)
     bus.InitBusOnly(busNumber, oldAddress)
     try:
@@ -166,44 +166,44 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
         if len(i2cRecv) == I2C_MAX_LEN:
             if i2cRecv[1] == I2C_ID_THUNDERBORG:
                 foundChip = True
-                __log.info('Found ThunderBorg at 0x{:02X}'.format(oldAddress))
+                __log.info('found ThunderBorg at 0x{:02X}'.format(oldAddress))
             else:
                 foundChip = False
-                __log.warning('Found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(oldAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
+                __log.warning('found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(oldAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
         else:
             foundChip = False
-            __log.warning('Missing ThunderBorg at 0x{:02X}'.format(oldAddress))
+            __log.warning('missing ThunderBorg at 0x{:02X}'.format(oldAddress))
     except KeyboardInterrupt:
         raise
     except:
         foundChip = False
-        __log.warning('Missing ThunderBorg at 0x{:02X}'.format(oldAddress))
+        __log.warning('missing ThunderBorg at 0x{:02X}'.format(oldAddress))
     if foundChip:
         bus.RawWrite(COMMAND_SET_I2C_ADD, [newAddress])
         time.sleep(0.1)
-        __log.info('Address changed to 0x{:02X}, attempting to talk with the new address'.format(newAddress))
+        __log.info('address changed to 0x{:02X}, attempting to talk with the new address'.format(newAddress))
         try:
             bus.InitBusOnly(busNumber, newAddress)
             i2cRecv = bus.RawRead(COMMAND_GET_ID, I2C_MAX_LEN)
             if len(i2cRecv) == I2C_MAX_LEN:
                 if i2cRecv[1] == I2C_ID_THUNDERBORG:
                     foundChip = True
-                    __log.info('Found ThunderBorg at 0x{:02X}'.format(newAddress))
+                    __log.info('found ThunderBorg at 0x{:02X}'.format(newAddress))
                 else:
                     foundChip = False
-                    __log.warning('Found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(newAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
+                    __log.warning('found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(newAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
             else:
                 foundChip = False
-                __log.warning('Missing ThunderBorg at 0x{:02X}'.format(newAddress))
+                __log.warning('missing ThunderBorg at 0x{:02X}'.format(newAddress))
         except KeyboardInterrupt:
             raise
         except:
             foundChip = False
-            __log.warning('Missing ThunderBorg at 0x{:02X}'.format(newAddress))
+            __log.warning('missing ThunderBorg at 0x{:02X}'.format(newAddress))
     if foundChip:
-        __log.info('New I2C address of 0x{:02X} set successfully'.format(newAddress))
+        __log.info('new I2C address of 0x{:02X} set successfully'.format(newAddress))
     else:
-        __log.error('Failed to set new I2C address...')
+        __log.error('failed to set new I2C address...')
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ThunderBorg:
@@ -229,56 +229,9 @@ class ThunderBorg:
     def __init__(self, level=Level.INFO):
         super().__init__()
         self._log = Logger('thunderborg', level)
-        self._log.info('ready.')
+        self._log.debug('ready.')
 
-    def RawWrite(self, command, data):
-        '''
-        RawWrite(command, data)
-
-        Sends a raw command on the I2C bus to the ThunderBorg.
-        Command codes can be found at the top of ThunderBorg.py,
-        data is a list of 0 or more byte values.
-
-        Under most circumstances you should use the appropriate
-        function instead of RawWrite.
-        '''
-        rawOutput = [command]
-        rawOutput.extend(data)
-        rawOutput = bytes(rawOutput)
-        self.i2cWrite.write(rawOutput)
-
-
-    def RawRead(self, command, length, retryCount = 3):
-        '''
-        RawRead(command, length, [retryCount])
-
-        Reads data back from the ThunderBorg after sending a GET command
-        Command codes can be found at the top of ThunderBorg.py, length
-        is the number of bytes to read back.
-
-        The function checks that the first byte read back matches the
-        requested command.
-        If it does not it will retry the request until retryCount is
-        exhausted (default is 3 times).
-
-        Under most circumstances you should use the appropriate function
-        instead of RawRead.
-        '''
-        while retryCount > 0:
-            self.RawWrite(command, [])
-            rawReply = self.i2cRead.read(length)
-            reply = []
-            for singleByte in rawReply:
-                reply.append(singleByte)
-            if command == reply[0]:
-                break
-            else:
-                retryCount -= 1
-        if retryCount > 0:
-            return reply
-        else:
-            raise IOError('I2C read for command %d failed'.format(command))
-
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def InitBusOnly(self, busNumber, address):
         '''
@@ -294,7 +247,6 @@ class ThunderBorg:
         fcntl.ioctl(self.i2cRead, I2C_SLAVE, self.i2cAddress)
         self.i2cWrite = io.open("/dev/i2c-" + str(self.busNumber), "wb", buffering = 0)
         fcntl.ioctl(self.i2cWrite, I2C_SLAVE, self.i2cAddress)
-
 
     def Init(self, tryOtherBus = False):
         '''
@@ -353,6 +305,55 @@ class ThunderBorg:
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    def RawWrite(self, command, data):
+        '''
+        RawWrite(command, data)
+
+        Sends a raw command on the I2C bus to the ThunderBorg.
+        Command codes can be found at the top of ThunderBorg.py,
+        data is a list of 0 or more byte values.
+
+        Under most circumstances you should use the appropriate
+        function instead of RawWrite.
+        '''
+        rawOutput = [command]
+        rawOutput.extend(data)
+        rawOutput = bytes(rawOutput)
+        self.i2cWrite.write(rawOutput)
+
+    def RawRead(self, command, length, retryCount = 3):
+        '''
+        RawRead(command, length, [retryCount])
+
+        Reads data back from the ThunderBorg after sending a GET command
+        Command codes can be found at the top of ThunderBorg.py, length
+        is the number of bytes to read back.
+
+        The function checks that the first byte read back matches the
+        requested command.
+        If it does not it will retry the request until retryCount is
+        exhausted (default is 3 times).
+
+        Under most circumstances you should use the appropriate function
+        instead of RawRead.
+        '''
+        while retryCount > 0:
+            try:
+                self.RawWrite(command, [])
+                rawReply = self.i2cRead.read(length)
+                reply = list(rawReply)
+                if reply and command == reply[0]:
+                    return reply
+                else:
+                    self._log.debug("reply mismatch or empty: sent {}, got {}".format(command, reply))
+            except Exception as e:
+                self._log.error(f"Exception during RawRead: {e}")
+            retryCount -= 1
+#           time.sleep(0.005) # add short delay between attempts (maybe 0.01)
+        raise IOError('I2C read for command {} failed'.format(command))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def I2cAddress(self):
         '''
@@ -385,14 +386,12 @@ class ThunderBorg:
             pwm = int(PWM_MAX * power)
             if pwm > PWM_MAX:
                 pwm = PWM_MAX
-
         try:
             self.RawWrite(command, [pwm])
         except KeyboardInterrupt:
             raise
         except:
             self._log.error('failed sending all motors drive level!')
-
 
     def MotorsOff(self):
         '''
@@ -439,7 +438,6 @@ class ThunderBorg:
         except:
             self._log.error('failed sending motor 1 drive level!')
 
-
     def SetMotor1Off(self):
         '''
         Bespoke method (not part of ThunderBorg API code).
@@ -452,7 +450,6 @@ class ThunderBorg:
         except:
             self._log.error('failed zeroing motor 1 drive level!')
 
-
     def GetMotor1(self):
         '''
         power = GetMotor1()
@@ -464,11 +461,12 @@ class ThunderBorg:
             1     -> motor 1 moving forward at 100% power
         '''
         try:
+#           self._log.info("GetMotor1: address={}, i2cRead.fileno={}".format(self.i2cAddress, self.i2cRead.fileno()))
             i2cRecv = self.RawRead(COMMAND_GET_A, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            self._log.error('{} raised reading motor 1 drive level: {}'.format(type(e), e))
+            self._log.debug('{} raised reading motor 1 drive level: {}'.format(type(e), e))
             return None
 
         power = float(i2cRecv[2]) / float(PWM_MAX)
@@ -512,7 +510,6 @@ class ThunderBorg:
         except:
             self._log.error('failed sending motor 2 drive level!')
 
-
     def SetMotor2Off(self):
         '''
         Bespoke method (not part of ThunderBorg API code).
@@ -525,7 +522,6 @@ class ThunderBorg:
         except:
             self._log.error('failed zeroing motor 2 drive level!')
 
-
     def GetMotor2(self):
         '''
         power = GetMotor2()
@@ -537,11 +533,12 @@ class ThunderBorg:
             1     -> motor 2 moving forward at 100% power
         '''
         try:
+#           self._log.info("GetMotor2: address={}, i2cRead.fileno={}".format(self.i2cAddress, self.i2cRead.fileno()))
             i2cRecv = self.RawRead(COMMAND_GET_B, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            self._log.error('{} raised reading motor 2 drive level: {}'.format(type(e), e))
+            self._log.debug('{} raised reading motor 2 drive level: {}'.format(type(e), e))
             return None
 
         power = float(i2cRecv[2]) / float(PWM_MAX)
@@ -577,7 +574,6 @@ class ThunderBorg:
         except:
             self._log.error('failed sending colour for the ThunderBorg LED!')
 
-
     def GetLed1(self):
         '''
         r, g, b = GetLed1()
@@ -602,7 +598,6 @@ class ThunderBorg:
         b = i2cRecv[3] / float(PWM_MAX)
         return r, g, b
 
-
     def SetLed2(self, r, g, b):
         '''
         SetLed2(r, g, b)
@@ -624,7 +619,6 @@ class ThunderBorg:
             raise
         except:
             self._log.error('failed sending colour for the ThunderBorg Lid LED!')
-
 
     def GetLed2(self):
         '''
@@ -650,7 +644,6 @@ class ThunderBorg:
         b = i2cRecv[3] / float(PWM_MAX)
         return r, g, b
 
-
     def SetLeds(self, r, g, b):
         '''
         SetLeds(r, g, b)
@@ -673,7 +666,6 @@ class ThunderBorg:
         except:
             self._log.error('failed sending colour for both LEDs!')
 
-
     def SetLedShowBattery(self, state):
         '''
         SetLedShowBattery(state)
@@ -694,7 +686,6 @@ class ThunderBorg:
             raise
         except:
             self._log.error('failed sending LED battery monitoring state!')
-
 
     def GetLedShowBattery(self):
         '''
@@ -743,7 +734,6 @@ class ThunderBorg:
         except:
             self._log.error('failed sending communications failsafe state!')
 
-
     def GetCommsFailsafe(self):
         '''
         state = GetCommsFailsafe()
@@ -764,7 +754,6 @@ class ThunderBorg:
             return False
         else:
             return True
-
 
     def GetDriveFault1(self):
         '''
@@ -809,7 +798,6 @@ class ThunderBorg:
             return False
         else:
             return True
-
 
     def GetDriveFault2(self):
         '''
@@ -857,6 +845,7 @@ class ThunderBorg:
         else:
             return True
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def GetBatteryReading(self):
         '''
@@ -872,12 +861,10 @@ class ThunderBorg:
         except:
             self._log.error('failed reading battery level!')
             return
-
         raw = (i2cRecv[1] << 8) + i2cRecv[2]
         level = float(raw) / float(COMMAND_ANALOG_MAX)
         level *= VOLTAGE_PIN_MAX
         return level + VOLTAGE_PIN_CORRECTION
-
 
     def SetBatteryMonitoringLimits(self, minimum, maximum):
         '''
@@ -893,7 +880,6 @@ class ThunderBorg:
         levelMax = maximum / float(VOLTAGE_PIN_MAX)
         levelMin = max(0, min(0xFF, int(levelMin * 0xFF)))
         levelMax = max(0, min(0xFF, int(levelMax * 0xFF)))
-
         try:
             self.RawWrite(COMMAND_SET_BATT_LIMITS, [levelMin, levelMax])
             time.sleep(0.2) # Wait for EEPROM write to complete
@@ -901,7 +887,6 @@ class ThunderBorg:
             raise
         except:
             self._log.error('failed sending battery monitoring limits!')
-
 
     def GetBatteryMonitoringLimits(self):
         '''
@@ -919,7 +904,6 @@ class ThunderBorg:
         except:
             self._log.error('failed reading battery monitoring limits!')
             return
-
         rawMin = i2cRecv[1]
         rawMax = i2cRecv[2]
         levelMin = float(rawMin) / float(0xFF)
@@ -927,7 +911,6 @@ class ThunderBorg:
         levelMin *= VOLTAGE_PIN_MAX
         levelMax *= VOLTAGE_PIN_MAX
         return levelMin, levelMax
-
 
     def WriteExternalLedWord(self, b0, b1, b2, b3):
         '''
@@ -948,14 +931,12 @@ class ThunderBorg:
         b1 = max(0, min(PWM_MAX, int(b1)))
         b2 = max(0, min(PWM_MAX, int(b2)))
         b3 = max(0, min(PWM_MAX, int(b3)))
-
         try:
             self.RawWrite(COMMAND_WRITE_EXTERNAL_LED, [b0, b1, b2, b3])
         except KeyboardInterrupt:
             raise
         except:
             self._log.error('failed sending word for the external LEDs!')
-
 
     def SetExternalLedColours(self, colours):
         '''
@@ -979,6 +960,7 @@ class ThunderBorg:
         for r, g, b in colours:
             self.WriteExternalLedWord(255, 255 * b, 255 * g, 255 * r)
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def Help(self):
         '''
@@ -989,7 +971,6 @@ class ThunderBorg:
         '''
         funcList = [ThunderBorg.__dict__.get(a) for a in dir(ThunderBorg) if isinstance(ThunderBorg.__dict__.get(a), types.FunctionType)]
         funcListSorted = sorted(funcList, key = lambda x: x.func_code.co_firstlineno)
-
         print(self.__doc__)
         print
         for func in funcListSorted:

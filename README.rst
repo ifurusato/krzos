@@ -119,6 +119,16 @@ then:
     with:         sudo apt install python3-yaml
 * colorama:     https://pypi.org/project/colorama/
     with:         sudo apt install python3-colorama
+* luma:         https://pypi.org/project/luma.core/
+    with:         sudo pip3 install luma.core --break-system-packages
+    (used only for the Monitor)
+* ina260:       https://pypi.org/project/ina260/
+    with:         sudo pip3 install ina260 --break-system-packages
+
+If a Luxonis OAK-D Lite camera is attached, install:
+
+* depthai:      https://github.com/luxonis/depthai-python
+    with:         sudo pip3 install depthai --break-system-packages
 
 The Radiozoa board contains eight VL53L0X sensors. This can be connected to the
 default I2C bus 1, or configured to operate on the alternate I2C bus 0 (which is
