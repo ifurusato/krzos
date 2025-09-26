@@ -26,7 +26,7 @@ def test_bluetooth_state():
     '''
     Checks if Bluetooth is enabled.
     '''
-    __log.info("testing if Bluetooth is enabled…")
+    __log.info(Style.BRIGHT + "testing if Bluetooth is enabled…")
     try:
         output = subprocess.check_output("sudo systemctl status bluetooth", shell=True).decode()
         assert "active (running)" in output

@@ -31,7 +31,7 @@ def test_required_devices():
     Tests for the required devices for the KRZ04.
     '''
     _show_optional = True
-    __log.info("testing existence of required and optional devices…")
+    __log.info(Style.BRIGHT + "testing existence of required and optional devices…")
     _devices = __config['kros'].get('hardware').get('devices')
     for _device in _devices:
         hex_address = "0x{:02X}".format(_device['address'])

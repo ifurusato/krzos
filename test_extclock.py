@@ -32,7 +32,7 @@ def count_pulse():
 @pytest.mark.unit
 def test_extclock():
     global pulse_count
-    __log.info("testing if external clock is generating a signal…")
+    __log.info(Style.BRIGHT + "testing if external clock is generating a signal…")
 
     INPUT_PIN = 15
 

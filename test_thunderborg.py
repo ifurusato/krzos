@@ -24,7 +24,7 @@ __log = Logger('test-thunderborg', level=Level.INFO)
 
 @pytest.mark.unit
 def test_thunderborg():
-    __log.info("testing if motor controllers are available and functional…")
+    __log.info(Style.BRIGHT + "testing if motor controllers are available and functional…")
     TB1 = None
     TB2 = None
 
