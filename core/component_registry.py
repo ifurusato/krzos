@@ -79,7 +79,7 @@ class ComponentRegistry:
             raise TypeError('argument \'{}\' is not a component.'.format(name))
         else:
             self._dict[name] = component
-            self._log.info('added component \'{}\' to registry ({:d} total).'.format(name, len(self._dict)))
+            self._log.info(Style.DIM + 'added component \'{}\' to registry ({:d} total).'.format(name, len(self._dict)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has(self, name):

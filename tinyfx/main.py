@@ -14,7 +14,6 @@
 import sys
 import os
 import gc
-import _thread
 import utime
 import machine
 from machine import Pin, Timer
@@ -116,6 +115,7 @@ try:
     _controller.startTimer()
     i2c_slave.enable()
     _log.warning('I2C slave started; it should have blocked.')
+
 except KeyboardInterrupt:
     _log.info('Ctrl-C caught; exiting…')
 except Exception as e:

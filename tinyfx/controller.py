@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-04-25
-# modified: 2025-05-24
+# modified: 2025-09-26
 #
 
 import sys
@@ -32,11 +32,13 @@ class Controller:
     '''
     def __init__(self, display=None, level=Level.INFO):
         self._log = Logger('controller', level)
-        self._display = display
+        self._display  = display
         self._processing_task = None
-        self._enabled = False
-        self._timer   = None
-        self._on      = False
+        self._enabled  = False
+        self._timer    = None
+        self._on       = False
+        self._response = None
+        self._response_event = asyncio.Event()
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -75,6 +77,16 @@ class Controller:
             self._display.show_color(color)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def set_response(self, response):
+        '''
+        Set the response and release the task by setting the Event.
+        This is meant to be called by handle_command().
+        '''
+        self._response = response
+        self._processing_task = None
+        self._response_event.set()
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def process_payload(self, payload):
         '''
         Immediately returns and delegates payload processing to an async task.
@@ -82,18 +94,24 @@ class Controller:
         if not isinstance(payload, Payload):
             raise ValueError('expected Payload not {}'.format(type(payload)))
         if self._processing_task is None:
-            self._processing_task = asyncio.create_task(self.handle_command(payload.command))
+            self._response = None
+            self._response_event.clear()
+            loop = asyncio.get_event_loop()
+            _command = payload.command
+
+            print("Type:", type(self.handle_command(_command)))
+            print("Is coroutine?", asyncio.iscoroutine(self.handle_command(_command)))
+
+            self._processing_task = asyncio.create_task(self.handle_command(_command))
             self._log.debug('task created.')
-            # ensure the event loop is running
-            asyncio.get_event_loop().run_forever() # keep the event loop running
-#           self._log.debug('payload processing complete.')
-            return RESPONSE_OKAY
+            while not self._response_event.is_set():
+                loop.run_until_complete(asyncio.sleep(0.001))
+            return self._response
         elif self._processing_task.done():
-            self._processing_task = None
-            return RESPONSE_OUT_OF_SYNC
+            self.set_response(RESPONSE_OUT_OF_SYNC)
         else:
             self._log.warning("another task is already running, skipping new payload.")
-            return RESPONSE_BUSY
+            self.set_response(RESPONSE_BUSY)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def handle_command(self, command):
@@ -101,7 +119,7 @@ class Controller:
         Async payload processor. This understands 'help', 'enable' and 'disable',
         and is meant to be overridden by subclasses.
         '''
-#       self._log.debug("handling command: " + Fore.GREEN + "'{}'".format(command))
+        self._log.debug("handling command: " + Fore.GREEN + "'{}'".format(command))
         try:
             self.show_color(COLOR_SKY_BLUE)
             if command == 'help':
@@ -113,13 +131,16 @@ class Controller:
             else:
                 self._log.warning("unknown command: '{}'".format(command))
                 self.show_color(COLOR_ORANGE)
+                self.set_response(RESPONSE_BAD_REQUEST)
+#               raise NotImplementedError('subclasses must implement this method.')
         except Exception as e:
             self._log.error("error processing command: {}".format(e))
             sys.print_exception(e)
             self.show_color(COLOR_RED)
-            return RESPONSE_UNKNOWN_ERROR
+            self.set_response(RESPONSE_UNKNOWN_ERROR)
         finally:
-            self._processing_task = None
+            if not self._response:
+                self.set_response(RESPONSE_OKAY)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def validated(self):

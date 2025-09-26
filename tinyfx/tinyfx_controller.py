@@ -12,7 +12,6 @@
 
 import os, sys, gc
 import utime
-import _thread
 from machine import Timer
 import uasyncio as asyncio
 from colorama import Fore, Style
@@ -97,15 +96,18 @@ class TinyFxController(Controller):
 #       self._log.debug("handling command: '{}'".format(command))
         try:
             if command.startswith('help'):
+                import _thread
+                self.set_response(RESPONSE_OKAY)
                 _thread.start_new_thread(self.help, ())
             elif command.startswith('play'):
                 parts = command.strip().split()
                 if len(parts) >= 2:
+                    self.set_response(RESPONSE_OKAY)
                     name = parts[1]
 #                   self._log.debug("play sound: " + Fore.GREEN + "{}".format(name))
-#                   _thread.start_new_thread(self.play, (name,))
                     self.play(name)
                 else:
+                    self.set_response(RESPONSE_BAD_REQUEST)
                     self._log.warning("no sound name provided.")
 
             # LED channels ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -149,21 +151,21 @@ class TinyFxController(Controller):
             # pir ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'pir get':
                 if self._pir_triggered:
+                    self.set_response(RESPONSE_PIR_ACTIVE)
                     self.show_color(COLOR_ORANGE)
                     self._log.info(Fore.YELLOW + "pir active")
-                    return RESPONSE_PIR_ACTIVE
                 else:
+                    self.set_response(RESPONSE_PIR_IDLE)
                     self.show_color(COLOR_VIOLET)
                     self._log.info(Fore.MAGENTA + "pir idle")
-                    return RESPONSE_PIR_IDLE
             elif command == 'pir on':
+                self.set_response(RESPONSE_PIR_ON)
                 self._pir_enabled = True
                 self.show_color(COLOR_GREEN)
-                return RESPONSE_PIR_ON
             elif command == 'pir off':
+                self.set_response(RESPONSE_PIR_OFF)
                 self._pir_enabled = False
                 self.show_color(COLOR_DARK_GREEN)
-                return RESPONSE_PIR_OFF
 
             # set some colors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'red':
@@ -189,6 +191,7 @@ class TinyFxController(Controller):
 
             # asynchronous wait ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command.startswith('wait'):
+                self.set_response(RESPONSE_OKAY)
                 self.show_color(COLOR_VIOLET)
                 _duration = self._parse_duration(command, default=5)
                 self._log.info("waiting for {:.2f} seconds.".format(_duration))
@@ -202,9 +205,10 @@ class TinyFxController(Controller):
             self._log.error("TinyFxController error: {}".format(e))
             sys.print_exception(e)
             self.show_color(COLOR_RED)
-            return RESPONSE_UNKNOWN_ERROR
+            self.set_response(RESPONSE_UNKNOWN_ERROR)
         finally:
-            self._processing_task = None
+            if not self._response:
+                self.set_response(RESPONSE_OKAY)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _list_wav_files_without_extension(self, directory="sounds"):
