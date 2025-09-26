@@ -75,6 +75,18 @@ class DepthCamera(Component):
         self._pipeline_handle.start()
         self._log.info('DepthCamera initialized and pipeline started.')
 
+    def get_depth_frame_size(self):
+        '''
+        Returns the size (height, width) of the latest depth frame as a tuple.
+        Returns None if no frame is available.
+        '''
+        np_depth = self.get_depth_frame()
+        if np_depth is not None:
+            return np_depth.shape
+        else:
+            self._log.warning('no depth frame available to get size.')
+            return None
+
     def get_pixel_depth(self, x, y):
         '''
         Returns the depth (in mm) for pixel (x, y) from the latest depth frame.
@@ -88,7 +100,7 @@ class DepthCamera(Component):
                 self._log.warning('pixel coordinates ({},{}) out of bounds for shape {}.'.format(x, y, np_depth.shape))
                 return None
         else:
-            self._log.info('No depth frame available for pixel query.')
+            self._log.warning('no depth frame available for pixel query.')
             return None
 
     def get_depth_frame(self):
