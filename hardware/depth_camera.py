@@ -234,6 +234,47 @@ class DepthCamera(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    def get_reference_pixel_grid(self):
+        '''
+        Returns a numpy array of (x, y) pixel coordinates for the normalized reference grid
+        (in 640x480 calibration space), e.g., 15 rows × 5 columns = 75 points.
+        Returns:
+            np.ndarray: Array of shape (75, 2) [(x, y), ...]
+        '''
+        import numpy as np
+        rows = [256, 299, 302, 305, 309, 314, 319, 326, 334, 343, 356, 372, 394, 427, 479]
+        cols = [20, 170, 320, 470, 620]
+        grid = [(x, y) for y in rows for x in cols]
+        return np.array(grid)
+
+    def get_reference_depth_grid(self):
+        '''
+        Uses the reference pixel grid and queries the current depth frame for those points,
+        returning a (15, 5) numpy array of depths (in mm), np.nan for invalid/missing points.
+        Returns:
+            np.ndarray: Depth grid, shape (15, 5)
+        '''
+        _start_time = dt.now()
+        grid = self.get_reference_pixel_grid()
+        np_depth = self.get_depth_frame()
+        if np_depth is None:
+            self._log.warning('no depth frame available for grid query.')
+            return np.full((15, 5), np.nan)
+        height, width = np_depth.shape
+        # Optionally scale if enabled
+        if self.scale_pixel_coordinates:
+            x_scaled = np.round(grid[:, 0] * (width / 640)).astype(int)
+            y_scaled = np.round(grid[:, 1] * (height / 480)).astype(int)
+            points = np.stack([x_scaled, y_scaled], axis=1)
+        else:
+            points = grid.astype(int)
+        depths = self.get_pixel_depths(points)
+        _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+        self._log.info(Fore.WHITE + 'depth camera returned reference depth: {}ms elapsed.'.format(_elapsed_ms))
+        return depths.reshape((15, 5))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def save_camera_frames_png(self, base_filename="output"):
         '''
         Saves PNG images for left, right, and depth frames from the pipeline.
