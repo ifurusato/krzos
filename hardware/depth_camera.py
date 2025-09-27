@@ -18,7 +18,6 @@
 #   ROBOTICS:      Tuned for robotics applications, usually with wider depth range and robustness.
 #
 # DepthAI Python API: https://docs.luxonis.com/software-v3/depthai/api/python/
-#
 
 import numpy as np
 import json
@@ -54,8 +53,10 @@ class DepthCamera(Component):
 
         # create pipeline
         self._pipeline = dai.Pipeline()
+        # color camera
+        color_cam  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
         # mono cameras and stereo depth node
-        mono_left = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
+        mono_left  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
         mono_right = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
         stereo = self._pipeline.create(dai.node.StereoDepth)
         # linking
@@ -66,8 +67,8 @@ class DepthCamera(Component):
         mono_right_out.link(stereo.right)
         # set stereo features
         # create a node that will produce the depth map (using disparity output as it's easier to visualize depth this way)
-#       stereo.setRectification(True)
-        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.ROBOTICS)
+        stereo.setRectification(True)
+        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
         # options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
         stereo.initialConfig.setMedianFilter(dai.MedianFilter.KERNEL_7x7)
         stereo.setLeftRightCheck(LR_CHECK)
