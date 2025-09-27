@@ -261,10 +261,13 @@ class DepthCamera(Component):
             self._log.warning('no depth frame available for grid query.')
             return np.full((15, 5), np.nan)
         height, width = np_depth.shape
-        # Optionally scale if enabled
+        # optionally scale if enabled
         if self.scale_pixel_coordinates:
             x_scaled = np.round(grid[:, 0] * (width / 640)).astype(int)
             y_scaled = np.round(grid[:, 1] * (height / 480)).astype(int)
+            # clamp to ensure indices are in bounds
+            x_scaled = np.clip(x_scaled, 0, width - 1)
+            y_scaled = np.clip(y_scaled, 0, height - 1)
             points = np.stack([x_scaled, y_scaled], axis=1)
         else:
             points = grid.astype(int)
