@@ -23,7 +23,7 @@ import numpy as np
 import json
 import csv
 import cv2
-import datetime as dt
+from datetime import datetime as dt
 import depthai as dai
 from colorama import init, Fore, Style
 init()
@@ -31,26 +31,28 @@ init()
 from core.logger import Level, Logger
 from core.component import Component
 from core.orientation import Orientation
+from hardware.depth_utils import DepthUtils
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DepthCamera(Component):
     '''
     Component wrapper for OAK-D Lite depth-only acquisition using DepthAI 3.x.
 
-    The camera must be enabled to start the pipeline.
-
     :param config:      application configuration (currently unused)
     :param level:       the logging Level
     '''
-    def __init__(self, config=None, suppressed=False, enabled=False, level=Level.INFO):
+    def __init__(self, config=None, suppressed=False, enabled=True, level=Level.INFO):
         self._log = Logger('depth-camera', level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
-
+        _start_time = dt.now()
         # configuration
-        EXTENDED_DISPARITY = False   # closer-in minimum depth, disparity range is doubled (from 95 to 190)
-        SUBPIXEL = False             # better accuracy for longer distance, fractional disparity 32-levels
-        LR_CHECK = True              # better handling for occlusions
-
+        _cfg = config.get('kros').get('hardware').get('depth_camera')
+        _preset_mode_value  = _cfg.get('preset_mode')
+        _preset_mode = DepthCamera.parse_preset_mode(_preset_mode_value, default=dai.node.StereoDepth.PresetMode.ROBOTICS)
+        _extended_disparity = _cfg.get('extended_disparity')  # closer-in minimum depth, disparity range is doubled (from 95 to 190)
+        _subpixel    =  _cfg.get('subpixel')                  # better accuracy for longer distance, fractional disparity 32-levels
+        _lr_check    =  _cfg.get('left_right_check')          # better handling for occlusions
+        self.scale_pixel_coordinates = True
         # create pipeline
         self._pipeline = dai.Pipeline()
         # color camera
@@ -68,17 +70,37 @@ class DepthCamera(Component):
         # set stereo features
         # create a node that will produce the depth map (using disparity output as it's easier to visualize depth this way)
         stereo.setRectification(True)
-        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
+        stereo.setDefaultProfilePreset(_preset_mode)
         # options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
         stereo.initialConfig.setMedianFilter(dai.MedianFilter.KERNEL_7x7)
-        stereo.setLeftRightCheck(LR_CHECK)
-        stereo.setExtendedDisparity(EXTENDED_DISPARITY)
-        stereo.setSubpixel(SUBPIXEL)
+        stereo.setLeftRightCheck(_lr_check)
+        stereo.setExtendedDisparity(_extended_disparity)
+        stereo.setSubpixel(_subpixel)
         # output queues
         self._mono_left_queue  = mono_left_out.createOutputQueue()
         self._mono_right_queue = mono_right_out.createOutputQueue()
         self._depth_queue      = stereo.depth.createOutputQueue()
-        self._log.info('DepthCamera initialized and pipeline started.')
+        # start pipeline
+        self._pipeline.start()
+        _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+        self._log.info('depth camera initialized and pipeline started: {}ms elapsed.'.format(_elapsed_ms))
+
+    @staticmethod
+    def parse_preset_mode(mode_str, default=None):
+        '''
+        Convert a string to dai.node.StereoDepth.PresetMode enum.
+        Accepts values like 'DEFAULT', 'FACE', etc.
+        Returns `default` if input is invalid or not recognized.
+        If `default` is None, returns dai.node.StereoDepth.PresetMode.DEFAULT.
+        '''
+        try:
+            mode_str = mode_str.strip().upper()
+            return getattr(dai.node.StereoDepth.PresetMode, mode_str)
+        except Exception:
+            if default is not None:
+                return default
+            import depthai as dai  # in case not already imported
+            return dai.node.StereoDepth.PresetMode.DEFAULT
 
     def get_depth_frame_size(self):
         '''
@@ -94,6 +116,36 @@ class DepthCamera(Component):
         else:
             self._log.warning('no depth frame available to get size.')
             return None
+
+    def get_pixel_depths(self, points):
+        '''
+        Returns a numpy array of depth values (in mm) for a list/array of (x, y) pixel coordinates.
+        Each input should be a tuple/list (x, y) or a numpy array of shape (N, 2).
+        Returns np.nan for points that are out of bounds or if no frame is available.
+        Parameters:
+            points (list or np.ndarray): List or array of (x, y) pixel coordinates.
+        Returns:
+            np.ndarray: Array of depth values (in mm) with shape (N,). np.nan for invalid points.
+        '''
+        import numpy as np
+        if not self.enabled:
+            self._log.warning('depth camera not enabled.')
+            return np.full(len(points), np.nan)
+        np_depth = self.get_depth_frame()
+        if np_depth is None:
+            self._log.warning('no depth frame available for pixel query.')
+            return np.full(len(points), np.nan)
+        points = np.asarray(points)
+        # split into x and y arrays
+        x_arr = points[:, 0].astype(int)
+        y_arr = points[:, 1].astype(int)
+        # mask for in-bounds points
+        h, w = np_depth.shape
+        in_bounds = (x_arr >= 0) & (x_arr < w) & (y_arr >= 0) & (y_arr < h)
+        depths = np.full(len(points), np.nan)
+        # only assign depth for in-bounds points
+        depths[in_bounds] = np_depth[y_arr[in_bounds], x_arr[in_bounds]]
+        return depths
 
     def get_pixel_depth(self, x, y):
         '''
@@ -120,13 +172,11 @@ class DepthCamera(Component):
         of uint8 values, where each value is a greyscale intensity of 0-255.
         '''
         if orientation is Orientation.PORT:
-            port_frame = self._mono_left_queue.get().getFrame() if self._mono_left_queue is not None else None
-            return port_frame
+            return self._mono_left_queue.get().getFrame() if self._mono_left_queue is not None else None
         elif orientation is Orientation.STBD:
-            stbd_frame = self._mono_right_queue.get().getFrame() if self._mono_right_queue is not None else None
-            return stbd_frame
+            return self._mono_right_queue.get().getFrame() if self._mono_right_queue is not None else None
         else:
-            self._log.warning('unrecognised frame orientation.')
+            raise ValueError('unrecognised frame orientation.')
 
     def get_depth_frame(self):
         '''
@@ -138,14 +188,13 @@ class DepthCamera(Component):
         if not self.enabled:
             self._log.warning('depth camera not enabled.')
             return None
-        start = dt.datetime.now()
+        _start_time = dt.now()
         depth_frame = self._depth_queue.get()
-        end = dt.datetime.now()
-        elapsed = (end - start).total_seconds() * 1000
-        self._log.info(Fore.MAGENTA + "get depth frame: {:.2f}ms elapsed.".format(elapsed))
+        _end_time   = dt.now()
+        _elapsed_ms = (_end_time - _start_time).total_seconds() * 1000
+        self._log.info(Fore.MAGENTA + Style.DIM + "get depth frame: {:.2f}ms elapsed.".format(_elapsed_ms))
         if depth_frame is not None:
-            np_depth = depth_frame.getFrame() # uint16, depth in mm
-            return np_depth
+            return depth_frame.getFrame() # uint16, depth in mm
         else:
             self._log.debug('no depth frame available at this time.')
             return None
@@ -227,11 +276,88 @@ class DepthCamera(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    def ground_to_pixel(self, X, Z, ref_width=640, ref_height=480):
+        '''
+        Given ground X (cm), Z (cm), return (x, y) image pixel coordinates
+        (in depth frame space, as integers).
+        If scale_pixel_coordinates is True, scales calibration-space pixel to actual frame size.
+        '''
+        # get calibration-space pixel coordinates
+        x_calib, y_calib = DepthUtils.ground_to_pixel(X, Z)
+        np_depth = self.get_depth_frame()
+        if np_depth is None:
+            self._log.warning('no depth frame available.')
+            return None
+        height, width = np_depth.shape
+        if self.scale_pixel_coordinates:
+            x = int(round(x_calib * (width / ref_width)))
+            y = int(round(y_calib * (height / ref_height)))
+        else:
+            x = int(round(x_calib))
+            y = int(round(y_calib))
+        if 0 <= y < height and 0 <= x < width:
+            return x, y
+        else:
+            self._log.warning(f'pixel ({x},{y}) out of bounds for shape {np_depth.shape}.')
+            return None
+
+    def get_ground_point(self, x, y, ref_width=640, ref_height=480):
+        '''
+        Returns (X, Z, depth_mm) for the given image pixel (x, y).
+        If scale_pixel_coordinates is True, (x, y) are assumed to be in reference coordinates
+        and will be scaled to the actual depth frame size.
+        '''
+        if not self.enabled:
+            self._log.warning('depth camera not enabled.')
+            return None
+        np_depth = self.get_depth_frame()
+        if np_depth is None:
+            self._log.warning('no depth frame available.')
+            return None
+        height, width = np_depth.shape  # (rows, cols)
+        # optionally scale input (x, y) from reference calibration space to actual frame
+        if self.scale_pixel_coordinates:
+            x_scaled = int(round(x * (width / ref_width)))
+            y_scaled = int(round(y * (height / ref_height)))
+        else:
+            x_scaled = x
+            y_scaled = y
+        if 0 <= y_scaled < height and 0 <= x_scaled < width:
+            depth_mm = int(np_depth[y_scaled, x_scaled])
+            # Use calibration-space coordinates for DepthUtils
+            if self.scale_pixel_coordinates:
+                X, Z = DepthUtils.pixel_to_ground(x, y)
+            else:
+                X, Z = DepthUtils.pixel_to_ground(x_scaled, y_scaled)
+            return (X, Z, depth_mm)
+        else:
+            self._log.warning(f'pixel coordinates ({x_scaled},{y_scaled}) out of bounds for shape {np_depth.shape}.')
+            return None
+
+    def get_depth_at_ground(self, X, Z):
+        '''
+        Returns the measured depth value (in millimeters) from the depth frame
+        at the pixel corresponding to the specified ground coordinates (X, Z).
+
+        Parameters:
+            X (float): Lateral ground coordinate in centimeters (cm), relative to camera calibration.
+            Z (float): Forward ground coordinate in centimeters (cm), relative to camera calibration.
+
+        Returns:
+            int or None: Measured depth at the mapped pixel (in mm), or None if mapping is invalid or no data available.
+        '''
+        pixel = self.ground_to_pixel(X, Z)
+        if pixel is not None:
+            x, y = pixel
+            return self.get_pixel_depth(x, y)
+        else:
+            return None
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def enable(self):
         self._log.info('enabling depth camera…')
         Component.enable(self)
-        # start pipeline
-        self._pipeline.start()
 
     def disable(self):
         self._log.info('disabling depth camera…')
