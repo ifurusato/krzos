@@ -13,6 +13,7 @@
 import sys
 import time
 import os, subprocess
+import socket
 from pathlib import Path
 from datetime import datetime as dt
 import json
@@ -129,6 +130,29 @@ class Util:
         dy = stop-start
         # f(i) goes from start to stop as i goes from 0 to nsteps
         return [start + float(i)*dy/nsteps for i in range(nsteps)]
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @staticmethod
+    def get_ip_address():
+        '''
+        Returns the local IP address of the Pi.
+        '''
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # doesn't need to be reachable; just used to get local interface
+            s.connect(('10.255.255.255', 1))
+            _ip_address = s.getsockname()[0]
+        except Exception:
+            _ip_address = '127.0.0.1'
+        finally:
+            s.close()
+        return _ip_address
+
+    @staticmethod
+    def is_port_in_use(port, host='0.0.0.0'):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex((host, port)) == 0
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod

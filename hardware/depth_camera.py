@@ -23,6 +23,7 @@ import numpy as np
 import json
 import csv
 import cv2
+from threading import Thread
 from datetime import datetime as dt
 import depthai as dai
 from colorama import init, Fore, Style
@@ -45,7 +46,7 @@ class DepthCamera(Component):
         self._log = Logger('depth-camera', level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         _start_time = dt.now()
-        # configuration
+        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = config.get('kros').get('hardware').get('depth_camera')
         _preset_mode_value  = _cfg.get('preset_mode')
         _preset_mode = DepthCamera.parse_preset_mode(_preset_mode_value, default=dai.node.StereoDepth.PresetMode.ROBOTICS)
@@ -53,22 +54,29 @@ class DepthCamera(Component):
         _subpixel    =  _cfg.get('subpixel')                  # better accuracy for longer distance, fractional disparity 32-levels
         _lr_check    =  _cfg.get('left_right_check')          # better handling for occlusions
         self.scale_pixel_coordinates = True
-        # create pipeline
+        # create pipeline ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._pipeline = dai.Pipeline()
-        # color camera
-        color_cam  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-        # mono cameras and stereo depth node
+        # mono cameras and stereo depth node ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         mono_left  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
         mono_right = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
         stereo = self._pipeline.create(dai.node.StereoDepth)
-        # linking
+        # color camera ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        color_cam  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+#       color_cam  = self._pipeline.create(dai.node.ColorCamera).build(dai.CameraBoardSocket.CAM_A)
+#       color_cam.setPreviewSize(640, 480)
+#       color_cam.setInterleaved(False)
+        # video streaming ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._streamer = None
+        self._streamer_thread = None
+        self._streaming_enabled = False
+        # linking ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         mono_left_out  = mono_left.requestFullResolutionOutput(type=dai.ImgFrame.Type.NV12)
         mono_right_out = mono_right.requestFullResolutionOutput(type=dai.ImgFrame.Type.NV12)
         # link mono outputs to stereo node
         mono_left_out.link(stereo.left)
         mono_right_out.link(stereo.right)
-        # set stereo features
-        # create a node that will produce the depth map (using disparity output as it's easier to visualize depth this way)
+        # set stereo features ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create a node that will produce the depth map using disparity output
         stereo.setRectification(True)
         stereo.setDefaultProfilePreset(_preset_mode)
         # options: MEDIAN_OFF, KERNEL_3x3, KERNEL_5x5, KERNEL_7x7 (default)
@@ -76,10 +84,13 @@ class DepthCamera(Component):
         stereo.setLeftRightCheck(_lr_check)
         stereo.setExtendedDisparity(_extended_disparity)
         stereo.setSubpixel(_subpixel)
-        # output queues
+        # output queues ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._mono_left_queue  = mono_left_out.createOutputQueue()
         self._mono_right_queue = mono_right_out.createOutputQueue()
         self._depth_queue      = stereo.depth.createOutputQueue()
+#       self._color_queue      = color_cam.preview.createOutputQueue(name="color", maxSize=4, blocking=False)
+        # request NV12 stream with resolution of 1280x720 from the camera
+        self._color_queue      = color_cam.requestOutput(size=(1280, 720), type=dai.ImgFrame.Type.NV12).createOutputQueue()
         # start pipeline
         self._pipeline.start()
         _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
@@ -397,6 +408,55 @@ class DepthCamera(Component):
         else:
             return None
 
+    # video streaming ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def enable_streaming(self, port=5000):
+        if self._streaming_enabled:
+            self._log.info("video streaming already enabled.")
+            return
+        self._log.info("starting video streaming…")
+        from hardware.depth_camera_streamer import DepthCameraStreamer
+        self._streamer = DepthCameraStreamer(self)
+        self._streamer.enable_stream()
+        self._streamer_thread = Thread(target=self._streamer.run, kwargs={'host': '0.0.0.0', 'port': port}, daemon=True)
+        self._streamer_thread.start()
+        self._streaming_enabled = True
+        self._log.info("video streaming enabled on port {}.".format(port))
+
+    def disable_streaming(self):
+        if not self._streaming_enabled:
+            self._log.info("Video streaming already disabled.")
+            return
+        self._log.info("shutting down video streaming…")
+        # Flask's development server does not provide a clean shutdown mechanism.
+        # For production, use gunicorn or a production WSGI server with .shutdown().
+        # For development, this will just mark the flag and log.
+        self._streaming_enabled = False
+        self._log.info("video streaming disabled (server will exit on process termination).")
+
+    def is_streaming(self):
+        return self._streaming_enabled
+
+    def get_latest_color_frame(self):
+        '''
+        Returns the latest color frame from the OAK-D Lite as a numpy BGR array.
+        Returns None if no frame is available.
+        '''
+        if self._color_queue is None:
+            self._log.warning('color camera queue not initialized.')
+            return None
+        try:
+            frame = self._color_queue.get()
+            if frame is not None:
+                self._log.debug('color frame retrieved at {}.'.format(dt.now()))
+                return frame.getCvFrame() # OpenCV BGR numpy array
+            else:
+                self._log.debug('no color frame available.')
+                return None
+        except Exception as e:
+            self._log.error('error retrieving color frame: {}'.format(e))
+            return None
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def enable(self):
@@ -406,7 +466,16 @@ class DepthCamera(Component):
     def disable(self):
         self._log.info('disabling depth camera…')
         Component.disable(self)
-        # stop pipeline
-        self._pipeline.stop()
+        try:
+            if self._pipeline is not None:
+                self._pipeline.stop()
+            self._mono_left_queue = None
+            self._mono_right_queue = None
+            self._depth_queue = None
+            self._color_queue = None
+        except Exception as e:
+            self._log.error("{} raised during DepthCamera cleanup: {}".format(type(e), e))
+        finally:
+            self._log.info('depth camera disabled.')
 
 #EOF
