@@ -124,6 +124,8 @@ then:
     (used only for the Monitor)
 * ina260:       https://pypi.org/project/ina260/
     with:         sudo pip3 install ina260 --break-system-packages
+* ltr559:       https://pypi.org/project/ltr559/
+    with:         sudo pip3 install ltr559 --break-system-packages
 
 If a Luxonis OAK-D Lite camera is attached, install:
 

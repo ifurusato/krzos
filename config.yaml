@@ -145,6 +145,8 @@ kros:
             pin_red:                          1            # red pin
             pin_green:                        7            # green pin
             pin_blue:                         2            # blue pin
+        lux_sensor:
+            lux_threshold:                200.0            # threshold of light/dark
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled
@@ -221,7 +223,7 @@ kros:
             required:                     False
           - address:                       0x23
             name:    "LTR-559 Light & Proximity"
-            required:                     False
+            required:                      True
           - address:                       0x28
             name:         "MPU9250 + BMP280 IMU"
             required:                      True

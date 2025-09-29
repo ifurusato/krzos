@@ -67,7 +67,8 @@ class TinyFxController(Component):
         Accepts an Orientation argument. Modify the channel designated by:
 
             Orientation.NONE :  turn off all lights
-            Orientation.ALL :   turn on port, starboard and mast lights
+            Orientation.ALL  :  turn on port, starboard and mast lights
+            Orientation.FWD  :  turn on head light
             Orientation.PORT :  turn on port light
             Orientation.STBD :  turn on starboard light
             Orientation.MAST :  turn on mast flashing light
@@ -77,6 +78,8 @@ class TinyFxController(Component):
                 return self.send_data('off')
             case Orientation.ALL:
                 return self.send_data('on')
+            case Orientation.FWD:
+                return self.send_data('fwd')
             case Orientation.PORT:
                 return self.send_data('port')
             case Orientation.STBD:
@@ -146,38 +149,42 @@ class TinyFxController(Component):
         '''
         Sends a string to the TinyFX.
         '''
-        print('🍏 a. send data. ')
-        start_time = dt.datetime.now()
-        if self._last_send_time:
-            elapsed = start_time - self._last_send_time
-            if elapsed < self._min_send_interval:
-                self._log.warning(
-                    "write_payload skipped: only {:.1f}ms since last send (minimum is {:.1f}ms)".format(
-                        elapsed.total_seconds() * 1000,
-                        self._min_send_interval.total_seconds() * 1000
+        try:
+#           print('🍏 a. send data. ')
+            start_time = dt.datetime.now()
+            if self._last_send_time:
+                elapsed = start_time - self._last_send_time
+                if elapsed < self._min_send_interval:
+                    self._log.warning(
+                        "write_payload skipped: only {:.1f}ms since last send (minimum is {:.1f}ms)".format(
+                            elapsed.total_seconds() * 1000,
+                            self._min_send_interval.total_seconds() * 1000
+                        )
                     )
-                )
-                return RESPONSE_SKIPPED
-        self._log.info("sending data: '{}'…".format(data))
-        _response = self._controller.send_payload(data)
-        elapsed_ms = (dt.datetime.now() - start_time).total_seconds() * 1000.0
-        if _response is None:
-            raise ValueError('null response.')
-        elif isinstance(_response, Response):
-            if _response == RESPONSE_OKAY:
-                print('🍏 b. RESPONSE_OKAY: {}'.format(_response))
-                self._log.info("response: "
-                        + Fore.GREEN + "'{}'".format(_response.description)
-                        + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
+                    return RESPONSE_SKIPPED
+            self._log.info("sending data: '{}'…".format(data))
+            _response = self._controller.send_payload(data)
+            elapsed_ms = (dt.datetime.now() - start_time).total_seconds() * 1000.0
+            if _response is None:
+                self._log.warning('no response.')
+            elif isinstance(_response, Response):
+                if _response == RESPONSE_OKAY:
+#                   print('🍏 b. RESPONSE_OKAY: {}'.format(_response))
+                    self._log.info("response: "
+                            + Fore.GREEN + "'{}'".format(_response.description)
+                            + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
+                else:
+#                   print('🍏 c. response: {}'.format(_response))
+                    self._log.warning("response: "
+                            + Fore.RED + "'{}'".format(_response.description)
+                            + Fore.WHITE + "; {:5.2f}ms elapsed.".format(elapsed_ms))
+            elif not isinstance(_response, Response):
+                raise ValueError('expected Response, not {}.'.format(type(_response)))
             else:
-                print('🍏 c. response: {}'.format(_response))
-                self._log.warning("response: "
-                        + Fore.RED + "'{}'".format(_response.description)
-                        + Fore.WHITE + "; {:5.2f}ms elapsed.".format(elapsed_ms))
-        elif not isinstance(_response, Response):
-            raise ValueError('expected Response, not {}.'.format(type(_response)))
-        else:
-            self._log.error("error response: {}; {:5.2f}ms elapsed.".format(_response.description, elapsed_ms))
+                self._log.error("error response: {}; {:5.2f}ms elapsed.".format(_response.description, elapsed_ms))
+        except Exception as e:
+            self._log.error("{} raised sending data: {}".format(type(e), e))
+
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
