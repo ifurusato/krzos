@@ -41,7 +41,7 @@ class PIDController(Component):
     :param enabled:      Initial enabled state.
     :param level:        The log level, e.g., Level.INFO.
     '''
-    def __init__(self, config, motor, setpoint=0.0, period=0.01, suppressed=False, enabled=True, level=Level.INFO):
+    def __init__(self, config, motor, setpoint=0.0, period=0.01, suppressed=False, enabled=False, level=Level.INFO):
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(config)))
         self._config = config
@@ -70,7 +70,7 @@ class PIDController(Component):
         self._power        = 0.0
         self._last_power   = 0.0
         self._last_time = dt.now() # for calculating elapsed time
-        self._verbose      = True
+        self._verbose      = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -154,8 +154,8 @@ class PIDController(Component):
 #               self._motor.get_velocity().reset_steps()
                 self._motor.set_motor_power(0.0)
                 if self._verbose:
-#                   if _count % 20 == 0:
-#                       self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(target_speed, self._power, self._motor.velocity))
+                    if _count % 20 == 0:
+                        self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(target_speed, self._power, self._motor.velocity))
                     pass
             else:
                 self._pid.setpoint = target_speed
@@ -168,7 +168,8 @@ class PIDController(Component):
 #               _pid_output = self._pid(self._motor.velocity)
 #               if _changed:
                 self._power += _pid_output
-#               self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, self._motor.velocity))
+                if self._verbose:
+                    self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, self._motor.velocity))
                 _motor_power = self._power
                 self._motor.set_motor_power(_motor_power)
 

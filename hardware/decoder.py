@@ -27,7 +27,7 @@ except ImportError as ie:
 from colorama import init, Fore, Style
 init()
 
-from core.logger import Logger
+from core.logger import Logger, Level
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Decoder(object):
@@ -52,7 +52,7 @@ class Decoder(object):
     '''
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def __init__(self, orientation, gpio_a, gpio_b, callback, level):
+    def __init__(self, orientation=None, gpio_a=None, gpio_b=None, reverse=False, callback=None, level=Level.INFO):
         '''
         Instantiate the class with the gpios connected to
         rotary encoder contacts A and B. The common contact should
@@ -74,9 +74,9 @@ class Decoder(object):
         decoder.cancel()
 
         :param orientation:  the motor orientation
-        :param gpio_a:        pin number for A
-        :param gpio_b:        pin number for B
-        :param callback:     the callback method
+        :param gpio_a:       pin number for A
+        :param gpio_b:       pin number for B
+        :param callback:     the optional callback method
         :param level:        the log Level
         '''
         self._log = Logger('enc:{}'.format(orientation.label), level)
@@ -84,12 +84,12 @@ class Decoder(object):
         self._gpio_b    = gpio_b
         self._log.debug('pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
         self._callback  = callback
-        self._reversed = False
+        self._reversed = reverse
 
         try:
             # gpiozero RotaryEncoder takes pin_a, pin_b as args.
             self._encoder = RotaryEncoder(self._gpio_a, self._gpio_b, max_steps=0)
-            self._encoder.when_rotated = self._rotated
+#           self._encoder.when_rotated = self._rotated
             self._last_value = self._encoder.value
             self._log.info('configured {} motor encoder with channel A on pin {}, channel B on pin {}.'.format(orientation.name, self._gpio_a, self._gpio_b))
         except Exception as e:
@@ -108,19 +108,20 @@ class Decoder(object):
     def _rotated(self):
         '''
         Internal handler called by gpiozero when the encoder is rotated.
-        Calls user callback with +1 or -1 depending on direction.
+        Calls user callback with +1 or -1 depending on direction. Due to
+        what might be considered an arbitrary hardware design decision,
+        the callback is sent a -1 when the motor is moving forward.
+
+        No longer used.
         '''
-        step = self._encoder.steps - self._last_value
-        forward = step >= 0
+        pass 
+
+    @property
+    def steps(self):
         if self._reversed:
-            forward = not forward
-        if forward: # forward
-            self._log.info(Fore.BLUE + Style.BRIGHT + 'FORWARD on pin A: {:d}; pin B: {:d}; {} steps.'.format(self._gpio_a,self._gpio_b, self._encoder.steps))
-            self._callback(1)
-        else: # reverse
-            self._log.info(Fore.RED + Style.BRIGHT + 'REVERSE on pin A: {:d}; pin B: {:d}; {} steps.'.format(self._gpio_a,self._gpio_b, self._encoder.steps))
-            self._callback(-1)
-        self._last_value = self._encoder.steps
+            return self._encoder.steps * -1
+        else:
+            return self._encoder.steps
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def cancel(self):

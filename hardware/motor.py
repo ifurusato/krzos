@@ -69,7 +69,8 @@ class Motor(Component):
                 orientation.name, type(self._tb).__name__, self._tb.I2cAddress))
         # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = config['kros'].get('motor')
-        self._scale_factor = _cfg.get('scale_factor')      # a constant that converts target speed to motor speed
+        self._scale_factor_closed = _cfg.get('scale_factor_closed') # constant converts target speed to motor speed (closed loop)
+        self._scale_factor_open   = _cfg.get('scale_factor_open')   # constant converts target speed to motor speed (open loop)
         self._max_observed_speed = 0.0                     # the observed max forward speed
 #       self._log.info('max speed:\t{:<5.2f}'.format(self._speed_multiplier))
         _max_speed = 1.0
@@ -82,7 +83,6 @@ class Motor(Component):
         self._log.info('reverse motor: {}'.format(self._reverse_motor))
         self._counter            = itertools.count()
         self.__callbacks         = []
-        self.__steps             = 0     # step counter
         self.__max_applied_power = 0.0   # capture maximum power applied
         self.__max_power_ratio   = 0.0   # will be set by MotorConfigurer
         self.__target_speed      = 0.0   # the current target speed of the motor
@@ -97,15 +97,13 @@ class Motor(Component):
         # add callback from motor's update method
         self.add_callback(self._velocity.tick)
         self._velocity.enable()
+        self._pid_controller     = PIDController(config, self, level=level)
         # slew limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _enable_slew_limiter     = _cfg.get('enable_slew_limiter')
         self._slew_limiter       = SlewLimiter(config, orientation, suppressed=False, enabled=_enable_slew_limiter, level=level)
         # jerk limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _enable_jerk_limiter     = _cfg.get('enable_jerk_limiter')
         self._jerk_limiter       = JerkLimiter(config, orientation, suppressed=False, enabled=_enable_jerk_limiter, level=level)
-        # pid controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _enable_pid_controller   = _cfg.get('enable_pid_controller')
-        self._pid_controller     = PIDController(config, self, suppressed=False, enabled=_enable_pid_controller, level=level)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -224,9 +222,6 @@ class Motor(Component):
         return self._pid_controller
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def steps(self):
-        return self._decoder.steps
 
     @property
     def decoder(self):
@@ -281,7 +276,7 @@ class Motor(Component):
             _current_target_speed = self.__target_speed
             _new_target_speed = target_speed 
             self.__target_speed = self._slew_limiter.limit(_current_target_speed, _new_target_speed)
-#           self._log.info(Fore.MAGENTA + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
+#           self._log.info(Fore.WHITE + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
 #                   _current_target_speed, _new_target_speed, self.__target_speed))
         else:
             self.__target_speed = target_speed
@@ -289,11 +284,10 @@ class Motor(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def steps(self):
-        return self.__steps
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def reset_steps(self):
-        self.__steps = 0
+        '''
+        Return the value of the step count from the motor encoder.
+        '''
+        return self._decoder.steps
 
     # max power rate ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -305,19 +299,6 @@ class Motor(Component):
     def max_power_ratio(self, max_power_ratio):
         self.__max_power_ratio = max_power_ratio
         self._log.info('set maximum power ratio: {:<5.2f}'.format(self.__max_power_ratio))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _callback_step_count(self, pulse):
-        '''
-        This callback is used to capture encoder steps.
-        '''
-        
-        if self._orientation.side is Orientation.PORT:
-            self.__steps = self.__steps + pulse
-            self._log.info(Fore.RED + '_callback_step_count: {}'.format(self.__steps))
-        elif self._orientation.side is Orientation.STBD:
-            self.__steps = self.__steps - pulse
-            self._log.info(Fore.GREEN + '_callback_step_count: {}'.format(self.__steps))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -365,6 +346,7 @@ class Motor(Component):
         if self.enabled:
             for callback in self.__callbacks:
                 callback()
+            _count = next(self._counter)
             # we start with the current value of the target speed
             self.__modified_target_speed = self.__target_speed
             _returned_value = 0.0
@@ -390,16 +372,18 @@ class Motor(Component):
                         self._pid_controller.set_speed(0.0)
                     return
             if self._pid_controller.is_active:
-                _motor_speed = self.__modified_target_speed # self._scale_factor
-                if self._orientation is Orientation.PFWD:
-                    self._log.info(Fore.MAGENTA + '😡 CLOSED LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps'.format(
-                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
+                _motor_speed = self.__modified_target_speed * self._scale_factor_closed
+#               if _count % 20 == 0:
+#                   if self._orientation is Orientation.PAFT:
+#                       self._log.debug(Fore.MAGENTA + 'updating {} target speed to: {:<5.2f} motor speed: {:5.2f}; {} steps'.format(
+#                               self._orientation.label, self.__modified_target_speed, _motor_speed, self.steps))
                 self._pid_controller.set_speed(_motor_speed)
             else:
-                _motor_speed = self.__modified_target_speed * self._scale_factor
-                if self._orientation is Orientation.PFWD:
-                    self._log.info(Fore.MAGENTA + '😡 OPEN LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps.'.format(
-                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
+                _motor_speed = self.__modified_target_speed * self._scale_factor_open
+#               if _count % 20 == 0:
+#                   if self._orientation is Orientation.PAFT:
+#                       self._log.debug(Fore.MAGENTA + 'OPEN LOOP updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps.'.format(
+#                               self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
                 self.set_motor_power(_motor_speed)
 #               self._log.debug('pid controller is not active.')
                 pass
@@ -434,10 +418,10 @@ class Motor(Component):
 
         if self._orientation is Orientation.PFWD:
             if _is_zero:
-                self._log.info(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(0.0)
             else:
-                self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(_driving_power)
 
         elif self._orientation is Orientation.SFWD:

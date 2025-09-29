@@ -37,14 +37,6 @@ kros:
         publish_delay_sec:                 0.05            # publishing delay loop
         clip_event_list:                  False            # if True clip length of displayed event list
         clip_length:                         42            # max length of displayed event list
-        loop_freq_hz:                        50            # main loop delay in hz
-        accel_decel_steps:                   50            # determines rate of acceleration/deceleration
-        coasting_steps:                     300            # determines coasting deceleration
-        braking_steps:                       60            # determines braking deceleration
-        stopping_steps:                      10            # determines stopping deceleration
-        pause:                                0.05         # delay on stepping
-        speed_scale:                          5.4          # scaling to apply to the motor's speed to match its real-world speed
-        enable_pid:                        True            # initial enable state for PID controller, otherwise direct drive
     publisher:
         system:
             enable_battery_messaging:     False            # if True we enable low battery messages to be sent
@@ -57,6 +49,7 @@ kros:
     subscriber:
         # TBD
     motor_controller:
+        closed_loop:                       True            # open or closed loop control
         loop_freq_hz:                        20            # main loop delay in hz
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
@@ -65,7 +58,10 @@ kros:
         rotation_speed:                       0.25         # motor speed when rotating in place
 #       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
 #       use_speed_indicator:              False            # publish RGB events for motor speed indication
-
+        accel_decel_steps:                   50            # determines rate of acceleration/deceleration (unused)
+        coasting_steps:                     300            # determines coasting deceleration (unused)
+        braking_steps:                       60            # determines braking deceleration (unused)
+        stopping_steps:                      10            # determines stopping deceleration (unused)
     geometry:                                              # robot geometry (e.g., KR01)
         wheel_diameter:                     104            # wheel diameter (mm)
         wheel_base:                         148            # wheel base (mm), distance between front and rear axles
@@ -76,8 +72,8 @@ kros:
         thunderborg_stbd_address:          0x16            # I²C address for starboard thunderborg motor controller
         motor_voltage:                       12            # the voltage rating of the motor
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
-        scale_factor:                         3.0          # a constant multiplier that determines maximum power sent to the motors (7 maxes them out at 0.9)
-        enable_pid_controller:             True            # initial enable state for PID controller, otherwise direct drive
+        scale_factor_open:                  1.5            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
+        scale_factor_closed:                5.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
         enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
         reverse_motor_pfwd:               False            # in case you wire up the motors backwards
@@ -85,18 +81,17 @@ kros:
         reverse_motor_paft:               False            # ditto
         reverse_motor_saft:                True            # ditto
         odometry:
-            enable_odometry:               True            # if true we enable motor encoders and odometry
             motor_encoder_sfwd_a:            26            # stbd fwd A channel
             motor_encoder_sfwd_b:            19            # stbd fwd B channel
             motor_encoder_pfwd_a:            21            # port fwd A channel
             motor_encoder_pfwd_b:            20            # port fwd B channel
             motor_encoder_saft_a:             6            # stbd aft A channel
             motor_encoder_saft_b:             5            # stbd aft B channel
-            motor_encoder_paft_a:            18            # port aft A channel (was 16)
+            motor_encoder_paft_a:            16            # port aft A channel
             motor_encoder_paft_b:            12            # port aft B channel
             reverse_encoder_pfwd:          True            # in case you wire up the encoders backwards
             reverse_encoder_sfwd:         False            # ditto
-            reverse_encoder_paft:         False            # ditto
+            reverse_encoder_paft:          True            # ditto
             reverse_encoder_saft:         False            # ditto
         pid_controller:
             kp:                               0.05000      # proportional gain

@@ -58,95 +58,77 @@ class MotorConfigurer(Component):
         # now import motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         try:
             self._log.info('configuring motors…')
-            # PFWD "port-pwd" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # GPIO pins configured for A and B channels for each encoder, reversed on starboard side
+            _odo_cfg = self._config['kros'].get('motor').get('odometry')
+
+            # PFWD "port-forward" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._pfwd_motor = Motor(self._config, self._port_tb, Orientation.PFWD, level)
             self._pfwd_motor.max_power_ratio = self._max_power_ratio
+            _motor_encoder_pfwd_a    = _odo_cfg.get('motor_encoder_pfwd_a')
+            _motor_encoder_pfwd_b    = _odo_cfg.get('motor_encoder_pfwd_b')
+            _reverse_encoder_pfwd    = _odo_cfg.get('reverse_encoder_pfwd')
+            self._pfwd_motor.decoder = Decoder(
+                orientation = Orientation.PFWD,
+                gpio_a  = _motor_encoder_pfwd_a, 
+                gpio_b  = _motor_encoder_pfwd_b, 
+                reverse = _reverse_encoder_pfwd
+            )
+            self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
+                Orientation.PFWD, _motor_encoder_pfwd_a, _motor_encoder_pfwd_b, _reverse_encoder_pfwd))
+
+            # SFWD "starboard-forward" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            self._sfwd_motor = Motor(self._config, self._stbd_tb, Orientation.SFWD, level)
+            self._sfwd_motor.max_power_ratio = self._max_power_ratio
+            _motor_encoder_sfwd_a    = _odo_cfg.get('motor_encoder_sfwd_a')
+            _motor_encoder_sfwd_b    = _odo_cfg.get('motor_encoder_sfwd_b')
+            _reverse_encoder_sfwd    = _odo_cfg.get('reverse_encoder_sfwd')
+            self._sfwd_motor.decoder = Decoder(
+                orientation = Orientation.SFWD,
+                gpio_a  = _motor_encoder_sfwd_a,
+                gpio_b  = _motor_encoder_sfwd_b,
+                reverse = _reverse_encoder_sfwd
+            )
+            self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
+                Orientation.SFWD, _motor_encoder_sfwd_a, _motor_encoder_sfwd_b, _reverse_encoder_sfwd))
+
             # PAFT "port-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._paft_motor = Motor(self._config, self._port_tb, Orientation.PAFT, level)
             self._paft_motor.max_power_ratio = self._max_power_ratio
-            # SFWD "starboard-fwd" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._sfwd_motor = Motor(self._config, self._stbd_tb, Orientation.SFWD, level)
-            self._sfwd_motor.max_power_ratio = self._max_power_ratio
+            _motor_encoder_paft_a    = _odo_cfg.get('motor_encoder_paft_a')
+            _motor_encoder_paft_b    = _odo_cfg.get('motor_encoder_paft_b')
+            _reverse_encoder_paft    = _odo_cfg.get('reverse_encoder_paft')
+            self._paft_motor.decoder = Decoder(
+                orientation = Orientation.PAFT,
+                gpio_a  = _motor_encoder_paft_a,
+                gpio_b  = _motor_encoder_paft_b,
+                reverse = _reverse_encoder_paft
+            )
+            self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
+                Orientation.PAFT, _motor_encoder_paft_a, _motor_encoder_paft_b, _reverse_encoder_paft))
+
             # SAFT "starboard-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._saft_motor = Motor(self._config, self._stbd_tb, Orientation.SAFT, level)
             self._saft_motor.max_power_ratio = self._max_power_ratio
-        except OSError as oe:
-            self._log.error('failed to configure motors: {}'.format(oe))
+            _motor_encoder_saft_a    = _odo_cfg.get('motor_encoder_saft_a')
+            _motor_encoder_saft_b    = _odo_cfg.get('motor_encoder_saft_b')
+            _reverse_encoder_saft    = _odo_cfg.get('reverse_encoder_saft')
+            self._saft_motor.decoder = Decoder(
+                orientation = Orientation.SAFT,
+                gpio_a  = _motor_encoder_saft_a,
+                gpio_b  = _motor_encoder_saft_b,
+                reverse = _reverse_encoder_saft
+            )
+            self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
+                Orientation.SAFT, _motor_encoder_saft_a, _motor_encoder_saft_b, _reverse_encoder_saft))
+
+        except Exception as e:
+            self._log.error('{} raised configuring motors: {}'.format(type(e), e))
             self._pfwd_motor = None
             self._sfwd_motor = None
             self._paft_motor = None
             self._saft_motor = None
-            raise Exception('unable to instantiate ThunderBorg [1].')
-
-        _odo_cfg = self._config['kros'].get('motor').get('odometry')
-        _enable_odometry = _odo_cfg.get('enable_odometry')
-        if _enable_odometry: # motor odometry configuration ┈┈┈┈┈┈┈┈┈┈
-            # in case you wire something up backwards (we need this prior to the logger)
-            self._reverse_motor_orientation   = _odo_cfg.get('reverse_motor_orientation')
-            self._log.info('reverse motor orientation:   {}'.format(self._reverse_motor_orientation))
-            # GPIO pins configured for A and B channels for each encoder
-            self._motor_encoder_sfwd_a    = _odo_cfg.get('motor_encoder_sfwd_a')
-            self._log.info('motor encoder sfwd A: {:d}'.format(self._motor_encoder_sfwd_a))
-            self._motor_encoder_sfwd_b    = _odo_cfg.get('motor_encoder_sfwd_b')
-            self._log.info('motor encoder sfwd B: {:d}'.format(self._motor_encoder_sfwd_b))
-            self._motor_encoder_pfwd_a    = _odo_cfg.get('motor_encoder_pfwd_a')
-            self._log.info('motor encoder pfwd A: {:d}'.format(self._motor_encoder_pfwd_a))
-            self._motor_encoder_pfwd_b    = _odo_cfg.get('motor_encoder_pfwd_b')
-            self._log.info('motor encoder pfwd B: {:d}'.format(self._motor_encoder_pfwd_b))
-            self._motor_encoder_saft_a    = _odo_cfg.get('motor_encoder_saft_a')
-            self._log.info('motor encoder saft A: {:d}'.format(self._motor_encoder_saft_a))
-            self._motor_encoder_saft_b    = _odo_cfg.get('motor_encoder_saft_b')
-            self._log.info('motor encoder saft B: {:d}'.format(self._motor_encoder_saft_b))
-            self._motor_encoder_paft_a    = _odo_cfg.get('motor_encoder_paft_a')
-            self._log.info('motor encoder paft A: {:d}'.format(self._motor_encoder_paft_a))
-            self._motor_encoder_paft_b    = _odo_cfg.get('motor_encoder_paft_b')
-            self._log.info('motor encoder paft B: {:d}'.format(self._motor_encoder_paft_b))
-
-            # configure motor encoders… ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._reverse_encoder_sfwd    = _odo_cfg.get('reverse_encoder_sfwd')
-            self._log.info('sfwd motor encoder reversed? {}'.format(self._reverse_encoder_sfwd))
-            self._reverse_encoder_pfwd    = _odo_cfg.get('reverse_encoder_pfwd')
-            self._log.info('pfwd motor encoder reversed? {}'.format(self._reverse_encoder_pfwd))
-            self._reverse_encoder_saft    = _odo_cfg.get('reverse_encoder_saft')
-            self._log.info('saft motor encoder reversed? {}'.format(self._reverse_encoder_saft))
-            self._reverse_encoder_paft    = _odo_cfg.get('reverse_encoder_paft')
-            self._log.info('paft motor encoder reversed? {}'.format(self._reverse_encoder_paft))
-            self._log.info('configuring motor encoders…')
-            self._configure_encoder(self._pfwd_motor, Orientation.PFWD)
-            self._configure_encoder(self._sfwd_motor, Orientation.SFWD)
-            self._configure_encoder(self._paft_motor, Orientation.PAFT)
-            self._configure_encoder(self._saft_motor, Orientation.SAFT)
-
-        # end odometry configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            raise e
         self._log.info('ready.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _configure_encoder(self, motor, orientation):
-        '''
-        Configure the encoder for the specified motor.
-        '''
-        if orientation is Orientation.SFWD:
-            _reversed  = self._reverse_encoder_sfwd
-            _encoder_a = self._motor_encoder_sfwd_a
-            _encoder_b = self._motor_encoder_sfwd_b
-        elif orientation is Orientation.PFWD:
-            _reversed  = self._reverse_encoder_pfwd
-            _encoder_a = self._motor_encoder_pfwd_a
-            _encoder_b = self._motor_encoder_pfwd_b
-        elif orientation is Orientation.SAFT:
-            _reversed  = self._reverse_encoder_saft
-            _encoder_a = self._motor_encoder_saft_a
-            _encoder_b = self._motor_encoder_saft_b
-        elif orientation is Orientation.PAFT:
-            _reversed  = self._reverse_encoder_paft
-            _encoder_a = self._motor_encoder_paft_a
-            _encoder_b = self._motor_encoder_paft_b
-        else:
-            raise ValueError("unrecognised value for orientation.")
-        motor.decoder = Decoder(motor.orientation, _encoder_a, _encoder_b, motor._callback_step_count, self._log.level)
-        if _reversed:
-            motor.decoder.set_reversed()
-        self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(motor.orientation.name, _encoder_a, _encoder_b, _reversed))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _import_thunderborg(self, orientation):

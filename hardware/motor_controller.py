@@ -126,8 +126,23 @@ class MotorController(Component):
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
         self._clamp          = lambda n: max(min(_max_speed, n), _min_speed)
         self._print_info_done = False
+        _closed_loop         = _cfg.get('closed_loop')
+        self.set_closed_loop(_closed_loop)
         # finish up…
         self._log.info('ready with {} motors.'.format(len(self._all_motors)))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def set_closed_loop(self, closed_loop):
+        '''
+        Set the motor controller to open or closed loop.
+        '''
+        for _motor in self._all_motors:
+            if closed_loop:
+                _motor.pid_controller.enable()
+                self._log.info(Style.BRIGHT + 'set closed loop control.')
+            else:
+                _motor.pid_controller.disable()
+                self._log.info(Style.BRIGHT + 'set open loop control.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_mean_speed(self, orientation):
@@ -154,19 +169,6 @@ class MotorController(Component):
             _speeds.append(self._sfwd_motor.modified_speed)
             _speeds.append(self._saft_motor.modified_speed)
         return statistics.fmean(_speeds)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def set_closed_loop(self, closed_loop):
-        '''
-        Set the motor controller to open or closed loop.
-        '''
-        for _motor in self._all_motors:
-            if closed_loop:
-                _motor.pid_controller.enable()
-                self._log.info('set closed loop control.')
-            else:
-                _motor.pid_controller.disable()
-                self._log.info('set open loop control.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_motors(self):
@@ -415,7 +417,6 @@ class MotorController(Component):
         if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
             self._pfwd_motor.target_speed = target_speed
         elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
-            self._log.info(Fore.MAGENTA + 'set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
             self._sfwd_motor.target_speed = target_speed
         elif orientation is Orientation.PAFT and self._paft_motor.enabled:
             self._paft_motor.target_speed = target_speed

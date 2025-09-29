@@ -58,15 +58,15 @@ try:
 
     _log.info('starting motor controller…')
     _motor_controller = MotorController(_config, external_clock=_irq_clock, level=_level)
-    _motor_controller.set_closed_loop(False)
+#   _motor_controller.set_closed_loop(True)
     _motor_controller.enable()
 
     _log.info('starting test…')
     _hz = 2
     _rate = Rate(_hz, Level.ERROR)
 
-#   _test_orientation = Orientation.ALL
-    _test_orientation = Orientation.PAFT
+    _test_orientation = Orientation.ALL
+#   _test_orientation = Orientation.PAFT
 
     while True:
 
@@ -74,13 +74,13 @@ try:
         _target_speed = _pot.get_scaled_value(False) # values 0.0-1.0
         if isclose(_target_speed, 0.0, abs_tol=0.08):
             _pot.set_black() # only on digital pot
-#           if ENABLE_MOTORS:
-            if _test_orientation is Orientation.ALL:
-                _motor_controller.set_speed(Orientation.PORT, 0.0)
-                _motor_controller.set_speed(Orientation.STBD, 0.0)
-            else:
-                _motor_controller.set_speed(_test_orientation, 0.0)
-            _log.info(Style.DIM + 'target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+            if ENABLE_MOTORS:
+                if _test_orientation is Orientation.ALL:
+                    _motor_controller.set_speed(Orientation.PORT, 0.0)
+                    _motor_controller.set_speed(Orientation.STBD, 0.0)
+                else:
+                    _motor_controller.set_speed(_test_orientation, 0.0)
+#           _log.info(Style.DIM + 'target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
         else:
 #           _target_speed = 0.1
             _pot.set_rgb(_pot.value) # only on digital pot
@@ -90,7 +90,7 @@ try:
                     _motor_controller.set_speed(Orientation.STBD, _target_speed)
                 else:
                     _motor_controller.set_speed(_test_orientation, _target_speed)
-            _log.info('target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+#           _log.info('target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
 
         _rate.wait()
 
