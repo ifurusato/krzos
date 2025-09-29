@@ -92,12 +92,12 @@ kros:
             motor_encoder_pfwd_b:            20            # port fwd B channel
             motor_encoder_saft_a:             6            # stbd aft A channel
             motor_encoder_saft_b:             5            # stbd aft B channel
-            motor_encoder_paft_a:            16            # port aft A channel
+            motor_encoder_paft_a:            18            # port aft A channel (was 16)
             motor_encoder_paft_b:            12            # port aft B channel
-            reverse_encoder_pfwd:         False            # in case you wire up the encoders backwards
-            reverse_encoder_sfwd:          True            # ditto
+            reverse_encoder_pfwd:          True            # in case you wire up the encoders backwards
+            reverse_encoder_sfwd:         False            # ditto
             reverse_encoder_paft:         False            # ditto
-            reverse_encoder_saft:          True            # ditto
+            reverse_encoder_saft:         False            # ditto
         pid_controller:
             kp:                               0.05000      # proportional gain
             ki:                               0.00500      # integral gain

@@ -81,8 +81,6 @@ class MotorConfigurer(Component):
         _odo_cfg = self._config['kros'].get('motor').get('odometry')
         _enable_odometry = _odo_cfg.get('enable_odometry')
         if _enable_odometry: # motor odometry configuration ┈┈┈┈┈┈┈┈┈┈
-            self._reverse_encoder_orientation = _odo_cfg.get('reverse_encoder_orientation')
-            self._log.info('reverse encoder orientation: {}'.format(self._reverse_encoder_orientation))
             # in case you wire something up backwards (we need this prior to the logger)
             self._reverse_motor_orientation   = _odo_cfg.get('reverse_motor_orientation')
             self._log.info('reverse motor orientation:   {}'.format(self._reverse_motor_orientation))
@@ -127,8 +125,6 @@ class MotorConfigurer(Component):
         '''
         Configure the encoder for the specified motor.
         '''
-        if self._reverse_encoder_orientation:
-            pass # unsupported: swap port for starboard
         if orientation is Orientation.SFWD:
             _reversed  = self._reverse_encoder_sfwd
             _encoder_a = self._motor_encoder_sfwd_a

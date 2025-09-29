@@ -225,6 +225,10 @@ class Motor(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
+    def steps(self):
+        return self._decoder.steps
+
+    @property
     def decoder(self):
         return self._decoder
 
@@ -387,15 +391,15 @@ class Motor(Component):
                     return
             if self._pid_controller.is_active:
                 _motor_speed = self.__modified_target_speed # self._scale_factor
-                if self._orientation is Orientation.SFWD:
-                    self._log.info(Fore.MAGENTA + '😡 CLOSED LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}) with motor speed: {:5.2f}'.format(
-                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed))
+                if self._orientation is Orientation.PFWD:
+                    self._log.info(Fore.MAGENTA + '😡 CLOSED LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps'.format(
+                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
                 self._pid_controller.set_speed(_motor_speed)
             else:
                 _motor_speed = self.__modified_target_speed * self._scale_factor
-                if self._orientation is Orientation.SFWD:
-                    self._log.info(Fore.MAGENTA + '😡 OPEN LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}) with motor speed: {:5.2f}'.format(
-                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed))
+                if self._orientation is Orientation.PFWD:
+                    self._log.info(Fore.MAGENTA + '😡 OPEN LOOP - updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps.'.format(
+                            self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
                 self.set_motor_power(_motor_speed)
 #               self._log.debug('pid controller is not active.')
                 pass
@@ -430,18 +434,18 @@ class Motor(Component):
 
         if self._orientation is Orientation.PFWD:
             if _is_zero:
-                self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._log.info(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(0.0)
             else:
-                self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
+                self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(_driving_power)
 
         elif self._orientation is Orientation.SFWD:
             if _is_zero:
-                self._log.info(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
+                self._log.debug(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(0.0)
             else:
-                self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
+                self._log.debug(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(_driving_power)
 
         elif self._orientation is Orientation.PAFT:

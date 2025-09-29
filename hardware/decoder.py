@@ -16,6 +16,8 @@
 #
 
 import sys, traceback
+from colorama import init, Fore, Style
+init()
 
 try:
     from gpiozero import RotaryEncoder
@@ -82,7 +84,7 @@ class Decoder(object):
         self._gpio_b    = gpio_b
         self._log.debug('pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
         self._callback  = callback
-        self._increment = 1
+        self._reversed = False
 
         try:
             # gpiozero RotaryEncoder takes pin_a, pin_b as args.
@@ -100,7 +102,7 @@ class Decoder(object):
         '''
         If called, sets this encoder for reversed operation.
         '''
-        self._increment = -1
+        self._reversed = True
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _rotated(self):
@@ -108,13 +110,17 @@ class Decoder(object):
         Internal handler called by gpiozero when the encoder is rotated.
         Calls user callback with +1 or -1 depending on direction.
         '''
-#       self._log.debug('_rotated on pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
-        step = self._encoder.value - self._last_value
-        if step > 0:
-            self._callback(self._increment)
-        elif step < 0:
-            self._callback(-1 * self._increment)
-        self._last_value = self._encoder.value
+        step = self._encoder.steps - self._last_value
+        forward = step >= 0
+        if self._reversed:
+            forward = not forward
+        if forward: # forward
+            self._log.info(Fore.BLUE + Style.BRIGHT + 'FORWARD on pin A: {:d}; pin B: {:d}; {} steps.'.format(self._gpio_a,self._gpio_b, self._encoder.steps))
+            self._callback(1)
+        else: # reverse
+            self._log.info(Fore.RED + Style.BRIGHT + 'REVERSE on pin A: {:d}; pin B: {:d}; {} steps.'.format(self._gpio_a,self._gpio_b, self._encoder.steps))
+            self._callback(-1)
+        self._last_value = self._encoder.steps
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def cancel(self):
