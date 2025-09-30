@@ -24,6 +24,7 @@ from core.orientation import Orientation
 from core.rate import Rate
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
+from core.steering_mode import SteeringMode
 from hardware.irq_clock import IrqClock
 from hardware.motor_controller import MotorController
 from hardware.digital_pot import DigitalPotentiometer
@@ -37,7 +38,6 @@ _start_time  = dt.now()
 
 _log = Logger('test', Level.INFO)
 _motor_controller = None
-ENABLE_MOTORS = True
 
 try:
 
@@ -68,28 +68,27 @@ try:
     _test_orientation = Orientation.ALL
 #   _test_orientation = Orientation.PAFT
 
-    while True:
+    _motor_controller.set_steering_mode(SteeringMode.ROTATE)
 
+    while True:
         _current = _system.get_system_current()
         _target_speed = _pot.get_scaled_value(False) # values 0.0-1.0
         if isclose(_target_speed, 0.0, abs_tol=0.08):
             _pot.set_black() # only on digital pot
-            if ENABLE_MOTORS:
-                if _test_orientation is Orientation.ALL:
-                    _motor_controller.set_speed(Orientation.PORT, 0.0)
-                    _motor_controller.set_speed(Orientation.STBD, 0.0)
-                else:
-                    _motor_controller.set_speed(_test_orientation, 0.0)
+            if _test_orientation is Orientation.ALL:
+                _motor_controller.set_speed(Orientation.PORT, 0.0)
+                _motor_controller.set_speed(Orientation.STBD, 0.0)
+            else:
+                _motor_controller.set_speed(_test_orientation, 0.0)
 #           _log.info(Style.DIM + 'target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
         else:
 #           _target_speed = 0.1
             _pot.set_rgb(_pot.value) # only on digital pot
-            if ENABLE_MOTORS:
-                if _test_orientation is Orientation.ALL:
-                    _motor_controller.set_speed(Orientation.PORT, _target_speed)
-                    _motor_controller.set_speed(Orientation.STBD, _target_speed)
-                else:
-                    _motor_controller.set_speed(_test_orientation, _target_speed)
+            if _test_orientation is Orientation.ALL:
+                _motor_controller.set_speed(Orientation.PORT, _target_speed)
+                _motor_controller.set_speed(Orientation.STBD, _target_speed)
+            else:
+                _motor_controller.set_speed(_test_orientation, _target_speed)
 #           _log.info('target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
 
         _rate.wait()

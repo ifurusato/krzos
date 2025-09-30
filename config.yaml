@@ -50,6 +50,7 @@ kros:
         # TBD
     motor_controller:
         closed_loop:                       True            # open or closed loop control
+        create_ext_clock:                  True            # create external clock if not provided
         loop_freq_hz:                        20            # main loop delay in hz
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
@@ -112,7 +113,7 @@ kros:
         system:
             battery_channel:                  1            # AD channel for raw battery voltage
             regulator_channel:                2            # AD channel for regulated 3V3
-            low_12v_battery_threshold:     11.5            # low 12v battery threshold
+            low_12v_battery_threshold:     11.1            # low 12v battery threshold
             low_5v_regulator_threshold:    4.95            # low 5V regulator threshold
             low_3v3_regulator_threshold:   3.25            # low 3.3V regulator threshold
             battery_12v_channel:       'in0/ref'           # ADS1015 channel for 12V
@@ -251,7 +252,7 @@ kros:
             required:                      True
           - address:                       0x75
             name:        "Starboard 11x7 Matrix"
-            required:                     False
+            required:                      True
           - address:                       0x77
             name:          "Port 5x5 RGB Matrix"
             required:                      True

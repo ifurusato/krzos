@@ -21,15 +21,18 @@ from enum import Enum
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class SteeringMode(Enum):
-    NONE              = ( 0, 'none',            'none') # used only for reset
-    ACKERMANN         = ( 1, 'ackermann',       'ackm')
-    SKID              = ( 2, 'skid',            'skid') # AKA tank steering
-    AFRS              = ( 3, 'afrs',            'afrs') # synchro front and rear angles
-    OMNIDIRECTIONAL   = ( 4, 'omnidirectional', 'omni') # AKA crab steering
-    SIDEWAYS          = ( 5, 'sideways',        'side')
-    ROTATE            = ( 6, 'rotate',          'rota') # AKA center-pivot
-    FORWARD_PIVOT     = ( 7, 'forward-pivot',   'fpvt')
-    AFT_PIVOT         = ( 8, 'aft-pivot',       'apvt')
+    NONE              = (  0, 'none',                     'none') # used only for reset
+    ACKERMANN         = (  1, 'ackermann',                'ackm')
+    SKID              = (  2, 'skid',                     'skid') # AKA tank steering
+    AFRS              = (  3, 'afrs',                     'afrs') # synchro front and rear angles
+    CRAB_PORT         = (  4, 'crab port',                'crbp')
+    CRAB_STBD         = (  5, 'crab starboard',           'crbs')
+    SIDEWAYS          = (  6, 'sideways',                 'side')
+    ROTATE            = (  7, 'rotate',                   'rota')
+    ROTATE_CW         = (  8, 'rotate clockwise',         'rotc')
+    ROTATE_CCW        = (  9, 'rotate counter-clockwise', 'rotw') # widdershins
+    FORWARD_PIVOT     = ( 10, 'forward-pivot',            'fpvt')
+    AFT_PIVOT         = ( 11, 'aft-pivot',                'apvt')
 
     # ignore the first param since it's already set by __new__
     def __init__(self, num, name, mnemonic):

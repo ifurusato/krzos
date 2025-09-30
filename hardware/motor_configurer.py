@@ -177,11 +177,10 @@ class MotorConfigurer(Component):
                 self._log.info('voltage in: {:>5.2f}V'.format(voltage_in))
         #       voltage_in = 20.5
                 # maximum motor voltage
-#               _motor_voltage = 9.0
                 _motor_voltage = self._config['kros'].get('motor').get('motor_voltage')
                 self._log.info('voltage out: {:>5.2f}V'.format(_motor_voltage))
                 if voltage_in < _motor_voltage:
-                    raise OSError('cannot continue: battery voltage too low ({:>5.2f}V).'.format(voltage_in))
+                    self._log.warning('battery voltage low ({:>5.2f}V).'.format(voltage_in))
                 # set the power limits
                 if _motor_voltage > voltage_in:
                     self._max_power_ratio = 1.0
