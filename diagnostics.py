@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-08-30
-# modified: 2025-08-30
+# modified: 2025-10-01
 
 import os, sys, subprocess
 import ast
@@ -51,7 +51,7 @@ class Diagnostics:
                     continue
             time.sleep(10 / 1000)
             self._led_control.set_color(Color.BLACK)
-        return test_files
+        return sorted(test_files)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_marked_tests(self, filename, marker="unit"):
