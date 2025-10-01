@@ -52,7 +52,7 @@ class Component:
             raise ValueError('wrong type for suppressed argument: {}'.format(type(suppressed)))
         if not isinstance(enabled, bool):
             raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
-        Component._registry.add(logger.name, self)
+        Component._registry.add(self._log.name, self)
         self._uuid       = uuid.uuid4()
         self._suppressed = suppressed
         self._enabled    = enabled
@@ -129,6 +129,7 @@ class Component:
         '''
         Returns True if this Component is closed.
         '''
+        Component._registry.remove(self._log.name)
         return self._closed
 
     # state setters ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
