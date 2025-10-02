@@ -133,7 +133,7 @@ kros:
             impl:                    'gpiozero'            # either 'gpio', 'lpgio', 'gpiod', 'ioe', 'gpiozero' or 'pigpio'
             edge_detect:              'falling'            # either 'falling', 'rising' or 'both'
             momentary:                     True            # button or toggle?
-            pin:                             23            # default GPIO or IO Expander pin used
+            pin:                             24            # default GPIO or IO Expander pin used
             led_pin:                         13            # GPIO pin for LED on wait()
         digital_potentiometer:                             # IO Expander-based RGB Potentiometer board
             i2c_address:                   0x0C            # I²C address for the device
@@ -163,8 +163,8 @@ kros:
             include_accel_gyro:            True            # if true, poll heading data
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
-        irq_clock:
-            pin:                             15            # GPIO pin connected to an external clock source
+        irq_clock:                                         # external clock
+            pin:                             18            # GPIO pin connected to an external clock source
             freq_divider:                    50            # tick divisor for lower frequency callback
         monitor:
             i2c_port:                         0

@@ -9,6 +9,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-01
+# modified: 2025-10-02
 
 import sys
 import time
@@ -26,15 +27,19 @@ from matrix11x7 import Matrix11x7
 from hardware.em7180 import Em7180
 from hardware.heading_task import HeadingTask
 from hardware.button import Button
+from hardware.irq_clock import IrqClock
+
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 _log = Logger('test-heading-task', Level.INFO)
 
-# Global references for access in button callback and heading control
+# global references
 _motor_controller = None
 _em7180 = None
 _heading_task = None
 _level = Level.INFO
 _button = None
+_irq_clock = None
 
 def disable_heading_task_callback():
     global _heading_task
@@ -51,7 +56,7 @@ def set_target_heading(target_heading, persistent=True,
     If persistent is False, the task will auto-disable after settling.
     If persistent is True, manual intervention (button) is needed to end the task.
     '''
-    global _heading_task, _motor_controller, _em7180, _level
+    global _heading_task, _motor_controller, _em7180, _level, _irq_clock, _config
     # Stop and cleanup previous heading_task, if any
     if _heading_task and _heading_task.enabled:
         _log.info(Fore.YELLOW + "Disabling previous HeadingTask before setting new target.")
@@ -59,7 +64,9 @@ def set_target_heading(target_heading, persistent=True,
         time.sleep(0.5)
     _log.info(Fore.CYAN + f"Setting target heading to {target_heading}° (persistent={persistent})...")
     _heading_task = HeadingTask(
+        _config,
         _motor_controller,
+        _irq_clock,
         _em7180,
         target_heading,
         kp=kp,
@@ -112,8 +119,13 @@ if __name__ == "__main__":
         _motor_controller = MotorController(_config, external_clock=None, level=_level)
         _motor_controller.enable()
 
+        # External IRQ clock for PID timing
+        _log.info('creating IRQ clock…')
+        _irq_clock = IrqClock(_config, level=Level.INFO)
+        _irq_clock.enable()
+
         # hardware button setup for manual HeadingTask disable
-        _button = Button(config=_config, pin=24, level=_level)
+        _button = Button(config=_config, level=_level)
         _button.add_callback(disable_heading_task_callback)
         _log.info(Fore.CYAN + "Hardware button ready for HeadingTask disable.")
 
@@ -140,12 +152,14 @@ if __name__ == "__main__":
     except Exception as e:
         _log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
     finally:
-        if '_motor_controller' in locals() and _motor_controller:
+        if _motor_controller:
             _motor_controller.stop()
             _motor_controller.close()
-        if '_trim_pot' in locals() and _trim_pot:
+        if _trim_pot:
             _trim_pot.close()
-        if '_em7180' in locals() and _em7180:
+        if _em7180:
             _em7180.close()
+        if _irq_clock:
+            _irq_clock.disable()
 
 #EOF

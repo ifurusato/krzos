@@ -15,7 +15,7 @@ from datetime import datetime as dt
 from colorama import init, Fore, Style
 init()
 
-from gpiozero import Button
+from gpiozero import DigitalInputDevice
 
 from core.logger import Logger, Level
 from core.component import Component
@@ -52,7 +52,7 @@ class IrqClock(Component):
         self.__lf_callbacks = []
         self._freq_divider  = _cfg.get('freq_divider')
         self._pin           = _cfg.get('pin')
-        self._button        = None
+        self._input         = None
         self._log.info('IRQ clock pin:\t{}'.format(self._pin))
         self._log.info('ready.')
 
@@ -65,14 +65,14 @@ class IrqClock(Component):
         if self.enabled:
             if not self._initd:
                 try:
-                    self._log.info('initializing gpiozero Button...')
+                    self._log.info('initialising gpiozero DigitalInputDevice…')
                     # STM32 output is likely push-pull, so pull_up=False is correct
-                    self._button = Button(self._pin, pull_up=False)
-                    # use falling edge (when_released) to match pigpio's FALLING_EDGE behavior
-                    self._button.when_released = self._callback_method
-                    self._log.info('configured IRQ clock via gpiozero.')
+                    self._input = DigitalInputDevice(self._pin, pull_up=False)
+                    self._input.when_deactivated = self._callback_method  # on falling edge
+                    self._log.info('configured IRQ clock via gpiozero on pin {}.'.format(self._pin))
                 except Exception as e:
                     self._log.error('unable to enable IRQ clock: {}'.format(e))
+                    raise e
                 finally:
                     self._initd = True
         else:
@@ -125,9 +125,9 @@ class IrqClock(Component):
 
     def close(self):
         try:
-            self._log.info('IRQ clock closing...')
-            if self._button:
-                self._button.close()
+            self._log.info('closing IRQ clock…')
+            if self._input:
+                self._input.close()
             self._log.info('IRQ clock closed.')
         except Exception as e:
             self._log.error('error closing gpiozero Button: {}'.format(e))

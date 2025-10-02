@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # HeadingTask: A Component to rotate and hold a robot at a specified heading,
-# with optional persistent mode and hysteresis.
+# with optional persistent mode and hysteresis. Now uses external clock for PID timing.
 #
 # Copyright 2025 by Murray Altheim. All rights reserved.
 #
@@ -21,8 +21,8 @@ from core.steering_mode import SteeringMode
 class HeadingTask(Component):
     '''
     A Component that rotates the robot to a specified heading using a proportional controller,
-    responding in real time to IMU trim changes via a DigitalPotentiometer if in persistent mode.
-    
+    now using external clock timing for the PID loop.
+
     - With persistent=True, the task runs until explicitly disabled, always responding to heading/trim changes.
     - With persistent=False, the task automatically disables itself once the heading has been achieved and held
       within deadband for a given number of cycles.
@@ -30,7 +30,9 @@ class HeadingTask(Component):
     Supports hysteresis to prevent repeated re-activation from small IMU drift.
     '''
     def __init__(self,
+                 config,
                  motor_controller, 
+                 external_clock,
                  imu,
                  target_heading,
                  kp=0.02,
@@ -43,7 +45,9 @@ class HeadingTask(Component):
                  level=Level.INFO):
         self._log = Logger(name, level)
         super().__init__(self._log, suppressed=False, enabled=False)
+        self._config = config
         self._motor_controller = motor_controller
+        self._external_clock = external_clock
         self._imu = imu
         self._target_heading = target_heading
         self._kp = kp
@@ -54,6 +58,7 @@ class HeadingTask(Component):
         self._persistent = persistent
         self._running = False
         self._in_deadband = False
+        self._settled = 0
         self._log.info('ready.')
 
     def shortest_angle_diff(self, target, current):
@@ -65,7 +70,7 @@ class HeadingTask(Component):
 
     def enable(self):
         '''
-        Enable the HeadingTask and start the control loop.
+        Enable the HeadingTask and start the control loop using the external clock.
         '''
         if self.enabled:
             self._log.warning('already enabled.')
@@ -73,57 +78,59 @@ class HeadingTask(Component):
         self._log.info(Fore.CYAN + f"Enabling HeadingTask to {self._target_heading:.1f}° (persistent={self._persistent})...")
         super().enable()
         self._running = True
-        self._run_loop()
-
-    def _run_loop(self):
-        '''
-        Main control loop: rotate to and hold the target heading (persistent or non-persistent).
-        '''
         self._motor_controller.set_steering_mode(SteeringMode.ROTATE)
         self._in_deadband = False
-        settled = 0
-        while self._running and not self.closed:
-            self._imu.poll()
-            current_yaw = self._imu.corrected_yaw
-            _yaw_trim = self._imu.yaw_trim
-            error = self.shortest_angle_diff(self._target_heading, current_yaw)
-            self._log.info('Current: {:6.2f} | Target: {:6.2f} | Error: {:+6.2f}'.format(
-                current_yaw, self._target_heading, error) + Fore.GREEN + ' | {:+6.2f}'.format(_yaw_trim))
+        self._settled = 0
+        self._log.info(Fore.CYAN + "Using external clock for HeadingTask timing.")
+        self._external_clock.add_callback(self._external_clock_callback)
 
-            if self._in_deadband:
-                if abs(error) > self._hysteresis:
-                    self._in_deadband = False  # Resume control if error exceeds hysteresis
-                    settled = 0
-                    self._log.info(Fore.MAGENTA + f"Error left deadband (>{self._hysteresis:.2f}), resuming control.")
-                else:
-                    self._motor_controller.set_speed(Orientation.PORT, 0.0)
-                    self._motor_controller.set_speed(Orientation.STBD, 0.0)
-                    time.sleep(0.05)
-                    continue
+    def _external_clock_callback(self):
+        if not self._running or self.closed:
+            return
+        self._run_loop_tick()
 
-            if abs(error) < self._deadband:
-                settled += 1
+    def _run_loop_tick(self):
+        '''
+        One tick of the PID loop, called by external clock.
+        '''
+        self._imu.poll()
+        current_yaw = self._imu.corrected_yaw
+        _yaw_trim = self._imu.yaw_trim
+        error = self.shortest_angle_diff(self._target_heading, current_yaw)
+        self._log.info('Current: {:6.2f} | Target: {:6.2f} | Error: {:+6.2f}'.format(
+            current_yaw, self._target_heading, error) + Fore.GREEN + ' | {:+6.2f}'.format(_yaw_trim))
+
+        if self._in_deadband:
+            if abs(error) > self._hysteresis:
+                self._in_deadband = False  # Resume control if error exceeds hysteresis
+                self._settled = 0
+                self._log.info(Fore.MAGENTA + f"Error left deadband (>{self._hysteresis:.2f}), resuming control.")
+            else:
                 self._motor_controller.set_speed(Orientation.PORT, 0.0)
                 self._motor_controller.set_speed(Orientation.STBD, 0.0)
-                self._in_deadband = True
-                if not self._persistent and settled >= self._settle_cycles:
-                    self._log.info(Fore.GREEN + f"Heading achieved for {settled} cycles, disabling.")
-                    self.disable()  # Will break the loop and cleanup
-                    break
-            else:
-                settled = 0
-                output = max(min(self._kp * error, self._max_speed), -self._max_speed)
-                self._motor_controller.set_speed(Orientation.PORT, output)
-                self._motor_controller.set_speed(Orientation.STBD, output)
-            time.sleep(0.05)
-        self._cleanup()
+                return
+
+        if abs(error) < self._deadband:
+            self._settled += 1
+            self._motor_controller.set_speed(Orientation.PORT, 0.0)
+            self._motor_controller.set_speed(Orientation.STBD, 0.0)
+            self._in_deadband = True
+            if not self._persistent and self._settled >= self._settle_cycles:
+                self._log.info(Fore.GREEN + f"Heading achieved for {self._settled} cycles, disabling.")
+                self.disable()  # Will cleanup
+        else:
+            self._settled = 0
+            output = max(min(self._kp * error, self._max_speed), -self._max_speed)
+            self._motor_controller.set_speed(Orientation.PORT, output)
+            self._motor_controller.set_speed(Orientation.STBD, output)
 
     def disable(self):
         '''
-        Disable the HeadingTask, stop motors, and cleanup.
+        Disable the HeadingTask, stop motors, cleanup, and remove external clock callback.
         '''
         self._log.info(Fore.YELLOW + "Disabling HeadingTask.")
         self._running = False
+        self._external_clock.remove_callback(self._external_clock_callback)
         super().disable()
         self._cleanup()
 
@@ -133,6 +140,7 @@ class HeadingTask(Component):
         '''
         self._log.info(Fore.YELLOW + "Suppressing HeadingTask.")
         self._running = False
+        self._external_clock.remove_callback(self._external_clock_callback)
         super().suppress()
         self._cleanup()
 
@@ -149,6 +157,7 @@ class HeadingTask(Component):
         '''
         self._log.info(Fore.YELLOW + "Closing HeadingTask.")
         self._running = False
+        self._external_clock.remove_callback(self._external_clock_callback)
         self._cleanup()
         super().close()
 
