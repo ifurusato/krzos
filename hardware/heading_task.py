@@ -97,8 +97,10 @@ class HeadingTask(Component):
         current_yaw = self._imu.corrected_yaw
         _yaw_trim = self._imu.yaw_trim
         error = self.shortest_angle_diff(self._target_heading, current_yaw)
-        self._log.info('Current: {:6.2f} | Target: {:6.2f} | Error: {:+6.2f}'.format(
-            current_yaw, self._target_heading, error) + Fore.GREEN + ' | {:+6.2f}'.format(_yaw_trim))
+        self._log.info(          'current: {:6.2f}'.format(current_yaw)
+                + Fore.MAGENTA + ' | target: {:6.2f}'.format(self._target_heading) 
+                + Fore.RED     + ' | error: {:+6.2f}'.format(error) 
+                + Fore.GREEN   + ' | trim: {:+6.2f}'.format(_yaw_trim))
 
         if self._in_deadband:
             if abs(error) > self._hysteresis:

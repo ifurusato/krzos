@@ -111,7 +111,8 @@ class IrqClock(Component):
         Removes a callback from the internal list.
         '''
         if callback:
-            self.__callbacks.remove(callback)
+            if callback in self.__callbacks:
+                self.__callbacks.remove(callback)
         else:
             raise TypeError('null callback argument')
 

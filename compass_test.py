@@ -31,6 +31,8 @@ from hardware.irq_clock import IrqClock
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+FIXED_TRIM = 0
+
 _log = Logger('test-heading-task', Level.INFO)
 
 # global references
@@ -96,6 +98,8 @@ def show_heading_live(imu, rate=None):
         else:
             time.sleep(0.05)
 
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 if __name__ == "__main__":
     try:
         _level = Level.INFO
@@ -111,13 +115,9 @@ if __name__ == "__main__":
 
         # IMU with dynamic trim
         _em7180 = Em7180(_config, matrix11x7=_matrix11x7, trim_pot=_trim_pot, level=_level)
-        # Do NOT call set_fixed_yaw_trim() if using trim_pot!
-#       _em7180.set_fixed_yaw_trim(-79.70)
+        if FIXED_TRIM != 0:
+            _em7180.set_fixed_yaw_trim(FIXED_TRIM)
         _em7180.set_verbose(False)
-
-        # Motor Controller
-        _motor_controller = MotorController(_config, external_clock=None, level=_level)
-        _motor_controller.enable()
 
         # External IRQ clock for PID timing
         _log.info('creating IRQ clock…')
@@ -129,13 +129,17 @@ if __name__ == "__main__":
         _button.add_callback(disable_heading_task_callback)
         _log.info(Fore.CYAN + "Hardware button ready for HeadingTask disable.")
 
+        # Motor Controller
+        _motor_controller = MotorController(_config, external_clock=_irq_clock, level=_level)
+        _motor_controller.enable()
+
         _rate = Rate(2, Level.ERROR) # 2Hz
 
         # Example usage: head North, then East, then West, then South
         headings = [0, 90, 180, 270]
 
         for hdg in headings:
-            set_target_heading(hdg, persistent=True)  # Use persistent mode -- button disables after settling
+            set_target_heading(hdg, persistent=True) # use persistent mode -- button disables after settling
             _log.info(Fore.CYAN + f"Moving to heading {hdg}°. Press button to stop and proceed to next.")
             show_heading_live(_em7180, rate=_rate)
             time.sleep(1.0)
