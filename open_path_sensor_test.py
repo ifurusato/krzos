@@ -98,6 +98,50 @@ class OpenPathSensor(Component):
 
     def calibrate_floor_rows(self):
         self._log.info('Calibrating floor rows...')
+        self.floor_row_means = [None for _ in range(self.ROWS)]
+        self.floor_row_stddevs = [None for _ in range(self.ROWS)]
+        samples = []
+        for i in range(self.calibration_samples):
+            data = self.sensor.get_distance_mm()
+            if data is None:
+                self._log.warning(f"Calibration sample {i} is None.")
+                continue
+            arr = np.array(data).reshape((self.ROWS, self.COLS))
+            samples.append(arr)
+            time.sleep(0.05)
+        if len(samples) == 0:
+            self._log.warning('No calibration samples collected! Check sensor connection.')
+            return
+        samples = np.array(samples)  # shape: (samples, ROWS, COLS)
+        for row in range(self.ROWS):
+            values = samples[:, row, :].flatten()
+            mean = values.mean()
+            stddev = values.std()
+            self._log.info(f'Row {row}: mean={mean:.1f}, stddev={stddev:.1f}')
+            if stddev < self.stddev_threshold:
+                self.floor_row_means[row] = mean
+                self.floor_row_stddevs[row] = stddev
+                self._log.info(f'Row {row} marked as floor (mean={mean:.1f}, stddev={stddev:.1f})')
+            else:
+                self.floor_row_means[row] = None
+                self.floor_row_stddevs[row] = None
+                self._log.info(f'Row {row} NOT floor (mean={mean:.1f}, stddev={stddev:.1f})')
+                # All rows above this cannot be floor rows
+                for above_row in range(row+1, self.ROWS):
+                    self.floor_row_means[above_row] = None
+                    self.floor_row_stddevs[above_row] = None
+                break  # exit the calibration loop
+        detected_floor_rows = [i for i, v in enumerate(self.floor_row_means) if v is not None]
+        self._log.info(f'Floor rows detected (indices): {detected_floor_rows}')
+        if all(val is None for val in self.floor_row_means):
+            # Force bottom row as floor
+            values = samples[:, 0, :].flatten()
+            self.floor_row_means[0] = values.mean()
+            self.floor_row_stddevs[0] = values.std()
+            self._log.warning('No floor detected during calibration! Forcibly marking bottom row as floor.')
+
+    def x_calibrate_floor_rows(self):
+        self._log.info('Calibrating floor rows...')
         samples = []
         for i in range(self.calibration_samples):
             data = self.sensor.get_distance_mm()
