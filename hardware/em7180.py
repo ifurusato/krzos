@@ -114,7 +114,8 @@ class Em7180(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_verbose(self, verbose):
-        self._verbose = verbose
+#       self._verbose = verbose
+        pass
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -201,7 +202,6 @@ class Em7180(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def poll(self):
-
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
@@ -225,13 +225,10 @@ class Em7180(Component):
         # which has additional links.
 
         if (self._usfs.gotQuaternion()):
-
             qw, qx, qy, qz = self._usfs.readQuaternion()
-
             self._roll  = math.atan2(2.0 * (qw * qx + qy * qz), qw * qw - qx * qx - qy * qy + qz * qz)
             self._pitch = -math.asin(2.0 * (qx * qz - qw * qy))
             self._yaw   = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
-
             self._pitch *= 180.0 / math.pi
             self._yaw   *= 180.0 / math.pi
 #           self._yaw   += 13.8 # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
@@ -252,15 +249,18 @@ class Em7180(Component):
             if self._corrected_yaw < 0: self._corrected_yaw += 360.0
             elif self._corrected_yaw > 360: self._corrected_yaw -= 360.0
             if self._verbose:
-                self._log.info('Quaternion Roll: {:+2.2f}; Pitch: {:+2.2f}; '.format(self._roll, self._pitch)
-                        + Fore.BLUE + 'Yaw: {:+2.2f} '.format(self._yaw)
-                        + Fore.WHITE + 'Corrected Yaw: {:+2.2f} '.format(self._corrected_yaw)
-                        + Style.DIM + 'with trim: {:+2.2f}'.format(self._yaw_trim))
+                self._log.info('Quaternion roll: {:+2.2f}; '.format(self._roll) 
+                        + Fore.RED   + 'pitch: {:+2.2f}; '.format(self._pitch)
+                        + Fore.GREEN + 'yaw: {:+2.2f}; '.format(self._yaw)
+                        + Fore.BLUE  + 'corrected yaw: {:+2.2f}; '.format(self._corrected_yaw)
+                        + Fore.WHITE + 'with trim: {:+2.2f}'.format(self._yaw_trim))
 
             if self._use_matrix:
                 self._matrix11x7.clear()
                 self._matrix11x7.write_string('{:>3}'.format(int(self._corrected_yaw)), y=1, font=font3x5)
                 self._matrix11x7.show()
+        else:
+                self._log.warning('NO Quaternion')
 
         if self._usfs.gotAccelerometer():
             self._ax, self._ay, self._az = self._usfs.readAccelerometer()

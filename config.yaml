@@ -143,6 +143,17 @@ kros:
             pin_blue:                         2            # blue pin
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
+        vl53l5cx:
+            cols:                             8
+            rows:                             8
+            fov:                             47
+            ranging_frequency_hz:            15
+            integration_time_ms:             20
+        open_path_sensor:
+            distance_threshold:            1000            # pay no attention to anything beyond 1000mm
+            calibration_samples:             10            # how many samples to determine floor rows?
+            stddev_threshold:               100
+            floor_margin:                    50
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled

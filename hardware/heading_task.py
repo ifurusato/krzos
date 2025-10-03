@@ -35,9 +35,9 @@ class HeadingTask(Component):
                  external_clock,
                  imu,
                  target_heading,
-                 kp=0.02,
-                 deadband=2.0,
-                 hysteresis=4.0,
+                 kp=0.01,
+                 deadband=3.0,
+                 hysteresis=5.0,
                  max_speed=0.4,
                  settle_cycles=6,
                  persistent=True,
@@ -93,6 +93,7 @@ class HeadingTask(Component):
         '''
         One tick of the PID loop, called by external clock.
         '''
+        self._log.info(Fore.WHITE + Style.BRIGHT + "_run_loop_tick")
         self._imu.poll()
         current_yaw = self._imu.corrected_yaw
         _yaw_trim = self._imu.yaw_trim

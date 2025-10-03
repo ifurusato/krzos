@@ -11,31 +11,24 @@
 
 import sys
 import time
+import threading
 import numpy as np
-from colorama import init, Fore, Style
-init()
 
-import vl53l5cx_ctypes as vl53l5cx
-from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
-
+from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from core.component import Component
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 
 class OpenPathSensor(Component):
     '''
-    OpenPathSensor sets up and manages the VL53L5CX ToF sensor,
-    analyzes its multizone data to determine the most open direction,
-    and outputs filtered steering/motor multipliers.
-    If "skip" is True, firmware upload to VL53L5CX is skipped.
-
-    Convention: Sensor does not begin ranging until enable() is called.
+    OpenPathSensor analyzes VL53L5CX multizone data to determine the most open direction.
+    The control loop runs in a thread when enabled, and can send display data to an external display class via callback.
+    Only contiguous bottom rows can be floor rows. Once a row fails the stddev check, all above are not floor.
     '''
-    def __init__(self, config, skip=False, level=Level.INFO):
+    def __init__(self, config, sensor, level=Level.INFO, calibration_samples=10, stddev_threshold=100, margin=50, display=None, loop_period=0.2):
         self._log = Logger('openpath', level)
         Component.__init__(self, self._log, suppressed=True, enabled=False)
         self._log.info('initialising OpenPathSensor…')
-        # configuration
         _cfg = config['kros'].get('hardware').get('open_path_sensor')
         if _cfg is None or not isinstance(_cfg, dict):
             raise ValueError('invalid config: missing kros.hardware.open_path_sensor section')
@@ -43,51 +36,111 @@ class OpenPathSensor(Component):
         self.ROWS = _cfg.get('rows', 8)
         self.FOV = _cfg.get('fov', 47.0)
         self.DISTANCE_THRESHOLD = _cfg.get('distance_threshold', 1000)
-        self.ROW_LOWER = _cfg.get('row_lower', 0)
-        self.ROW_UPPER = _cfg.get('row_upper', 2)
         self.WEIGHTS = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self.ALPHA = _cfg.get('alpha', 0.08)
         self._filtered_offset = 0.0
-        # hardware support setup
-        self._log.info('initialising VL53L5CX sensor{}…'.format(' (skip firmware upload)' if skip else ''))
-        self.vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
-        self.vl53.set_resolution(self.COLS * self.ROWS)
-        self.vl53.set_ranging_frequency_hz(15)
-        self.vl53.set_integration_time_ms(20)
-        self.vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
+        self.calibration_samples = calibration_samples
+        self.stddev_threshold = stddev_threshold
+        self.margin = margin
+        self.sensor = sensor
+        self.floor_row_means = [None for _ in range(self.ROWS)]
+        self.floor_row_stddevs = [None for _ in range(self.ROWS)]
+        self._display = display
+        self._thread = None
+        self._running = False
+        self.loop_period = loop_period
         self._log.info('open path sensor ready.')
 
     def enable(self):
-        '''
-        Enables sensor and starts ranging if not already running.
-        '''
         if not self.enabled:
-            self.vl53.start_ranging()
+            self.sensor.enable()
             super().enable()
-            self._log.info('VL53L5CX sensor enabled and ranging.')
+            self._log.info('OpenPathSensor enabled and sensor ranging.')
+            self.calibrate_floor_rows()
+            self._running = True
+            self._thread = threading.Thread(target=self._control_loop, daemon=True)
+            self._thread.start()
         else:
-            self._log.info('VL53L5CX sensor already enabled.')
+            self._log.info('OpenPathSensor already enabled.')
+
+    def disable(self):
+        self._running = False
+        if self._thread is not None:
+            self._thread.join()
+            self._thread = None
+        if self.enabled:
+            self.sensor.disable()
+            super().disable()
+            self._log.info('OpenPathSensor disabled and sensor stopped ranging.')
+        else:
+            self._log.info('OpenPathSensor already disabled.')
+
+    def close(self):
+        self.disable()
+        if not self.closed:
+            self.sensor.close()
+            super().close()
+            self._log.info('OpenPathSensor closed.')
+        else:
+            self._log.info('OpenPathSensor already closed.')
+
+    def set_display(self, display):
+        self._display = display
+
+    def _control_loop(self):
+        while self._running:
+            distance_mm = self.get_distance_mm()
+            if distance_mm is not None:
+                result = self.process(distance_mm)
+                if self._display is not None:
+                    self._display.update(distance_mm, self.floor_row_means, self.margin, result)
+            time.sleep(self.loop_period)
+
+    def calibrate_floor_rows(self):
+        self._log.info('Calibrating floor rows...')
+        samples = []
+        for i in range(self.calibration_samples):
+            data = self.sensor.get_distance_mm()
+            if data is None:
+                continue
+            arr = np.array(data).reshape((self.ROWS, self.COLS))
+            samples.append(arr)
+            time.sleep(0.05)
+        samples = np.array(samples)  # shape: (samples, ROWS, COLS)
+        # Only contiguous bottom rows can be floor rows.
+        for row in range(self.ROWS):
+            values = samples[:, row, :].flatten()
+            mean = values.mean()
+            stddev = values.std()
+            if stddev < self.stddev_threshold:
+                self.floor_row_means[row] = mean
+                self.floor_row_stddevs[row] = stddev
+                self._log.info(f'Row {row} marked as floor (mean={mean:.1f}, stddev={stddev:.1f})')
+            else:
+                self.floor_row_means[row] = None
+                self.floor_row_stddevs[row] = None
+                self._log.info(f'Row {row} NOT floor (mean={mean:.1f}, stddev={stddev:.1f})')
+                # All rows above this cannot be floor rows
+                for above_row in range(row+1, self.ROWS):
+                    self.floor_row_means[above_row] = None
+                    self.floor_row_stddevs[above_row] = None
+                break  # exit the calibration loop
+        detected_floor_rows = [i for i, v in enumerate(self.floor_row_means) if v is not None]
+        self._log.info(f'Floor rows detected (indices): {detected_floor_rows}')
+        if all(val is None for val in self.floor_row_means):
+            self._log.warning('No floor rows detected during calibration!')
 
     def get_distance_mm(self):
-        '''
-        Wait for sensor data and return the 8x8 grid as a flat list.
-        Only returns real data if enabled.
-        '''
         if not self.enabled:
-            self._log.warning('get_distance_mm called while sensor is not enabled.')
+            self._log.warning('get_distance_mm called while OpenPathSensor is not enabled.')
             return None
-        for _ in range(30):
-            if self.vl53.data_ready():
-                data = self.vl53.get_data()
-                return data.distance_mm
-            time.sleep(1 / 1000)
-        return None
+        return self.sensor.get_distance_mm()
 
     def process(self, distance_mm):
         distance = np.array(distance_mm).reshape((self.ROWS, self.COLS))
         pixel_angles = [-(self.FOV/2) + (i + 0.5) * (self.FOV/self.COLS) for i in range(self.COLS)]
-
-        if not np.any(distance < self.DISTANCE_THRESHOLD):
+        obstacle_rows = [r for r in range(self.ROWS) if self.floor_row_means[r] is None]
+        if not obstacle_rows or not np.any(distance[obstacle_rows, :] < self.DISTANCE_THRESHOLD):
             target_offset = 0.0
             self._filtered_offset = 0.0
             port_mult = 1.0
@@ -103,20 +156,17 @@ class OpenPathSensor(Component):
                 highlighted_idx=highlighted_idx,
                 pixel_angles=pixel_angles
             )
-
         weighted_avgs = []
+        weights = self.WEIGHTS[:len(obstacle_rows)] if len(self.WEIGHTS) >= len(obstacle_rows) else np.ones(len(obstacle_rows))
         for col in range(self.COLS):
-            values = distance[self.ROW_LOWER:self.ROW_UPPER+1, col]
-            avg = np.average(values, weights=self.WEIGHTS)
+            values = distance[obstacle_rows, col]
+            avg = np.average(values, weights=weights)
             weighted_avgs.append(avg)
-
         max_idx = int(np.argmax(weighted_avgs))
         target_offset = pixel_angles[max_idx]
-
         self._filtered_offset = self.ALPHA * target_offset + (1 - self.ALPHA) * self._filtered_offset
         port_mult, starboard_mult = self.get_motor_multipliers(self._filtered_offset, self.FOV/2)
         highlighted_idx = min(range(self.COLS), key=lambda i: abs(pixel_angles[i] - self._filtered_offset))
-
         return dict(
             weighted_avgs=weighted_avgs,
             target_offset=target_offset,
@@ -134,99 +184,92 @@ class OpenPathSensor(Component):
         starboard_mult = max(0.0, min(starboard_mult, 1.0))
         return port_mult, starboard_mult
 
-    def disable(self):
-        '''
-        Disables sensor and stops ranging.
-        '''
-        if self.enabled:
-            self.vl53.stop_ranging()
-            super().disable()
-            self._log.info('open path sensor disabled and stopped ranging.')
-        else:
-            self._log.info('open path sensor already disabled.')
+class OpenPathDisplay:
+    '''
+    Handles console display of open path sensor data.
+    '''
+    DIST_COLORS = [
+        (0,     150,  "\033[31m"),  # RED
+        (151,   300,  "\033[33m"),  # YELLOW
+        (301,   500,  "\033[32m"),  # GREEN
+        (501,   800,  "\033[34m"),  # BLUE
+        (801,  1000,  "\033[34m"),  # BLUE
+        (1001, 99999, "\033[30m"),  # BLACK
+    ]
+    FLOOR_COLOR = "\033[35;1m"  # Bright magenta
 
-    def close(self):
-        '''
-        Closes the component and stops sensor.
-        '''
-        if not self.closed:
-            self.vl53.stop_ranging()
-            super().close()
-            self._log.info('open path sensor closed.')
-        else:
-            self._log.info('open path sensor already closed.')
+    def __init__(self, cols, rows):
+        self.cols = cols
+        self.rows = rows
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def get_dist_color(self, val):
+        for low, high, color in self.DIST_COLORS:
+            if low <= val <= high:
+                return color
+        return "\033[30m"
 
-DIST_COLORS = [
-    (0,     150,  Fore.RED),
-    (151,   300,  Fore.YELLOW),
-    (301,   500,  Fore.GREEN),
-    (501,   800,  Fore.BLUE),
-    (801,  1000,  Fore.BLUE),
-    (1001, 99999, Fore.BLACK),
-]
+    def update(self, distance_mm, floor_row_means, margin, result):
+        distance = np.array(distance_mm).reshape((len(floor_row_means), self.cols))
+        self.print_colored_grid(distance, self.cols, floor_row_means, margin)
+        self.print_target_row(
+            result['weighted_avgs'],
+            result['highlighted_idx'],
+            result['pixel_angles'],
+            result['target_offset'],
+            result['filtered_offset'],
+            result['port_mult'],
+            result['starboard_mult']
+        )
 
-def get_dist_color(val):
-    for low, high, color in DIST_COLORS:
-        if low <= val <= high:
-            return color
-    return Fore.BLACK  # fallback
+    def print_colored_grid(self, distance, COLS, floor_row_means, margin):
+        print("\033[1m" + "{}".format("┈" * (COLS * 6)) + "\033[0m")
+        print(f"DEBUG: floor_row_means = {floor_row_means}")
+        print("DEBUG: Floor rows (indices):", [i for i, v in enumerate(floor_row_means) if v is not None])
+        for row in reversed(range(distance.shape[0])):
+            line = ""
+            for col in range(distance.shape[1]):
+                val = distance[row, col]
+                floor_mean = floor_row_means[row]
+                # Only color as floor for values in floor rows, unless obstacle
+                if floor_mean is not None:
+                    if val >= (floor_mean - margin):
+                        color = self.FLOOR_COLOR
+                    else:
+                        color = self.get_dist_color(val)  # obstacle color
+                else:
+                    color = self.get_dist_color(val)
+                line += f"{color}{val:4d}\033[0m "
+            print(line + f"   # row {row}")
+        print("\033[0m")
 
-def print_colored_grid(distance, COLS):
-    print(Style.BRIGHT + "{}".format("┈" * (COLS * 6)) + Style.RESET_ALL)
-    for row in reversed(range(distance.shape[0])):
+    def print_target_row(self, weighted_avgs, highlighted_idx, pixel_angles, target_offset, filtered_offset, port_mult, starboard_mult):
         line = ""
-        for col in range(distance.shape[1]):
-            val = distance[row, col]
-            color = get_dist_color(val)
-            line += "{}{:4d}{}".format(color, val, Style.RESET_ALL) + " "
-        print(line)
-    print(Style.RESET_ALL)
-
-def print_target_row(weighted_avgs, highlighted_idx, pixel_angles, target_offset, filtered_offset, port_mult, starboard_mult):
-    line = ""
-    for i, val in enumerate(weighted_avgs):
-        if highlighted_idx is not None and i == highlighted_idx:
-            color = Fore.WHITE
-            style = Style.BRIGHT
-        else:
-            color = Fore.BLACK
-            style = ""
-        line += "{}{}{:4d}{}".format(color, style, int(val), Style.RESET_ALL) + " "
-    print(line + "   Target offset: {:+.2f}°   (filtered: {:+.2f}°)".format(target_offset, filtered_offset))
-    print("Filtered Port multiplier: {:.2f}  Filtered Starboard multiplier: {:.2f}".format(port_mult, starboard_mult))
+        for i, val in enumerate(weighted_avgs):
+            if highlighted_idx is not None and i == highlighted_idx:
+                color = "\033[37;1m"  # Bright white
+            else:
+                color = "\033[30m"    # Black
+            line += f"{color}{int(val):4d}\033[0m "
+        print(line + f"   Target offset: {target_offset:+.2f}°   (filtered: {filtered_offset:+.2f}°)")
+        print(f"Filtered Port multiplier: {port_mult:.2f}  Filtered Starboard multiplier: {starboard_mult:.2f}")
 
 def main():
     _log = Logger('main', level=Level.INFO)
     _config = ConfigLoader(Level.INFO).configure()
     skip = 'skip' in sys.argv or True in sys.argv
-    _open_path_sensor = OpenPathSensor(_config, skip=skip, level=Level.INFO)
-    _open_path_sensor.enable()
+    vl53_sensor = Vl53l5cxSensor(_config, skip=skip, level=Level.INFO)
+    display = OpenPathDisplay(cols=8, rows=8)
+    open_path_sensor = OpenPathSensor(_config, sensor=vl53_sensor, level=Level.INFO, display=display)
+    open_path_sensor.enable()
 
     try:
         while True:
-            distance_mm = _open_path_sensor.get_distance_mm()
-            if distance_mm is None:
-                continue
-            result = _open_path_sensor.process(distance_mm)
-            distance = np.array(distance_mm).reshape((_open_path_sensor.ROWS, _open_path_sensor.COLS))
-            print_colored_grid(distance, _open_path_sensor.COLS)
-            print_target_row(
-                result['weighted_avgs'],
-                result['highlighted_idx'],
-                result['pixel_angles'],
-                result['target_offset'],
-                result['filtered_offset'],
-                result['port_mult'],
-                result['starboard_mult']
-            )
-            time.sleep(0.2)
+            time.sleep(0.5)  # Let the sensor/display thread run
     except KeyboardInterrupt:
-        print("{}caught Ctrl-C; exiting…{}".format(Style.BRIGHT, Style.RESET_ALL))
+        print("\033[1mcaught Ctrl-C; exiting…\033[0m")
     finally:
-        _open_path_sensor.close()
-        print("{}complete.{}".format(Fore.CYAN, Style.RESET_ALL))
+        open_path_sensor.close()
+        print("\033[36mcomplete.\033[0m")
 
 if __name__== "__main__":
     main()

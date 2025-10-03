@@ -31,7 +31,8 @@ from hardware.irq_clock import IrqClock
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-FIXED_TRIM = 0
+FIXED_TRIM = -121.4
+trim_fixed = True
 
 _log = Logger('test-heading-task', Level.INFO)
 
@@ -44,10 +45,16 @@ _button = None
 _irq_clock = None
 
 def disable_heading_task_callback():
-    global _heading_task
+    global _heading_task, _em7180, trim_fixed
     if _heading_task and _heading_task.enabled:
         _log.info(Fore.YELLOW + "Button pressed: Disabling current HeadingTask.")
         _heading_task.close()
+        if not trim_fixed:
+            # Fix the trim for the rest of the session
+            current_trim = _em7180.yaw_trim
+            _em7180.set_fixed_yaw_trim(current_trim)
+            trim_fixed = True
+            _log.info(Fore.YELLOW + f"Fixed yaw trim set to {current_trim:+6.2f}")
         time.sleep(0.2) # crude debounce
 
 def set_target_heading(target_heading, persistent=True,
@@ -115,8 +122,7 @@ if __name__ == "__main__":
 
         # IMU with dynamic trim
         _em7180 = Em7180(_config, matrix11x7=_matrix11x7, trim_pot=_trim_pot, level=_level)
-        if FIXED_TRIM != 0:
-            _em7180.set_fixed_yaw_trim(FIXED_TRIM)
+        _em7180.set_fixed_yaw_trim(FIXED_TRIM)
         _em7180.set_verbose(False)
 
         # External IRQ clock for PID timing
@@ -140,7 +146,7 @@ if __name__ == "__main__":
 
         for hdg in headings:
             set_target_heading(hdg, persistent=True) # use persistent mode -- button disables after settling
-            _log.info(Fore.CYAN + f"Moving to heading {hdg}°. Press button to stop and proceed to next.")
+            _log.info("moving to heading {}°. Press button to stop and proceed to next.".format(hdg))
             show_heading_live(_em7180, rate=_rate)
             time.sleep(1.0)
 

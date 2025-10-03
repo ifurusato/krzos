@@ -52,25 +52,25 @@ def main():
         # fixed trim for Pukerua Bay, NZ, determined via observation
 #       _em7180.set_fixed_yaw_trim(148.0)
 #       _em7180.set_fixed_yaw_trim(136.5)
-        _em7180.set_fixed_yaw_trim(-83.5)
+        _em7180.set_fixed_yaw_trim(-87.6)
         _em7180.set_verbose(False)
 
         while True:
             _em7180.poll()
-            _yaw = _em7180.yaw
-            _corrected_yaw = _em7180.corrected_yaw
-            _yaw_trim = _em7180.yaw_trim
-            _log.info('Yaw: {:+2.2f} '.format(_yaw)
-                    + Fore.WHITE + 'Corrected Yaw: {:+2.2f} '.format(_corrected_yaw)
-                    + Style.DIM + 'with trim: {:+2.2f}'.format(_yaw_trim))
+#           _yaw = _em7180.yaw
+#           _corrected_yaw = _em7180.corrected_yaw
+#           _yaw_trim = _em7180.yaw_trim
+#           _log.info('yaw: {:+2.2f} '.format(_yaw)
+#                   + Fore.WHITE + 'corrected yaw: {:+2.2f} '.format(_corrected_yaw)
+#                   + Style.DIM + 'with trim: {:+2.2f}'.format(_yaw_trim))
 
-            if INCLUDE_ENV:
-                _pressure    = _em7180.pressure
-                _temperature = _em7180.temperature
-                _altitude    = _em7180.altitude
-                _log.info(Fore.YELLOW + 'Pressure: {:+2.2f}hPa '.format(_pressure) 
-                        + Fore.GREEN + 'Temperature: {:+2.2f}C '.format(_temperature)
-                        + Fore.MAGENTA + 'Altitude: {:+2.2f}m'.format(_altitude))
+#           if INCLUDE_ENV:
+#               _pressure    = _em7180.pressure
+#               _temperature = _em7180.temperature
+#               _altitude    = _em7180.altitude
+#               _log.info(Fore.YELLOW + 'pressure: {:+2.2f}hPa '.format(_pressure) 
+#                       + Fore.GREEN + 'temperature: {:+2.2f}C '.format(_temperature)
+#                       + Fore.MAGENTA + 'altitude: {:+2.2f}m'.format(_altitude))
 
             time.sleep(.05)
 
