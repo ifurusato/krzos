@@ -70,6 +70,8 @@ class I2CScanner:
             self._i2c_bus = i2c_bus
         self._int_list = []
         self._hex_list = []
+        self._verbose = False
+        self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_hex_addresses(self, force_scan=False):
@@ -156,7 +158,8 @@ class I2CScanner:
                     universal_newlines=True,
                     stderr=subprocess.PIPE,
                     timeout=timeout)
-            self._log.info(Fore.BLUE + "i2cdetect output:\n\n{}".format(output))
+            if self._verbose:
+                self._log.info(Fore.BLUE + "i2cdetect output:\n\n{}".format(output))
         except FileNotFoundError:
             self._log.warning("i2cdetect command not found. Please install i2c-tools.")
             self._py_scan_addresses()

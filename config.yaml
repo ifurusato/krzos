@@ -58,8 +58,13 @@ kros:
             publish_delay_sec:                0.05         # publishing delay loop
         queue:
             loop_freq_hz:                    50            # polling loop frequency (Hz)
+        distance_sensors:                                  # distance sensors publisher (not hardware)
+            loop_freq_hz:                      20          # main loop delay in hz
+            sense_threshold:                  150          # threshold in millimeters to react to an obstacle
+            bump_threshold:                    70          # threshold in millimeters to consider as a bump
     subscriber:
-        # TBD
+        distance_sensors:
+            verbose:                       True            # noisy sensor output
     motor_controller:
         closed_loop:                       True            # open or closed loop control
         create_ext_clock:                  True            # create external clock if not provided
@@ -158,18 +163,30 @@ kros:
             pin_blue:                         2            # blue pin
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
+        distance_sensors:                  
+            max_distance:                   300            # maximum distance in mm
+            min_distance:                    50            # minimum distance in mm
+            easing:                'LOGARITHMIC'           # normalisation easing formula
+        distance_sensor:       
+            pin_port:                         0            # the port input pin
+            pin_cntr:                        23            # the center input pin
+            pin_stbd:                         0            # the starboard input pin
+            timeout:                          1            # time in seconds to consider sensor as timed out 
+            smoothing:                     True            # enable smoothing of distance readings
+            smoothing_window:                 5            # number of samples to use for smoothing
+            loop_interval:                  0.1            # interval between distance polling, in seconds
         vl53l5cx:
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8
             fov:                             47
+            calibration_samples:             10            # how many samples to determine floor rows?
+            stddev_threshold:               100
+            floor_margin:                    50            # in millimeters
             ranging_frequency_hz:            15
             integration_time_ms:             20
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
-            calibration_samples:             10            # how many samples to determine floor rows?
-            stddev_threshold:               100
-            floor_margin:                    50            # in millimeters
             loop_freq_hz:                     5            # control loop frequency (Hz)
             alpha:                          0.8            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
         icm20948:
