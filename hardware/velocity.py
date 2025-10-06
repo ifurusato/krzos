@@ -111,22 +111,24 @@ class Velocity(object):
         # establish sample frequency
         self._freq_hz = config['kros'].get('motor').get('pid_controller').get('sample_freq_hz')
         self._period_ms = 1000.0 / self._freq_hz
-        self._log.info('sample frequency:   \t{:d}Hz ({:>5.2f}ms)'.format(self._freq_hz, self._period_ms))
         # now calculate some geometry-based conversions
         _cfg = config['kros'].get('geometry')
         self._steps_per_rotation  = _cfg.get('steps_per_rotation') # 494 encoder steps per wheel rotation
-        self._log.info('encoder steps/rotation:\t{:7.2f}'.format(self._steps_per_rotation))
         self._wheel_diameter      = _cfg.get('wheel_diameter') # 68.0mm
-        self._log.info('wheel diameter:     \t{:4.1f}mm'.format(self._wheel_diameter))
         self._wheel_circumference = self._wheel_diameter * math.pi / 10.0
-        self._log.info('wheel circumference:\t{:7.4f}cm'.format(self._wheel_circumference))
         # convert raw velocity to approximate a percentage
         self._steps_per_cm = self._steps_per_rotation / self._wheel_circumference
-        self._log.info('conversion constant:\t{:7.4f} steps/cm'.format(self._steps_per_cm))
         # sanity check: perform conversion for velocity of 1 wheel rotation (e.g., 494 steps)
         # per second, where the returned value should be the circumference (e.g., 21.36cm)
         _test_velocity = self.steps_to_cm(self._steps_per_rotation)
-        self._log.info('example conversion:\t{:7.4f}cm/rotation'.format(_test_velocity))
+        # only display information for one motor (SAFT) not all, since they're otherwise the same
+        if motor.orientation is Orientation.SAFT:
+            self._log.info('sample frequency:       ' + Fore.GREEN + ' {:d}Hz ({:>5.2f}ms)'.format(self._freq_hz, self._period_ms))
+            self._log.info('encoder steps/rotation: ' + Fore.GREEN + ' {:7.2f}'.format(self._steps_per_rotation))
+            self._log.info('wheel diameter:         ' + Fore.GREEN + ' {:4.1f}mm'.format(self._wheel_diameter))
+            self._log.info('wheel circumference:    ' + Fore.GREEN + ' {:7.4f}cm'.format(self._wheel_circumference))
+            self._log.info('conversion constant:    ' + Fore.GREEN + ' {:7.4f} steps/cm'.format(self._steps_per_cm))
+            self._log.info('example conversion:     ' + Fore.GREEN + ' {:7.4f}cm/rotation'.format(_test_velocity))
         assert _test_velocity == self._wheel_circumference
         # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._stepcount_timestamp = time.perf_counter()

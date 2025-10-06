@@ -130,17 +130,17 @@ class Motor(Component):
         return self._max_observed_speed
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def add_speed_multiplier(self, name, lambda_function, clear=True):
+    def add_speed_multiplier(self, name, lambda_function, exclusive=True):
         '''
         Adds a named speed multiplier to the dict of lambda functions. This
-        replaces any existing lambda under the same name. Default is to clear
-        any existing lambdas upon adding a new one.
+        replaces any existing lambda under the same name. The default with
+        exclusive True is to clear any existing lambdas upon adding a new one.
 
         This is a function that alters the target speed as a multiplier.
 
-        :param optional clear if True, clear all existing multipliers before adding
+        :param optional exclusive if True, clear all existing multipliers before adding
         '''
-        if clear:
+        if exclusive:
             self.__speed_lambdas.clear()
         if name in self.__speed_lambdas:
             self._log.warning('motor already contains a \'{}\' lambda.'.format(name))
@@ -342,6 +342,8 @@ class Motor(Component):
         '''
         Align the current speed and the target speed and motor power. This
         is meant to be called regularly, in a loop.
+
+        Returns the calculated motor speed after setting motor power to the value.
         '''
         if self.enabled:
             for callback in self.__callbacks:
@@ -370,14 +372,14 @@ class Motor(Component):
                     self.remove_speed_multiplier(_lambda_name)
                     if self._pid_controller.is_active:
                         self._pid_controller.set_speed(0.0)
-                    return
+                    return None
             if self._pid_controller.is_active:
                 _motor_speed = self.__modified_target_speed * self._scale_factor_closed
 #               if _count % 20 == 0:
 #                   if self._orientation is Orientation.PAFT:
 #                       self._log.debug(Fore.MAGENTA + 'updating {} target speed to: {:<5.2f} motor speed: {:5.2f}; {} steps'.format(
 #                               self._orientation.label, self.__modified_target_speed, _motor_speed, self.steps))
-                self._pid_controller.set_speed(_motor_speed)
+                return self._pid_controller.set_speed(_motor_speed)
             else:
                 _motor_speed = self.__modified_target_speed * self._scale_factor_open
 #               if _count % 20 == 0:
@@ -385,8 +387,7 @@ class Motor(Component):
 #                       self._log.debug(Fore.MAGENTA + 'OPEN LOOP updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps.'.format(
 #                               self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
                 self.set_motor_power(_motor_speed)
-#               self._log.debug('pid controller is not active.')
-                pass
+                return _motor_speed
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_motor_power(self, target_power):

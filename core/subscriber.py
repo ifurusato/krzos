@@ -201,7 +201,6 @@ class Subscriber(Component, FiniteStateMachine):
                 _elapsed_ms = (dt.now() - _message.timestamp).total_seconds() * 1000.0
                 self._print_message_info('process message:', _message, _elapsed_ms)
 #           self._log.debug('creating task for processing message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
-            self._log.info('🎂 creating task for processing message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
             # create message processing task
             asyncio.create_task(self.process_message(_message), name='{}:process-message-{}'.format(self.name, _message.name))
 

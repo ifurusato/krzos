@@ -16,6 +16,7 @@ kros:
     component:
         enable_motor_controller:           True            # enable Motor 2040
         enable_external_clock:             True            # if True use external clock, ignoring loop delay value
+        enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
         # publishers .......................................
         enable_queue_publisher:            True            # publishes from globally-available queue
 #       enable_distance_publisher:         True            # enable Distance Sensors and Publisher
@@ -32,6 +33,17 @@ kros:
         # subscribers ......................................
 #       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
         enable_sound_subscriber:           True            # enable sounds for various events
+    behaviour:
+        enable_idle_behaviour:             True            # enable idle behaviour
+        idle:
+            idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
+        roam:
+            min_velocity:                 0.0              # minimum motor target velocity
+            max_velocity:               100.0              # maximum motor target velocity
+            cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
+            cruise_wait_ticks:              3              # how many ticks to wait before cruising again
+            loop_delay_ms:                 80              # asyncio loop delay in milliseconds
+            loop_freq_hz:                   1              # main loop delay in hz
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -51,7 +63,7 @@ kros:
     motor_controller:
         closed_loop:                       True            # open or closed loop control
         create_ext_clock:                  True            # create external clock if not provided
-        loop_freq_hz:                        20            # main loop delay in hz
+        loop_freq_hz:                        20            # main loop delay in hz (only used when no ext clock)
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
         brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
@@ -59,7 +71,10 @@ kros:
         rotation_speed:                       0.25         # motor speed when rotating in place
 #       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
 #       use_speed_indicator:              False            # publish RGB events for motor speed indication
-        accel_decel_steps:                   50            # determines rate of acceleration/deceleration (unused)
+        accel_step:                           0.01         # step size for acceleration
+        accel_step_delay_ms:                 20            # acceleration step delay in milliseconds
+        decel_step:                           0.01         # step size for deceleration
+        decel_step_delay_ms:                 20            # deceleration step delay in milliseconds
         coasting_steps:                     300            # determines coasting deceleration (unused)
         braking_steps:                       60            # determines braking deceleration (unused)
         stopping_steps:                      10            # determines stopping deceleration (unused)
@@ -144,6 +159,7 @@ kros:
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
         vl53l5cx:
+            i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8
             fov:                             47
@@ -153,7 +169,9 @@ kros:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             calibration_samples:             10            # how many samples to determine floor rows?
             stddev_threshold:               100
-            floor_margin:                    50
+            floor_margin:                    50            # in millimeters
+            loop_freq_hz:                     5            # control loop frequency (Hz)
+            alpha:                          0.8            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled
@@ -235,8 +253,8 @@ kros:
             name:         "MPU9250 + BMP280 IMU"
             required:                      True
           - address:                       0x29
-            name:           "VL53L1X or VL53L5X"
-            required:                     False
+            name:   "VL53L5X Ranging ToF Sensor"
+            required:                      True
           - address:                       0x38
             name:                "HT0740 Switch"
             required:                     False

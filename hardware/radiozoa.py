@@ -11,7 +11,7 @@
 #
 
 import sys
-import threading
+from threading import Thread, Lock, Event
 import asyncio
 import time
 import RPi.GPIO as GPIO
@@ -98,8 +98,8 @@ class Radiozoa(object):
         # internal state for distance readings, always length 8.
         self._distances = [None for _ in range(self._sensor_count)]
         # asyncio support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._distances_lock = threading.Lock()
-        self._polling_stop_event = threading.Event()
+        self._distances_lock = Lock()
+        self._polling_stop_event = Event()
         self._polling_thread = None
         self._polling_loop   = None
         self._polling_task   = None
@@ -168,7 +168,7 @@ class Radiozoa(object):
                 self._polling_loop.run_forever()
             finally:
                 self._polling_loop.close()
-        self._polling_thread = threading.Thread(target=run_loop, daemon=True)
+        self._polling_thread = Thread(target=run_loop, daemon=True)
         self._polling_thread.start()
         self._log.info('background polling started.')
 

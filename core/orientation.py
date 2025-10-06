@@ -19,17 +19,18 @@ class Orientation(Enum):
     NONE  = (  0, "none",          'NONE',  "none")
     PORT  = (  1, "port",          'PORT',  "port")
     STBD  = (  2, "starboard",     'STBD',  "stbd")
-    FWD   = (  3, "fwd",           'NONE',  "fwd")
-    AFT   = (  4, "aft",           'NONE',  "aft")
-    PSID  = (  5, "port-side",     'PORT',  "psid")
-    SSID  = (  6, "stbd-side",     'STBD',  "ssid")
-    PFWD  = (  7, "port-fwd",      'PORT',  "pfwd")
-    SFWD  = (  8, "starboard-fwd", 'STBD',  "sfwd")
-    PAFT  = (  9, "port-aft",      'PORT',  "paft")
-    SAFT  = ( 10, "starboard-aft", 'STBD',  "saft")
-    MAST  = ( 11, "mast",          'NONE',  "mast")
-    PIR   = ( 12, "pir",           'NONE',  "pir")
-    ALL   = ( 13, "all",           'NONE',  "all") # all extant orientations
+    CNTR  = (  3, "center",        'CNTR',  "cntr")
+    FWD   = (  4, "fwd",           'NONE',  "fwd")
+    AFT   = (  5, "aft",           'NONE',  "aft")
+    PSID  = (  6, "port-side",     'PORT',  "psid")
+    SSID  = (  7, "stbd-side",     'STBD',  "ssid")
+    PFWD  = (  8, "port-fwd",      'PORT',  "pfwd")
+    SFWD  = (  9, "starboard-fwd", 'STBD',  "sfwd")
+    PAFT  = ( 10, "port-aft",      'PORT',  "paft")
+    SAFT  = ( 11, "starboard-aft", 'STBD',  "saft")
+    MAST  = ( 12, "mast",          'NONE',  "mast")
+    PIR   = ( 13, "pir",           'NONE',  "pir")
+    ALL   = ( 14, "all",           'NONE',  "all") # all extant orientations
 
     # ignore the first param since it's already set by __new__
     def __init__(self, num, name, side, label):

@@ -20,6 +20,7 @@ from core.component import Component
 from core.logger import Logger, Level
 
 class Vl53l5cxSensor(Component):
+    NAME = 'vl53l5cx'
     '''
     Wrapper for VL53L5CX sensor.
     Handles sensor initialization, configuration, and data acquisition.
@@ -27,7 +28,7 @@ class Vl53l5cxSensor(Component):
     Extends Component for lifecycle management.
     '''
     def __init__(self, config, skip=False, level=Level.INFO):
-        self._log = Logger('vl53l5cx', level)
+        self._log = Logger(Vl53l5cxSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=True, enabled=False)
         self._log.info('initialising Vl53l5cxSensor…')
         # configuration
@@ -37,8 +38,20 @@ class Vl53l5cxSensor(Component):
         self.COLS = _cfg.get('cols', 8)
         self.ROWS = _cfg.get('rows', 8)
         self.FOV = _cfg.get('fov', 47.0)
-        self._log.info('initialising VL53L5CX hardware{}…'.format(' (skip firmware upload)' if skip else ''))
-        self.vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
+        _i2c_bus_number = _cfg.get('i2c_bus_number')
+        self._log.info('initialising VL53L5CX hardware {} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
+        if _i2c_bus_number == 0:
+            try:
+                self._log.info('connecting to I2C bus 0…')
+                from smbus2 import SMBus
+                _i2c_bus_dev = SMBus(0)
+                # __init__(self, i2c_addr=DEFAULT_I2C_ADDRESS, i2c_dev=None, skip_init=False):
+                self.vl53 = vl53l5cx.VL53L5CX(i2c_dev=_i2c_bus_dev, skip_init=skip)
+            except Exception as e:
+                self._log.error('{} raised connecting to I2C bus 0: {}'.format(type(e), e))
+                raise e
+        else:
+            self.vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
         self.vl53.set_resolution(self.COLS * self.ROWS)
         self.vl53.set_ranging_frequency_hz(_cfg.get('ranging_frequency_hz', 15))
         self.vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))

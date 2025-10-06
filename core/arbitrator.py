@@ -71,7 +71,8 @@ class Arbitrator(Component):
         If the Event Group is CLOCK this will trigger the callback without
         arbitration.
         '''
-        self._log.debug('arbitrating payload: {}'.format(payload.event.label))
+        self._log.info('payload event type: {}'.format(type(payload.event)))
+        self._log.info('arbitrating payload: {}'.format(payload.event.label))
         if self._suppressed:
             self._queue.clear()
         else:

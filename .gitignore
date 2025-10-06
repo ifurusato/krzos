@@ -209,4 +209,5 @@ __marimo__/
 # KROS specific ignores
 archive/
 docs/
+tests/
 

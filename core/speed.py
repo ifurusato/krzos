@@ -1,18 +1,16 @@
 #}!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2021-07-29
-# modified: 2021-10-15
+# modified: 2024-06-08
 #
 
 from enum import Enum
-from colorama import init, Fore, Style
-init()
 
 from core.util import Util
 
@@ -20,35 +18,38 @@ from core.util import Util
 class Speed(Enum):
     '''
     Provides an enumeration of both ahead (forward) and astern (reverse)
-    Chadburn-style speeds, as corresponding to an abstract velocity.
+    Chadburn-style speeds, as corresponding to an abstract speed value.
+
+    NOTE: the speed values here are not used for motor control; those would
+    the values enumerated by the Chadburn class.
 
     The default values for astern and ahead proportional power are initially
     set to zero; these must be set from the YAML application configuration
     via the configure() method.
     '''
-    #                                                  proportional power
-    #                    label             velocity      astern  ahead
-    STOP          = ( 1, 'stop',                  0.0,      0.0,   0.0 )
-    DEAD_SLOW     = ( 2, 'dead slow',            20.0,      0.0,   0.0 )
-    SLOW          = ( 3, 'slow',                 30.0,      0.0,   0.0 )
-    ONE_THIRD     = ( 4, 'one third speed',      40.0,      0.0,   0.0 )
-    HALF          = ( 5, 'half speed',           50.0,      0.0,   0.0 )
-    TWO_THIRDS    = ( 6, 'two thirds speed',     67.0,      0.0,   0.0 )
-    THREE_QUARTER = ( 7, 'three quarter speed',  75.0,      0.0,   0.0 )
-    FULL          = ( 8, 'full speed',           90.0,      0.0,   0.0 )
-    MAXIMUM       = ( 9, 'maximum speed',       100.0,      0.0,   0.0 )
+    #                     label                   speed  proportional   astern  ahead
+    STOP           = ( 1, 'stop',                   0.0,         0.0,     0.0,    0.0 )
+    DEAD_SLOW      = ( 2, 'dead slow',             20.0,         0.2,     0.0,    0.0 )
+    SLOW           = ( 3, 'slow',                  30.0,         0.3,     0.0,    0.0 )
+    ONE_THIRD      = ( 4, 'one third speed',       40.0,         0.4,     0.0,    0.0 )
+    HALF           = ( 5, 'half speed',            50.0,         0.5,     0.0,    0.0 )
+    TWO_THIRDS     = ( 6, 'two thirds speed',      67.0,         0.67,    0.0,    0.0 )
+    THREE_QUARTERS = ( 7, 'three quarters speed',  75.0,         0.75,    0.0,    0.0 )
+    FULL           = ( 8, 'full speed',            90.0,         0.9,     0.0,    0.0 )
+    MAXIMUM        = ( 9, 'maximum speed',        100.0,         1.0,     0.0,    0.0 )
 
     # ignore the first param since it's already set by __new__
-    def __init__(self, num, label, velocity, astern, ahead):
-        self._label    = label
+    def __init__(self, num, label, velocity, proportional, astern, ahead):
+        self._label     = label
         self._velocity = velocity
+        self._proportional = proportional
         self._astern   = astern
         self._ahead    = ahead
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   @property
-    def value(self):
-        raise NotImplementedError('can\'t call value directly.')
+#   def value(self):
+#       raise Exception('can\'t call value directly.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -65,16 +66,24 @@ class Speed(Enum):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
+    def proportional(self):
+        '''
+        Return the fixed proportional power for this Speed.
+        '''
+        return self._proportional
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
     def astern(self):
         '''
-        Return the proportional power astern for this Speed.
+        Return the configured proportional power astern for this Speed.
         '''
         return self._astern
 
     @astern.setter
     def astern(self, astern):
         '''
-        Set the proportional power astern for this Speed.
+        Set the configured proportional power astern for this Speed.
         '''
         self._astern = astern
 
@@ -101,6 +110,10 @@ class Speed(Enum):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def from_string(value):
+        '''
+        Returns the Speed corresponding to the argument, e.g., "SLOW" returns Speed.SLOW.
+        No match raises a NotImplementedError.
+        '''
         for s in Speed:
             if value.upper() == s.name:
                 return s
@@ -186,8 +199,8 @@ class Speed(Enum):
     def print_configuration(log):
         log.info('configured speeds:')
         for _speed in Speed:
-            log.info('  {}:{}astern: '.format(_speed.label, Util.repeat(' ', 21 - len(_speed.label))) + Fore.YELLOW + '{:>5.2f}'.format(_speed.astern) 
-                    + Fore.CYAN + '   ahead: ' + Fore.YELLOW + '{:>5.2f}'.format(_speed.ahead))
+            log.info('  {}:{}astern: '.format(_speed.name, Util.repeat(' ', 21 - len(_speed.name))) + '{:>5.2f}'.format(_speed.astern) 
+                    + '   ahead: {:>5.2f}'.format(_speed.ahead))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
@@ -196,9 +209,9 @@ class Speed(Enum):
         A static method that imports astern and ahead values from the provided
         YAML-sourced configuration.
 
-        This imports from 'kros:motor:speed'
+        This imports from 'krzos:motor:speed'
         '''
-        _entries = config['kros'].get('motor').get('speed')
+        _entries = config['krzos'].get('motor').get('speed')
         _astern_speeds = _entries.get('astern')
         _ahead_speeds  = _entries.get('ahead')
         for _speed in Speed:

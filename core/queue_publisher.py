@@ -15,28 +15,19 @@ import asyncio
 from colorama import init, Fore, Style
 init()
 
-import core.globals as globals
-globals.init()
-
 from core.dequeue import DeQueue
 from core.logger import Logger, Level
 from core.publisher import Publisher
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class QueuePublisher(Publisher):
-
+    NAME = 'pub:queue'
     _PUBLISHER_LOOP = '__queue_publisher_loop'
-
     '''
     A Publisher that publishes messages from a queue, available as a global
-    publishing service, e.g.:
-
-        _qpub = globals.get('queue-publisher')
-        _qpub.put(message)
-
-    This is to permit lower-priority, non-asynchronous processes to publish
-    messages to the message bus, with no particular guarantee of immediate
-    delivery.
+    publishing service. This is to permit lower-priority, non-asynchronous
+    processes to publish messages to the message bus, with no particular
+    guarantee of immediate delivery.
 
     :param config:          the application configuration
     :param message_bus:     the asynchronous message bus
@@ -44,20 +35,19 @@ class QueuePublisher(Publisher):
     :param level:           the optional log level
     '''
     def __init__(self, config, message_bus, message_factory, level=Level.INFO):
-        Publisher.__init__(self, 'queue', config, message_bus, message_factory, suppressed=False, level=level)
+        Publisher.__init__(self, QueuePublisher.NAME, config, message_bus, message_factory, suppressed=False, level=level)
         _cfg = self._config['kros'].get('publisher').get('queue')
         _loop_freq_hz  = _cfg.get('loop_freq_hz')
         self._log.info('queue publisher loop frequency: {:d}Hz'.format(_loop_freq_hz))
         self._publish_delay_sec = 1.0 / _loop_freq_hz
         self._queue    = DeQueue()
         self._counter  = itertools.count()
-        globals.put('queue-publisher', self)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def name(self):
-        return 'queue'
+        return QueuePublisher.NAME
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def put(self, message):

@@ -59,6 +59,7 @@ try:
     _log.info('starting motor controller…')
     _motor_controller = MotorController(_config, external_clock=_irq_clock, level=_level)
 #   _motor_controller.set_closed_loop(True)
+#   _motor_controller.set_differential_drive(True)
     _motor_controller.enable()
 
     _log.info('starting test…')
@@ -68,7 +69,7 @@ try:
     _test_orientation = Orientation.ALL
 #   _test_orientation = Orientation.PAFT
 
-    _motor_controller.set_steering_mode(SteeringMode.ROTATE)
+#   _motor_controller.set_steering_mode(SteeringMode.ROTATE)
 
     while True:
         _current = _system.get_system_current()

@@ -307,6 +307,13 @@ class Event(Enum):
         return self._name
 
     @property
+    def label(self):
+        '''
+        A legacy alias for name.
+        '''
+        return self._name
+
+    @property
     def priority(self):
         return self._priority
 

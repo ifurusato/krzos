@@ -34,7 +34,8 @@ class ComponentRegistry:
         '''
         Return a dict of all components in the registry that are instances of cls.
         '''
-        return {k: v for k, v in self._dict.items() if isinstance(v, cls)}
+#       return {k: v for k, v in self._dict.items() if isinstance(v, cls)}
+        return [v for v in self._dict.values() if isinstance(v, cls)]
 
     def count_by_type(self, cls):
         '''
@@ -65,21 +66,49 @@ class ComponentRegistry:
         return len(self._dict) == 0
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def add(self, name, component):
-        '''
-        Add a component to the registry using a unique name, raising a
-        ConfigurationError if a like-named component already exists in
-        the registry.
-        '''
-        if name in self._dict:
-            raise ConfigurationError('component \'{}\' already in registry.'.format(name))
 
+    @staticmethod
+    def is_publisher(component):
+        return any(cls.__name__ == "Publisher" for cls in component.__class__.mro())
+
+    @staticmethod
+    def is_subscriber(component):
+        return any(cls.__name__ == "Subscriber" for cls in component.__class__.mro())
+
+    @staticmethod
+    def is_behaviour(component):
+        return any(cls.__name__ == "Behaviour" for cls in component.__class__.mro())
+
+    @staticmethod
+    def is_multiple_inheritor(component):
+        '''
+        Returns True if the component multiply inherits Publisher, Subscriber,
+        and/or Behaviour.
+        '''
+        return sum([
+            ComponentRegistry.is_publisher(component),
+            ComponentRegistry.is_subscriber(component),
+            ComponentRegistry.is_behaviour(component)]) >= 2
+
+    def add(self, component):
+        '''
+        Add a component to the registry using its name, generating either a
+        warning or raising a ConfigurationError if a like-named component 
+        already exists in the registry.
+        '''
+        if component.name in self._dict:
+            existing = self._dict.get(component.name)
+            if ComponentRegistry.is_multiple_inheritor(existing):
+                self._log.info(Style.DIM + 'multiple-inheritor component \'{}\' already in registry.'.format(component.name))
+                return
+            else:
+                raise ConfigurationError('component \'{}\' already in registry.'.format(component.name))
         from core.component import Component
         if not isinstance(component, Component):
-            raise TypeError('argument \'{}\' is not a component.'.format(name))
+            raise TypeError('argument \'{}\' is not a component.'.format(type(component)))
         else:
-            self._dict[name] = component
-            self._log.info(Style.DIM + 'added component \'{}\' to registry ({:d} total).'.format(name, len(self._dict)))
+            self._dict[component.name] = component
+            self._log.info(Style.DIM + 'added component \'{}\' to registry ({:d} total).'.format(component.name, len(self._dict)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has(self, name):

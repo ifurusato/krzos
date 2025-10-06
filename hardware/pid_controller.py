@@ -155,8 +155,10 @@ class PIDController(Component):
                 self._motor.set_motor_power(0.0)
                 if self._verbose:
                     if _count % 20 == 0:
-                        self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(target_speed, self._power, self._motor.velocity))
+                        self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(
+                                target_speed, self._power, self._motor.velocity))
                     pass
+                _motor_power = 0.0
             else:
                 self._pid.setpoint = target_speed
                 # converts speed to power...
@@ -189,8 +191,10 @@ class PIDController(Component):
 
             self._last_power = self._power
             self._last_time = dt.now()
+            return _motor_power
         else:
             self._log.info(Fore.RED + 'pid controller disabled.')
+            return 0.0
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_mean_setpoint(self, value):

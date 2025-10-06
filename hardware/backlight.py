@@ -33,13 +33,14 @@ class Backlight(Component):
 
     def on(self):
         GPIO.output(self._pin, GPIO.HIGH)
-        print(Fore.CYAN + "backlight on" + Style.RESET_ALL)
+        self._log.debug("backlight on")
 
     def off(self):
         GPIO.output(self._pin, GPIO.LOW)
-        print(Fore.CYAN + "backlight off" + Style.RESET_ALL)
+        self._log.debug("backlight off")
 
     def close(self):
         GPIO.cleanup( self._pin)
+        self._log.debug("closed.")
 
 #EOF

@@ -23,7 +23,8 @@ from hardware.i2c_scanner import I2CScanner, DeviceNotFound
 
 __log = Logger('test-devices', level=Level.INFO)
 __config = ConfigLoader(level=Level.ERROR).configure()
-__i2c_scanner = I2CScanner(__config, level=Level.ERROR)
+__i2c_scanner_0 = I2CScanner(__config, i2c_bus_number=0, level=Level.ERROR)
+__i2c_scanner_1 = I2CScanner(__config, level=Level.ERROR)
 
 @pytest.mark.unit
 def test_required_devices():
@@ -35,15 +36,22 @@ def test_required_devices():
     _devices = __config['kros'].get('hardware').get('devices')
     for _device in _devices:
         hex_address = "0x{:02X}".format(_device['address'])
+        _is_vl53 = hex_address == '0x29' # for VL53L1CX or VL53L5CX 
         name        = _device['name']
         required    = _device['required']
-        found = __i2c_scanner.has_hex_address([hex_address])
+        if _is_vl53:
+            found = __i2c_scanner_0.has_hex_address([hex_address])
+        else:
+            found = __i2c_scanner_1.has_hex_address([hex_address])
         if required:
             assert found, "{} not found at {}".format(name, hex_address)
             __log.info("{}: ".format(hex_address) + Fore.GREEN + "{}".format(name))
         elif _show_optional:
             if found:
-                __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
+                if _is_vl53:
+                    __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional, on I2C0)")
+                else:
+                    __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
             else:
                 __log.debug(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (not found, optional)")
     __log.info(Fore.GREEN + "required devices are available.")
@@ -61,9 +69,10 @@ def main():
     except Exception as e:
         __log.error("an unexpected error occurred: {}".format(e))
     finally:
-        __log         = None
-        __config      = None
-        __i2c_scanner = None
+        __log           = None
+        __config        = None
+        __i2c_scanner_0 = None
+        __i2c_scanner_1 = None
 
 if __name__ == "__main__":
     main()
