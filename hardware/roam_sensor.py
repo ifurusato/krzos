@@ -20,6 +20,7 @@ init()
 from core.logger import Logger, Level
 from core.component import Component
 
+from hardware.easing import Easing
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from hardware.distance_sensor import DistanceSensor
 
@@ -55,15 +56,15 @@ class RoamSensor(Component):
         self._smoothing      = _cfg.get('smoothing', True)
         _smoothing_window    = _cfg.get('smoothing_window', 5)
         self._window = deque(maxlen=_smoothing_window) if self._smoothing else None
-        self._distance       = -1
-        self._last_read_time = time.time()
+        self._min_distance   = _cfg.get('min_distance', 150)  # mm
+        self._max_distance   = _cfg.get('max_distance', 1000) # mm, the "no obstacle" threshold
+        _easing_value        = _cfg.get('easing', 'logarithmic')
+        self._easing         = Easing.SIGMOID # Easing.from_string(_easing_value)
         # PWM sensor range for fusion
-        self._pwm_max_range  = _cfg.get('max_range', 250)  # mm
+        self._pwm_max_range  = _cfg.get('pwm_max_range', 250)  # mm
         # sensor instantiation
-#       self._vl53l5cx = vl53l5cx_sensor if vl53l5cx_sensor is not None else Vl53l5cxSensor(config, level=Level.INFO)
-#       self._distance_sensor = distance_sensor if distance_sensor is not None else DistanceSensor(config, level=Level.INFO)
         _component_registry = Component.get_registry()
-        # VL53L5CX
+        # Vl53l5cxSensor class
         if vl53l5cx_sensor is not None:
             self._vl53l5cx = vl53l5cx_sensor
         else:
@@ -77,12 +78,22 @@ class RoamSensor(Component):
             self._distance_sensor = _component_registry.get(DistanceSensor.NAME)
             if self._distance_sensor is None:
                 self._distance_sensor = DistanceSensor(config, level=Level.INFO)
+        self._distance       = -1 # returned value
+        self._last_read_time = time.time()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
                 .format(self._sigmoid_d0, self._sigmoid_k, self._smoothing, _smoothing_window))
 
     @property
     def name(self):
         return RoamSensor.NAME
+
+    @property
+    def min_distance(self):
+        return self._min_distance
+
+    @property
+    def max_distance(self):
+        return self._max_distance
 
     @property
     def distance(self):
@@ -102,35 +113,6 @@ class RoamSensor(Component):
         d = max(0, min(pwm_value, self._pwm_max_range))
         w = 1.0 / (1.0 + np.exp((d - self._sigmoid_d0) / self._sigmoid_k))
         return w
-
-    def get_distance(self):
-        '''
-        Polls both sensors, fuses their values, applies smoothing, and returns the fused distance (mm).
-        '''
-        pwm_value = self._distance_sensor.get_distance()
-        vl53_value   = self._get_vl53l5cx_front_distance()
-        # fusion logic
-        if pwm_value is not None and 0 < pwm_value <= self._pwm_max_range:
-            weight = self.sigmoid_weight(pwm_value)
-            fused = weight * pwm_value + (1.0 - weight) * vl53_value if vl53_value is not None else pwm_value
-#           self._log.debug(f"fused value: {fused:.1f}mm [PWM={pwm_value:.1f}, VL53L5CX={vl53_value}, weight={weight:.2f}]")
-        elif vl53_value is not None:
-            fused = vl53_value
-#           self._log.debug("PWM out of range or None, using: {:.1f}mm".format(vl53_value))
-        else:
-            fused = None
-#           self._log.debug("no valid sensor value, returning None.")
-        # smoothing logic
-        if fused is not None and self._smoothing:
-            self._window.append(fused)
-            smoothed = int(np.mean(self._window))
-            self._distance = smoothed
-        elif fused is not None:
-            self._distance = int(fused)
-        else:
-            self._distance = None
-        self._last_read_time = time.time()
-        return self._distance
 
     def _get_vl53l5cx_front_distance(self):
         '''
@@ -159,6 +141,43 @@ class RoamSensor(Component):
             return median
         except Exception as e:
             self._log.error('Error extracting VL53L5CX center values: {}'.format(e))
+            return None
+
+    def get_distance(self, apply_easing=True):
+        '''
+        Polls both sensors, fuses their values, applies smoothing, sets self._distance,
+        then returns the eased/normalized value if 'apply_easing' is True, otherwise
+        the fused, smoothed value. Returns None if no value is available.
+        '''
+        pwm_value = self._distance_sensor.get_distance()
+        vl53_value = self._get_vl53l5cx_front_distance()
+        # fusion logic ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if pwm_value is not None and 0 < pwm_value <= self._pwm_max_range:
+            weight = self.sigmoid_weight(pwm_value)
+            fused = weight * pwm_value + (1.0 - weight) * vl53_value if vl53_value is not None else pwm_value
+        elif vl53_value is not None:
+            fused = vl53_value
+        else:
+            fused = None
+        # smoothing logic ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if fused is not None and self._smoothing:
+            self._window.append(fused)
+            smoothed = int(np.mean(self._window))
+            self._distance = smoothed
+        elif fused is not None:
+            self._distance = int(fused)
+        else:
+            self._distance = None
+        self._last_read_time = time.time()
+        if not apply_easing:
+            return self._distance
+        # apply normalization and easing ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if self._distance is not None:
+            normalised = (self._distance - self._min_distance) / float(self._max_distance - self._min_distance)
+            eased = self._easing.apply(normalised)
+            eased_mm = self._min_distance + eased * (self._max_distance - self._min_distance)
+            return eased_mm
+        else:
             return None
 
     def check_timeout(self):

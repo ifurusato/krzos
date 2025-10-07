@@ -31,6 +31,7 @@ from hardware.motor_controller import MotorController
 from hardware.roam_sensor import RoamSensor
 
 class Roam(Behaviour):
+    NAME = 'roam'
     STOPPED = 'stopped'
     ROAM_PORT_LAMBDA_NAME =  "__roam_port"
     ROAM_STBD_LAMBDA_NAME =  "__roam_stbd"
@@ -43,7 +44,7 @@ class Roam(Behaviour):
     Roam is by default suppressed.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
-        self._log = Logger('roam', level)
+        self._log = Logger(Roam.NAME, level)
         Behaviour.__init__(self, 'roam', config, message_bus, message_factory, suppressed=False, enabled=True, level=level)
         self.add_event(Event.AVOID)
         # configuration
@@ -56,11 +57,9 @@ class Roam(Behaviour):
         self._log.info(Style.BRIGHT + 'default speed: \t{}'.format(self._default_speed))
         self._post_delay     = 500
         self._task           = None 
-        self._min_distance   = 150   # mm
-        self._max_distance   = 1000  # mm, the "no obstacle" threshold
         self._stop_delay     = _cfg.get('stop_delay_s', 3)  # seconds, configurable
         self._resume_after   = None
-        self._last_was_stopped = False
+        self._was_fully_stopped = False
         self._roam_distance  = -1
         # motor control lambdas
         self._port_multiplier  = 1.0 # multiplier for the port motors
@@ -95,7 +94,7 @@ class Roam(Behaviour):
 
     @property
     def name(self):
-        return 'roam'
+        return Roam.NAME
 
     @property
     def is_ballistic(self):
@@ -117,12 +116,12 @@ class Roam(Behaviour):
         _event = message.event
         if _event is Event.AVOID:
             if _event.value == 'suppress':
-                self._log.info(Fore.WHITE + "🍀 processing AVOID message with event: '{}'; value: {}".format(_event.name, _event.value))
+                self._log.info(Fore.WHITE + "processing AVOID message with event: '{}'; value: {}".format(_event.name, _event.value))
                 self.suppress()
             else:
                 self._log.info(Fore.BLUE + "ignored AVOID message with event: '{}'; value: {}".format(_event.name, _event.value))
         else:
-            self._log.info(Fore.WHITE + "🍀 processing {} message with event: '{}'; value: {}".format(message.name, _event.name, _event.value))
+            self._log.info(Fore.WHITE + "processing {} message with event: '{}'; value: {}".format(message.name, _event.name, _event.value))
         await Subscriber.process_message(self, message)
 
     def execute(self, message):
@@ -148,9 +147,6 @@ class Roam(Behaviour):
         self._log.info("roam loop started with {}ms delay…".format(self._loop_delay_ms))
         try:
             self._accelerate()
-            if self._motor_controller:
-                print('🍉 set_differential_speeds')
-#               self._motor_controller.set_differential_speeds(self._default_speed, self._default_speed)
             while not self._stop_event.is_set():
                 if not self.suppressed:
                     await self._poll()
@@ -190,26 +186,42 @@ class Roam(Behaviour):
 
     def _update_motor_multipliers(self, roam_distance):
         '''
-        Adjusts motor multipliers with a fixed post-stop delay, using a single resume_after variable.
+        Linearly scales motor multipliers from 1.0 (far) to 0.0 (close).
+        '''
+        min_d = self._roam_sensor.min_distance
+        max_d = self._roam_sensor.max_distance
+        if roam_distance is None or roam_distance <= min_d:
+            multiplier = 0.0
+        elif roam_distance >= max_d:
+            multiplier = 1.0
+        else:
+            multiplier = (roam_distance - min_d) / float(max_d - min_d)
+            multiplier = max(0.0, min(multiplier, 1.0))
+        self._port_multiplier = multiplier
+        self._stbd_multiplier = multiplier
+
+    def x_update_motor_multipliers(self, roam_distance):
+        '''
+        Adjusts motor multipliers with a fixed post-stop delay,
+        only when the robot actually comes to a full stop.
         '''
         now = time.time()
-        min_d = self._min_distance
-        max_d = self._max_distance
+        min_d = self._roam_sensor.min_distance
+        max_d = self._roam_sensor.max_distance
         delay = self._stop_delay
-        # if obstacle present, robot is stopped, clear resume_after
+        # check if robot is fully stopped
         if roam_distance is not None and roam_distance <= min_d:
             self._port_multiplier = 0.0
             self._stbd_multiplier = 0.0
             self._resume_after = None
-            self._last_was_stopped = True
+            self._was_fully_stopped = True
             return
-        # if obstacle was just cleared, start delay
-        if self._last_was_stopped and self._resume_after is None:
+        # if robot was fully stopped and can now move, start delay
+        # only do this if we were truly stopped
+        if self._was_fully_stopped and self._resume_after is None:
             self._resume_after = now + delay
-            self._log.info("Obstacle cleared. Waiting {} seconds before resuming movement.".format(delay))
-        # save last state for next poll
-        self._last_was_stopped = roam_distance is not None and roam_distance <= min_d
-        # if delay is running, keep stopped until elapsed
+            self._log.info("obstacle cleared after stop, waiting {} seconds before resuming movement.".format(delay))
+        # if in post-stop delay, hold multipliers at 0 until delay ends
         if self._resume_after is not None:
             if now < self._resume_after:
                 self._port_multiplier = 0.0
@@ -217,8 +229,8 @@ class Roam(Behaviour):
                 self._log.debug("Waiting {:.1f}/{:.1f}s before resuming.".format(self._resume_after - now, delay))
                 return
             else:
-                self._resume_after = None  # delay finished
-        # normal speed scaling
+                self._resume_after = None
+        # normal operation
         if roam_distance is None or roam_distance >= max_d:
             multiplier = 1.0
         else:
@@ -226,6 +238,8 @@ class Roam(Behaviour):
             multiplier = max(0.0, min(multiplier, 1.0))
         self._port_multiplier = multiplier
         self._stbd_multiplier = multiplier
+        # reset flag
+        self._was_fully_stopped = False
 
     @property
     def roam_distance(self):
@@ -249,30 +263,25 @@ class Roam(Behaviour):
     def _accelerate(self):
         self._log.info("accelerate…")
         if self._motor_controller:
-            print('🍉 accelerate')
             self._motor_controller.accelerate(self._default_speed, enabled=lambda: not self._stop_event.is_set())
 
     def _decelerate(self):
         self._log.info("decelerate…")
         if self._motor_controller:
-            print('🍉 decelerate')
             self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
     def _stop(self):
         self._log.info("stop…")
         if self._motor_controller:
-            print('🍉 stop')
             self._motor_controller.stop()
 
     def _handle_stoppage(self):
-        self._log.info(Fore.WHITE + "🌼 stoppage")
         _message = self.message_factory.create_message(Event.ROAM, Roam.STOPPED)
         self._queue_publisher.put(_message)
-        self._log.info(Fore.WHITE + "🌼 published ROAM message: {}".format(_message))
+        self._log.info("published ROAM message: {}".format(_message))
 
     def enable(self):
         if self._motor_controller:
-            print('🍉 enable')
             self._motor_controller.enable()
         Component.enable(self)
         self._loop_instance = asyncio.new_event_loop()
@@ -298,7 +307,6 @@ class Roam(Behaviour):
             self._loop_instance.stop()
             self._loop_instance.call_soon_threadsafe(self._shutdown)
         if self._motor_controller:
-            print('🍉 disable')
             self._motor_controller.disable()
         Component.disable(self)
         self._log.info("disabled.")

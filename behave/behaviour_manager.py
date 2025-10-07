@@ -88,18 +88,18 @@ class BehaviourManager(Subscriber):
                                         self._level
                                     )
                                     # we don't need this if there is self-registration
-                                    self._log.info(Fore.WHITE + '🦁 associating behaviour name {} with behaviour {}'.format(key, _behaviour.name))
+                                    self._log.info(Fore.WHITE + 'associating behaviour name {} with behaviour {}'.format(key, _behaviour.name))
                                     self._behaviours[_behaviour.name] = _behaviour
                                 else:
-                                    self._log.info(Fore.WHITE + '🦁 associating key {} with behaviour {}'.format(key, _behaviour.name))
+                                    self._log.info(Fore.WHITE + 'associating key {} with behaviour {}'.format(key, _behaviour.name))
                     except Exception as e:
                         stack_trace = traceback.format_exc()
                         self._log.error("{} thrown loading filename '{}' for behaviour: {}\n{}".format(type(e), filename, e, stack_trace))
         # list registered behaviours
         if len(self._behaviours) > 0:
-            self._log.info("🦁 registered {} behaviours:".format(len(self._behaviours)))
+            self._log.info("registered {} behaviours:".format(len(self._behaviours)))
             for _key, _behaviour in self._behaviours.items():
-                self._log.info("🦁   key: '{}'\t behaviour: {}".format(_key, _behaviour.name))
+                self._log.info("   key: '{}'\t behaviour: {}".format(_key, _behaviour.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def start(self):
@@ -107,10 +107,10 @@ class BehaviourManager(Subscriber):
         The necessary state machine call to start the publisher, which performs
         any initialisations of active sub-components, etc.
         '''
-        self._log.info('🌼 starting behaviour manager…')
+        self._log.info('starting behaviour manager…')
         for _key, _behaviour in self._behaviours.items():
             _behaviour.start()
-            self._log.info('🌼 started behaviour {}'.format(_behaviour.name))
+            self._log.info('started behaviour {}'.format(_behaviour.name))
         Subscriber.start(self)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
