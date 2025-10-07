@@ -24,7 +24,7 @@ from core.component import Component
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensor(Component):
-    CLASS_NAME = 'dist'
+    NAME = 'distance'
     '''
     Provides distance information in millimeters from a Pololu PWM-based
     infrared proximity sensor. The maximum range seems to be around 270mm,
@@ -44,7 +44,7 @@ class DistanceSensor(Component):
         :param config:        the application configuration
         :param level:         the logging Level
         '''
-        self._log = Logger('distance', level)
+        self._log = Logger(DistanceSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None:
             raise ValueError('no configuration provided.')
@@ -68,7 +68,7 @@ class DistanceSensor(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def name(self):
-        return 'distance'
+        return DistanceSensor.NAME
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _measure_pulse_width(self):

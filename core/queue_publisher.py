@@ -21,7 +21,7 @@ from core.publisher import Publisher
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class QueuePublisher(Publisher):
-    NAME = 'pub:queue'
+    NAME = 'queue'
     _PUBLISHER_LOOP = '__queue_publisher_loop'
     '''
     A Publisher that publishes messages from a queue, available as a global
