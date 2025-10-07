@@ -32,6 +32,8 @@ from hardware.roam_sensor import RoamSensor
 
 class Roam(Behaviour):
     STOPPED = 'stopped'
+    ROAM_PORT_LAMBDA_NAME =  "__roam_port"
+    ROAM_STBD_LAMBDA_NAME =  "__roam_stbd"
     '''
     Implements a roaming behaviour. The end result of this Behaviour is to
     provide a forward speed limit for both motors based on a fused distance
@@ -54,24 +56,37 @@ class Roam(Behaviour):
         self._log.info(Style.BRIGHT + 'default speed: \t{}'.format(self._default_speed))
         self._post_delay     = 500
         self._task           = None 
-
+        # motor control lambdas
+        self._port_multiplier  = 1.0 # multiplier for the port motors
+        self._stbd_multiplier  = 1.0 # multiplier for the starboard motors
+        self._roam_port_lambda = lambda speed: speed * self._port_multiplier
+        self._roam_stbd_lambda = lambda speed: speed * self._stbd_multiplier
+        # get necessary components from registry
         _component_registry = Component.get_registry()
         self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
         if self._queue_publisher is None:
             raise MissingComponentError('queue publisher not available.')
-
         # RoamSensor instantiation
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
             self._roam_sensor = RoamSensor(config, level=Level.INFO)
-
         # MotorController instantiation (from registry only)
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-
+        self._decorate_motor_controller()
         self._roam_distance = -1
         self._log.info('ready.')
+
+    def _decorate_motor_controller(self):
+        '''
+        Adds the speed multiplier lambda functions of this class to the motors.
+        '''
+        self._motor_controller.add_lambda(Orientation.PFWD, self.ROAM_PORT_LAMBDA_NAME, self._roam_port_lambda)
+        self._motor_controller.add_lambda(Orientation.SFWD, self.ROAM_STBD_LAMBDA_NAME, self._roam_stbd_lambda)
+        self._motor_controller.add_lambda(Orientation.PAFT, self.ROAM_PORT_LAMBDA_NAME, self._roam_port_lambda)
+        self._motor_controller.add_lambda(Orientation.SAFT, self.ROAM_STBD_LAMBDA_NAME, self._roam_stbd_lambda)
+        self._log.info('lambda functions added to motors.')
 
     @property
     def name(self):
