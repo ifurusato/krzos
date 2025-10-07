@@ -181,7 +181,8 @@ class Component:
         '''
         if not self.closed:
             _nil = self.disable()
-            Component._registry.remove(self._log.name)
+#           Component._registry.remove(self._log.name)
+            Component._registry.deregister(self)
             self._closed = True
             self._log.debug('closed.')
         else:

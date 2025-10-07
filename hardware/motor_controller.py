@@ -392,7 +392,7 @@ class MotorController(Component):
                 break
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def decelerate(self, target_speed, step=0.02, step_delay_ms=20, enabled=None):
+    def decelerate(self, target_speed=0.0, step=0.02, step_delay_ms=20, enabled=None):
         '''
         Gradually decelerate from the current speed to the target speed
         using the provided slew rate (step size and delay).

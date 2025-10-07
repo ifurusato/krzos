@@ -63,6 +63,7 @@ class RoamSensor(Component):
         self._log.info(Fore.MAGENTA + 'easing function: {}'.format(self._easing.name))
         # PWM sensor range for fusion
         self._pwm_max_range  = _cfg.get('pwm_max_range', 250)  # mm
+        self._use_sigmoid_fusion = _cfg.get('use_sigmoid_fusion')
         # sensor instantiation
         _component_registry = Component.get_registry()
         # Vl53l5cxSensor class
@@ -144,47 +145,65 @@ class RoamSensor(Component):
             self._log.error('Error extracting VL53L5CX center values: {}'.format(e))
             return None
 
+
+    def _fuse(self, pwm_value, vl53_value):
+        '''
+        Fuses PWM and VL53L5CX sensor values according to fusion strategy.
+        Returns fused value (mm) or None.
+        '''
+        if pwm_value is None and vl53_value is None:
+            return None
+        elif pwm_value is not None and vl53_value is None:
+            return pwm_value
+        elif pwm_value is None and vl53_value is not None:
+            return vl53_value
+        elif self._use_sigmoid_fusion:
+            weight = self.sigmoid_weight(pwm_value)
+            fused = weight * pwm_value + (1.0 - weight) * vl53_value
+            self._log.info(Fore.WHITE + 'fusion(sigmoid): pwm={}, vl53={}, weight={:.3f}, fused={:.2f}'.format(pwm_value, vl53_value, weight, fused))
+            return fused
+        else:
+            fused = min(pwm_value, vl53_value)
+            self._log.info(Fore.WHITE + 'fusion(min): pwm={}, vl53={}, fused={:.2f}'.format(pwm_value, vl53_value, fused))
+            return fused
+
+    def _smooth(self, value):
+        '''
+        Applies smoothing to the fused value if enabled.
+        Returns smoothed value (mm) or None.
+        '''
+        if value is None:
+            return None
+        if not self._smoothing:
+            self._log.info(Fore.WHITE + 'unsmoothed: {:.2f}'.format(value))
+            return value
+        self._window.append(value)
+        smoothed = np.mean(self._window)
+        self._log.info(Fore.WHITE + 'smoothed: {:.2f}'.format(smoothed))
+        return smoothed
+
+    def _normalise_and_ease(self, value):
+        '''
+        Clamps, normalises, eases, and rescales the value.
+        Returns eased value (mm) or None.
+        '''
+        if value is None:
+            return None
+        clamped = min(value, self._max_distance)
+        normalised = clamped / self._max_distance
+        eased = self._easing.apply(normalised)
+        eased_mm = eased * self._max_distance
+        self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
+        return eased_mm
+
     def get_distance(self, apply_easing=True):
         '''
         Returns a fused, smoothed, and eased value for Roam behaviour.
         Values above max_distance are treated as max_distance.
         '''
-        pwm_value = self._distance_sensor.get_distance()
-        vl53_value = self._get_vl53l5cx_front_distance()
-        # sensor fusion ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        if pwm_value is None and vl53_value is None:
-            fused = None
-        elif pwm_value is not None and vl53_value is None:
-            fused = pwm_value
-        elif pwm_value is None and vl53_value is not None:
-            fused = vl53_value
-        else:
-            fused = min(pwm_value, vl53_value)
-        print('fused: {:4.2f} from pwm: {} & vl53: {}'.format(fused, pwm_value, vl53_value))
-        # smoothing ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        if fused is not None and self._smoothing:
-            self._window.append(fused)
-            smoothed = np.mean(self._window)
-            self._distance = smoothed
-        elif fused is not None:
-            self._distance = fused
-        else:
-            self._distance = None
-        print('smoothed: {:4.2f}'.format(self._distance))
+        self._distance = self._smooth(self._fuse(self._distance_sensor.get_distance(), self._get_vl53l5cx_front_distance()))
         self._last_read_time = time.time()
-        if not apply_easing:
-            return self._distance
-        # apply normalization and easing ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        if self._distance is not None:
-            # clamp only to self._max_distance for behaviour logic
-            clamped = min(self._distance, self._max_distance)
-            normalised = clamped / self._max_distance
-            eased = self._easing.apply(normalised)
-            eased_mm = eased * self._max_distance
-            print('eased: {:4.2f}'.format(eased_mm))
-            return eased_mm
-        else:
-            return None
+        return self._distance if not apply_easing else self._normalise_and_ease(self._distance)
 
     def check_timeout(self):
         '''

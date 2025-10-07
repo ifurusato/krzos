@@ -46,6 +46,7 @@ class Vl53l5cxSensor(Component):
         self._stddev_threshold = _cfg.get('stddev_threshold', 100)
         self._floor_margin = _cfg.get('floor_margin', 50)
         _i2c_bus_number = _cfg.get('i2c_bus_number')
+        self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
         if _i2c_bus_number == 0:
             try:
@@ -99,9 +100,9 @@ class Vl53l5cxSensor(Component):
             self._vl53.start_ranging()
             super().enable()
             self._calibrate_floor_rows()
-            self._log.info('🍄 VL53L5CX hardware enabled and ranging.')
+            self._log.info('VL53L5CX hardware enabled and ranging.')
         else:
-            self._log.info('🍄 VL53L5CX hardware already enabled.')
+            self._log.info('VL53L5CX hardware already enabled.')
 
     def get_distance_mm(self):
         '''
@@ -135,32 +136,42 @@ class Vl53l5cxSensor(Component):
             self._log.warning('no calibration samples collected, check sensor connection.')
             return
         samples = np.array(samples)  # shape: (samples, _rows, _cols)
+        clear_distance = True
         for row in range(self._rows):
             values = samples[:, row, :].flatten()
             mean = values.mean()
             stddev = values.std()
-            self._log.info('row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
-            if stddev < self._stddev_threshold:
+            if mean < self._minimum_free_distance:
+                # not enough free space in front of robot
+                clear_distance = False
+            else:
+                self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
+            if clear_distance and ( stddev < self._stddev_threshold ):
                 self._floor_row_means[row] = mean
                 self._floor_row_stddevs[row] = stddev
-                self._log.info('row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+                self._log.info(Fore.WHITE + 'row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
             else:
                 self._floor_row_means[row] = None
                 self._floor_row_stddevs[row] = None
-                self._log.info('row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+                self._log.info(Fore.WHITE + 'row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
                 # all rows above this cannot be floor rows
                 for above_row in range(row+1, self._rows):
                     self._floor_row_means[above_row] = None
                     self._floor_row_stddevs[above_row] = None
                 break  # exit the calibration loop
-        detected_floor_rows = [i for i, v in enumerate(self._floor_row_means) if v is not None]
-        self._log.info('floor rows detected (indices): {}'.format(detected_floor_rows))
+        if clear_distance:
+            detected_floor_rows = [i for i, v in enumerate(self._floor_row_means) if v is not None]
+            self._log.info(Fore.WHITE + 'floor rows detected (indices): {}'.format(detected_floor_rows))
         if all(val is None for val in self._floor_row_means):
             # force bottom row as floor
             values = samples[:, 0, :].flatten()
             self._floor_row_means[0] = values.mean()
             self._floor_row_stddevs[0] = values.std()
-            self._log.warning('no floor detected during calibration, forcibly marking bottom row as floor.')
+            if clear_distance:
+                self._log.warning('no floor detected during calibration, forcibly marking bottom row as floor.')
+            else:
+                # disable sensor or behaviour?
+                self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row as floor.')
 
     def disable(self):
         if self.enabled:

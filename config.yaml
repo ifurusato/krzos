@@ -170,7 +170,6 @@ kros:
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 5            # number of samples to use for smoothing
             loop_interval:                  0.1            # interval between distance polling, in seconds
-            easing:                     'LINEAR'           # normalisation easing formula
         vl53l5cx:
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
@@ -179,6 +178,7 @@ kros:
             calibration_samples:             10            # how many samples to determine floor rows?
             stddev_threshold:               100
             floor_margin:                    50            # in millimeters
+            minimum_free_distance:          500            # minimum required free space, in millimeters
             ranging_frequency_hz:            15
             integration_time_ms:             20
         roam_sensor:
@@ -189,7 +189,8 @@ kros:
             max_distance:                  1000            # maximum distance in mm of VL53L5CX (actual range is 4m)
             min_distance:                    80            # minimum distance in mm of VL53L5CX
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            easing:                     'LINEAR'           # normalisation easing formula
+            easing:                    'SIGMOID'           # normalisation easing formula, see hardware.easing
+            use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)

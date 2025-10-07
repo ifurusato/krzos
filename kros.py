@@ -396,7 +396,7 @@ class KROS(Component, FiniteStateMachine):
                             and _component != self and _component != self._message_bus:
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
-                        self._component_registry.deregister(_component)
+#                       self._component_registry.deregister(_component)
                 time.sleep(0.1)
 
                 self._log.info('closing other components…')

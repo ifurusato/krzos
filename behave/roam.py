@@ -176,7 +176,7 @@ class Roam(Behaviour):
             if roam_distance is None:
                 self._log.warning(Fore.WHITE + "no distance available: ignored.")
             elif roam_distance > 0.0:
-                self._log.info(Fore.WHITE + "roam distance: {:4.2f}".format(roam_distance))
+                self._log.debug(Fore.WHITE + "roam distance: {:4.2f}".format(roam_distance))
                 self._update_motor_multipliers(roam_distance)
             else:
                 self._log.warning(Fore.WHITE + "roam distance not set.")
@@ -193,20 +193,20 @@ class Roam(Behaviour):
         max_d = self._roam_sensor.max_distance
 
         if roam_distance is None or roam_distance >= max_d:
-            print('mult=1')
+            self._log.info(Fore.GREEN + 'mult=1')
             multiplier = 1.0
         elif roam_distance <= min_d:
-            print('mult=0')
+            self._log.info(Fore.BLUE + 'mult=0')
             multiplier = 0.0
         else:
             multiplier = (roam_distance - min_d) / float(max_d - min_d)
             multiplier = max(0.0, min(multiplier, 1.0))
             # apply deadband near zero
             if isclose(multiplier, 0.0, abs_tol=self._deadband_threshold):
-                print('mult={:4.2f} (in deadband)'.format(multiplier))
+                self._log.info(Style.DIM + 'mult={:4.2f} (in deadband)'.format(multiplier))
                 multiplier = 0.0
             else:
-                print('mult={:4.2f}'.format(multiplier))
+                self._log.info(Fore.WHITE + 'mult={:4.2f}'.format(multiplier))
         self._port_multiplier = multiplier
         self._stbd_multiplier = multiplier
 
@@ -269,7 +269,7 @@ class Roam(Behaviour):
         if not self.enabled:
             self._log.warning("already disabled.")
             return
-        self._log.info(Fore.YELLOW + "roam disabling…")
+        self._log.info("roam disabling…")
         self._stop_event.set()
         time.sleep(0.1)
         if self._loop_instance:
@@ -281,6 +281,7 @@ class Roam(Behaviour):
         self._log.info("disabled.")
 
     def _shutdown(self):
+        self._log.info("shutting down tasks and event loop…")
         if not self._task.done():
             self._task.cancel()
         self._loop_instance.stop()
