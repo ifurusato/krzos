@@ -56,6 +56,12 @@ class Roam(Behaviour):
         self._log.info(Style.BRIGHT + 'default speed: \t{}'.format(self._default_speed))
         self._post_delay     = 500
         self._task           = None 
+        self._min_distance   = 150   # mm
+        self._max_distance   = 1000  # mm, the "no obstacle" threshold
+        self._stop_delay     = _cfg.get('stop_delay_s', 3)  # seconds, configurable
+        self._resume_after   = None
+        self._last_was_stopped = False
+        self._roam_distance  = -1
         # motor control lambdas
         self._port_multiplier  = 1.0 # multiplier for the port motors
         self._stbd_multiplier  = 1.0 # multiplier for the starboard motors
@@ -75,7 +81,6 @@ class Roam(Behaviour):
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
         self._decorate_motor_controller()
-        self._roam_distance = -1
         self._log.info('ready.')
 
     def _decorate_motor_controller(self):
@@ -176,14 +181,51 @@ class Roam(Behaviour):
                 self._log.warning(Fore.WHITE + "no distance available: ignored.")
             elif roam_distance > 0.0:
                 self._log.info(Fore.WHITE + "roam distance: {:4.2f}".format(roam_distance))
-
-                # TODO: speed limiting logic goes here
-
+                self._update_motor_multipliers(roam_distance)
             else:
                 self._log.warning(Fore.WHITE + "roam distance not set.")
         except Exception as e:
             self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self.disable()
+
+    def _update_motor_multipliers(self, roam_distance):
+        '''
+        Adjusts motor multipliers with a fixed post-stop delay, using a single resume_after variable.
+        '''
+        now = time.time()
+        min_d = self._min_distance
+        max_d = self._max_distance
+        delay = self._stop_delay
+        # if obstacle present, robot is stopped, clear resume_after
+        if roam_distance is not None and roam_distance <= min_d:
+            self._port_multiplier = 0.0
+            self._stbd_multiplier = 0.0
+            self._resume_after = None
+            self._last_was_stopped = True
+            return
+        # if obstacle was just cleared, start delay
+        if self._last_was_stopped and self._resume_after is None:
+            self._resume_after = now + delay
+            self._log.info("Obstacle cleared. Waiting {} seconds before resuming movement.".format(delay))
+        # save last state for next poll
+        self._last_was_stopped = roam_distance is not None and roam_distance <= min_d
+        # if delay is running, keep stopped until elapsed
+        if self._resume_after is not None:
+            if now < self._resume_after:
+                self._port_multiplier = 0.0
+                self._stbd_multiplier = 0.0
+                self._log.debug("Waiting {:.1f}/{:.1f}s before resuming.".format(self._resume_after - now, delay))
+                return
+            else:
+                self._resume_after = None  # delay finished
+        # normal speed scaling
+        if roam_distance is None or roam_distance >= max_d:
+            multiplier = 1.0
+        else:
+            multiplier = (roam_distance - min_d) / float(max_d - min_d)
+            multiplier = max(0.0, min(multiplier, 1.0))
+        self._port_multiplier = multiplier
+        self._stbd_multiplier = multiplier
 
     @property
     def roam_distance(self):

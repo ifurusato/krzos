@@ -126,7 +126,7 @@ class Vl53l5cxSensor(Component):
         for i in range(self._calibration_samples):
             data = self.get_distance_mm() # returns an 8x8 array
             if data is None:
-                self._log.warning("calibration sample {} is None.".format(i))
+                self._log.debug("calibration sample {} is None.".format(i))
                 continue
             arr = np.array(data).reshape((self._rows, self._cols))
             samples.append(arr)

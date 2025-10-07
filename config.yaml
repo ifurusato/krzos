@@ -41,7 +41,7 @@ kros:
             min_velocity:                 0.0              # minimum motor target velocity
             max_velocity:               100.0              # maximum motor target velocity
             cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
-            cruise_wait_ticks:              3              # how many ticks to wait before cruising again
+            stop_delay_s:                   3              # how many seconds to wait before cruising again
             loop_delay_ms:                 80              # asyncio loop delay in milliseconds
             loop_freq_hz:                   1              # main loop delay in hz
     message_bus:
