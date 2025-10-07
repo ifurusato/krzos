@@ -43,6 +43,7 @@ kros:
             cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
             stop_delay_s:                   3              # how many seconds to wait before cruising again
             loop_delay_ms:                 80              # asyncio loop delay in milliseconds
+            deadband_threshold:             0.10           # don't drive motors slower than this
             loop_freq_hz:                   1              # main loop delay in hz
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
@@ -165,8 +166,6 @@ kros:
             lux_threshold:                200.0            # threshold of light/dark
         distance_sensor:       
             pin:                             18            # the input pin
-            max_distance:                   300            # maximum distance in mm
-            min_distance:                    50            # minimum distance in mm
             timeout:                          1            # time in seconds to consider sensor as timed out 
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 5            # number of samples to use for smoothing
@@ -187,8 +186,10 @@ kros:
             smoothing_window:                 5            # window size for moving average
             sigmoid_d0:                     150            # sigmoid inflection point (mm)
             sigmoid_k:                       40            # sigmoid steepness
+            max_distance:                  1000            # maximum distance in mm of VL53L5CX (actual range is 4m)
+            min_distance:                    80            # minimum distance in mm of VL53L5CX
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            easing:                'LOGARITHMIC'           # normalisation easing formula
+            easing:                     'LINEAR'           # normalisation easing formula
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)

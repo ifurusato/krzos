@@ -14,6 +14,7 @@ import sys, traceback
 import time
 from threading import Thread
 from threading import Event as ThreadEvent
+from math import isclose
 import asyncio
 from colorama import init, Fore, Style
 init()
@@ -58,8 +59,7 @@ class Roam(Behaviour):
         self._post_delay     = 500
         self._task           = None 
         self._stop_delay     = _cfg.get('stop_delay_s', 3)  # seconds, configurable
-        self._resume_after   = None
-        self._was_fully_stopped = False
+        self._deadband_threshold = _cfg.get('deadband_threshold', 0.05) # for multiplier
         self._roam_distance  = -1
         # motor control lambdas
         self._port_multiplier  = 1.0 # multiplier for the port motors
@@ -186,60 +186,29 @@ class Roam(Behaviour):
 
     def _update_motor_multipliers(self, roam_distance):
         '''
-        Linearly scales motor multipliers from 1.0 (far) to 0.0 (close).
+        Linearly scales motor multipliers from 1.0 (far) to 0.0 (close),
+        with a deadband near zero to prevent jitter.
         '''
         min_d = self._roam_sensor.min_distance
         max_d = self._roam_sensor.max_distance
-        if roam_distance is None or roam_distance <= min_d:
-            multiplier = 0.0
-        elif roam_distance >= max_d:
-            multiplier = 1.0
-        else:
-            multiplier = (roam_distance - min_d) / float(max_d - min_d)
-            multiplier = max(0.0, min(multiplier, 1.0))
-        self._port_multiplier = multiplier
-        self._stbd_multiplier = multiplier
 
-    def x_update_motor_multipliers(self, roam_distance):
-        '''
-        Adjusts motor multipliers with a fixed post-stop delay,
-        only when the robot actually comes to a full stop.
-        '''
-        now = time.time()
-        min_d = self._roam_sensor.min_distance
-        max_d = self._roam_sensor.max_distance
-        delay = self._stop_delay
-        # check if robot is fully stopped
-        if roam_distance is not None and roam_distance <= min_d:
-            self._port_multiplier = 0.0
-            self._stbd_multiplier = 0.0
-            self._resume_after = None
-            self._was_fully_stopped = True
-            return
-        # if robot was fully stopped and can now move, start delay
-        # only do this if we were truly stopped
-        if self._was_fully_stopped and self._resume_after is None:
-            self._resume_after = now + delay
-            self._log.info("obstacle cleared after stop, waiting {} seconds before resuming movement.".format(delay))
-        # if in post-stop delay, hold multipliers at 0 until delay ends
-        if self._resume_after is not None:
-            if now < self._resume_after:
-                self._port_multiplier = 0.0
-                self._stbd_multiplier = 0.0
-                self._log.debug("Waiting {:.1f}/{:.1f}s before resuming.".format(self._resume_after - now, delay))
-                return
-            else:
-                self._resume_after = None
-        # normal operation
         if roam_distance is None or roam_distance >= max_d:
+            print('mult=1')
             multiplier = 1.0
+        elif roam_distance <= min_d:
+            print('mult=0')
+            multiplier = 0.0
         else:
             multiplier = (roam_distance - min_d) / float(max_d - min_d)
             multiplier = max(0.0, min(multiplier, 1.0))
+            # apply deadband near zero
+            if isclose(multiplier, 0.0, abs_tol=self._deadband_threshold):
+                print('mult={:4.2f} (in deadband)'.format(multiplier))
+                multiplier = 0.0
+            else:
+                print('mult={:4.2f}'.format(multiplier))
         self._port_multiplier = multiplier
         self._stbd_multiplier = multiplier
-        # reset flag
-        self._was_fully_stopped = False
 
     @property
     def roam_distance(self):
