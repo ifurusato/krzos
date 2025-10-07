@@ -34,7 +34,7 @@ def test_extclock():
     global pulse_count
     __log.info(Style.BRIGHT + "testing if external clock is generating a signal…")
 
-    INPUT_PIN = 18
+    INPUT_PIN = 23
 
     # target frequency and tolerance
     TARGET_FREQUENCY   = 20.0 # Hz

@@ -168,9 +168,7 @@ kros:
             min_distance:                    50            # minimum distance in mm
             easing:                'LOGARITHMIC'           # normalisation easing formula
         distance_sensor:       
-            pin_port:                         0            # the port input pin
-            pin_cntr:                        23            # the center input pin
-            pin_stbd:                         0            # the starboard input pin
+            pin:                             18            # the input pin
             timeout:                          1            # time in seconds to consider sensor as timed out 
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 5            # number of samples to use for smoothing
@@ -210,7 +208,7 @@ kros:
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
         irq_clock:                                         # external clock
-            pin:                             18            # GPIO pin connected to an external clock source
+            pin:                             23            # GPIO pin connected to an external clock source
             freq_divider:                    50            # tick divisor for lower frequency callback
         monitor:
             i2c_port:                         0
