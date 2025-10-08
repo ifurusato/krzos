@@ -7,15 +7,11 @@
 #
 # author:   Murray Altheim
 # created:  2020-05-19
-# modified: 2025-05-08
-#
+# modified: 2025-10-08
 
 import asyncio
 from colorama import init, Fore, Style
 init()
-
-import core.globals as globals
-globals.init()
 
 from core.logger import Logger, Level
 from core.event import Event
@@ -164,7 +160,7 @@ class DistanceSensorsPublisher(Publisher):
             for _sensor in self._sensors:
                 _sensor.stop()
             if _exit_flag:
-                _component_registry = globals.get('component-registry')
+                _component_registry = Component.get_registry()
                 _krzos = _component_registry.get('krzos')
                 _krzos.shutdown()
 

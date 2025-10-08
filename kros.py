@@ -27,9 +27,6 @@ from pathlib import Path
 from colorama import init, Fore, Style
 init()
 
-import core.globals as globals
-globals.init()
-
 from core.logger import Logger, Level
 from core.event import Event, Group
 from core.component import Component
@@ -575,9 +572,7 @@ def parse_args(passed_args=None):
             print(Fore.CYAN + '{}'.format(parser.format_help()) + Style.RESET_ALL)
             return -1
         else:
-            globals.put('log-to-file', args.log)
             return args
-
 
     except NotImplementedError as nie:
         _log.error('unrecognised log level \'{}\': {}'.format(args.level, nie))

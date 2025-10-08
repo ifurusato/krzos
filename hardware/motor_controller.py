@@ -19,9 +19,6 @@ from threading import Thread
 from colorama import init, Fore, Style
 init()
 
-import core.globals as globals
-globals.init()
-
 from core.component import Component
 from core.direction import Direction
 from core.orientation import Orientation

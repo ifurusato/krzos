@@ -10,17 +10,16 @@
 # modified: 2025-10-07
 
 import time
+import warnings
 from threading import Thread
 from collections import deque
 import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
 init()
 
-import core.globals as globals
-globals.init()
-
 from core.logger import Logger, Level
 from core.component import Component
+from core.util import Util
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensor(Component):
@@ -176,7 +175,13 @@ class DistanceSensor(Component):
         Disable the sensor and clean up resources.
         '''
         self.stop()
-        GPIO.cleanup(self._pin)
+        # we know of this warning so make it pretty
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", RuntimeWarning)
+            GPIO.cleanup(self._pin)
+            for warning in w:
+                msg = Util.ellipsis('{}'.format(warning.message), 33)
+                self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
         Component.disable(self)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

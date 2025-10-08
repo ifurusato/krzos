@@ -581,8 +581,6 @@ class MessageBus(Component):
         '''
         if self.closed:
             self._log.warning('already closed.')
-        elif self._closing:
-            self._log.warning('already closing.')
         elif not self.enabled:
             self._log.warning('already disabled.')
         else:
@@ -596,6 +594,9 @@ class MessageBus(Component):
                 [_subscriber.close() for _subscriber in self.subscribers]
             self.clear_tasks()
             self.clear_queue()
+            if self.loop and self.loop.is_running():
+                fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
+                fut.result()
             _nil = self._close_message_bus()
             time.sleep(0.1)
             self._log.info('disabled.')
@@ -616,7 +617,7 @@ class MessageBus(Component):
             self._log.warning('already closing.')
         else:
             self._log.info('closing…')
-            Component.close(self) # will call disable()
+            Component.close(self) # will set self._closing True and call disable()
             self._closing = False
             self._log.info('closed.')
 

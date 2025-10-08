@@ -1,4 +1,4 @@
-# configuration for the VL53L0X Proximity Sensor Array
+# configuration for the Radiozoa VL53L0X Proximity Sensor Array
 
 kros:
   hardware:
