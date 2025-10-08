@@ -278,12 +278,17 @@ class Roam(Behaviour):
         if self._motor_controller:
             self._motor_controller.disable()
         Component.disable(self)
-        self._log.info("disabled.")
+        self._log.info(Fore.YELLOW + 'disabled.')
 
     def _shutdown(self):
         self._log.info("shutting down tasks and event loop…")
         if not self._task.done():
             self._task.cancel()
         self._loop_instance.stop()
+        self._log.info(Fore.YELLOW + 'shut down complete.')
+
+    def close(self):
+        super().close()
+        self._log.info(Fore.YELLOW + 'closed.')
 
 #EOF
