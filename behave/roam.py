@@ -275,6 +275,9 @@ class Roam(Behaviour):
         if self._loop_instance:
             self._loop_instance.stop()
             self._loop_instance.call_soon_threadsafe(self._shutdown)
+            # wait for the thread to finish
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=1.0)
         if self._motor_controller:
             self._motor_controller.disable()
         Component.disable(self)
@@ -282,9 +285,16 @@ class Roam(Behaviour):
 
     def _shutdown(self):
         self._log.info("shutting down tasks and event loop…")
-        if not self._task.done():
-            self._task.cancel()
+        try:
+            # cancel all tasks
+            tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
+            for task in tasks:
+                task.cancel()
+            self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        except Exception as e:
+            self._log.error("{} raised during shutdown: {}".format(type(e), e))
         self._loop_instance.stop()
+        self._loop_instance.close()
         self._log.info(Fore.YELLOW + 'shut down complete.')
 
     def close(self):

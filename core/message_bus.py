@@ -447,9 +447,8 @@ class MessageBus(Component):
     # exception handling ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def handle_exception(self, loop, context):
-        print('🐹 a.')
         self._log.error('handle exception on loop: {}'.format(loop))
-        print('🐹 b. {}'.format(traceback.format_exc()))
+#       print('stack trace; {}'.format(traceback.format_exc()))
         # context["message"] will always be there; but context["exception"] may not
         _exception = context.get('exception', context['message'])
         if _exception != None:
@@ -460,7 +459,6 @@ class MessageBus(Component):
             asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
         else:
             self._log.warning("loop already shut down.")
-        print('🐹 c.')
 
     # shutdown ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -490,7 +488,7 @@ class MessageBus(Component):
         self._log.info('shutting down…')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def __close_message_bus(self):
+    def _close_message_bus(self):
         '''
         This method is only to be called by the close method, used when
         shutting down services.
@@ -500,13 +498,13 @@ class MessageBus(Component):
         try:
             if self.loop:
                 if self.loop.is_running():
-                    self._log.info('stopping event loop…')
+                    self._log.info(Fore.YELLOW + 'stopping event loop…')
                     self.loop.stop()
-                    self._log.info('event loop stopped.')
+                    self._log.info(Fore.YELLOW + 'event loop stopped.')
                 if not self.loop.is_running() and not self.loop.is_closed():
-                    self._log.info('closing event loop…')
+                    self._log.info(Fore.YELLOW + 'closing event loop…')
                     self.loop.close()
-                    self._log.info('event loop closed.')
+                    self._log.info(Fore.YELLOW + 'event loop closed.')
             else:
                 self._log.warning('no message bus event loop!')
         except Exception as e:
@@ -562,7 +560,7 @@ class MessageBus(Component):
             for s in signals:
                 self._loop.add_signal_handler(
                     s, lambda s = s: asyncio.create_task(self.shutdown(s), name='shutdown'),)
-#           self._loop.set_exception_handler(self.handle_exception)
+            self._loop.set_exception_handler(self.handle_exception)
             self._loop.create_task(self._start_consuming(), name='__event_loop__')
         if not self._loop.is_running():
             self._log.info('starting asyncio task loop…')
@@ -598,7 +596,7 @@ class MessageBus(Component):
                 [_subscriber.close() for _subscriber in self.subscribers]
             self.clear_tasks()
             self.clear_queue()
-            _nil = self.__close_message_bus()
+            _nil = self._close_message_bus()
             time.sleep(0.1)
             self._log.info('disabled.')
 
