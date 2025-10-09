@@ -3,7 +3,7 @@
 kros:
   hardware:
     vl53l0x:
-      i2c_bus_number:  0       # use alternate I2C bus 0
+      i2c_bus_number:  1       # use 1 or alternate I2C bus 0
       ioe_i2c_address: 0x18    # if the IO Expander is available it will be used
       devices:
         0:
@@ -18,31 +18,31 @@ kros:
           xshut:       8       # white:red (GPIO 26)
         2:
           label:      'E2'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x32
           xshut:       9       # grey:green (GPIO 20)
         3:
           label:      'SE3'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x33
-          xshut:       10      # white:green (GPIO 19)
+          xshut:       10      # white:green (GPIO 19) 10
         4:
           label:      'S4'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x34
-          xshut:       11      # grey:blue (GPIO 16)
+          xshut:       11      # grey:blue (GPIO 16) 11
         5:
           label:      'SW5'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x35
-          xshut:       12     # white:blue (GPIO 6)
+          xshut:       12     # white:blue (GPIO 6) 12
         6:
           label:      'W6'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x36
-          xshut:       13      # grey:grey (GPIO 12)
+          xshut:       13      # grey:grey (GPIO 12) 13
         7:
           label:      'NW7'
-          enabled:     False
+          enabled:     True
           i2c_address: 0x37
-          xshut:       14     # white:white (GPIO 5)
+          xshut:       14     # white:white (GPIO 5) 14

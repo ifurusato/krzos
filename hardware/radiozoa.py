@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-08
-# modified: 2025-09-08
-#
+# modified: 2025-10-08
 
 import sys
 from threading import Thread, Lock, Event
