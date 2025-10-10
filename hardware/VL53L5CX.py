@@ -1,10 +1,13 @@
+# note: this is a modification of the original VL53L5CX library,
+#       which includes better handling of KeyboardInterrupt and
+#       shutting down the sensor (using a new close method).
 
 import time
 import sysconfig
+from threading import Event
 import pathlib
 from smbus2 import SMBus, i2c_msg
 from ctypes import CDLL, CFUNCTYPE, POINTER, Structure, byref, c_int, c_int8, c_uint8, c_int16, c_uint16, c_uint32
-
 
 __version__ = '0.0.3'
 
@@ -53,7 +56,9 @@ _I2C_WR_FUNC = CFUNCTYPE(c_int, c_uint8, c_uint16, POINTER(c_uint8), c_uint32)
 _SLEEP_FUNC = CFUNCTYPE(c_int, c_uint32)
 
 # Path to the library dir
-_PATH = pathlib.Path(__file__).parent.parent.absolute()
+#_PATH = pathlib.Path(__file__).parent.parent.absolute()
+# local copy:
+_PATH = pathlib.Path(__file__).parent.absolute()
 
 # System OS/Arch dependent module name suffix
 _SUFFIX = sysconfig.get_config_var('EXT_SUFFIX')
@@ -91,7 +96,6 @@ class VL53L5CX_ResultsData(Structure):
         ("motion_indicator", VL53L5CX_MotionData)
     ]
 
-
 class VL53L5CX:
     def __init__(self, i2c_addr=DEFAULT_I2C_ADDRESS, i2c_dev=None, skip_init=False):
         """Initialise VL53L5CX.
@@ -102,43 +106,14 @@ class VL53L5CX:
         """
         self._configuration = None
         self._motion_configuration = None
-
-        def _i2c_read(address, reg, data_p, length):
-            msg_w = i2c_msg.write(address, [reg >> 8, reg & 0xff])
-            msg_r = i2c_msg.read(address, length)
-            self._i2c.i2c_rdwr(msg_w, msg_r)
-
-            for index in range(length):
-                data_p[index] = ord(msg_r.buf[index])
-
-            return 0
-
-        def _i2c_write(address, reg, data_p, length):
-            # Copy the ctypes pointer data into a Python list
-            data = []
-            for i in range(length):
-                data.append(data_p[i])
-
-            for offset in range(0, length, _I2C_CHUNK_SIZE):
-                chunk = data[offset:offset + _I2C_CHUNK_SIZE]
-                msg_w = i2c_msg.write(address, [(reg + offset) >> 8, (reg + offset) & 0xff] + chunk)
-                self._i2c.i2c_rdwr(msg_w)
-
-            return 0
-
-        def _sleep(ms):
-            time.sleep(ms / 1000.0)
-            return 0
-
+        self._exit_event = Event()
         self._i2c = i2c_dev or SMBus(1)
-        self._i2c_rd_func = _I2C_RD_FUNC(_i2c_read)
-        self._i2c_wr_func = _I2C_WR_FUNC(_i2c_write)
-        self._sleep_func = _SLEEP_FUNC(_sleep)
+        self._i2c_rd_func = _I2C_RD_FUNC(self._i2c_read)
+        self._i2c_wr_func = _I2C_WR_FUNC(self._i2c_write)
+        self._sleep_func = _SLEEP_FUNC(self._sleep)
         self._configuration = _VL53.get_configuration(i2c_addr << 1, self._i2c_rd_func, self._i2c_wr_func, self._sleep_func)
-
         if not self.is_alive():
             raise RuntimeError(f"VL53L5CX not detected on 0x{i2c_addr:02x}")
-
         if not skip_init:
             if not self.init():
                 raise RuntimeError("VL53L5CX init failed!")
@@ -147,11 +122,60 @@ class VL53L5CX:
         """Initialise VL53L5CX."""
         return _VL53.vl53l5cx_init(self._configuration) == STATUS_OK
 
-    def __del__(self):
+    def _i2c_read(self, address, reg, data_p, length):
+        try:
+            msg_w = i2c_msg.write(address, [reg >> 8, reg & 0xff])
+            msg_r = i2c_msg.read(address, length)
+            self._i2c.i2c_rdwr(msg_w, msg_r)
+            for index in range(length):
+                data_p[index] = ord(msg_r.buf[index])
+            return 0
+        except KeyboardInterrupt:
+            self._exit_event.set()
+            return 1
+
+    def _i2c_write(self, address, reg, data_p, length):
+        # copy the ctypes pointer data into a Python list
+        try:
+            data = []
+            for i in range(length):
+                data.append(data_p[i])
+            for offset in range(0, length, _I2C_CHUNK_SIZE):
+                chunk = data[offset:offset + _I2C_CHUNK_SIZE]
+                msg_w = i2c_msg.write(address, [(reg + offset) >> 8, (reg + offset) & 0xff] + chunk)
+                self._i2c.i2c_rdwr(msg_w)
+            return 0
+        except KeyboardInterrupt:
+            self._exit_event.set()
+            return 1
+
+    def _sleep(self, ms):
+        total = ms / 1000.0
+        interval = 0.01
+        waited = 0.0
+        while waited < total:
+            try:
+                if self._exit_event.is_set():
+                    return 1  # interrupted
+                time.sleep(min(interval, total - waited))
+                waited += interval
+            except KeyboardInterrupt:
+                self._exit_event.set()
+                return 1
+        return 0
+
+    def _cleanup(self):
+        self._exit_event.set()
         if self._configuration:
             _VL53.cleanup_configuration(self._configuration)
         if self._motion_configuration:
             _VL53.cleanup_motion_configuration(self._motion_configuration)
+
+    def close(self):
+        self._cleanup()
+
+    def __del__(self):
+        self._cleanup()
 
     def enable_motion_indicator(self, resolution=64):
         """Enable motion indicator.

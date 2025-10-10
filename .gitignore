@@ -210,4 +210,5 @@ __marimo__/
 archive/
 docs/
 tests/
-
+# include (don't ignore)
+!hardware/vl53l5cx_ctypes.cpython-311-aarch64-linux-gnu.so

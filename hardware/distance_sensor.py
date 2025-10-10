@@ -56,6 +56,7 @@ class DistanceSensor(Component):
         self._window = deque(maxlen=_smoothing_window) if self._smoothing else None
         self._loop_interval   = _cfg.get('loop_interval') # interval between distance polling, in seconds
         self._distance        = -1
+        self._disable_thread  = True # don't permit thread to start
         self._thread          = None
         self._running         = False
         self._use_message_bus = False
@@ -163,6 +164,8 @@ class DistanceSensor(Component):
         '''
         Component.enable(self)
         if self.enabled:
+            if self._disable_thread:
+                raise Exception('thread use is disabled.')
             self._running = True
             self._thread = Thread(name='sensor-loop', target=self._sensor_loop)
             self._thread.start()

@@ -14,10 +14,10 @@ import numpy as np
 from colorama import init, Fore, Style
 init()
 
-import vl53l5cx_ctypes as vl53l5cx
-from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
-#import hardware.VL53L5CX as vl53l5cx
-#from hardware.VL53L5CX import RANGING_MODE_CONTINUOUS
+#import vl53l5cx_ctypes as vl53l5cx
+#from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
+import hardware.VL53L5CX as vl53l5cx
+from hardware.VL53L5CX import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
 from core.logger import Logger, Level
@@ -186,6 +186,7 @@ class Vl53l5cxSensor(Component):
     def close(self):
         if not self.closed:
             self._vl53.stop_ranging()
+            self._vl53.close() # note: custom method in local copy
             super().close()
             self._log.info('VL53L5CX hardware closed.')
         else:
