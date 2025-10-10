@@ -276,7 +276,7 @@ class BehaviourManager(Subscriber):
         Enable the behaviour manager and all behaviours.
         '''
         self._log.info('enabling behaviour manager and all behaviours…')
-        self.release_all_behaviours()
+#       self.release_all_behaviours()
         self.enable_all_behaviours()
         Subscriber.enable(self)
 
@@ -286,7 +286,7 @@ class BehaviourManager(Subscriber):
         Disable the behaviour manager and all behaviours.
         '''
         self._log.info('disabling behaviour manager and all behaviours…')
-        self.suppress_all_behaviours()
+#       self.suppress_all_behaviours()
         self.disable_all_behaviours()
         Subscriber.disable(self)
 

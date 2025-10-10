@@ -466,6 +466,7 @@ class MessageBus(Component):
         '''
         Cleanup tasks tied to the service's shutdown.
         '''
+        print("                             🍿🍿🍿🍿🍿🍿🍿🍿🍿  ")
         if self._closing:
             self._log.warning('shutdown procedure already underway.')
         print('') # on Ctrl-C

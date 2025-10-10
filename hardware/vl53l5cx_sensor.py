@@ -16,6 +16,8 @@ init()
 
 import vl53l5cx_ctypes as vl53l5cx
 from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
+#import hardware.VL53L5CX as vl53l5cx
+#from hardware.VL53L5CX import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
 from core.logger import Logger, Level

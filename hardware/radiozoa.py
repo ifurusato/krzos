@@ -189,8 +189,8 @@ class Radiozoa(Component):
         Coroutine to poll all sensors at regular intervals and update the internal distances list.
         '''
         self._log.info(Fore.GREEN + 'start polling sensors…')
-        while not self._polling_stop_event.is_set():
-#           self._log.info(Fore.WHITE + 'polling sensors…')
+        while self.enabled and not self._polling_stop_event.is_set():
+            self._log.info('polling sensors…; stop event: {}'.format(self._polling_stop_event.is_set()))
             distances = [None for _ in range(self._sensor_count)]
             _start_time = dt.now()
             for sensor in self._sensors:
@@ -269,6 +269,7 @@ class Radiozoa(Component):
         '''
         Stops the polling thread and asyncio loop.
         '''
+        self._log.info(' 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 ')
         self._polling_stop_event.set()
         if self._polling_loop:
             self._polling_loop.call_soon_threadsafe(self._polling_loop.stop)
@@ -317,17 +318,25 @@ class Radiozoa(Component):
         print(msg)
 
     # ...
+    def disable(self):
+        self._log.info('disabling…')
+        self._log.info(' 🎀 🎀 🎀 🎀 🎀 ')
+        super().disable()
+        self._log.info(' 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 ')
 
     def close(self):
         self._log.info('closing…')
+        self._polling_stop_event.set()
         if self.closed:
+            self._log.info('a.  🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀 ')
             self._log.warning('already closed.')
         else:
+            self._log.info('b.  🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀 ')
             self._log.info('closing…')
             try:
+                super().close()
                 self._stop_ranging()
                 self._stop_polling()
-                super().close()
                 self._log.info('closed.')
             except Exception as e:
                 self._log.error("{} raised closing radiozoa: {}".format(type(e), e))

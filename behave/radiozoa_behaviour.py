@@ -53,7 +53,10 @@ class RadiozoaBehaviour(Behaviour):
         _component_registry = Component.get_registry()
         self._radiozoa = _component_registry.get(Radiozoa.NAME)
         if self._radiozoa is None:
+            self._log.info(Fore.WHITE + 'creating Radiozoa…                                     xxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
             self._radiozoa = Radiozoa(config, level=Level.INFO)
+        else:
+            self._log.info(Fore.WHITE + 'using existing Radiozoa.                                zzzzzzzzzzzzzzzzzzzzzzzzzzzzz ')
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
