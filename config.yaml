@@ -247,6 +247,50 @@ kros:
             loop_delay:                       0.01         # main loop delay was sleep(0.01) or 1/100th second, or 10ms. 50ms is the delay for 20Hz, so 10ms is 5x 20Hz or 100Hz.
             suppress_horiz_events:         True            # ignore horizontal joystick events
             loop_freq_hz:                   100            # polling loop frequency (Hz)
+        radiozoa:
+            i2c_bus_number:                   1            # use I2C1 or alternate I2C0
+            ioe_i2c_address:               0x18            # if the IO Expander is available it will be used
+            devices:
+                0:
+                    label:      'N0'
+                    enabled:     True
+                    i2c_address: 0x30
+                    xshut:       7                         # grey:red (GPIO 21)
+                1:
+                    label:      'NE1'
+                    enabled:     True
+                    i2c_address: 0x31
+                    xshut:       8                         # white:red (GPIO 26)
+                2:
+                    label:      'E2'
+                    enabled:     True
+                    i2c_address: 0x32
+                    xshut:       9                         # grey:green (GPIO 20)
+                3:
+                    label:      'SE3'
+                    enabled:     True
+                    i2c_address: 0x33
+                    xshut:       10                        # white:green (GPIO 19) 10
+                4:
+                    label:      'S4'
+                    enabled:     True
+                    i2c_address: 0x34
+                    xshut:       11                        # grey:blue (GPIO 16) 11
+                5:
+                    label:      'SW5'
+                    enabled:     True
+                    i2c_address: 0x35
+                    xshut:       12                        # white:blue (GPIO 6) 12
+                6:
+                    label:      'W6'
+                    enabled:     True
+                    i2c_address: 0x36
+                    xshut:       13                        # grey:grey (GPIO 12) 13
+                7:
+                    label:      'NW7'
+                    enabled:     True
+                    i2c_address: 0x37
+                    xshut:       14                        # white:white (GPIO 5) 14
         devices:                                           # set of availale i2c devices
           - address:                       0x0C
             name:        "Digital Potentiometer"

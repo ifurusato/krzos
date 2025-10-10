@@ -176,8 +176,7 @@ class Diagnostics:
         except subprocess.CalledProcessError:
             sys.exit(1)
         finally:
-            if not there_were_errors:
-                self._led_control.cleanup()
+            self._led_control.cleanup()
             _elapsed_ms = int((time.monotonic() - _start_time) * 1000)
             self._log.info('diagnostics complete: {}ms elapsed.'.format(_elapsed_ms))
 

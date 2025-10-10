@@ -44,9 +44,9 @@ class DistanceSensor(Component):
         :param level:         the logging Level
         '''
         self._log = Logger(DistanceSensor.NAME, level)
-        Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None:
             raise ValueError('no configuration provided.')
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         _cfg = config['kros'].get('hardware').get('distance_sensor')
         self._pin = _cfg.get('pin') # pin connected to the center sensor
         self._task_name = '__distance-sensor-loop'

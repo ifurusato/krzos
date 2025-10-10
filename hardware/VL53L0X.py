@@ -101,11 +101,12 @@ _I2C_WRITE_FUNC = CFUNCTYPE(c_int, c_ubyte, c_ubyte, POINTER(c_ubyte), c_ubyte)
 
 class VL53L0X:
     """VL53L0X ToF."""
-    def __init__(self, i2c_bus=None, i2c_address=0x29, tca9548a_num=255, tca9548a_addr=0):
+    def __init__(self, i2c_bus=None, i2c_address=0x29, label='tof', tca9548a_num=255, tca9548a_addr=0):
         """Initialize the VL53L0X ToF Sensor from ST"""
         self._log = Logger('vl53l0x-0x{:02X}'.format(i2c_address), level=Level.INFO)
 #       self._i2c_bus_number = i2c_bus_number
         self._i2c_address = i2c_address
+        self._label = label
         self._log.debug('creating sensor at 0x{:02X}…'.format(i2c_address))
         self._tca9548a_num = tca9548a_num
         self._tca9548a_addr = tca9548a_addr
@@ -120,7 +121,7 @@ class VL53L0X:
         self.ADDR_I2C_ID_LOW = 0x19 # Write serial number low byte for I2C address unlock
         self.ADDR_I2C_SEC_ADDR = 0x8a # Write new I2C address after unlock
         self._get_tof_library()
-        self._log.info('sensor ready at 0x{:02X}…'.format(self._i2c_address))
+        self._log.info('{} sensor ready at 0x{:02X}…'.format(self._label, self._i2c_address))
 
     @property
     def i2c_address(self):

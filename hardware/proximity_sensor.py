@@ -11,10 +11,9 @@
 #
 
 import time
+import traceback
+from datetime import datetime as dt
 import RPi.GPIO as GPIO
-from colorama import init, Fore, Style
-init()
-
 import ioexpander as io
 
 from hardware.VL53L0X import VL53L0X, Vl53l0xAccuracyMode
@@ -27,19 +26,20 @@ class ProximitySensor(object):
     Encapsulates a single VL53L0X proximity sensor.
     Initializes the sensor with a configuration information.
 
-    If an IO Expander is supplied it is used to implement the XSHUT
-    functionality, otherwise it will be implemented using GPIO pins.
+    The previous implementation included use of the VL53L0X's XSHUT pin
+    to enable/disable the sensor in order to change its I2C address.
+    This has been removed from this class and the addesses are assumed
+    to have been configured elsewhere.
 
     Args:
 
         cardinal (Cardinal):   The enumeration of the cardinal direction of this sensor.
         i2c_bus:               The I2C bus used for connection.
         i2c_address (int):     The I2C address used for this sensor.
-        xshut_pin (int):       The pin (GPIO or IO Expander) used to shut down the sensor.
         enabled (boolean):     Whether or not to activate this sensor.
         level (Level):         The logging level for this sensor's logger.
     '''
-    def __init__(self, cardinal=None, i2c_bus=None, i2c_address=None, xshut_pin=None, ioe=None, enabled=False, level=Level.INFO):
+    def __init__(self, cardinal=None, i2c_bus=None, i2c_address=None, ioe=None, enabled=False, level=Level.INFO):
         self._cardinal    = cardinal
         self._id          = cardinal.id
         self._log = Logger('proximity-{}'.format(self._id), level=level)
@@ -47,23 +47,19 @@ class ProximitySensor(object):
         self._abbrev      = cardinal.abbrev
         self._i2c_bus     = i2c_bus 
         self._i2c_address = i2c_address
-        self._xshut_pin   = xshut_pin 
         self._ioe         = ioe
         self._enabled     = enabled
         self._is_ranging  = False
         self._active      = False # set True by connect()
-        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._tof         = None
         self._change_state_delay_s = 1.0
         try:
             if self._ioe:
-                self._ioe.set_mode(self._xshut_pin, io.OUT)
-                self._log.info('sensor {} ({}) ready using IOE.'.format(self._abbrev, self._id))
+                self._log.debug('sensor {} ({}) ready using IO Expander.'.format(self._abbrev, self._id))
             else:
                 GPIO.setwarnings(False)
                 GPIO.setmode(GPIO.BCM)
-                GPIO.setup(self._xshut_pin, GPIO.OUT)
-                self._log.info('sensor {} ({}) ready using GPIO.'.format(self._abbrev, self._id))
+                self._log.debug('sensor {} ({}) ready using GPIO.'.format(self._abbrev, self._id))
         except Exception as e:
             self._log.info('{} raised during pin setup: {}'.format(type(e).__name__, e))
             raise
@@ -100,13 +96,6 @@ class ProximitySensor(object):
         return self._i2c_address
 
     @property
-    def xshut_pin(self):
-        '''
-        Returns the sensor's configured XSHUT pin.
-        '''
-        return self._xshut_pin
-
-    @property
     def enabled(self):
         '''
         Returns whether the sensor is enabled.
@@ -129,64 +118,24 @@ class ProximitySensor(object):
 
     # connection ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def connect(self, i2c_scanner):
+    def connect(self):
         '''
         Creates the VL53L0X sensor object, changing its I2C address.
         This sets the active flag to True if the sensor is enabled.
 
         Returns True if the sensor is active.
         '''
-        self._log.debug('setup sensor {} ({}) at 0x{:02X}…'.format(self._abbrev, self._id, self._i2c_address))
         try:
-            self.startup();
-            self._tof = None
-            if i2c_scanner.has_hex_address([self.i2c_address]):
-                # the sensor can already be seen at the desired I2C address, so create it at that address
-                self._log.info(Fore.GREEN + 'create VL53L0X {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
-                self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self.i2c_address)
-                time.sleep(0.2)
-            else:
-                # otherwise instantiate at 0x29 and change the address.
-                self._log.info(Fore.MAGENTA + 'create VL53L0X {} at default address 0x29…'.format(self._abbrev))
-                self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=0x29)
-                self._log.info(Fore.MAGENTA + 'changing I2C address to 0x{:02X}…'.format(self._i2c_address))
-                self._tof.change_address(self._i2c_address)
-                self._log.info(Fore.MAGENTA + 'successfully changed I2C address to 0x{:02X}.'.format(self._i2c_address))
-                time.sleep(1)
-            if i2c_scanner.has_hex_address([self.i2c_address], force_scan=True):
-                self._log.info(Fore.WHITE + Style.BRIGHT + "HAS VL53L0X {} at default address 0x29…".format(self._abbrev))
-                if self._enabled:
-                    self._active = True
-            else:
-                self._log.info(Fore.WHITE + Style.BRIGHT + "DOESN'T HAVE VL53L0X {} at default address 0x29…".format(self._abbrev))
-                self._enabled = False # then just don't use it
-            self._log.info('sensor {} ready.'.format(self._abbrev))
+            self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._abbrev)
+            self._active = True
+            self._log.debug('sensor {} ready.'.format(self._abbrev))
         except Exception as e:
-            self._log.info('{} raised during setup of sensor {}: {}'.format(type(e).__name__, self._abbrev, e))
-            self.stop_ranging()
-            self.shutdown();
-            self._log.info(Style.DIM + '{} disabled.'.format(self._abbrev))
+            self._log.error('{} raised during setup of sensor {}: {}\n{}'.format(type(e).__name__, self._abbrev, e, traceback.format_exc()))
+            self.close()
+        finally:
+            self._log.debug('connect complete.')
         return self._active
-
-    def startup(self):
-        self._log.info(Fore.MAGENTA + 'enabling sensor {} ({}) on XSHUT pin {}…'.format(self._abbrev, self._id, self._xshut_pin))
-        if self._ioe:
-            self._log.info(Fore.MAGENTA + '😭 sensor {} ({}) STARTUP on XSHUT pin {}.'.format(self._abbrev, self._id, self._xshut_pin))
-            self._ioe.output(self._xshut_pin, io.HIGH)
-        else:
-            GPIO.output(self._xshut_pin, GPIO.HIGH)
-        time.sleep(self._change_state_delay_s)
-        self._log.info(Fore.MAGENTA + 'sensor {} ({}) enabled on XSHUT pin {}.'.format(self._abbrev, self._id, self._xshut_pin))
-
-    def shutdown(self):
-        self._log.info(Fore.MAGENTA + 'shutting down sensor {} ({})…'.format(self._abbrev, self._id))
-        if self._ioe:
-            self._log.info(Fore.MAGENTA + '😭 sensor {} ({}) SHUTDOWN on XSHUT pin {}.'.format(self._abbrev, self._id, self._xshut_pin))
-            self._ioe.output(self._xshut_pin, io.LOW)
-        else:
-            GPIO.output(self._xshut_pin, GPIO.LOW)
-#       time.sleep(self._change_state_delay_s)
-        self._log.info(Fore.MAGENTA + 'sensor {} ({}) shut down.'.format(self._abbrev, self._id))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -198,7 +147,11 @@ class ProximitySensor(object):
             int: The distance in millimeters, or -1 if an error occurred.
         '''
         if self._active:
-            return self._tof.get_distance()
+#           _start_time = dt.now()
+            _distance = self._tof.get_distance()
+#           _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+#           self._log.info('sensor poll complete: {}ms elapsed.'.format(_elapsed_ms))
+            return _distance
         raise Exception('cannot get distance: tof not active.')
 
     def start_ranging(self, mode=Vl53l0xAccuracyMode.BETTER):
@@ -212,6 +165,7 @@ class ProximitySensor(object):
             if not self._is_ranging:
                 self._tof.start_ranging(mode)
                 self._is_ranging = True
+                self._log.info('ranging started for sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
             else:
                 self._log.warning('sensor {} already ranging at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
         else:
@@ -222,13 +176,13 @@ class ProximitySensor(object):
         Stops ranging for the sensor.
         '''
         if self._enabled and self._active:
-            self._log.info(Fore.MAGENTA + 'stop ranging sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
             if not self._tof:
                 raise Exception('cannot stop ranging: sensor {} at 0x{:02X} does not exist.'.format(self._abbrev, self._i2c_address))
             if self._is_ranging:
                 self._tof.stop_ranging()
                 self._is_ranging = False
-                self._log.info(Fore.MAGENTA + 'ranging stopped on sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+                self._log.info('ranging stopped on sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
             else:
                 self._log.warning('sensor {} was not ranging at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
         else:
@@ -239,8 +193,8 @@ class ProximitySensor(object):
         Opens the sensor's ranging object.
         '''
         if self._tof:
-            self._log.info(Fore.MAGENTA + 'opening sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
-            _ = self._tof.open()
+            self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._tof.open()
         else:
             self._log.warning('cannot open: sensor {} at 0x{:02X} not available.'.format(self._abbrev, self._i2c_address))
 
@@ -248,15 +202,14 @@ class ProximitySensor(object):
         '''
         Stops ranging and shuts down the sensor.
         '''
-        self._log.info(Fore.MAGENTA + 'closing sensor {}…'.format(self._abbrev))
+        self._log.info('closing sensor {}…'.format(self._abbrev))
         try:
-            self.stop()
+            self.stop_ranging()
             if self._tof:
                 self._tof.close()
             self._enabled = False
         except Exception as e:
             self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._abbrev, self._i2c_address, e))
-            self.shutdown()
 
     def __str__(self):
         return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, xshut_pin={}, enabled={})".format(

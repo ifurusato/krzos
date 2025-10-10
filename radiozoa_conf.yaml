@@ -46,3 +46,4 @@ kros:
           enabled:     True
           i2c_address: 0x37
           xshut:       14     # white:white (GPIO 5) 14
+
