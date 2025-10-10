@@ -269,6 +269,43 @@ class Roam(Behaviour):
         if not self.enabled:
             self._log.warning("already disabled.")
             return
+        self._log.info("disabling roam…")
+        # 1. Signal coroutine to exit.
+        self._stop_event.set()
+        time.sleep(0.1)
+        if self._loop_instance:
+            # 2. Schedule task cleanup and stop the event loop thread-safely.
+            self._loop_instance.call_soon_threadsafe(self._shutdown)
+            self._loop_instance.call_soon_threadsafe(self._loop_instance.stop)
+            # 3. Wait for the loop thread to finish.
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=2.0)
+            # 4. Now it's safe to close the event loop.
+            self._loop_instance.close()
+        if self._motor_controller:
+            self._motor_controller.disable()
+        Component.disable(self)
+        self._log.info(Fore.YELLOW + 'disabled.')
+
+    def _shutdown(self):
+        self._log.info("shutting down tasks and event loop…")
+        try:
+            # cancel all tasks except those already done.
+            tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                self._loop_instance.run_until_complete(
+                    asyncio.gather(*tasks, return_exceptions=True)
+                )
+        except Exception as e:
+            self._log.error("{} raised during shutdown: {}".format(type(e), e))
+        self._log.info(Fore.YELLOW + 'shut down complete.')
+
+    def x_disable(self):
+        if not self.enabled:
+            self._log.warning("already disabled.")
+            return
         self._log.info("roam disabling…")
         self._stop_event.set()
         time.sleep(0.1)
@@ -283,7 +320,7 @@ class Roam(Behaviour):
         Component.disable(self)
         self._log.info(Fore.YELLOW + 'disabled.')
 
-    def _shutdown(self):
+    def x_shutdown(self):
         self._log.info("shutting down tasks and event loop…")
         try:
             # cancel all tasks
@@ -293,7 +330,7 @@ class Roam(Behaviour):
             self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        self._loop_instance.stop()
+#       self._loop_instance.stop()
         self._loop_instance.close()
         self._log.info(Fore.YELLOW + 'shut down complete.')
 

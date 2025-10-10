@@ -122,6 +122,14 @@ class BehaviourManager(Subscriber):
         if not self.closed:
             self._log.info('enable all behaviours…')
             for _key, _behaviour in self._behaviours.items():
+                behaviour_key = "release_{}_behaviour".format(_behaviour.name.lower())
+                release_flag  = self._config['kros']['behaviour'].get(behaviour_key, False)
+                if release_flag:
+                    _behaviour.release()
+                    self._log.info(Fore.MAGENTA + "{} behaviour released.".format(_behaviour.name))
+                else:
+                    _behaviour.suppress()
+                    self._log.info(Fore.MAGENTA + "{} behaviour suppressed.".format(_behaviour.name))
                 if not _behaviour.enabled:
                     _behaviour.enable()
                     self._log.info(Fore.MAGENTA + '{} behaviour enabled.'.format(_behaviour.name))
