@@ -50,22 +50,15 @@ class GamepadSubscriber(Subscriber):
         Pass the message on to the Arbitrator and acknowledge that it has been
         sent (by setting a flag in the message).
         '''
-        print('🍿 a. ')
         try:
             await self._message_bus.arbitrate(message.payload)
-            print('🍿 b. ')
             message.acknowledge_sent()
-            print('🍿 c. ')
             _value = message.payload.value
-            print('🍿 d. ')
             self._log.info('arbitrated message ' + Fore.WHITE + '{} '.format(message.name)
                     + Fore.CYAN + 'for event \'{}\' with value type: '.format(message.event.name)
                     + Fore.YELLOW + '{}'.format(type(_value)))
-            print('🍿 e. ')
         except Exception as e:
-            print('🍿 f. ')
             self._log.error('{} raised arbitrating message: {}\n{}'.format(type(e), e, traceback.format_exc()))
-            print('🍿 g. ')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
@@ -74,23 +67,15 @@ class GamepadSubscriber(Subscriber):
 
         :param message:  the message to process.
         '''
-        print('🎀 a. ')
         try:
             if message.gcd:
                 raise GarbageCollectedError('cannot process message: message has been garbage collected.')
-            print('🎀 b. ')
             _event = message.event
-            print('🎀 c. ')
             self._log.info('pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
-            print('🎀 d. ')
             await Subscriber.process_message(self, message)
-            print('🎀 e. ')
             self._log.info('post-processing message {}'.format(message.name))
-            print('🎀 f. ')
         except Exception as e:
-            print('🎀 g. ')
             self._log.error('{} raised processing message: {}\n{}'.format(type(e), e, traceback.format_exc()))
-            print('🎀 h. ')
 
 #EOF
 

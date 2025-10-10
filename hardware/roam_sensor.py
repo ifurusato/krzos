@@ -119,15 +119,16 @@ class RoamSensor(Component):
     def _get_vl53l5cx_front_distance(self):
         '''
         Returns the median distance from the central 4 pixels of the VL53L5CX grid.
+        Now reads the latest value from the queue (via Vl53l5cxSensor.get_distance_mm()).
         '''
         if not self._vl53l5cx.enabled:
             self._log.warning('VL53L5CX not enabled.')
             return None
-        data = self._vl53l5cx.get_distance_mm()
+        data = self._vl53l5cx.get_distance_mm()  # now non-blocking
         if data is None:
             self._log.warning('VL53L5CX returned no data.')
             return None
-        # Assume 8x8 grid, take rows 2,3 and cols 3,4 (0-indexed, for central 4 pixels)
+        # Assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
         try:
             grid = np.array(data).reshape((8, 8))
             center_rows = [3, 4]  # middle two rows
@@ -139,12 +140,10 @@ class RoamSensor(Component):
                 self._log.warning('No valid VL53L5CX center values.')
                 return None
             median = float(np.median(values))
-#           self._log.debug("VL53L5CX center median: {:.1f}mm".format(median))
             return median
         except Exception as e:
             self._log.error('Error extracting VL53L5CX center values: {}'.format(e))
             return None
-
 
     def _fuse(self, pwm_value, vl53_value):
         '''

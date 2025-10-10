@@ -110,7 +110,7 @@ class VL53L5CX:
         self._i2c = i2c_dev or SMBus(1)
         self._i2c_rd_func = _I2C_RD_FUNC(self._i2c_read)
         self._i2c_wr_func = _I2C_WR_FUNC(self._i2c_write)
-        self._sleep_func = _SLEEP_FUNC(self._sleep)
+        self._sleep_func  = _SLEEP_FUNC(self._sleep)
         self._configuration = _VL53.get_configuration(i2c_addr << 1, self._i2c_rd_func, self._i2c_wr_func, self._sleep_func)
         if not self.is_alive():
             raise RuntimeError(f"VL53L5CX not detected on 0x{i2c_addr:02x}")
@@ -121,33 +121,6 @@ class VL53L5CX:
     def init(self):
         """Initialise VL53L5CX."""
         return _VL53.vl53l5cx_init(self._configuration) == STATUS_OK
-
-    def _i2c_read(self, address, reg, data_p, length):
-        try:
-            msg_w = i2c_msg.write(address, [reg >> 8, reg & 0xff])
-            msg_r = i2c_msg.read(address, length)
-            self._i2c.i2c_rdwr(msg_w, msg_r)
-            for index in range(length):
-                data_p[index] = ord(msg_r.buf[index])
-            return 0
-        except KeyboardInterrupt:
-            self._exit_event.set()
-            return 1
-
-    def _i2c_write(self, address, reg, data_p, length):
-        # copy the ctypes pointer data into a Python list
-        try:
-            data = []
-            for i in range(length):
-                data.append(data_p[i])
-            for offset in range(0, length, _I2C_CHUNK_SIZE):
-                chunk = data[offset:offset + _I2C_CHUNK_SIZE]
-                msg_w = i2c_msg.write(address, [(reg + offset) >> 8, (reg + offset) & 0xff] + chunk)
-                self._i2c.i2c_rdwr(msg_w)
-            return 0
-        except KeyboardInterrupt:
-            self._exit_event.set()
-            return 1
 
     def _sleep(self, ms):
         total = ms / 1000.0
@@ -163,6 +136,32 @@ class VL53L5CX:
                 self._exit_event.set()
                 return 1
         return 0
+
+    def _i2c_read(self, address, reg, data_p, length):
+        try:
+            msg_w = i2c_msg.write(address, [reg >> 8, reg & 0xff])
+            msg_r = i2c_msg.read(address, length)
+            self._i2c.i2c_rdwr(msg_w, msg_r)
+            for index in range(length):
+                data_p[index] = ord(msg_r.buf[index])
+            return 0
+        except KeyboardInterrupt:
+            self._exit_event.set()
+            return 1
+
+    def _i2c_write(self, address, reg, data_p, length):
+        try:
+            data = []
+            for i in range(length):
+                data.append(data_p[i])
+            for offset in range(0, length, _I2C_CHUNK_SIZE):
+                chunk = data[offset:offset + _I2C_CHUNK_SIZE]
+                msg_w = i2c_msg.write(address, [(reg + offset) >> 8, (reg + offset) & 0xff] + chunk)
+                self._i2c.i2c_rdwr(msg_w)
+            return 0
+        except KeyboardInterrupt:
+            self._exit_event.set()
+            return 1
 
     def _cleanup(self):
         self._exit_event.set()

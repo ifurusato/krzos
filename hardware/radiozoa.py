@@ -269,7 +269,6 @@ class Radiozoa(Component):
         '''
         Stops the polling thread and asyncio loop.
         '''
-        self._log.info(' 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 ')
         self._polling_stop_event.set()
         if self._polling_loop:
             self._polling_loop.call_soon_threadsafe(self._polling_loop.stop)
@@ -320,18 +319,14 @@ class Radiozoa(Component):
     # ...
     def disable(self):
         self._log.info('disabling…')
-        self._log.info(' 🎀 🎀 🎀 🎀 🎀 ')
         super().disable()
-        self._log.info(' 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 🎀 ')
 
     def close(self):
         self._log.info('closing…')
         self._polling_stop_event.set()
         if self.closed:
-            self._log.info('a.  🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀 ')
             self._log.warning('already closed.')
         else:
-            self._log.info('b.  🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀    🎀 ')
             self._log.info('closing…')
             try:
                 super().close()

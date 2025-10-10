@@ -11,6 +11,8 @@
 
 import time
 import numpy as np
+import multiprocessing
+from multiprocessing import Process, Queue, Event
 from colorama import init, Fore, Style
 init()
 
@@ -49,6 +51,7 @@ class Vl53l5cxSensor(Component):
         self._floor_margin = _cfg.get('floor_margin', 50)
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
+        self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
         if _i2c_bus_number == 0:
             try:
@@ -67,6 +70,10 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         self._log.info('VL53L5CX hardware ready.')
+        # multiprocessing attributes
+        self._queue = Queue(maxsize=2)
+        self._stop_event = Event()
+        self._process = None
 
     @property
     def floor_margin(self):
@@ -97,9 +104,36 @@ class Vl53l5cxSensor(Component):
             self._non_floor_rows = non_floor_rows
         return self._non_floor_rows
 
+    def _polling_loop(self, queue, stop_event, poll_interval):
+        '''
+        Polls the VL53L5CX sensor as a separate process and puts results into the queue.
+        '''
+        self._vl53.start_ranging()
+        try:
+            while not stop_event.is_set():
+                if self._vl53.data_ready():
+                    data = self._vl53.get_data()
+                    try:
+                        queue.put(data.distance_mm, block=False)
+                    except Exception:
+                        pass
+                time.sleep(poll_interval)
+        except Exception as e:
+            print("VL53L5CX polling process error:", e)
+        finally:
+            self._vl53.stop_ranging()
+
     def enable(self):
         if not self.enabled:
-            self._vl53.start_ranging()
+            # Start multiprocessing polling process
+            if self._process is None or not self._process.is_alive():
+                self._stop_event.clear()
+                self._process = Process(
+                    target=self._polling_loop,
+                    args=(self._queue, self._stop_event, self._poll_interval),
+                    daemon=True
+                )
+                self._process.start()
             super().enable()
             self._calibrate_floor_rows()
             self._log.info('VL53L5CX hardware enabled and ranging.')
@@ -108,18 +142,20 @@ class Vl53l5cxSensor(Component):
 
     def get_distance_mm(self):
         '''
-        Wait for sensor data and return the grid as a flat list.
+        Gets the latest sensor data from the process queue (non-blocking).
         Only returns real data if enabled.
         '''
         if not self.enabled:
             self._log.warning('get_distance_mm called while sensor is not enabled.')
             return None
-        for _ in range(30):
-            if self._vl53.data_ready():
-                data = self._vl53.get_data()
-                return data.distance_mm
-            time.sleep(1 / 1000)
-        return None
+        # Drain queue to get the most recent value
+        value = None
+        while True:
+            try:
+                value = self._queue.get_nowait()
+            except Exception:
+                break
+        return value
 
     def _calibrate_floor_rows(self):
         self._log.info(Fore.WHITE + 'calibrating floor rows…')
@@ -177,6 +213,13 @@ class Vl53l5cxSensor(Component):
 
     def disable(self):
         if self.enabled:
+            # Stop the process if running
+            if self._process is not None and self._process.is_alive():
+                self._stop_event.set()
+                self._process.join(timeout=2)
+                if self._process.is_alive():
+                    self._process.terminate()
+                self._process = None
             self._vl53.stop_ranging()
             super().disable()
             self._log.info('VL53L5CX hardware disabled and stopped ranging.')
@@ -185,7 +228,7 @@ class Vl53l5cxSensor(Component):
 
     def close(self):
         if not self.closed:
-            self._vl53.stop_ranging()
+            self.disable()
             self._vl53.close() # note: custom method in local copy
             super().close()
             self._log.info('VL53L5CX hardware closed.')
