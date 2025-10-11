@@ -229,7 +229,7 @@ class RadiozoaSensor(Component):
         '''
         with self._distances_lock:
             if cardinals is None:
-                # Return all eight distances
+                # return all eight distances
                 return list(self._distances)
             else:
                 # Return only those specified by Cardinal enum values, in argument order

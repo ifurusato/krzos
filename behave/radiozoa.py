@@ -10,6 +10,7 @@
 # modified: 2025-10-11
 
 import time
+import numpy as np
 from threading import Thread, Event as ThreadEvent
 import asyncio
 from colorama import init, Fore, Style
@@ -37,11 +38,25 @@ class Radiozoa(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._default_speed = _cfg.get('default_speed', 1.0)
+        self._reversed  = False  # TODO load from config
+        self._verbose   = False
+        self._use_color = True
         # multipliers for each motor
         self._pfwd_multiplier = 1.0
         self._sfwd_multiplier = 1.0
         self._paft_multiplier = 1.0
         self._saft_multiplier = 1.0
+        # directional vectors
+        self._directions = np.array([
+            [0, 1],                      
+            [np.sqrt(2)/2, np.sqrt(2)/2],
+            [1, 0],
+            [np.sqrt(2)/2, -np.sqrt(2)/2],
+            [0, -1],
+            [-np.sqrt(2)/2, -np.sqrt(2)/2],
+            [-1, 0],
+            [-np.sqrt(2)/2, np.sqrt(2)/2]
+        ])
         # lambdas for each motor
         self._roam_pfwd_lambda = lambda speed: speed * self._pfwd_multiplier
         self._roam_sfwd_lambda = lambda speed: speed * self._sfwd_multiplier
@@ -126,7 +141,7 @@ class Radiozoa(Behaviour):
             self._log.debug("polling…")
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
-                self._log.info(Fore.GREEN + "all sensors out of range or unavailable.")
+                self._log.warning("all sensors out of range or unavailable.")
                 self._set_default_multipliers()
             else:
                 self._update_motor_multipliers(distances)
@@ -140,7 +155,92 @@ class Radiozoa(Behaviour):
         self._paft_multiplier = 1.0
         self._saft_multiplier = 1.0
 
+    def get_highlight_color(self, value):
+        """Return colorama color/style for multiplier legend."""
+        from colorama import Fore, Style
+        if value <= 0.1:
+            return Style.DIM
+        elif value <= 0.2:
+            return Fore.BLUE
+        elif value <= 0.3:
+            return Fore.GREEN
+        elif value <= 0.5:
+            return Fore.YELLOW
+        elif value <= 0.6:
+            return Fore.RED
+        else:  # 0.61 - 0.8
+            return Fore.MAGENTA
+
     def _update_motor_multipliers(self, distances):
+        """
+        Center robot in space using 8 sensor distances, no rotation.
+        Out-of-range or missing sensors (None, <= 0, > FAR_THRESHOLD) are treated as maximally open (FAR_THRESHOLD).
+        Motor speeds are scaled by self._default_speed.
+        """
+        # treat None, <= 0, or > FAR_THRESHOLD as FAR_THRESHOLD (max range, e.g., 1000mm)
+        D = np.array([
+            d if d is not None and d > 0 and d <= RadiozoaSensor.FAR_THRESHOLD
+            else RadiozoaSensor.FAR_THRESHOLD
+            for d in distances
+        ])
+        mean = np.mean(D)
+        errors = D - mean
+        movement = np.sum(errors[:, None] * self._directions, axis=0)
+        if self._reversed:
+            movement = -movement
+        # normalize vector to [-1, 1] range; avoid division by zero
+        max_abs = np.max(np.abs(movement)) if np.max(np.abs(movement)) > 1.0 else 1.0
+        vx, vy = movement / max_abs
+        # Mecanum mapping (no rotation)
+        pfwd = vy + vx
+        sfwd = vy - vx
+        paft = vy - vx
+        saft = vy + vx
+        # normalize so no motor exceeds [-1, 1]
+        max_motor = max(abs(pfwd), abs(sfwd), abs(paft), abs(saft), 1.0)
+        pfwd /= max_motor
+        sfwd /= max_motor
+        paft /= max_motor
+        saft /= max_motor
+        # scale by self._default_speed and clamp to [0, self._default_speed]
+        pfwd = np.clip(pfwd * self._default_speed, 0.0, self._default_speed)
+        sfwd = np.clip(sfwd * self._default_speed, 0.0, self._default_speed)
+        paft = np.clip(paft * self._default_speed, 0.0, self._default_speed)
+        saft = np.clip(saft * self._default_speed, 0.0, self._default_speed)
+        # set motor lambda multipliers
+        self._pfwd_multiplier = pfwd
+        self._sfwd_multiplier = sfwd
+        self._paft_multiplier = paft
+        self._saft_multiplier = saft
+        # display
+        if self._verbose:
+            if self._use_color:
+                self._log.info("multipliers: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
+                        self.get_highlight_color(self._pfwd_multiplier),
+                        self._pfwd_multiplier,
+                        Style.RESET_ALL,
+                        self.get_highlight_color(self._sfwd_multiplier),
+                        self._sfwd_multiplier,
+                        Style.RESET_ALL,
+                        self.get_highlight_color(self._paft_multiplier),
+                        self._paft_multiplier,
+                        Style.RESET_ALL,
+                        self.get_highlight_color(self._saft_multiplier),
+                        self._saft_multiplier,
+                        Style.RESET_ALL
+                    )
+                )
+            else:
+                self._log.info("multipliers: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
+                        self._pfwd_multiplier, self._sfwd_multiplier, self._paft_multiplier, self._saft_multiplier
+                    )
+                )
+        else:
+#           self._log.debug(Fore.BLACK + "…")
+            print(Fore.BLACK + "…" + Style.RESET_ALL)
+            pass
+
+    def x_update_motor_multipliers(self, distances):
         # Opposing sensor pairs: [N,S], [NE,SW], [E,W], [SE,NW]
         # Indices: N=0, NE=1, E=2, SE=3, S=4, SW=5, W=6, NW=7
         pairs = [(0,4), (1,5), (2,6), (3,7)]

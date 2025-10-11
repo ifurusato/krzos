@@ -119,6 +119,7 @@ class MotorController(Component):
         self._loop_thread    = None
         self._loop_enabled   = False
         self._event_counter  = itertools.count()
+        self._motor_loop_callback = None
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self.__callback      = None
         self._is_stopped     = True # used to capture state transitions
@@ -242,7 +243,7 @@ class MotorController(Component):
         no harm is done in calling it repeatedly.
         '''
         if self.enabled:
-            self._log.warning('already enabled.')
+            self._log.debug('already enabled.')
         else:
             Component.enable(self)
             if self._external_clock:
@@ -300,6 +301,14 @@ class MotorController(Component):
         return self._loop_enabled and self._loop_thread != None and self._loop_thread.is_alive()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def set_motor_loop_callback(self, callback):
+        '''
+        Sets the optional callback executed upon each motor loop. This should
+        return relatively quickly as to not affect the motor loop performance.
+        '''
+        self._motor_loop_callback = callback
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _motor_loop(self, f_is_enabled):
         '''
         The motors loop, which executes while the flag argument lambda is True.
@@ -322,6 +331,8 @@ class MotorController(Component):
                     if _count % 20 == 0:
                         self.print_info(_count)
                 self._state_change_check()
+                if self._motor_loop_callback is not None:
+                    self._motor_loop_callback()
                 self._rate.wait()
         except Exception as e:
             self._log.error('error in loop: {}\n{}'.format(e, traceback.format_exc()))
@@ -352,6 +363,8 @@ class MotorController(Component):
                 if _count % 10 == 0:
                     self.print_info(_count)
             self._state_change_check()
+            if self._motor_loop_callback is not None:
+                self._motor_loop_callback()
         else:
 #           self._log.warning('not enabled: external callback ignored.')
             pass
@@ -466,6 +479,7 @@ class MotorController(Component):
         '''
         Set all four motors speeds.
         '''
+        self._log.info(Fore.MAGENTA + 'set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
         self.set_motor_speed(Orientation.PFWD, pfwd_speed)
         self.set_motor_speed(Orientation.SFWD, sfwd_speed)
         self.set_motor_speed(Orientation.PAFT, paft_speed)
@@ -473,6 +487,7 @@ class MotorController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_differential_speeds(self, port_speed, stbd_speed):
+        self._log.info(Fore.MAGENTA + 'set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
         self.set_speeds(port_speed, stbd_speed, port_speed, stbd_speed)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -492,7 +507,14 @@ class MotorController(Component):
         particularly good idea.
         '''
         _speed = self._clamp(value)
-        if orientation is Orientation.PORT:
+        if orientation is Orientation.ALL:
+            self._port_speed = _speed
+            self.set_motor_speed(Orientation.PFWD, _speed)
+            self.set_motor_speed(Orientation.PAFT, _speed)
+            self._stbd_speed = _speed
+            self.set_motor_speed(Orientation.SFWD, _speed)
+            self.set_motor_speed(Orientation.SAFT, _speed)
+        elif orientation is Orientation.PORT:
             self._port_speed = _speed
             self.set_motor_speed(Orientation.PFWD, _speed)
             self.set_motor_speed(Orientation.PAFT, _speed)
@@ -568,6 +590,13 @@ class MotorController(Component):
             self._paft_motor.add_speed_multiplier(lambda_name, lambda_function, exclusive)
         elif orientation is Orientation.SAFT:
             self._saft_motor.add_speed_multiplier(lambda_name, lambda_function, exclusive)
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def add_vector(self, orientation, vector_name, vector_function, exclusive=True):
+        '''
+        Adds the named vector to the specified motor, replacing any others if exclusive.
+        '''
+        pass
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def rotate(self, rotation):
