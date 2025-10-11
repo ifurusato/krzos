@@ -121,6 +121,12 @@ class MotorController(Component):
         self._event_counter  = itertools.count()
         self._motor_loop_callback = None
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._vector_functions = {
+            Orientation.PFWD: {},
+            Orientation.SFWD: {},
+            Orientation.PAFT: {},
+            Orientation.SAFT: {},
+        }
         self.__callback      = None
         self._is_stopped     = True # used to capture state transitions
         self.__state_change_callbacks = [] # anyone who wants to be informed if the robot is moving or stopped
@@ -309,6 +315,33 @@ class MotorController(Component):
         self._motor_loop_callback = callback
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def _motor_tick(self):
+        '''
+        The shared logic for a single motor control loop iteration, used by
+        both _motor_loop() and external_callback_method(). Incorporates vector
+        blending for per-motor speed control.
+        '''
+        # for each motor, blend vector functions before updating target speed
+        for orientation in [Orientation.PFWD, Orientation.SFWD, Orientation.PAFT, Orientation.SAFT]:
+            blended_speed = self.blend_vectors(orientation)
+            self.set_motor_speed(orientation, blended_speed)
+        # execute any callback here…
+        if self._differential_drive_mode:
+            _port_motor_power = self._pfwd_motor.update_target_speed()
+            _stbd_motor_power = self._sfwd_motor.update_target_speed()
+            self._paft_motor.set_motor_power(_port_motor_power)
+            self._saft_motor.set_motor_power(_stbd_motor_power)
+        else:
+            for _motor in self._all_motors:
+                _motor.update_target_speed()
+        if self._verbose: # print stats
+            _count = next(self._event_counter)
+            self.print_info(_count)
+        self._state_change_check()
+        if self._motor_loop_callback is not None:
+            self._motor_loop_callback()
+
     def _motor_loop(self, f_is_enabled):
         '''
         The motors loop, which executes while the flag argument lambda is True.
@@ -316,58 +349,23 @@ class MotorController(Component):
         self._log.info('loop start.')
         try:
             while f_is_enabled():
-                # execute any callback here…
-                if self._differential_drive_mode:
-                    _port_motor_power = self._pfwd_motor.update_target_speed()
-                    _stbd_motor_power = self._sfwd_motor.update_target_speed()
-                    self._paft_motor.set_motor_power(_port_motor_power)
-                    self._saft_motor.set_motor_power(_stbd_motor_power)
-                else:
-                    for _motor in self._all_motors:
-#                       self._log.info('updating {} motor…'.format(_motor.orientation.name))
-                        _motor.update_target_speed()
-                if self._verbose: # print stats
-                    _count = next(self._event_counter)
-                    if _count % 20 == 0:
-                        self.print_info(_count)
-                self._state_change_check()
-                if self._motor_loop_callback is not None:
-                    self._motor_loop_callback()
+                self._motor_tick()
                 self._rate.wait()
         except Exception as e:
             self._log.error('error in loop: {}\n{}'.format(e, traceback.format_exc()))
         finally:
             self._log.info(Fore.GREEN + 'exited motor control loop.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def external_callback_method(self):
         '''
         The callback called by the external clock as an alternative to the
         asyncio _loop() method.
         '''
         if self.enabled:
-            # execute any callback here…
-            if self.__callback is not None:
-                self.__callback()
-            if self._differential_drive_mode:
-                _port_motor_power = self._pfwd_motor.update_target_speed()
-                _stbd_motor_power = self._sfwd_motor.update_target_speed()
-                self._paft_motor.set_motor_power(_port_motor_power)
-                self._saft_motor.set_motor_power(_stbd_motor_power)
-            else:
-                for _motor in self._all_motors:
-                    if _motor.enabled:
-                        _motor.update_target_speed()
-            if self._verbose: # print stats
-                _count = next(self._event_counter)
-                if _count % 10 == 0:
-                    self.print_info(_count)
-            self._state_change_check()
-            if self._motor_loop_callback is not None:
-                self._motor_loop_callback()
+            self._motor_tick()
         else:
 #           self._log.warning('not enabled: external callback ignored.')
-            pass
+            pass  
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def accelerate(self, target_speed, enabled=None):
@@ -594,9 +592,45 @@ class MotorController(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_vector(self, orientation, vector_name, vector_function, exclusive=True):
         '''
-        Adds the named vector to the specified motor, replacing any others if exclusive.
+        Adds the named vector function to the specified motor, replacing any others if exclusive.
+        This allows behaviours to register movement vector functions for blending.
+
+        :param orientation:     the motor orientation (PFWD, SFWD, PAFT, SAFT)
+        :param vector_name:     name for the vector function (for update/removal)
+        :param vector_function: function returning the desired speed for this motor
+        :param exclusive:       if True, clears other vector functions for this motor before adding
         '''
-        pass
+        if orientation not in self._vector_functions:
+            raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
+        if exclusive:
+            self._vector_functions[orientation].clear()
+        self._vector_functions[orientation][vector_name] = vector_function
+        self._log.info('added vector {} to {} motor{}'.format(
+            vector_name, orientation.name,
+            ' (exclusive)' if exclusive else ''
+        ))
+
+    def remove_vector(self, orientation, vector_name):
+        '''
+        Removes the named vector function from the specified motor.
+        '''
+        if orientation in self._vector_functions and vector_name in self._vector_functions[orientation]:
+            del self._vector_functions[orientation][vector_name]
+            self._log.info('removed vector {} from {} motor'.format(vector_name, orientation.name))
+
+    def blend_vectors(self, orientation):
+        '''
+        Blend all vector functions for this motor (e.g., average).
+        Returns the resulting speed for the motor.
+        '''
+        if orientation not in self._vector_functions:
+            raise Exception('unsupported orientation in blend_vectors: {}'.format(orientation))
+        vector_funcs = self._vector_functions[orientation].values()
+        if not vector_funcs:
+            return 0.0
+        speeds = [func() for func in vector_funcs]
+        # default: average blend; can be expanded for weighted blending
+        return sum(speeds) / len(speeds)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def rotate(self, rotation):
