@@ -78,6 +78,13 @@ class ProximitySensor(object):
         return self._id
 
     @property
+    def cardinal(self):
+        '''
+        Returns the sensor's cardinal value.
+        '''
+        return self._cardinal
+
+    @property
     def abbrev(self):
         '''
         Returns the sensor's cardinal abbreviation, e.g., "NE".
