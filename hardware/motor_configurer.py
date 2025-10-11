@@ -46,7 +46,7 @@ class MotorConfigurer(Component):
         # configure from command line argument properties
         _args = self._config['kros'].get('arguments')
         self._motors_enabled = _args.get('motors_enabled') or motors_enabled
-        self._log.info('motors enabled?\t{}'.format(self._motors_enabled))
+        self._log.info('motors enabled? {}'.format(self._motors_enabled))
         self._max_power_ratio = None
         # Import the ThunderBorg library, then configure and return the motors
         self._port_tb = self._import_thunderborg(Orientation.PORT)
@@ -140,19 +140,17 @@ class MotorConfigurer(Component):
                 _thunderborg_address = self._config['kros'].get('motor').get('thunderborg_stbd_address')
             else:
                 raise Exception('expected PORT or STBD orientation.')
-            self._log.info(Fore.MAGENTA + 'importing ThunderBorg for orientation {} at address 0x{:02X}…'.format(orientation.name, _thunderborg_address))
+            self._log.debug('importing ThunderBorg for {} orientation at address 0x{:02X}…'.format(orientation.name, _thunderborg_address))
             try:
                 if self._i2c_scanner.has_address([_thunderborg_address]):
-                    self._log.info('importing ThunderBorg at address 0x{:02X}…'.format(_thunderborg_address))
-                    self._log.info('successfully imported ThunderBorg.')
-                    self._log.info('instantiating thunderborg…')
+                    self._log.debug('importing ThunderBorg at address 0x{:02X}…'.format(_thunderborg_address))
                     _tb = ThunderBorg(Level.INFO)  # create a new ThunderBorg object
                     _tb.i2cAddress = _thunderborg_address
+                    self._log.debug('instantiated thunderborg.')
                 else:
                     raise Exception('unable to instantiate ThunderBorg [2].')
                 _tb.Init() # set the board up (checks the board is connected)
-                self._log.info('successfully instantiated ThunderBorg.')
-                self._log.info(Fore.MAGENTA + 'successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}…'.format(
+                self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
                         orientation.name, _thunderborg_address))
                 if not _tb.foundChip:
                     boards = ThunderBorg.ScanForThunderBorg()
@@ -186,7 +184,7 @@ class MotorConfigurer(Component):
                     self._max_power_ratio = 1.0
                 else:
                     self._max_power_ratio = _motor_voltage / float(voltage_in)
-                    self._log.info(Fore.WHITE + Style.BRIGHT + 'voltage in: {:.2f}; motor voltage: {:.2f}; max_power_ratio: {:.2f}'.format(
+                    self._log.info('voltage in: {:.2f}; motor voltage: {:.2f}; max_power_ratio: {:.2f}'.format(
                             voltage_in, _motor_voltage, self._max_power_ratio))
                 # convert float to ratio format
                 self._log.info('battery level: {:>5.2f}V; motor voltage: {:>5.2f}V; maximum power ratio: {}'.format(voltage_in, _motor_voltage, \

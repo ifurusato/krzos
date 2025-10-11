@@ -35,7 +35,7 @@ class Behaviour(ABC, Subscriber):
     :param enabled:          enabled state, default True
     :param level:            the optional log level
     '''
-    def __init__(self, name, config, message_bus, message_factory, suppressed=False, enabled=True, level=Level.INFO):
+    def __init__(self, name, config, message_bus, message_factory, suppressed=True, enabled=False, level=Level.INFO):
         self._log = Logger('beh:{}'.format(name), level)
         Subscriber.__init__(self, name, config, message_bus, suppressed=suppressed, enabled=enabled, level=Level.INFO)
         if not isinstance(message_factory, MessageFactory):

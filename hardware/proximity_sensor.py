@@ -127,7 +127,7 @@ class ProximitySensor(object):
         '''
         try:
             self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
-            self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._abbrev)
+            self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._label)
             self._active = True
             self._log.debug('sensor {} ready.'.format(self._abbrev))
         except Exception as e:

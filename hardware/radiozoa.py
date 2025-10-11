@@ -76,7 +76,7 @@ class Radiozoa(Component):
             raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
         self._i2c_bus = smbus.SMBus()
         self._i2c_bus.open(bus=self._i2c_bus_number)
-        self._log.info(Fore.BLUE + 'I2C{} open.'.format(self._i2c_bus_number))
+        self._log.debug('I2C{} open.'.format(self._i2c_bus_number))
         self._sensor_count   = 8
         self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
         self._sensors = []
@@ -87,13 +87,12 @@ class Radiozoa(Component):
         if self._i2c_scanner.has_hex_address([_ioe_i2c_address]):
             try:
                 self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
-                self._log.info(Fore.BLUE + 'found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
             except Exception as e:
                 self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
                 raise
         else:
-            raise MissingComponentError(Fore.BLUE + Style.DIM + 'did not find IO Expander at {} on I2C{}.'.format(
-                    _ioe_i2c_address, self._i2c_bus_number) + Style.RESET_ALL)
+            raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
         # create all sensors, raise exception if any are missing
         self._create_sensors()
         missing = []
@@ -188,9 +187,9 @@ class Radiozoa(Component):
         '''
         Coroutine to poll all sensors at regular intervals and update the internal distances list.
         '''
-        self._log.info(Fore.GREEN + 'start polling sensors…')
+        self._log.info('start polling sensors…')
         while self.enabled and not self._polling_stop_event.is_set():
-            self._log.info('polling sensors…; stop event: {}'.format(self._polling_stop_event.is_set()))
+#           self._log.debug('polling sensors…; stop event: {}'.format(self._polling_stop_event.is_set()))
             distances = [None for _ in range(self._sensor_count)]
             _start_time = dt.now()
             for sensor in self._sensors:
@@ -214,7 +213,7 @@ class Radiozoa(Component):
                 except Exception as e:
                     self._log.warning("Callback raised {}: {}".format(type(e).__name__, e))
             await asyncio.sleep(self._poll_interval)
-        self._log.info(Fore.WHITE + 'end polling sensors…')
+        self._log.info(Fore.WHITE + 'polling sensors stopped.')
 
     def get_distances(self, cardinals=None):
         '''
@@ -253,7 +252,7 @@ class Radiozoa(Component):
                     all_connected = False
         if all_connected:
             super().enable()
-            self._log.info(Fore.MAGENTA + 'all sensors connected.')
+            self._log.info('all sensors connected.')
         else:
             self._log.warning('unable to connect to all sensors.')
 

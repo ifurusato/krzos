@@ -34,6 +34,9 @@ kros:
 #       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
         enable_sound_subscriber:           True            # enable sounds for various events
         # behaviours .......................................
+        enable_idle_behaviour:            False            # enable idle behaviour
+        enable_roam_behaviour:            False            # enable roam behaviour
+        enable_radiozoa_behaviour:         True            # enable radiozoa behaviour
         release_idle_behaviour:           False            # release idle behaviour
         release_roam_behaviour:           False            # release roam behaviour
         release_radiozoa_behaviour:        True            # release radiozoa behaviour

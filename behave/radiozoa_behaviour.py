@@ -33,7 +33,7 @@ class RadiozoaBehaviour(Behaviour):
 
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(RadiozoaBehaviour.NAME, level)
-        Behaviour.__init__(self, RadiozoaBehaviour.NAME, config, message_bus, message_factory, suppressed=False, enabled=True, level=level)
+        Behaviour.__init__(self, RadiozoaBehaviour.NAME, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
@@ -53,10 +53,10 @@ class RadiozoaBehaviour(Behaviour):
         _component_registry = Component.get_registry()
         self._radiozoa = _component_registry.get(Radiozoa.NAME)
         if self._radiozoa is None:
-            self._log.info(Fore.WHITE + 'creating Radiozoa…                                     xxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
+            self._log.info(Fore.WHITE + 'creating Radiozoa…')
             self._radiozoa = Radiozoa(config, level=Level.INFO)
         else:
-            self._log.info(Fore.WHITE + 'using existing Radiozoa.                                zzzzzzzzzzzzzzzzzzzzzzzzzzzzz ')
+            self._log.info(Fore.WHITE + 'using existing Radiozoa.')
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
@@ -110,7 +110,8 @@ class RadiozoaBehaviour(Behaviour):
     async def _loop_main(self):
         self._log.info("radiozoa loop started with {}ms delay…".format(self._loop_delay_ms))
         try:
-            self._accelerate()
+            if not self.suppressed:
+                self._accelerate()
             while not self._stop_event.is_set():
                 if not self.suppressed:
                     await self._poll()
@@ -125,13 +126,11 @@ class RadiozoaBehaviour(Behaviour):
             self._log.error('{} encountered in radiozoa loop: {}'.format(type(e), e))
             self.disable()
         finally:
+            if not self.suppressed:
+                self._decelerate()
             self._log.info("radiozoa loop stopped.")
-            self._decelerate()
 
     async def _poll(self):
-        if not self.enabled:
-            self._log.warning("radiozoa has been disabled.")
-            return
         try:
             self._log.debug("polling…")
             distances = self._radiozoa.get_distances()
@@ -167,6 +166,8 @@ class RadiozoaBehaviour(Behaviour):
         self._sfwd_multiplier = max(0.0, min(1.0, 1.0 - max(0, -results[1])))
         self._paft_multiplier = max(0.0, min(1.0, 1.0 - max(0, results[0])))
         self._saft_multiplier = max(0.0, min(1.0, 1.0 - max(0, results[1])))
+        self._log.info(Fore.WHITE + "multipliers: pfwd={:4.2f}; sfwd={:4.2f}; paft={:4.2f}; saft={:4.2f}".format(
+                self._pfwd_multiplier, self._sfwd_multiplier, self._paft_multiplier, self._saft_multiplier))
         # Optionally further refine using additional pairs
 
     def _accelerate(self):

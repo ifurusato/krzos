@@ -96,9 +96,9 @@ class MotorController(Component):
             self._rate = Rate(self._loop_freq_hz, Level.ERROR)
         else:
             self._rate = None
-        self._log.info('loop frequency:\t{}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
+        self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         self._halt_slew_rate = SlewRate.from_string(_cfg.get('halt_rate'))
-        self._log.info('halt rate:\t{}'.format(self._halt_slew_rate.name))
+        self._log.info('halt rate: {}'.format(self._halt_slew_rate.name))
         # slew limiters are on motors, not here
         self._slew_limiter_enabled = config['kros'].get('motor').get('enable_slew_limiter')
         if external_clock:

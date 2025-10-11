@@ -165,7 +165,7 @@ class I2CScanner:
             self._py_scan_addresses()
             return
         except subprocess.TimeoutExpired:
-            self._log.error("i2cdetect command timed out after {} seconds.".format(timeout))
+            self._log.error("i2cdetect command timed out after {} seconds; trying python scan…".format(timeout))
             self._py_scan_addresses()
             return
         except subprocess.CalledProcessError as e:

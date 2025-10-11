@@ -77,6 +77,7 @@ def test_thunderborg():
             TB1.SetLeds(0.0, 0.0, 0.0)
         if TB2:
             TB2.SetLeds(0.0, 0.0, 0.0)
+        TB2.SetLedShowBattery(True)
 
 def main():
     global __log

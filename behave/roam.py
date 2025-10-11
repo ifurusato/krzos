@@ -46,7 +46,7 @@ class Roam(Behaviour):
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
-        Behaviour.__init__(self, 'roam', config, message_bus, message_factory, suppressed=False, enabled=True, level=level)
+        Behaviour.__init__(self, 'roam', config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('roam')
@@ -125,7 +125,6 @@ class Roam(Behaviour):
         await Subscriber.process_message(self, message)
 
     def execute(self, message):
-        print('🍀 execute message {}.'.format(message))
         if self.suppressed:
             self._log.info(Style.DIM + 'roam suppressed; message: {}'.format(message.event.label))
         else:
@@ -146,12 +145,14 @@ class Roam(Behaviour):
     async def _loop_main(self):
         self._log.info("roam loop started with {}ms delay…".format(self._loop_delay_ms))
         try:
-            self._accelerate()
+            if not self.suppressed:
+                self._accelerate()
             while not self._stop_event.is_set():
                 if not self.suppressed:
                     await self._poll()
                 else:
-                    self._log.info(Fore.WHITE + "suppressed…")
+                    self._log.debug("suppressed…")
+                    pass
                 await asyncio.sleep(self._loop_delay_ms / 1000)
                 if not self.enabled:
                     break
@@ -161,9 +162,9 @@ class Roam(Behaviour):
             self._log.error('{} encountered in roam loop: {}\n{}'.format(type(e), e, traceback.format_exc()))
             self.disable()
         finally:
+            if not self.suppressed:
+                self._decelerate()
             self._log.info("roam loop stopped.")
-            self._decelerate()
-#           self._stop()
 
     async def _poll(self):
         if not self.enabled:

@@ -82,6 +82,7 @@ class BehaviourManager(Subscriber):
                                 key = name.lower()
                                 if key not in self._behaviours:
                                     _behaviour = obj(
+                                        key,
                                         self._config,
                                         self._message_bus,
                                         self._message_factory,
@@ -122,17 +123,20 @@ class BehaviourManager(Subscriber):
         if not self.closed:
             self._log.info('enable all behaviours…')
             for _key, _behaviour in self._behaviours.items():
-                behaviour_key = "release_{}_behaviour".format(_behaviour.name.lower())
-                release_flag  = self._config['kros']['behaviour'].get(behaviour_key, False)
+                enable_flag  = self._config['kros']['behaviour'].get('enable_{}_behaviour'.format(_behaviour.name.lower()), False)
+                if enable_flag:
+                    _behaviour.enable()
+                    self._log.info(Fore.MAGENTA + "{} behaviour enabled.".format(_behaviour.name))
+                else:
+                    _behaviour.disable()
+                    self._log.info(Fore.MAGENTA + "{} behaviour disabled.".format(_behaviour.name))
+                release_flag = self._config['kros']['behaviour'].get('release_{}_behaviour'.format(_behaviour.name.lower()), False)
                 if release_flag:
                     _behaviour.release()
                     self._log.info(Fore.MAGENTA + "{} behaviour released.".format(_behaviour.name))
                 else:
                     _behaviour.suppress()
                     self._log.info(Fore.MAGENTA + "{} behaviour suppressed.".format(_behaviour.name))
-                if not _behaviour.enabled:
-                    _behaviour.enable()
-                    self._log.info(Fore.MAGENTA + '{} behaviour enabled.'.format(_behaviour.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable_all_behaviours(self):
