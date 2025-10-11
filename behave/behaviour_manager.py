@@ -7,14 +7,11 @@
 #
 # author:   Murray Altheim
 # created:  2021-02-16
-# modified: 2025-05-08
-#
+# modified: 2025-10-11
 
-import os, inspect, importlib.util # to locate Behaviours
 
-import asyncio
-import random
 import traceback
+import os, inspect, importlib.util # to locate Behaviours
 from datetime import datetime as dt
 from colorama import init, Fore, Style
 init()
@@ -57,16 +54,23 @@ class BehaviourManager(Subscriber):
         self._was_suppressed   = None
         self._clip_event_list  = True #_cfg.get('clip_event_list') # used for printing only
         self._clip_length      = 42   #_cfg.get('clip_length')
-        self._behaviours       = {}
         self._find_behaviours()
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def get_behaviours(self):
+        '''
+        Returns a list of all Behaviour instances registered in the ComponentRegistry.
+        '''
+        return Component.get_registry().filter_by_type(Behaviour)
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _find_behaviours(self):
         '''
-        Loads a dictionary with instantiated Behaviours found in the current
-        directory.
+        Instantiates all Behaviour subclasses found in the ./behave/ directory if they
+        are not already present in the ComponentRegistry.
         '''
+        registry = Component.get_registry()
         current_dir = os.path.dirname(os.path.abspath(__file__))
         for filename in os.listdir(current_dir):
             if filename.endswith(".py") and filename != os.path.basename(__file__):
@@ -79,28 +83,30 @@ class BehaviourManager(Subscriber):
                         spec.loader.exec_module(module)
                         for name, obj in inspect.getmembers(module, inspect.isclass):
                             if issubclass(obj, Behaviour) and obj is not Behaviour:
-                                key = name.lower()
-                                if key not in self._behaviours:
+                                # Only instantiate if not in ComponentRegistry
+                                already_registered = False
+                                for behaviour in registry.filter_by_type(obj):
+                                    if behaviour.classname == name:
+                                        already_registered = True
+                                        break
+                                if not already_registered:
                                     _behaviour = obj(
-                                        key,
                                         self._config,
                                         self._message_bus,
                                         self._message_factory,
                                         self._level
                                     )
-                                    # we don't need this if there is self-registration
-                                    self._log.info(Fore.WHITE + 'associating behaviour name {} with behaviour {}'.format(key, _behaviour.name))
-                                    self._behaviours[_behaviour.name] = _behaviour
+                                    self._log.info("instantiated behaviour name '{}' as '{}'".format(name.lower(), _behaviour.name))
                                 else:
-                                    self._log.info(Fore.WHITE + 'associating key {} with behaviour {}'.format(key, _behaviour.name))
+                                    self._log.info("behaviour '{}' already registered; skipping instantiation.".format(name))
                     except Exception as e:
-                        stack_trace = traceback.format_exc()
-                        self._log.error("{} thrown loading filename '{}' for behaviour: {}\n{}".format(type(e), filename, e, stack_trace))
+                        self._log.error("{} thrown loading filename '{}' for behaviour: {}".format(type(e), filename, e))
         # list registered behaviours
-        if len(self._behaviours) > 0:
-            self._log.info("registered {} behaviours:".format(len(self._behaviours)))
-            for _key, _behaviour in self._behaviours.items():
-                self._log.info("   key: '{}'\t behaviour: {}".format(_key, _behaviour.name))
+        behaviours = registry.filter_by_type(Behaviour)
+        if len(behaviours) > 0:
+            self._log.info('registered {} behaviours:'.format(len(behaviours)))
+            for _behaviour in behaviours:
+                self._log.info('   behaviour: ' + Fore.GREEN + "'{}'".format(_behaviour.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def start(self):
@@ -109,7 +115,7 @@ class BehaviourManager(Subscriber):
         any initialisations of active sub-components, etc.
         '''
         self._log.info('starting behaviour manager…')
-        for _key, _behaviour in self._behaviours.items():
+        for _behaviour in self.get_behaviours():
             _behaviour.start()
             self._log.info('started behaviour {}'.format(_behaviour.name))
         Subscriber.start(self)
@@ -122,7 +128,7 @@ class BehaviourManager(Subscriber):
         '''
         if not self.closed:
             self._log.info('enable all behaviours…')
-            for _key, _behaviour in self._behaviours.items():
+            for _behaviour in self.get_behaviours():
                 enable_flag  = self._config['kros']['behaviour'].get('enable_{}_behaviour'.format(_behaviour.name.lower()), False)
                 if enable_flag:
                     _behaviour.enable()
@@ -144,7 +150,7 @@ class BehaviourManager(Subscriber):
         Disable all registered behaviours.
         '''
         self._log.info('disable all behaviours…')
-        for _key, _behaviour in self._behaviours.items():
+        for _behaviour in self.get_behaviours():
             _behaviour.disable()
             self._log.info('{} behaviour disabled.'.format(_behaviour.name))
         self._was_suppressed = None
@@ -174,7 +180,7 @@ class BehaviourManager(Subscriber):
         '''
         self._log.info('suppress all behaviours…')
         self._was_suppressed = {}
-        for _key, _behaviour in self._behaviours.items():
+        for _behaviour in self.get_behaviours():
             self._was_suppressed[_behaviour] = _behaviour.suppressed
             if not _behaviour.suppressed:
                 _behaviour.suppress()
@@ -204,7 +210,7 @@ class BehaviourManager(Subscriber):
         '''
         if not self.closed:
             self._log.info('release all behaviours…')
-            for _key, _behaviour in self._behaviours.items():
+            for _behaviour in self.get_behaviours():
                 if self._was_suppressed:
                     if not self._was_suppressed[_behaviour]:
                         _behaviour.release()
@@ -219,23 +225,9 @@ class BehaviourManager(Subscriber):
         Permanently close all registered behaviours. They cannot be reopened
         or otherwise enabled after this.
         '''
-        for _key, _behaviour in self._behaviours.items():
+        for _behaviour in self.get_behaviours():
             _behaviour.close()
             self._log.info('{} behaviour closed.'.format(_behaviour.name))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _register_behaviour(self, behaviour):
-        '''
-        Register a Behaviour with the manager, referenced by its name.
-
-        This is called by the Behaviour's constructor and should not be
-        called directly.
-        '''
-        if behaviour.name not in self._behaviours:
-            self._behaviours[behaviour.name] = behaviour
-            self._log.info("added behaviour '{}' to manager.".format(behaviour.name))
-        else:
-            self._log.info("behaviour '{}' already registered with manager.".format(behaviour.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
@@ -261,7 +253,7 @@ class BehaviourManager(Subscriber):
         self._log.info('behaviour manager:')
         self._log.info('  suppressed:\t' + Fore.YELLOW + '{}'.format(self.suppressed))
         self._log.info('  behaviours:')
-        for _key, _behaviour in self._behaviours.items():
+        for _behaviour in self.get_behaviours():
             if self._clip_event_list:
                 _event_list = Util.ellipsis(_behaviour.print_events(), self._clip_length)
             else:

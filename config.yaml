@@ -33,17 +33,14 @@ kros:
         # subscribers ......................................
 #       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
         enable_sound_subscriber:           True            # enable sounds for various events
-        # behaviours .......................................
-        enable_idle_behaviour:            False            # enable idle behaviour
-        enable_roam_behaviour:            False            # enable roam behaviour
-        enable_radiozoa_behaviour:         True            # enable radiozoa behaviour
-        release_idle_behaviour:           False            # release idle behaviour
-        release_roam_behaviour:           False            # release roam behaviour
-        release_radiozoa_behaviour:        True            # release radiozoa behaviour
     behaviour:
         idle:
+            enable:                     False              # enable idle behaviour
+            release:                    False              # release idle behaviour
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         roam:
+            enable:                     False              # enable roam behaviour
+            release:                    False              # release roam behaviour
             min_velocity:                 0.0              # minimum motor target velocity
             max_velocity:               100.0              # maximum motor target velocity
             cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
@@ -51,6 +48,11 @@ kros:
             loop_delay_ms:                 80              # asyncio loop delay in milliseconds
             deadband_threshold:             0.10           # don't drive motors slower than this
             loop_freq_hz:                   1              # main loop delay in hz
+        radiozoa:
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour
+            loop_delay_ms:                 50
+            default_speed:                  0.8              # cruising speed
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop

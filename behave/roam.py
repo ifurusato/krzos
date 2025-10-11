@@ -46,7 +46,7 @@ class Roam(Behaviour):
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
-        Behaviour.__init__(self, 'roam', config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
+        Behaviour.__init__(self, Roam.NAME, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('roam')

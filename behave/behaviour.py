@@ -41,12 +41,6 @@ class Behaviour(ABC, Subscriber):
         if not isinstance(message_factory, MessageFactory):
             raise ValueError('expected MessageFactory, not {}.'.format(type(message_factory)))
         self._message_factory = message_factory
-        # register this behaviour with behaviour manager (we can't import it due to circular ref)
-        _behaviour_manager = message_bus.get_subscriber('behave-mgr') # BehaviourManager.CLASS_NAME
-        if _behaviour_manager:
-            _behaviour_manager._register_behaviour(self)
-        else:
-            self._log.warning('no behaviour manager found: {} operating as subscriber only.'.format(self.name))
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

@@ -38,7 +38,6 @@ class RadiozoaBehaviour(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._default_speed = _cfg.get('default_speed', 1.0)
-        self._deadband_threshold = _cfg.get('deadband_threshold', 0.05)
         # multipliers for each motor
         self._pfwd_multiplier = 1.0
         self._sfwd_multiplier = 1.0
