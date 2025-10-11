@@ -27,7 +27,7 @@ class Behaviour(ABC, Subscriber):
     An abstract class providing the basis for a behaviour.
     The loop callback is registered during class construction.
 
-    :param name:             the name of this behaviour
+    :param log_or_name:      the name of this behaviour, or an existing logger
     :param config:           the application configuration
     :param message_bus:      the message bus
     :param message_factory:  the message factory
@@ -35,9 +35,8 @@ class Behaviour(ABC, Subscriber):
     :param enabled:          enabled state, default True
     :param level:            the optional log level
     '''
-    def __init__(self, name, config, message_bus, message_factory, suppressed=True, enabled=False, level=Level.INFO):
-        self._log = Logger('beh:{}'.format(name), level)
-        Subscriber.__init__(self, name, config, message_bus, suppressed=suppressed, enabled=enabled, level=Level.INFO)
+    def __init__(self, log_or_name, config, message_bus, message_factory, suppressed=True, enabled=False, level=Level.INFO):
+        Subscriber.__init__(self, log_or_name, config, message_bus, suppressed=suppressed, enabled=enabled, level=Level.INFO)
         if not isinstance(message_factory, MessageFactory):
             raise ValueError('expected MessageFactory, not {}.'.format(type(message_factory)))
         self._message_factory = message_factory

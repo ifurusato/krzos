@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-07
-# modified: 2025-09-07
+# modified: 2025-10-11
 #
 # As a modification of the library by John Bryan Moore. This adds our own
 # Logger, and doesn't manage smbus itself, instead passing the instance into
@@ -40,20 +40,6 @@ import os
 from ctypes import CDLL, CFUNCTYPE, POINTER, c_int, c_uint, pointer, c_ubyte, c_uint8, c_uint32
 # import sysconfig # we use our own library
 
-# import pkg_resources
-# SMBUS='smbus2'
-# for dist in pkg_resources.working_set:
-#     #print(dist.project_name, dist.version)
-#     if dist.project_name == 'smbus':
-#         break
-#     if dist.project_name == 'smbus2':
-#         SMBUS='smbus2'
-#         break
-# if SMBUS == 'smbus':
-#     import smbus
-# elif SMBUS == 'smbus2':
-#     import smbus2 as smbus
-
 import site
 from colorama import init, Fore, Style
 init()
@@ -63,14 +49,12 @@ from core.logger import Logger, Level
 class Vl53l0xError(RuntimeError):
     pass
 
-
 class Vl53l0xAccuracyMode:
     GOOD = 0        # 33 ms timing budget 1.2m range
     BETTER = 1      # 66 ms timing budget 1.2m range
     BEST = 2        # 200 ms 1.2m range
     LONG_RANGE = 3  # 33 ms timing budget 2m range
     HIGH_SPEED = 4  # 20 ms timing budget 1.2m range
-
 
 class Vl53l0xDeviceMode:
     SINGLE_RANGING = 0
@@ -81,7 +65,6 @@ class Vl53l0xDeviceMode:
     GPIO_DRIVE = 20
     GPIO_OSC = 21
 
-
 class Vl53l0xGpioAlarmType:
     OFF = 0
     THRESHOLD_CROSSED_LOW = 1
@@ -89,20 +72,22 @@ class Vl53l0xGpioAlarmType:
     THRESHOLD_CROSSED_OUT = 3
     NEW_MEASUREMENT_READY = 4
 
-
 class Vl53l0xInterruptPolarity:
     LOW = 0
     HIGH = 1
-
 
 # Read/write function pointer types.
 _I2C_READ_FUNC = CFUNCTYPE(c_int, c_ubyte, c_ubyte, POINTER(c_ubyte), c_ubyte)
 _I2C_WRITE_FUNC = CFUNCTYPE(c_int, c_ubyte, c_ubyte, POINTER(c_ubyte), c_ubyte)
 
 class VL53L0X:
-    """VL53L0X ToF."""
+    '''
+    VL53L0X ToF.
+    '''
     def __init__(self, i2c_bus=None, i2c_address=0x29, label='tof', tca9548a_num=255, tca9548a_addr=0):
-        """Initialize the VL53L0X ToF Sensor from ST"""
+        '''
+        Initialize the VL53L0X ToF Sensor from ST.
+        '''
         self._log = Logger('vl53l0x-0x{:02X}'.format(i2c_address), level=Level.INFO)
 #       self._i2c_bus_number = i2c_bus_number
         self._i2c_address = i2c_address
@@ -116,12 +101,12 @@ class VL53L0X:
         self._tof_library = None
         # Register Address
         self.ADDR_UNIT_ID_HIGH = 0x16 # Serial number high byte
-        self.ADDR_UNIT_ID_LOW = 0x17 # Serial number low byte
-        self.ADDR_I2C_ID_HIGH = 0x18 # Write serial number high byte for I2C address unlock
-        self.ADDR_I2C_ID_LOW = 0x19 # Write serial number low byte for I2C address unlock
+        self.ADDR_UNIT_ID_LOW  = 0x17 # Serial number low byte
+        self.ADDR_I2C_ID_HIGH  = 0x18 # Write serial number high byte for I2C address unlock
+        self.ADDR_I2C_ID_LOW   = 0x19 # Write serial number low byte for I2C address unlock
         self.ADDR_I2C_SEC_ADDR = 0x8a # Write new I2C address after unlock
         self._get_tof_library()
-        self._log.info('{} sensor ready at 0x{:02X}…'.format(self._label, self._i2c_address))
+        self._log.info(Fore.GREEN + '{} '.format(self._label) + Fore.CYAN + 'sensor ready at 0x{:02X}…'.format(self._i2c_address))
 
     @property
     def i2c_address(self):

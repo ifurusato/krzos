@@ -49,21 +49,17 @@ class Subscriber(Component, FiniteStateMachine):
             self._name = log_or_name
         else:
             raise ValueError('wrong type for log_or_name argument: {}'.format(type(log_or_name)))
-        self._id   = random.randint(10000,99999)
+        self._id = random.randint(10000,99999)
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(self._name)))
         self._config = config
         if message_bus is None:
             raise ValueError('no message bus argument provided.')
         self._message_bus = message_bus
-        if not isinstance(suppressed, bool):
-            raise ValueError('wrong type for suppressed argument: {}'.format(type(suppressed)))
-        if not isinstance(enabled, bool):
-            raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
-        Component.__init__(self, self._log, suppressed, enabled)
-        FiniteStateMachine.__init__(self, self._log, self._name)
         self._events = [] # list of acceptable event types
         self._brief  = True # brief messages by default
+        Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
+        FiniteStateMachine.__init__(self, self._log, self._name)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_log_level(self, level):
@@ -115,7 +111,8 @@ class Subscriber(Component, FiniteStateMachine):
                     self.add_events(_event)
                 elif isinstance(_event, Group):
                     _events = Event.by_group(_event)
-                    self.add_events(_events)
+                    if _events:
+                        self.add_events(_events)
                 else:
                     raise ValueError('unrecognised event value: {}'.format(type(_event)))
 

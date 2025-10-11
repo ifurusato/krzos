@@ -16,7 +16,7 @@ from colorama import Fore, Style
 
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
-from hardware.radiozoa import Radiozoa
+from hardware.radiozoa_sensor import RadiozoaSensor
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -24,27 +24,26 @@ from colorama import Fore, Style
 
 def main():
     '''
-    Main function to demonstrate the Radiozoa class.
+    Main function to demonstrate the Radiozoa sensor class.
     '''
     enabled = True
     RANGE = 1001
-    radiozoa = None
+    radiozoa_sensor = None
     log = Logger('main', level=Level.INFO)
     try: 
         log.info('loading configuration…')
         config = ConfigLoader(Level.INFO).configure()
-        
         log.info('instantiating sensor array…')
-        radiozoa = Radiozoa(config)
-        radiozoa.enable()
+        radiozoa_sensor = RadiozoaSensor(config)
+        radiozoa_sensor.enable()
         timeout_seconds = 5
         start_time = time.monotonic()
-        while not radiozoa.enabled:
+        while not radiozoa_sensor.enabled:
             if time.monotonic() - start_time > timeout_seconds:
                 raise TimeoutError("radiozoa failed to enable within timeout")
             time.sleep(0.1)
-        radiozoa.set_visualisation(True)
-        radiozoa.start_ranging()
+        radiozoa_sensor.set_visualisation(True)
+        radiozoa_sensor.start_ranging()
         log.info(Fore.GREEN + 'radiozoa enabled (Ctrl-C to exit)…')
         # keep alive with signal.pause() if available
         try:
@@ -63,8 +62,8 @@ def main():
         enabled = False
     finally:
         log.info('finally…')
-        if radiozoa:
-            radiozoa.close()
+        if radiozoa_sensor:
+            radiozoa_sensor.close()
         log.info('complete.')
             
 if __name__ == '__main__':

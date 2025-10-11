@@ -21,8 +21,9 @@ from hardware.i2c_scanner import I2CScanner
 
 class RadiozoaConfig(object):
     '''
-    Configures all VL53L0X sensors on the Radiozoa board to their unique I2C addresses
-    by toggling XSHUT pins and setting addresses as specified in the configuration.
+    Configures all VL53L0X sensors on the Radiozoa sensor board to their unique I2C
+    addresses by toggling XSHUT pins and setting addresses as specified in the
+    configuration.
     '''
     def __init__(self, config, level=Level.INFO):
         self._log = Logger('radiozoa-config', level=level)

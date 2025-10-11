@@ -60,7 +60,7 @@ class RoamSensor(Component):
         self._max_distance   = _cfg.get('max_distance', 1000) # mm, the "no obstacle" threshold
         _easing_value        = _cfg.get('easing', 'logarithmic')
         self._easing         = Easing.from_string(_easing_value)
-        self._log.info(Fore.MAGENTA + 'easing function: {}'.format(self._easing.name))
+        self._log.info('easing function: {}'.format(self._easing.name))
         # PWM sensor range for fusion
         self._pwm_max_range  = _cfg.get('pwm_max_range', 250)  # mm
         self._use_sigmoid_fusion = _cfg.get('use_sigmoid_fusion')

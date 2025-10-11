@@ -14,9 +14,12 @@ import time
 import traceback
 from datetime import datetime as dt
 import RPi.GPIO as GPIO
+from colorama import init, Fore, Style
+init()
+
 import ioexpander as io
 
-from hardware.VL53L0X import VL53L0X, Vl53l0xAccuracyMode
+from hardware.vl53l0x import VL53L0X, Vl53l0xAccuracyMode
 from core.config_loader import ConfigLoader
 from core.logger import Logger, Level
 
@@ -55,11 +58,11 @@ class ProximitySensor(object):
         self._change_state_delay_s = 1.0
         try:
             if self._ioe:
-                self._log.debug('sensor {} ({}) ready using IO Expander.'.format(self._abbrev, self._id))
+                self._log.debug('sensor {} ({}) ready using IO Expander.'.format(self._label, self._id))
             else:
                 GPIO.setwarnings(False)
                 GPIO.setmode(GPIO.BCM)
-                self._log.debug('sensor {} ({}) ready using GPIO.'.format(self._abbrev, self._id))
+                self._log.debug('sensor {} ({}) ready using GPIO.'.format(self._label, self._id))
         except Exception as e:
             self._log.info('{} raised during pin setup: {}'.format(type(e).__name__, e))
             raise
@@ -126,12 +129,12 @@ class ProximitySensor(object):
         Returns True if the sensor is active.
         '''
         try:
-            self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._label)
             self._active = True
-            self._log.debug('sensor {} ready.'.format(self._abbrev))
+            self._log.debug('sensor {} ready.'.format(self._label))
         except Exception as e:
-            self._log.error('{} raised during setup of sensor {}: {}\n{}'.format(type(e).__name__, self._abbrev, e, traceback.format_exc()))
+            self._log.error('{} raised during setup of sensor {}: {}\n{}'.format(type(e).__name__, self._label, e, traceback.format_exc()))
             self.close()
         finally:
             self._log.debug('connect complete.')
@@ -165,55 +168,56 @@ class ProximitySensor(object):
             if not self._is_ranging:
                 self._tof.start_ranging(mode)
                 self._is_ranging = True
-                self._log.info('ranging started for sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+                self._log.info('ranging started for sensor ' + Fore.GREEN + '{}'.format(self._label)
+                        + Fore.CYAN + ' at 0x{:02X}…'.format(self._i2c_address))
             else:
-                self._log.warning('sensor {} already ranging at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+                self._log.warning('sensor {} already ranging at 0x{:02X}…'.format(self._label, self._i2c_address))
         else:
-            self._log.warning('cannot start ranging: sensor {} at 0x{:02X} not enabled or active.'.format(self._abbrev, self._i2c_address))
+            self._log.warning('cannot start ranging: sensor {} at 0x{:02X} not enabled or active.'.format(self._label, self._i2c_address))
 
     def stop_ranging(self):
         '''
         Stops ranging for the sensor.
         '''
         if self._enabled and self._active:
-            self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             if not self._tof:
-                raise Exception('cannot stop ranging: sensor {} at 0x{:02X} does not exist.'.format(self._abbrev, self._i2c_address))
+                raise Exception('cannot stop ranging: sensor {} at 0x{:02X} does not exist.'.format(self._label, self._i2c_address))
             if self._is_ranging:
                 self._tof.stop_ranging()
                 self._is_ranging = False
-                self._log.info('ranging stopped on sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+                self._log.info('ranging stopped on sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             else:
-                self._log.warning('sensor {} was not ranging at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+                self._log.warning('sensor {} was not ranging at 0x{:02X}…'.format(self._label, self._i2c_address))
         else:
-            self._log.debug('cannot stop ranging: sensor {} at 0x{:02X} not enabled or active.'.format(self._abbrev, self._i2c_address))
+            self._log.debug('cannot stop ranging: sensor {} at 0x{:02X} not enabled or active.'.format(self._label, self._i2c_address))
 
     def open(self):
         '''
         Opens the sensor's ranging object.
         '''
         if self._tof:
-            self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._abbrev, self._i2c_address))
+            self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             self._tof.open()
         else:
-            self._log.warning('cannot open: sensor {} at 0x{:02X} not available.'.format(self._abbrev, self._i2c_address))
+            self._log.warning('cannot open: sensor {} at 0x{:02X} not available.'.format(self._label, self._i2c_address))
 
     def close(self):
         '''
         Stops ranging and shuts down the sensor.
         '''
-        self._log.info('closing sensor {}…'.format(self._abbrev))
+        self._log.info('closing sensor {}…'.format(self._label))
         try:
             self.stop_ranging()
             if self._tof:
                 self._tof.close()
             self._enabled = False
         except Exception as e:
-            self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._abbrev, self._i2c_address, e))
+            self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._label, self._i2c_address, e))
 
     def __str__(self):
         return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, xshut_pin={}, enabled={})".format(
-            self._id, self._abbrev, self._i2c_address, self._xshut_pin, self._enabled
+            self._id, self._label, self._i2c_address, self._xshut_pin, self._enabled
         )
 
 #EOF

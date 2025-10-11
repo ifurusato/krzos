@@ -26,7 +26,7 @@ kros:
 #       enable_pir_publisher:              True            # enable PIR publisher
 #       enable_remote_ctrl_publisher:     False            # enable Remote Control Publisher
 #       enable_rtof_publisher:            False            # enable Ranging ToF publisher
-        enable_gamepad_publisher:          True            # enable gamepad support
+        enable_gamepad_publisher:         False            # enable gamepad support
 #       enable_killswitch:                 True            # enable toggle kill switch
 #       enable_pushbutton:                 True            # enable pushbutton
 #       enable_eyeballs  :                 True            # enable eyeballs
@@ -34,10 +34,11 @@ kros:
 #       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
         enable_sound_subscriber:           True            # enable sounds for various events
     behaviour:
-        idle:
-            enable:                     False              # enable idle behaviour
-            release:                    False              # release idle behaviour
-            idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
+#       idle:
+#           enable:                     False              # enable idle behaviour
+#           release:                    False              # release idle behaviour
+#           idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
+#           loop_freq_hz:                   1              # main loop delay in hz
         roam:
             enable:                     False              # enable roam behaviour
             release:                    False              # release roam behaviour

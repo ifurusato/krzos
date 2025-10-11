@@ -11,6 +11,7 @@
 
 import time
 import numpy as np
+from datetime import datetime as dt
 import multiprocessing
 from multiprocessing import Process, Queue, Event
 from colorama import init, Fore, Style
@@ -18,8 +19,8 @@ init()
 
 #import vl53l5cx_ctypes as vl53l5cx
 #from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
-import hardware.VL53L5CX as vl53l5cx
-from hardware.VL53L5CX import RANGING_MODE_CONTINUOUS
+import hardware.vl53l5cx as vl53l5cx
+from hardware.vl53l5cx import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
 from core.logger import Logger, Level
@@ -54,15 +55,18 @@ class Vl53l5cxSensor(Component):
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
         if _i2c_bus_number == 0:
+            _start_time = dt.now()
             try:
-                self._log.info('connecting to I2C bus 0…')
                 from smbus2 import SMBus
                 _i2c_bus_dev = SMBus(0)
                 # __init__(self, i2c_addr=DEFAULT_I2C_ADDRESS, i2c_dev=None, skip_init=False):
                 self._vl53 = vl53l5cx.VL53L5CX(i2c_dev=_i2c_bus_dev, skip_init=skip)
             except Exception as e:
-                self._log.error('{} raised connecting to I2C bus 0: {}'.format(type(e), e))
+                self._log.error('{} raised connecting to VL53L5CX on I2C bus 0: {}'.format(type(e), e))
                 raise e
+            finally:
+                _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+                self._log.info(Fore.MAGENTA + 'VL53L5CX ready: elapsed: {:d}ms'.format(_elapsed_ms))
         else:
             self._vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
         self._vl53.set_resolution(self._cols * self._rows)
@@ -71,7 +75,7 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         self._log.info('VL53L5CX hardware ready.')
         # multiprocessing attributes
-        self._queue = Queue(maxsize=2)
+        self._queue = Queue(maxsize=1)
         self._stop_event = Event()
         self._process = None
 

@@ -25,21 +25,25 @@ class Publisher(Component, FiniteStateMachine):
     Extends Component and FiniteStateMachine as a message/event publisher to
     the message bus.
 
-    :param name:             the unique name for the publisher
+    :param log_or_name:      the Logger or publisher name (for logging)
     :param config:           the application configuration
     :param message_bus:      the asynchronous message bus
     :param message_factory:  the factory for messages
     :param suppressed:       the supprsssed flag (optional, default False)
     :param level:            the logging level
     '''
-    def __init__(self, name, config, message_bus, message_factory, suppressed=False, level=Level.INFO):
+    def __init__(self, log_or_name, config, message_bus, message_factory, suppressed=False, enabled=False, level=Level.INFO):
+        if isinstance(log_or_name, Logger):
+            self._log = log_or_name
+            self._name = self._log.name
+        elif isinstance(log_or_name, str):
+            self._log = Logger('pub:{}'.format(log_or_name), level)
+            self._name = log_or_name
+        else:
+            raise ValueError('wrong type for log_or_name argument: {}'.format(type(log_or_name)))
         if not isinstance(level, Level):
             raise ValueError('wrong type for log level argument: {}'.format(type(level)))
         self._level = level
-        self._log = Logger('pub:{}'.format(name), level)
-        if not isinstance(name, str):
-            raise ValueError('wrong type for name argument: {}'.format(type(name)))
-        self._name = name
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
         self._config = config
@@ -49,9 +53,8 @@ class Publisher(Component, FiniteStateMachine):
         if message_factory is None:
             raise ValueError('no message factory argument provided.')
         self._message_factory = message_factory
-        Component.__init__(self, self._log, suppressed=suppressed, enabled=False)
-        FiniteStateMachine.__init__(self, self._log, name)
-        self._name = name
+        Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
+        FiniteStateMachine.__init__(self, self._log, self._name)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property

@@ -40,16 +40,17 @@ from core.cardinal import Cardinal
 from hardware.i2c_scanner import I2CScanner
 from hardware.proximity_sensor import ProximitySensor
 
-class Radiozoa(Component):
+class RadiozoaSensor(Component):
+    NAME = 'radiozoa-sensor'
     # thresholds in millimeters
     CLOSE_THRESHOLD = 100
     NEAR_THRESHOLD  = 200
     MID_THRESHOLD   = 600
     FAR_THRESHOLD   = 1000
     '''
-    Manages an array of VL53L0X proximity sensors as implemented on the Radiozoa board.
-    Assumes all sensors are configured and enabled. If any sensor is unavailable,
-    raises MissingComponentError.
+    Manages an array of VL53L0X proximity sensors as implemented on the Radiozoa
+    sensor board. Assumes all sensors are configured and enabled. If any sensor
+    is unavailable, raises a MissingComponentError.
     '''
     def __init__(self, config, level=Level.INFO):
         '''
@@ -59,7 +60,7 @@ class Radiozoa(Component):
             config (dict): The configuration dictionary for the sensors.
             level (Level): The logging level.
         '''
-        self._log = Logger('radiozoa', level=level)
+        self._log = Logger(RadiozoaSensor.NAME, level=level)
         if config is None:
             raise ValueError('no configuration provided.')
         Component.__init__(self, self._log, suppressed=False, enabled=False)

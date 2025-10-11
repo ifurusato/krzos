@@ -47,20 +47,19 @@ class MotorConfigurer(Component):
         _args = self._config['kros'].get('arguments')
         self._motors_enabled = _args.get('motors_enabled') or motors_enabled
         self._log.info('motors enabled? {}'.format(self._motors_enabled))
+        # import the ThunderBorg library, then configure and return the motors
         self._max_power_ratio = None
-        # Import the ThunderBorg library, then configure and return the motors
         self._port_tb = self._import_thunderborg(Orientation.PORT)
         self._log.info('configured PORT ThunderBorg at I2C address: 0x{:02X}'.format(self._port_tb.I2cAddress))
         self._stbd_tb  = self._import_thunderborg(Orientation.STBD)
         self._log.info('configured STBD ThunderBorg at I2C address: 0x{:02X}'.format(self._stbd_tb.I2cAddress))
         if self._max_power_ratio is None: # this should have been set by the ThunderBorg code.
             raise ValueError('max_power_ratio not set.')
-        # now import motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         try:
+            # now import motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._log.info('configuring motors…')
             # GPIO pins configured for A and B channels for each encoder, reversed on starboard side
             _odo_cfg = self._config['kros'].get('motor').get('odometry')
-
             # PFWD "port-forward" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._pfwd_motor = Motor(self._config, self._port_tb, Orientation.PFWD, level)
             self._pfwd_motor.max_power_ratio = self._max_power_ratio
@@ -200,16 +199,14 @@ class MotorConfigurer(Component):
         '''
         Turns the motor controller LEDs on or off.
         '''
-        _port_tb = self.get_thunderborg(Orientation.PORT)
-        _stbd_tb = self.get_thunderborg(Orientation.STBD)
-        if _port_tb:
-            _port_tb.SetLedShowBattery(enable)
+        if self._port_tb:
+            self._port_tb.SetLedShowBattery(enable)
             if not enable:
-                _port_tb.SetLeds(0.0, 0.0, 0.0) # black
-        if _stbd_tb:
-            _stbd_tb.SetLedShowBattery(enable)
+                self._port_tb.SetLeds(0.0, 0.0, 0.0) # black
+        if self._stbd_tb:
+            self._stbd_tb.SetLedShowBattery(enable)
             if not enable:
-                _stbd_tb.SetLeds(0.0, 0.0, 0.0) # black
+                self._stbd_tb.SetLeds(0.0, 0.0, 0.0) # black
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_thunderborg(self, orientation):

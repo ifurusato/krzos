@@ -19,14 +19,13 @@ import asyncio
 from colorama import init, Fore, Style
 init()
 
+from core.logger import Logger, Level
 from core.component import Component, MissingComponentError
 from core.config_loader import ConfigLoader
-from core.event import Event
-from core.queue_publisher import QueuePublisher
-from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.speed import Speed
-from core.subscriber import Subscriber
+from core.event import Event
+from core.queue_publisher import QueuePublisher
 from behave.behaviour import Behaviour
 from hardware.motor_controller import MotorController
 from hardware.roam_sensor import RoamSensor
@@ -52,12 +51,12 @@ class Roam(Behaviour):
         _cfg = config['kros'].get('behaviour').get('roam')
         self._loop_delay_ms  = _cfg.get('loop_delay_ms', 50) # 50ms
         _cruising_speed = Speed.from_string(_cfg.get('cruising_speed'))
-        self._log.info(Style.BRIGHT + 'cruising speed: \t{} ({:5.2f}cm/sec)'.format(_cruising_speed.label, _cruising_speed.velocity))
+        self._log.info('cruising speed: {} ({:5.2f}cm/sec)'.format(_cruising_speed.label, _cruising_speed.velocity))
         self._default_speed  = _cruising_speed.proportional
+        self._log.info('default speed:  {}'.format(self._default_speed))
         self._zero_tolerance = 0.2
-        self._log.info(Style.BRIGHT + 'default speed: \t{}'.format(self._default_speed))
         self._post_delay     = 500
-        self._task           = None 
+        self._task           = None
         self._stop_delay     = _cfg.get('stop_delay_s', 3)  # seconds, configurable
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.05) # for multiplier
         self._roam_distance  = -1
@@ -71,10 +70,7 @@ class Roam(Behaviour):
         self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
         if self._queue_publisher is None:
             raise MissingComponentError('queue publisher not available.')
-        # RoamSensor instantiation
-        self._roam_sensor = _component_registry.get(RoamSensor.NAME)
-        if self._roam_sensor is None:
-            self._roam_sensor = RoamSensor(config, level=Level.INFO)
+        self._roam_sensor = None
         # MotorController instantiation (from registry only)
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
@@ -103,13 +99,6 @@ class Roam(Behaviour):
     def callback(self):
         self._log.info('roam callback.')
 
-    def get_trigger_behaviour(self, event):
-        return TriggerBehaviour.EXECUTE
-
-    @property
-    def trigger_event(self):
-        return Event.ROAM
-
     async def process_message(self, message):
         if message.gcd:
             raise GarbageCollectedError('cannot process message: message has been garbage collected.')
@@ -122,7 +111,7 @@ class Roam(Behaviour):
                 self._log.info(Fore.BLUE + "ignored AVOID message with event: '{}'; value: {}".format(_event.name, _event.value))
         else:
             self._log.info(Fore.WHITE + "processing {} message with event: '{}'; value: {}".format(message.name, _event.name, _event.value))
-        await Subscriber.process_message(self, message)
+        await Behaviour.process_message(self, message)
 
     def execute(self, message):
         if self.suppressed:
@@ -251,6 +240,13 @@ class Roam(Behaviour):
         self._log.info("published ROAM message: {}".format(_message))
 
     def enable(self):
+        if self.enabled:
+            self._log.debug("already enabled.")
+            return
+        # RoamSensor instantiation
+        self._roam_sensor = _component_registry.get(RoamSensor.NAME)
+        if self._roam_sensor is None:
+            self._roam_sensor = RoamSensor(config, level=Level.INFO)
         if self._motor_controller:
             self._motor_controller.enable()
         Component.enable(self)
@@ -268,7 +264,7 @@ class Roam(Behaviour):
 
     def disable(self):
         if not self.enabled:
-            self._log.warning("already disabled.")
+            self._log.debug("already disabled.")
             return
         self._log.info("disabling roam…")
         # 1. Signal coroutine to exit.
@@ -283,6 +279,24 @@ class Roam(Behaviour):
                 self._thread.join(timeout=2.0)
             # 4. Now it's safe to close the event loop.
             self._loop_instance.close()
+        if self._motor_controller:
+            self._motor_controller.disable()
+        Component.disable(self)
+        self._log.info(Fore.YELLOW + 'disabled.')
+
+    def x_disable(self):
+        if not self.enabled:
+            self._log.debug("already disabled.")
+            return
+        self._log.info("roam disabling…")
+        self._stop_event.set()
+        time.sleep(0.1)
+        if self._loop_instance:
+            self._loop_instance.stop()
+            self._loop_instance.call_soon_threadsafe(self._shutdown)
+            # wait for the thread to finish
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=1.0)
         if self._motor_controller:
             self._motor_controller.disable()
         Component.disable(self)
@@ -303,24 +317,6 @@ class Roam(Behaviour):
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
         self._log.info(Fore.YELLOW + 'shut down complete.')
 
-    def x_disable(self):
-        if not self.enabled:
-            self._log.warning("already disabled.")
-            return
-        self._log.info("roam disabling…")
-        self._stop_event.set()
-        time.sleep(0.1)
-        if self._loop_instance:
-            self._loop_instance.stop()
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            # wait for the thread to finish
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-        if self._motor_controller:
-            self._motor_controller.disable()
-        Component.disable(self)
-        self._log.info(Fore.YELLOW + 'disabled.')
-
     def x_shutdown(self):
         self._log.info("shutting down tasks and event loop…")
         try:
@@ -331,7 +327,6 @@ class Roam(Behaviour):
             self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-#       self._loop_instance.stop()
         self._loop_instance.close()
         self._log.info(Fore.YELLOW + 'shut down complete.')
 

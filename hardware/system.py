@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-07-13
-# modified: 2024-10-31
-#
+# modified: 2025-10-11
 
 import sys, platform
 import os, psutil
@@ -16,12 +15,13 @@ from pathlib import Path
 from colorama import init, Fore, Style
 init()
 
+from core.component import Component
 from core.logger import Level, Logger
 from hardware.ina260_sensor import Ina260
 from ads1015 import ADS1015
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class System:
+class System(Component):
     '''
     A collection of system control/info/statistical methods.
     Args:
@@ -32,30 +32,33 @@ class System:
     '''
     def __init__(self, config=None, kros=None, level=Level.INFO):
         self._log = Logger('system', level)
+        Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._kros = kros
         _cfg = config['kros'].get('hardware').get('system')
         self._12v_battery_min  = _cfg.get('low_12v_battery_threshold')   # 11.5  e.g., in0/ref: 11.953v
         self._5v_reg_min       = _cfg.get('low_5v_regulator_threshold')  #  5.0  e.g., in2/ref:  5.028v
         self._3v3_reg_min      = _cfg.get('low_3v3_regulator_threshold') #  3.25 e.g., in1/ref:  3.302v
         self._system_current_max = _cfg.get('system_current_max')
-
-
         self._batt_12v_channel = _cfg.get('battery_12v_channel')
         self._reg_5v_channel   = _cfg.get('reg_5v_channel')
         self._reg_3v3_channel  = _cfg.get('reg_3v3_channel')
         self._log.info("testing power supplies…")
-        self._ads1015 = ADS1015()
-        chip_type = self._ads1015.detect_chip_type()
-        self._log.info("found device:  " + Fore.GREEN + "{}".format(chip_type))
-        self._ads1015.set_mode("single")
-        self._ads1015.set_programmable_gain(2.048)
-        if chip_type == "ADS1015":
-            self._ads1015.set_sample_rate(1600)
-        else:
-            self._ads1015.set_sample_rate(860)
-        self._reference = self._ads1015.get_reference_voltage()
-        self._log.info("reference:     " + Fore.GREEN + "{:6.3f}V".format(self._reference))
-        self._ina260 = Ina260(config, level=level)
+        try:
+            self._ads1015 = ADS1015()
+            chip_type = self._ads1015.detect_chip_type(timeout=20.0) # default 10.0
+            self._log.info("found device:  " + Fore.GREEN + "{}".format(chip_type))
+            self._ads1015.set_mode("single")
+            self._ads1015.set_programmable_gain(2.048)
+            if chip_type == "ADS1015":
+                self._ads1015.set_sample_rate(1600)
+            else:
+                self._ads1015.set_sample_rate(860)
+            self._reference = self._ads1015.get_reference_voltage()
+            self._log.info("reference:     " + Fore.GREEN + "{:6.3f}V".format(self._reference))
+            self._ina260 = Ina260(config, level=level)
+        except Exception as e:
+            self._log.error('{} raised establishing system monitor: {}'.format(type(e), e))
+            raise e
         self._log.info('ready.')
 
     # ADS1015 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

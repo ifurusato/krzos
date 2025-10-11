@@ -21,7 +21,6 @@ init()
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 from hardware.i2c_scanner import I2CScanner
-#from hardware.radiozoa import Radiozoa
 from hardware.radiozoa_config import RadiozoaConfig
 
 @pytest.mark.unit

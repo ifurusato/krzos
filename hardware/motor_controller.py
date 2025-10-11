@@ -108,6 +108,7 @@ class MotorController(Component):
             self._external_clock = IrqClock(config, level=Level.INFO)
             self._external_clock.enable()
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._all_motors     = []
         _motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
         self._pfwd_motor     = _motor_configurer.get_motor(Orientation.PFWD)
         self._sfwd_motor     = _motor_configurer.get_motor(Orientation.SFWD)
@@ -286,7 +287,7 @@ class MotorController(Component):
         if self.loop_is_running:
             self._loop_enabled = False
             self._loop_thread  = None
-            self._log.info(Style.BRIGHT + 'stopped motor control loop.')
+            self._log.info('stopped motor control loop.')
         else:
             self._log.warning('motor control loop already disabled.')
 
@@ -304,7 +305,6 @@ class MotorController(Component):
         The motors loop, which executes while the flag argument lambda is True.
         '''
         self._log.info('loop start.')
-        self._log.info(Style.BRIGHT + 'loop start.')
         try:
             while f_is_enabled():
                 # execute any callback here…
@@ -791,7 +791,7 @@ class MotorController(Component):
         This differs from both halt() and brake() in that it also suppresses
         all behaviours. TODO
         '''
-        self._log.info(Fore.MAGENTA + Style.BRIGHT + 'Y: STOP')
+        self._log.info(Fore.MAGENTA + 'stop')
         if self.is_stopped:
             # just in case a motor is still moving
             for _motor in self._all_motors:

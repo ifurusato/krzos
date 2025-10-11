@@ -21,7 +21,7 @@ from core.publisher import Publisher
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class QueuePublisher(Publisher):
-    NAME = 'queue'
+    NAME = 'pub:queue'
     _PUBLISHER_LOOP = '__queue_publisher_loop'
     '''
     A Publisher that publishes messages from a queue, available as a global
@@ -65,7 +65,7 @@ class QueuePublisher(Publisher):
             if self._message_bus.get_task_by_name(QueuePublisher._PUBLISHER_LOOP):
                 raise Exception('already enabled.')
             else:
-                self._log.info('creating task for publisher loop...')
+                self._log.info('creating task for publisher loop…')
                 self._message_bus.loop.create_task(self._publisher_loop(lambda: self.enabled), name=QueuePublisher._PUBLISHER_LOOP)
                 self._log.info('enabled.')
         else:
@@ -73,10 +73,10 @@ class QueuePublisher(Publisher):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _publisher_loop(self, f_is_enabled):
-        self._log.info('starting queue publisher loop:\t' + Fore.YELLOW + ( '; (suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
+        self._log.info('starting queue publisher loop: ' + Fore.YELLOW + ( '(suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
         while f_is_enabled():
             _count = next(self._counter)
-            self._log.debug('[{:03d}] begin publisher loop...'.format(_count))
+            self._log.debug('[{:03d}] begin publisher loop…'.format(_count))
             if not self.suppressed:
                 while not self._queue.empty():
                     _message = self._queue.poll()
