@@ -39,7 +39,7 @@ class Radiozoa(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._default_speed = _cfg.get('default_speed', 1.0)
-        self._verbose   = False
+        self._verbose   = True
         self._use_color = True
         # per-motor speed (for vectors)
         self._pfwd_speed = 1.0
@@ -156,7 +156,8 @@ class Radiozoa(Behaviour):
             self._log.debug("polling…")
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
-                self._log.warning("all sensors out of range or unavailable.")
+#               self._log.warning("all sensors out of range or unavailable.")
+                self._display_info(Fore.RED + '😡 OOR: {}\n'.format(distances) + Fore.CYAN)
                 self._set_default_speeds()
             else:
                 self._update_motor_speeds(distances)
@@ -243,32 +244,36 @@ class Radiozoa(Behaviour):
         self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, -self._default_speed, self._default_speed))
         # display
         if self._verbose:
-            if self._use_color:
-                self._log.info("speeds: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
-                        self.get_highlight_color(self._pfwd_speed),
-                        self._pfwd_speed,
-                        Style.RESET_ALL,
-                        self.get_highlight_color(self._sfwd_speed),
-                        self._sfwd_speed,
-                        Style.RESET_ALL,
-                        self.get_highlight_color(self._paft_speed),
-                        self._paft_speed,
-                        Style.RESET_ALL,
-                        self.get_highlight_color(self._saft_speed),
-                        self._saft_speed,
-                        Style.RESET_ALL
-                    )
-                )
-            else:
-                self._log.info("speeds: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
-                        self._pfwd_speed, self._sfwd_speed, self._paft_speed, self._saft_speed
-                    )
-                )
+            self._display_info()
         else:
 #           self._log.debug(Fore.BLACK + "…")
             print(Fore.BLACK + "…" + Style.RESET_ALL)
             pass
 
+    def _display_info(self, message=''):
+        if self._use_color:
+            self._log.info("{} speeds: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
+                    message,
+                    self.get_highlight_color(self._pfwd_speed),
+                    self._pfwd_speed,
+                    Style.RESET_ALL,
+                    self.get_highlight_color(self._sfwd_speed),
+                    self._sfwd_speed,
+                    Style.RESET_ALL,
+                    self.get_highlight_color(self._paft_speed),
+                    self._paft_speed,
+                    Style.RESET_ALL,
+                    self.get_highlight_color(self._saft_speed),
+                    self._saft_speed,
+                    Style.RESET_ALL
+                )
+            )
+        else:
+            self._log.info("speeds: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
+                    self._pfwd_speed, self._sfwd_speed, self._paft_speed, self._saft_speed
+                )
+            )
+ 
     def _accelerate(self):
         self._log.info("accelerate…")
         if self._motor_controller:

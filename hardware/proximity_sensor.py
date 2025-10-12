@@ -159,6 +159,8 @@ class ProximitySensor(object):
         if self._active:
 #           _start_time = dt.now()
             _distance = self._tof.get_distance()
+            # TEMP
+            self._log.info(f"😥 get_distance for {self._label} at {self._i2c_address}: {_distance}")
 #           _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
 #           self._log.info('sensor poll complete: {}ms elapsed.'.format(_elapsed_ms))
             return _distance

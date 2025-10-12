@@ -65,7 +65,7 @@ class RadiozoaSensor(Component):
             raise ValueError('no configuration provided.')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._level = level
-        self._poll_interval = 0.01  # 50ms
+        self._poll_interval = 0.2  # 50ms
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._config = config
         _cfg_radiozoa        = config.get('kros').get('hardware').get('radiozoa')
@@ -147,9 +147,10 @@ class RadiozoaSensor(Component):
             if sensor.enabled and not sensor.active:
                 raise MissingComponentError('Sensor {} is inactive.'.format(sensor.abbrev))
         for sensor in self._sensors:
-            self._log.debug('start ranging sensor {}…'.format(sensor.abbrev))
+            self._log.info('😥 start ranging sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 sensor.start_ranging()
+        time.sleep(1) # give the sensors a chance before actually using them
 
     def _create_sensors(self):
         '''

@@ -95,10 +95,11 @@ class VL53L0X:
         self._log.debug('creating sensor at 0x{:02X}…'.format(i2c_address))
         self._tca9548a_num = tca9548a_num
         self._tca9548a_addr = tca9548a_addr
-        self._i2c_bus = i2c_bus
-#       self._i2c_bus = smbus.SMBus()
-        self._dev = None
+        self._i2c_bus     = i2c_bus
+#       self._i2c_bus     = smbus.SMBus()
+        self._dev         = None
         self._tof_library = None
+        self._is_ranging  = False
         # Register Address
         self.ADDR_UNIT_ID_HIGH = 0x16 # Serial number high byte
         self.ADDR_UNIT_ID_LOW  = 0x17 # Serial number low byte
@@ -141,10 +142,13 @@ class VL53L0X:
     def open(self):
         self._log.debug('open sensor at 0x{:02X}'.format(self._i2c_address))
         if self._tof_library:
-#           self._i2c_bus.open(bus=self._i2c_bus_number)
             self._configure_i2c_library_functions()
             self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
-            return True # added to force wait for value
+            self._log.info("Device pointer after initialise for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, self._dev))
+            if not self._dev:
+                self._log.error("VL53L0X initialisation failed for '{}' at 0x{:02X}: device pointer is NULL/zero.".format(self._label, self._i2c_address))
+                raise Vl53l0xError("VL53L0X initialisation failed for '{}' at 0x{:02X}: device pointer is NULL/zero.".format(self._label, self._i2c_address))
+            return True
         else:
             raise Exception('no ToF library available.')
 
@@ -170,12 +174,10 @@ class VL53L0X:
                     data_p[index] = result[index]
 
             return ret_val
-
         # I2C bus write callback for low level library.
         def _i2c_write(address, reg, data_p, length):
             ret_val = 0
             data = []
-
             for index in range(length):
                 data.append(data_p[index])
             try:
@@ -183,22 +185,62 @@ class VL53L0X:
             except IOError:
                 ret_val = -1
             return ret_val
-
-        # Pass i2c read/write function pointers to VL53L0X library.
+        # pass i2c read/write function pointers to VL53L0X library.
         self._i2c_read_func = _I2C_READ_FUNC(_i2c_read)
         self._i2c_write_func = _I2C_WRITE_FUNC(_i2c_write)
         self._tof_library.VL53L0X_set_i2c(self._i2c_read_func, self._i2c_write_func)
 
     def start_ranging(self, mode=Vl53l0xAccuracyMode.GOOD):
         """Start VL53L0X ToF Sensor Ranging"""
-        self._tof_library.startRanging(self._dev, mode)
+        if not self._dev:
+            self._log.error("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
+            raise Vl53l0xError("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
+        result = self._tof_library.startRanging(self._dev, mode)
+        self._log.info("startRanging on '{}' at 0x{:02X} returned: {}".format(self._label, self._i2c_address, result))
+        if hasattr(self._tof_library, 'getRangingStatus'):
+            status = self._tof_library.getRangingStatus(self._dev)
+            self._log.info("Ranging status for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, status))
+            if status != 0:
+                self._log.error("Ranging failed for '{}' at 0x{:02X} with status {}".format(self._label, self._i2c_address, status))
+                raise Vl53l0xError("Ranging failed for '{}' at 0x{:02X} with status {}".format(self._label, self._i2c_address, status))
+        self._is_ranging = True
 
     def stop_ranging(self):
+        """Stop VL53L0X ToF Sensor Ranging"""
+        self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
+        if self._dev:
+            self._tof_library.stopRanging(self._dev)
+        self._is_ranging = False
+
+    def get_distance(self):
+        """Get distance from VL53L0X ToF Sensor"""
+        if not self._is_ranging:
+            self._log.error("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
+            raise Vl53l0xError("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
+        distance = self._tof_library.getDistance(self._dev)
+        self._log.info("getDistance for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, distance))
+        return distance
+
+    def x_open(self):
+        self._log.debug('open sensor at 0x{:02X}'.format(self._i2c_address))
+        if self._tof_library:
+#           self._i2c_bus.open(bus=self._i2c_bus_number)
+            self._configure_i2c_library_functions()
+            self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
+            return True # added to force wait for value
+        else:
+            raise Exception('no ToF library available.')
+
+    def x_start_ranging(self, mode=Vl53l0xAccuracyMode.GOOD):
+        """Start VL53L0X ToF Sensor Ranging"""
+        self._tof_library.startRanging(self._dev, mode)
+
+    def x_stop_ranging(self):
         """Stop VL53L0X ToF Sensor Ranging"""
         self._log.info('stop ranging sensor at 0x{:02X}…'.format(self._i2c_address))
         self._tof_library.stopRanging(self._dev)
 
-    def get_distance(self):
+    def x_get_distance(self):
         """Get distance from VL53L0X ToF Sensor"""
 #       self._log.info('getting distance from sensor at 0x{:02X}'.format(self._i2c_address))
         return self._tof_library.getDistance(self._dev)
