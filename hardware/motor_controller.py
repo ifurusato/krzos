@@ -34,8 +34,9 @@ from hardware.slew_rate import SlewRate
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorController(Component):
     NAME = 'motor-ctrl'
-    STOP_LAMBDA_NAME  = "__stop_accum" # TEMP moved to StopHandler
-    HALT_LAMBDA_NAME  = "__halt_accum" # TEMP moved to StopHandler
+    STOP_LAMBDA_NAME  = "__stop_accum"  # TEMP moved to StopHandler
+    HALT_LAMBDA_NAME  = "__halt_accum"  # TEMP moved to StopHandler
+    BRAKE_LAMBDA_NAME = "__brake_accum" # TEMP moved to StopHandler
     PORT_CW_ROTATE_LAMBDA_NAME   = "__port_rotate_cw_steering"
     STBD_CW_ROTATE_LAMBDA_NAME   = "__stbd_rotate_cw_steering"
 
@@ -855,11 +856,15 @@ class MotorController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def brake(self):
+        '''
+        Creates a thread to allow braking via a call to decelerate.
+        '''
+        self._log.info(Fore.YELLOW + 'brake')
         def run_brake():
             self.decelerate(target_speed=0.0, step=0.02, step_delay_ms=10, enabled=lambda: self.enabled)
-        t = threading.Thread(target=run_brake, daemon=True)
-        t.start()
-#       self._brake_thread = t
+        _brake_thread = Thread(target=run_brake, daemon=True)
+        _brake_thread.start()
+#       self._brake_thread = _brake_thread
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def stop(self):
@@ -869,7 +874,7 @@ class MotorController(Component):
         This differs from both halt() and brake() in that it also suppresses
         all behaviours. TODO
         '''
-        self._log.info(Fore.MAGENTA + 'stop')
+        self._log.info(Fore.YELLOW + 'stop')
         if self.is_stopped:
             # just in case a motor is still moving
             for _motor in self._all_motors:

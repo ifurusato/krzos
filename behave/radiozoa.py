@@ -42,7 +42,7 @@ class Radiozoa(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._counter  = itertools.count()
-        self._default_speed = _cfg.get('default_speed', 1.0)
+        _default_speed = _cfg.get('default_speed', 1.0)
         _dynamic_speed = _cfg.get('dynamic_speed')
         self._verbose   = False
         self._use_color = True
@@ -69,7 +69,10 @@ class Radiozoa(Behaviour):
         _component_registry = Component.get_registry()
         self._digital_pot = None
         if _dynamic_speed:
+            self._default_speed = 0.0
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        else:
+            self._default_speed = _default_speed
         self._radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
         if self._radiozoa_sensor is None:
             self._log.info(Fore.WHITE + 'creating Radiozoa sensor…')
@@ -161,7 +164,7 @@ class Radiozoa(Behaviour):
 
     def _dynamic_set_default_speed(self):
         _speed = self._digital_pot.get_scaled_value(False) # values 0.0-1.0
-        if isclose(_target_speed, 0.0, abs_tol=0.08):
+        if isclose(_speed, 0.0, abs_tol=0.08):
             self._digital_pot.set_black() # only on digital pot
             self._default_speed = 0.0
             self._log.info(Fore.BLACK + "default speed: stopped")
@@ -342,6 +345,8 @@ class Radiozoa(Behaviour):
 
     def _shutdown(self):
         self._log.info("shutting down tasks and event loop…")
+        self._motor_controller.brake()
+        time.sleep(2)
         try:
             tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
             for task in tasks:
@@ -349,6 +354,8 @@ class Radiozoa(Behaviour):
             self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
+        # if brake hasn't finished we stop anyway
+        self._motor_controller.stop()
         self._loop_instance.stop()
         self._loop_instance.close()
         self._log.info(Fore.YELLOW + 'shut down complete.')
