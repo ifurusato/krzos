@@ -39,16 +39,16 @@ kros:
 #           release:                    False              # release idle behaviour
 #           idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
 #           loop_freq_hz:                   1              # main loop delay in hz
-#       roam:
-#           enable:                     False              # enable roam behaviour
-#           release:                    False              # release roam behaviour
-#           min_velocity:                 0.0              # minimum motor target velocity
-#           max_velocity:               100.0              # maximum motor target velocity
-#           cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
-#           stop_delay_s:                   3              # how many seconds to wait before cruising again
-#           loop_delay_ms:                 80              # asyncio loop delay in milliseconds
-#           deadband_threshold:             0.10           # don't drive motors slower than this
-#           loop_freq_hz:                   1              # main loop delay in hz
+        roam:
+            enable:                     False              # enable roam behaviour
+            release:                    False              # release roam behaviour
+            min_velocity:                 0.0              # minimum motor target velocity
+            max_velocity:               100.0              # maximum motor target velocity
+            cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
+            stop_delay_s:                   3              # how many seconds to wait before cruising again
+            loop_delay_ms:                 80              # asyncio loop delay in milliseconds
+            deadband_threshold:             0.10           # don't drive motors slower than this
+            loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
             enable:                      True              # enable radiozoa behaviour
             release:                     True              # release radiozoa behaviour
