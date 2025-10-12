@@ -175,7 +175,7 @@ class VL53L0X:
         if self._tof_library:
             self._configure_i2c_library_functions()
             self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
-            self._log.info("Device pointer after initialise for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, self._dev))
+            self._log.debug("device pointer after initialise for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, self._dev))
             if not self._dev:
                 self._log.error("VL53L0X initialisation failed for '{}' at 0x{:02X}: device pointer is NULL/zero.".format(self._label, self._i2c_address))
                 raise Vl53l0xError("VL53L0X initialisation failed for '{}' at 0x{:02X}: device pointer is NULL/zero.".format(self._label, self._i2c_address))
@@ -222,7 +222,7 @@ class VL53L0X:
         self._tof_library.VL53L0X_set_i2c(self._i2c_read_func, self._i2c_write_func)
 
     def start_ranging(self):
-        self._log.info("starting ranging for '{}' at 0x{:02X}".format(self._label, self._i2c_address))
+        self._log.debug("starting ranging for '{}' at 0x{:02X}".format(self._label, self._i2c_address))
         if not self._dev:
             raise Vl53l0xError("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
         result = self._tof_library.startRanging(self._dev, self._accuracy_mode.value)

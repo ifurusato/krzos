@@ -11,6 +11,8 @@
 
 import time
 import numpy as np
+import itertools
+from math import isclose
 from threading import Thread, Event as ThreadEvent
 import asyncio
 from colorama import init, Fore, Style
@@ -23,6 +25,7 @@ from core.event import Event
 from core.orientation import Orientation
 from behave.behaviour import Behaviour
 from hardware.radiozoa_sensor import RadiozoaSensor
+from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 
 class Radiozoa(Behaviour):
@@ -38,7 +41,9 @@ class Radiozoa(Behaviour):
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
+        self._counter  = itertools.count()
         self._default_speed = _cfg.get('default_speed', 1.0)
+        _dynamic_speed = _cfg.get('dynamic_speed')
         self._verbose   = False
         self._use_color = True
         # per-motor speed (for vectors)
@@ -62,6 +67,9 @@ class Radiozoa(Behaviour):
         }
         # registry lookups
         _component_registry = Component.get_registry()
+        self._digital_pot = None
+        if _dynamic_speed:
+            self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
         self._radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
         if self._radiozoa_sensor is None:
             self._log.info(Fore.WHITE + 'creating Radiozoa sensor…')
@@ -151,28 +159,34 @@ class Radiozoa(Behaviour):
                 self._decelerate()
             self._log.info("radiozoa loop stopped.")
 
+    def _dynamic_set_default_speed(self):
+        _speed = self._digital_pot.get_scaled_value(False) # values 0.0-1.0
+        if isclose(_target_speed, 0.0, abs_tol=0.08):
+            self._digital_pot.set_black() # only on digital pot
+            self._default_speed = 0.0
+            self._log.info(Fore.BLACK + "default speed: stopped")
+        else:
+            self._digital_pot.set_rgb(self._digital_pot.value)
+            self._default_speed = _speed
+            self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
+
     async def _poll(self):
         try:
-            self._log.debug("polling…")
+#           self._log.debug("polling…")
+            if next(self._counter) % 5 == 0:
+                self._dynamic_set_default_speed()
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
-#               self._log.warning("all sensors out of range or unavailable.")
-#               self._display_info(Fore.RED + '😡 OOR: {}\n'.format(distances) + Fore.CYAN)
-                self._set_default_speeds()
+                # stop when sensors are unavailable or out of range.
+                self._pfwd_speed = 0.0
+                self._sfwd_speed = 0.0
+                self._paft_speed = 0.0
+                self._saft_speed = 0.0
             else:
                 self._update_motor_speeds(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
-
-    def _set_default_speeds(self):
-        '''
-        Set default speeds when sensors are unavailable or out of range.
-        '''
-        self._pfwd_speed = 0.0
-        self._sfwd_speed = 0.0
-        self._paft_speed = 0.0
-        self._saft_speed = 0.0
 
     def get_highlight_color(self, value):
         """Return colorama color/style for multiplier legend."""
@@ -234,10 +248,6 @@ class Radiozoa(Behaviour):
         paft = vy - vx
         saft = vy + vx
         max_motor = max(abs(pfwd), abs(sfwd), abs(paft), abs(saft), 1.0)
-#       self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, 0.0, self._default_speed))
-#       self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, 0.0, self._default_speed))
-#       self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, 0.0, self._default_speed))
-#       self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, 0.0, self._default_speed))
         self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
         self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
         self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, -self._default_speed, self._default_speed))

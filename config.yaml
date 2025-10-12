@@ -52,6 +52,7 @@ kros:
         radiozoa:
             enable:                      True              # enable radiozoa behaviour
             release:                     True              # release radiozoa behaviour
+            dynamic_speed:               True              # if True use digital pot for default speed
             loop_delay_ms:                 50
             default_speed:                  0.8              # cruising speed
     message_bus:

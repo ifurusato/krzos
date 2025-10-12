@@ -25,6 +25,7 @@ REG_PWMCON0 = 0x98
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DigitalPotentiometer(Component):
+    NAME = 'digital-pot'
     '''
     Configures an IO Expander Potentiometer breakout, returning an analog
     value scaled to a specified range. For a center-zero pot simply
@@ -52,7 +53,8 @@ class DigitalPotentiometer(Component):
             self._i2c_addr = i2c_address
         else:
             self._i2c_addr = _cfg.get('i2c_address')
-        self._log = Logger('digital-pot-0x{:02X}'.format(self._i2c_addr), level)
+#       self._log = Logger('digital-pot-0x{:02X}'.format(self._i2c_addr), level)
+        self._log = Logger(DigitalPotentiometer.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._pin_red    = _cfg.get('pin_red')
         self._pin_green  = _cfg.get('pin_green')

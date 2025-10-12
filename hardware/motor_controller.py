@@ -252,6 +252,7 @@ class MotorController(Component):
         if self.enabled:
             self._log.debug('already enabled.')
         else:
+            self._log.info(Style.BRIGHT + 'enabling motor controller…')
             Component.enable(self)
             if self._external_clock:
                 self._external_clock.add_callback(self.external_callback_method)
@@ -606,7 +607,6 @@ class MotorController(Component):
         :param vector_function: function returning the desired speed for this motor
         :param exclusive:       if True, clears other vector functions for this motor before adding
         '''
-        self._log.info(Fore.WHITE + Style.BRIGHT + 'motor controller enabled? {} '.format(self.enabled))
         if orientation not in self._vector_functions:
             raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
         if exclusive:
@@ -855,7 +855,11 @@ class MotorController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def brake(self):
-        self.decelerate(target_speed=0.0, step=0.02, step_delay_ms=20, enabled=lambda: self.enabled)
+        def run_brake():
+            self.decelerate(target_speed=0.0, step=0.02, step_delay_ms=10, enabled=lambda: self.enabled)
+        t = threading.Thread(target=run_brake, daemon=True)
+        t.start()
+#       self._brake_thread = t
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def stop(self):

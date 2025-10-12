@@ -500,13 +500,13 @@ class MessageBus(Component):
         try:
             if self.loop:
                 if self.loop.is_running():
-                    self._log.info(Fore.YELLOW + 'stopping event loop…')
+                    self._log.info('stopping event loop…')
                     self.loop.stop()
-                    self._log.info(Fore.YELLOW + 'event loop stopped.')
+                    self._log.info('event loop stopped.')
                 if not self.loop.is_running() and not self.loop.is_closed():
-                    self._log.info(Fore.YELLOW + 'closing event loop…')
+                    self._log.info('closing event loop…')
                     self.loop.close()
-                    self._log.info(Fore.YELLOW + 'event loop closed.')
+                    self._log.info('event loop closed.')
             else:
                 self._log.warning('no message bus event loop!')
         except Exception as e:

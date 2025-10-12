@@ -172,12 +172,12 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
                 __log.warning('found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(oldAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
         else:
             foundChip = False
-            __log.warning('missing ThunderBorg at 0x{:02X}'.format(oldAddress))
+            __log.warning('missing ThunderBorg at 0x{:02X} [1]'.format(oldAddress))
     except KeyboardInterrupt:
         raise
     except:
         foundChip = False
-        __log.warning('missing ThunderBorg at 0x{:02X}'.format(oldAddress))
+        __log.warning('missing ThunderBorg at 0x{:02X} [2]'.format(oldAddress))
     if foundChip:
         bus.RawWrite(COMMAND_SET_I2C_ADD, [newAddress])
         time.sleep(0.1)
@@ -194,12 +194,12 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
                     __log.warning('found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(newAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
             else:
                 foundChip = False
-                __log.warning('missing ThunderBorg at 0x{:02X}'.format(newAddress))
+                __log.warning('missing ThunderBorg at 0x{:02X} [3]'.format(newAddress))
         except KeyboardInterrupt:
             raise
         except:
             foundChip = False
-            __log.warning('missing ThunderBorg at 0x{:02X}'.format(newAddress))
+            __log.warning('missing ThunderBorg at 0x{:02X} [4]'.format(newAddress))
     if foundChip:
         __log.info('new I2C address of 0x{:02X} set successfully'.format(newAddress))
     else:
@@ -280,12 +280,12 @@ class ThunderBorg:
                             self.i2cAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
             else:
                 self.foundChip = False
-                self._log.error('missing ThunderBorg at 0x{:02X}'.format(self.i2cAddress))
+                self._log.error('missing ThunderBorg at 0x{:02X} [5]'.format(self.i2cAddress))
         except KeyboardInterrupt:
             raise
         except:
             self.foundChip = False
-            self._log.error('missing ThunderBorg at 0x{:02X}'.format(self.i2cAddress))
+            self._log.error('missing ThunderBorg at 0x{:02X} [6]'.format(self.i2cAddress))
 
         # See if we are missing chips
         if not self.foundChip:

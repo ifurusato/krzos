@@ -126,7 +126,7 @@ class RadiozoaSensor(Component):
             total_budget = sum(budgets)
             margin = 20  # ms safety margin
             poll_interval = (total_budget + margin) / 1000.0
-            self._log.info(Fore.BLUE + "🥣 computed poll interval: {:.3f} seconds (sum timing budgets: {} ms, margin: {} ms)".format(
+            self._log.info("computed poll interval: {:.3f} seconds (sum timing budgets: {} ms, margin: {} ms)".format(
                 poll_interval, total_budget, margin))
             return poll_interval
         else:
@@ -167,7 +167,7 @@ class RadiozoaSensor(Component):
             if sensor.enabled and not sensor.active:
                 raise MissingComponentError('Sensor {} is inactive.'.format(sensor.abbrev))
         for sensor in self._sensors:
-            self._log.info('😥 start ranging sensor {}…'.format(sensor.abbrev))
+            self._log.debug('start ranging sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 sensor.start_ranging()
         time.sleep(1) # give the sensors a chance before actually using them
