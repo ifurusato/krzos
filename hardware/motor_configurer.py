@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-10-05
-# modified: 2025-09-22
-#
+# modified: 2025-10-12
 
 import sys, traceback
 from fractions import Fraction
@@ -21,6 +20,7 @@ from core.orientation import Orientation
 from hardware.i2c_scanner import I2CScanner
 from hardware.motor import Motor
 from hardware.decoder import Decoder
+from hardware.system import System
 from hardware.thunderborg import ThunderBorg
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -42,6 +42,9 @@ class MotorConfigurer(Component):
         if not isinstance(i2c_scanner, I2CScanner):
             raise ValueError('expected I2CScanner, not {}.'.format(type(i2c_scanner)))
         self._i2c_scanner = i2c_scanner
+        self._system = Component.get_registry().get('system')
+        if self._system is None:
+            self._system = System(config)
         self._log.debug('getting battery reading…')
         # configure from command line argument properties
         _args = self._config['kros'].get('arguments')
@@ -49,6 +52,7 @@ class MotorConfigurer(Component):
         self._log.info('motors enabled? {}'.format(self._motors_enabled))
         # import the ThunderBorg library, then configure and return the motors
         self._max_power_ratio = None
+        self._enable_tb_scan = False
         self._port_tb = self._import_thunderborg(Orientation.PORT)
         self._log.info('configured PORT ThunderBorg at I2C address: 0x{:02X}'.format(self._port_tb.I2cAddress))
         self._stbd_tb  = self._import_thunderborg(Orientation.STBD)
@@ -140,59 +144,74 @@ class MotorConfigurer(Component):
             else:
                 raise Exception('expected PORT or STBD orientation.')
             self._log.debug('importing ThunderBorg for {} orientation at address 0x{:02X}…'.format(orientation.name, _thunderborg_address))
-            try:
-                if self._i2c_scanner.has_address([_thunderborg_address]):
-                    self._log.debug('importing ThunderBorg at address 0x{:02X}…'.format(_thunderborg_address))
+            _tb = None
+            if self._enable_tb_scan:
+                try:
+                    if self._i2c_scanner.has_address([_thunderborg_address]):
+                        self._log.debug('importing ThunderBorg at address 0x{:02X}…'.format(_thunderborg_address))
+                        _tb = ThunderBorg(Level.INFO)  # create a new ThunderBorg object
+                        _tb.i2cAddress = _thunderborg_address
+                        self._log.debug('instantiated thunderborg.')
+                    else:
+                        raise Exception('unable to instantiate ThunderBorg [1].')
+                    _tb.Init() # set the board up (checks the board is connected)
+                    self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
+                            orientation.name, _thunderborg_address))
+                    if not _tb.foundChip:
+                        boards = ThunderBorg.ScanForThunderBorg()
+                        if len(boards) == 0:
+                            self._log.error('No ThunderBorg found, check you are attached :)')
+                        else:
+                            self._log.error('No ThunderBorg at address %02X, but we did find boards:' % (_tb.i2cAddress))
+                            for board in boards:
+                                self._log.info('    %02X (%d)' % (board, board))
+                            self._log.error('If you need to change the I²C address change the setup line so it is correct, e.g. TB.i2cAddress = 0x{}'.format(
+                                    boards[0]))
+                        raise Exception('unable to instantiate ThunderBorg [2].')
+                except OSError as e:
+                    raise Exception('unable to instantiate ThunderBorg [3].\n{}', traceback.format_exc())
+                except Exception as e:
+                    raise Exception('{} error instantiating ThunderBorg [4]: {}\n{}'.format(type(e), e, traceback.format_exc()))
+            else:
+                try:
                     _tb = ThunderBorg(Level.INFO)  # create a new ThunderBorg object
                     _tb.i2cAddress = _thunderborg_address
-                    self._log.debug('instantiated thunderborg.')
-                else:
-                    raise Exception('unable to instantiate ThunderBorg [2].')
-                _tb.Init() # set the board up (checks the board is connected)
-                self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
-                        orientation.name, _thunderborg_address))
-                if not _tb.foundChip:
-                    boards = ThunderBorg.ScanForThunderBorg()
-                    if len(boards) == 0:
-                        self._log.error('No ThunderBorg found, check you are attached :)')
-                    else:
-                        self._log.error('No ThunderBorg at address %02X, but we did find boards:' % (_tb.i2cAddress))
-                        for board in boards:
-                            self._log.info('    %02X (%d)' % (board, board))
-                        self._log.error('If you need to change the I²C address change the setup line so it is correct, e.g. TB.i2cAddress = 0x{}'.format(
-                                boards[0]))
-                    raise Exception('unable to instantiate ThunderBorg [3].')
-                _tb.SetLedShowBattery(True)
-                # initialise ThunderBorg ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                self._log.info('getting battery reading…')
+                    _tb.Init() # set the board up (checks the board is connected)
+                    self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
+                            orientation.name, _thunderborg_address))
+                except Exception as e:
+                    raise Exception('{} error instantiating ThunderBorg [5]: {}\n{}'.format(type(e), e, traceback.format_exc()))
+            # initialise ThunderBorg ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            _tb.SetLedShowBattery(True)
+            self._log.info('getting battery reading…')
+            voltage_in = 0
+            try:
                 # get battery voltage to determine max motor power
                 # could be: Makita 12V or 18V power tool battery, 12V line supply
                 voltage_in = _tb.GetBatteryReading()
                 self._log.info('battery reading: {}'.format(voltage_in))
                 if voltage_in is None:
-                    raise OSError('cannot continue: cannot read battery voltage.')
+                    raise OSError('cannot read battery voltage from ThunderBorg.')
                 self._log.info('voltage in: {:>5.2f}V'.format(voltage_in))
-        #       voltage_in = 20.5
-                # maximum motor voltage
-                _motor_voltage = self._config['kros'].get('motor').get('motor_voltage')
-                self._log.info('voltage out: {:>5.2f}V'.format(_motor_voltage))
-                if voltage_in < _motor_voltage:
-                    self._log.warning('battery voltage low ({:>5.2f}V).'.format(voltage_in))
-                # set the power limits
-                if _motor_voltage > voltage_in:
-                    self._max_power_ratio = 1.0
-                else:
-                    self._max_power_ratio = _motor_voltage / float(voltage_in)
-                    self._log.info('voltage in: {:.2f}; motor voltage: {:.2f}; max_power_ratio: {:.2f}'.format(
-                            voltage_in, _motor_voltage, self._max_power_ratio))
-                # convert float to ratio format
-                self._log.info('battery level: {:>5.2f}V; motor voltage: {:>5.2f}V; maximum power ratio: {}'.format(voltage_in, _motor_voltage, \
-                        str(Fraction(self._max_power_ratio).limit_denominator(max_denominator=20)).replace('/',':')))
-                return _tb
             except OSError as e:
-                raise Exception('unable to instantiate ThunderBorg [4].\n{}', traceback.format_exc())
-            except Exception as e:
-                raise Exception('{} error instantiating ThunderBorg [5]: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                voltage_in = self._system.get_battery_12v()
+                self._log.info('voltage in: {:>5.2f}V'.format(voltage_in) + Fore.YELLOW + '(from ADS1015)')
+            # maximum motor voltage
+            _motor_voltage = self._config['kros'].get('motor').get('motor_voltage')
+            self._log.info('voltage out: {:>5.2f}V'.format(_motor_voltage))
+            if voltage_in < _motor_voltage:
+                self._log.warning('battery voltage low ({:>5.2f}V).'.format(voltage_in))
+            # set the power limits
+            if _motor_voltage > voltage_in:
+                self._max_power_ratio = 1.0
+            else:
+                self._max_power_ratio = _motor_voltage / float(voltage_in)
+                self._log.info('voltage in: {:.2f}; motor voltage: {:.2f}; max_power_ratio: {:.2f}'.format(
+                        voltage_in, _motor_voltage, self._max_power_ratio))
+            # convert float to ratio format
+            self._log.info('battery level: {:>5.2f}V; motor voltage: {:>5.2f}V; maximum power ratio: {}'.format(voltage_in, _motor_voltage, \
+                    str(Fraction(self._max_power_ratio).limit_denominator(max_denominator=20)).replace('/',':')))
+            return _tb
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_thunderborg_leds(self, enable):

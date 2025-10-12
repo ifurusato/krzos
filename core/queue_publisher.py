@@ -35,7 +35,7 @@ class QueuePublisher(Publisher):
     :param level:           the optional log level
     '''
     def __init__(self, config, message_bus, message_factory, level=Level.INFO):
-        Publisher.__init__(self, QueuePublisher.NAME, config, message_bus, message_factory, suppressed=False, level=level)
+        Publisher.__init__(self, QueuePublisher.NAME, config, message_bus, message_factory, suppressed=False, enabled=True, level=level)
         _cfg = self._config['kros'].get('publisher').get('queue')
         _loop_freq_hz  = _cfg.get('loop_freq_hz')
         self._log.info('queue publisher loop frequency: {:d}Hz'.format(_loop_freq_hz))

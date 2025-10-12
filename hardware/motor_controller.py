@@ -120,6 +120,7 @@ class MotorController(Component):
         self._loop_enabled   = False
         self._event_counter  = itertools.count()
         self._motor_loop_callback = None
+        self._graceful_stop  = True
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._vector_functions = {
             Orientation.PFWD: {},
@@ -847,6 +848,10 @@ class MotorController(Component):
             return target_speed
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def brake(self):
+        self.decelerate(target_speed=0.0, step=0.02, step_delay_ms=20, enabled=lambda: self.enabled)
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def stop(self):
         '''
         Stops all motors immediately, with no slewing.
@@ -897,7 +902,10 @@ class MotorController(Component):
         '''
         Disable the motors.
         '''
-        self.emergency_stop() # just in case
+        if self._graceful_stop:
+            self.brake()
+        else:
+            self.emergency_stop() # just in case
         if self.enabled:
             if self._external_clock:
                 self._log.info('disabling by removing external clock callback…')

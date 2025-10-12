@@ -96,6 +96,7 @@ class RadiozoaSensor(Component):
             raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
         # create all sensors, raise exception if any are missing
         self._create_sensors()
+        self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._sensors}
         missing = []
         for sensor in self._sensors:
             if not self._i2c_scanner.has_hex_address(["0x{:02X}".format(sensor.i2c_address)]):
@@ -110,6 +111,9 @@ class RadiozoaSensor(Component):
         self._polling_task   = None
         self._callback       = None
         self._log.info('ready.')
+
+    def get_sensor_by_cardinal(self, cardinal):
+        return self._sensor_by_cardinal[cardinal]
 
     def set_visualisation(self, enable):
         if enable:

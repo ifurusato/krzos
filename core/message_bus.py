@@ -337,7 +337,8 @@ class MessageBus(Component):
         '''
         self._enable_publishers()
         _subscribers = self.subscribers
-        self._log.info(Fore.MAGENTA + 'starting {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
+        self._log.info(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(
+                len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         for _subscriber in _subscribers:
             if isinstance(_subscriber, Subscriber):
                 if _subscriber.enabled and not _subscriber.suppressed:
@@ -345,12 +346,11 @@ class MessageBus(Component):
                     _subscriber.start()
             else:
                 self._log.warning('unable to start non-subscriber: {}; value: {}'.format(type(_subscriber), _subscriber))
-        self._log.info(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(
-                len(_subscribers), '' if len(_subscribers) == 1 else 's'))
-        self._log.info('start callbacks…')
-        for _callback in self._start_callbacks:
-            _callback()
-        self._log.info('callbacks started.')
+        if len(self._start_callbacks) > 0:
+            self._log.info('start callbacks…')
+            for _callback in self._start_callbacks:
+                _callback()
+            self._log.info('callbacks started.')
         try:
             while self.enabled and len(_subscribers) > 0:
                 for _subscriber in _subscribers:

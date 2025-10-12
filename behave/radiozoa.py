@@ -18,6 +18,7 @@ init()
 
 from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
+from core.cardinal import Cardinal
 from core.event import Event
 from core.orientation import Orientation
 from behave.behaviour import Behaviour
@@ -26,10 +27,10 @@ from hardware.motor_controller import MotorController
 
 class Radiozoa(Behaviour):
     NAME = 'radiozoa'
-    RADIOZOA_PFWD_LAMBDA_NAME = "__radiozoa_pfwd"
-    RADIOZOA_SFWD_LAMBDA_NAME = "__radiozoa_sfwd"
-    RADIOZOA_PAFT_LAMBDA_NAME = "__radiozoa_paft"
-    RADIOZOA_SAFT_LAMBDA_NAME = "__radiozoa_saft"
+    RADIOZOA_PFWD_VECTOR_NAME = "__radiozoa_pfwd"
+    RADIOZOA_SFWD_VECTOR_NAME = "__radiozoa_sfwd"
+    RADIOZOA_PAFT_VECTOR_NAME = "__radiozoa_paft"
+    RADIOZOA_SAFT_VECTOR_NAME = "__radiozoa_saft"
 
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Radiozoa.NAME, level)
@@ -38,30 +39,27 @@ class Radiozoa(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._default_speed = _cfg.get('default_speed', 1.0)
-        self._reversed  = False  # TODO load from config
         self._verbose   = False
         self._use_color = True
-        # multipliers for each motor
-        self._pfwd_multiplier = 1.0
-        self._sfwd_multiplier = 1.0
-        self._paft_multiplier = 1.0
-        self._saft_multiplier = 1.0
+        # per-motor speed (for vectors)
+        self._pfwd_speed = 1.0
+        self._sfwd_speed = 1.0
+        self._paft_speed = 1.0
+        self._saft_speed = 1.0
         # directional vectors
-        self._directions = np.array([
-            [0, 1],                      
-            [np.sqrt(2)/2, np.sqrt(2)/2],
-            [1, 0],
-            [np.sqrt(2)/2, -np.sqrt(2)/2],
-            [0, -1],
-            [-np.sqrt(2)/2, -np.sqrt(2)/2],
-            [-1, 0],
-            [-np.sqrt(2)/2, np.sqrt(2)/2]
-        ])
-        # lambdas for each motor
-        self._roam_pfwd_lambda = lambda speed: speed * self._pfwd_multiplier
-        self._roam_sfwd_lambda = lambda speed: speed * self._sfwd_multiplier
-        self._roam_paft_lambda = lambda speed: speed * self._paft_multiplier
-        self._roam_saft_lambda = lambda speed: speed * self._saft_multiplier
+        self._pairs = [
+            (Cardinal.NORTH, Cardinal.SOUTH),
+            (Cardinal.NORTHWEST, Cardinal.SOUTHEAST),
+            (Cardinal.WEST, Cardinal.EAST),
+            (Cardinal.NORTHEAST, Cardinal.SOUTHWEST),
+        ]
+        # direction vectors for each axis (unit vectors)
+        self._directions = {
+            (Cardinal.NORTH, Cardinal.SOUTH): np.array([0, 1]),
+            (Cardinal.NORTHWEST, Cardinal.SOUTHEAST): np.array([-1, 1]),
+            (Cardinal.WEST, Cardinal.EAST): np.array([-1, 0]),
+            (Cardinal.NORTHEAST, Cardinal.SOUTHWEST): np.array([1, 1])
+        }
         # registry lookups
         _component_registry = Component.get_registry()
         self._radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
@@ -73,15 +71,32 @@ class Radiozoa(Behaviour):
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-        self._decorate_motor_controller()
+        self._register_motor_vectors()
         self._log.info('ready.')
 
-    def _decorate_motor_controller(self):
-        self._motor_controller.add_lambda(Orientation.PFWD, self.RADIOZOA_PFWD_LAMBDA_NAME, self._roam_pfwd_lambda)
-        self._motor_controller.add_lambda(Orientation.SFWD, self.RADIOZOA_SFWD_LAMBDA_NAME, self._roam_sfwd_lambda)
-        self._motor_controller.add_lambda(Orientation.PAFT, self.RADIOZOA_PAFT_LAMBDA_NAME, self._roam_paft_lambda)
-        self._motor_controller.add_lambda(Orientation.SAFT, self.RADIOZOA_SAFT_LAMBDA_NAME, self._roam_saft_lambda)
-        self._log.info('lambda functions added to motors.')
+    def _register_motor_vectors(self):
+        '''
+        Register vector functions for each motor, replacing speed multiplier lambdas.
+        '''
+        self._motor_controller.add_vector(
+            Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME, lambda: self._pfwd_speed, exclusive=True)
+        self._motor_controller.add_vector(
+            Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME, lambda: self._sfwd_speed, exclusive=True)
+        self._motor_controller.add_vector(
+            Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME, lambda: self._paft_speed, exclusive=True)
+        self._motor_controller.add_vector(
+            Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME, lambda: self._saft_speed, exclusive=True)
+        self._log.info('vector functions added to motors.')
+
+    def _remove_motor_vectors(self):
+        '''
+        Remove Radiozoa vector functions from all motors.
+        '''
+        self._motor_controller.remove_vector(Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME)
+        self._motor_controller.remove_vector(Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME)
+        self._motor_controller.remove_vector(Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME)
+        self._motor_controller.remove_vector(Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME)
+        self._log.info('vector functions removed from motors.')
 
     @property
     def name(self):
@@ -142,18 +157,21 @@ class Radiozoa(Behaviour):
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
                 self._log.warning("all sensors out of range or unavailable.")
-                self._set_default_multipliers()
+                self._set_default_speeds()
             else:
-                self._update_motor_multipliers(distances)
+                self._update_motor_speeds(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
 
-    def _set_default_multipliers(self):
-        self._pfwd_multiplier = 1.0
-        self._sfwd_multiplier = 1.0
-        self._paft_multiplier = 1.0
-        self._saft_multiplier = 1.0
+    def _set_default_speeds(self):
+        '''
+        Set default speeds when sensors are unavailable or out of range.
+        '''
+        self._pfwd_speed = self._default_speed
+        self._sfwd_speed = self._default_speed
+        self._paft_speed = self._default_speed
+        self._saft_speed = self._default_speed
 
     def get_highlight_color(self, value):
         """Return colorama color/style for multiplier legend."""
@@ -171,95 +189,77 @@ class Radiozoa(Behaviour):
         else:  # 0.61 - 0.8
             return Fore.MAGENTA
 
-    def _update_motor_multipliers(self, distances):
+    def _update_motor_speeds(self, distances):
         """
-        Center robot in space using 8 sensor distances, no rotation.
-        Out-of-range or missing sensors (None, <= 0, > FAR_THRESHOLD) are treated as maximally open (FAR_THRESHOLD).
-        Motor speeds are scaled by self._default_speed.
+        Center robot in space using four opposing sensor pairs as force vectors.
+        Robot does not move if both sensors in a pair are far (open space).
+        The amplitude of each pair's contribution is proportional to the imbalance between the two sensors.
+        The resulting vector is mapped to Mecanum wheels.
         """
-        # treat None, <= 0, or > FAR_THRESHOLD as FAR_THRESHOLD (max range, e.g., 1000mm)
-        D = np.array([
-            d if d is not None and d > 0 and d <= RadiozoaSensor.FAR_THRESHOLD
-            else RadiozoaSensor.FAR_THRESHOLD
-            for d in distances
-        ])
-        mean = np.mean(D)
-        errors = D - mean
-        movement = np.sum(errors[:, None] * self._directions, axis=0)
-        if self._reversed:
-            movement = -movement
-        # normalize vector to [-1, 1] range; avoid division by zero
-        max_abs = np.max(np.abs(movement)) if np.max(np.abs(movement)) > 1.0 else 1.0
-        vx, vy = movement / max_abs
-        # Mecanum mapping (no rotation)
+        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95 # use a cutoff just below max range
+        force_vec = np.zeros(2)
+        pair_active = False
+        for c1, c2 in self._pairs:
+            d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
+            d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
+            d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
+            d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
+
+            # TEMP
+            d1 = RadiozoaSensor.FAR_THRESHOLD
+            d2 = RadiozoaSensor.FAR_THRESHOLD
+
+            # if both sensors are far, ignore this pair (no imbalance to correct)
+            if d1 >= far_threshold and d2 >= far_threshold:
+                continue
+            # imbalance sets amplitude; move toward centering
+            diff = d1 - d2
+            vec = self._directions[(c1, c2)] * diff
+            force_vec += vec
+            pair_active = True
+        # if no pair contributed, robot is centered or in open space
+        if not pair_active or np.linalg.norm(force_vec) < 1.0:
+            self._pfwd_speed = self._sfwd_speed = self._paft_speed = self._saft_speed = 0.0
+            return
+        # normalize, scale, map to wheel speeds
+        max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
+        vx, vy = force_vec / max_abs
         pfwd = vy + vx
         sfwd = vy - vx
         paft = vy - vx
         saft = vy + vx
-        # normalize so no motor exceeds [-1, 1]
         max_motor = max(abs(pfwd), abs(sfwd), abs(paft), abs(saft), 1.0)
-        pfwd /= max_motor
-        sfwd /= max_motor
-        paft /= max_motor
-        saft /= max_motor
-        # scale by self._default_speed and clamp to [0, self._default_speed]
-        pfwd = np.clip(pfwd * self._default_speed, 0.0, self._default_speed)
-        sfwd = np.clip(sfwd * self._default_speed, 0.0, self._default_speed)
-        paft = np.clip(paft * self._default_speed, 0.0, self._default_speed)
-        saft = np.clip(saft * self._default_speed, 0.0, self._default_speed)
-        # set motor lambda multipliers
-        self._pfwd_multiplier = pfwd
-        self._sfwd_multiplier = sfwd
-        self._paft_multiplier = paft
-        self._saft_multiplier = saft
+        self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, 0.0, self._default_speed))
+        self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, 0.0, self._default_speed))
+        self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, 0.0, self._default_speed))
+        self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, 0.0, self._default_speed))
         # display
         if self._verbose:
             if self._use_color:
-                self._log.info("multipliers: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
-                        self.get_highlight_color(self._pfwd_multiplier),
-                        self._pfwd_multiplier,
+                self._log.info("speeds: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
+                        self.get_highlight_color(self._pfwd_speed),
+                        self._pfwd_speed,
                         Style.RESET_ALL,
-                        self.get_highlight_color(self._sfwd_multiplier),
-                        self._sfwd_multiplier,
+                        self.get_highlight_color(self._sfwd_speed),
+                        self._sfwd_speed,
                         Style.RESET_ALL,
-                        self.get_highlight_color(self._paft_multiplier),
-                        self._paft_multiplier,
+                        self.get_highlight_color(self._paft_speed),
+                        self._paft_speed,
                         Style.RESET_ALL,
-                        self.get_highlight_color(self._saft_multiplier),
-                        self._saft_multiplier,
+                        self.get_highlight_color(self._saft_speed),
+                        self._saft_speed,
                         Style.RESET_ALL
                     )
                 )
             else:
-                self._log.info("multipliers: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
-                        self._pfwd_multiplier, self._sfwd_multiplier, self._paft_multiplier, self._saft_multiplier
+                self._log.info("speeds: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
+                        self._pfwd_speed, self._sfwd_speed, self._paft_speed, self._saft_speed
                     )
                 )
         else:
 #           self._log.debug(Fore.BLACK + "…")
             print(Fore.BLACK + "…" + Style.RESET_ALL)
             pass
-
-    def x_update_motor_multipliers(self, distances):
-        # Opposing sensor pairs: [N,S], [NE,SW], [E,W], [SE,NW]
-        # Indices: N=0, NE=1, E=2, SE=3, S=4, SW=5, W=6, NW=7
-        pairs = [(0,4), (1,5), (2,6), (3,7)]
-        results = []
-        for i,j in pairs:
-            d_i = distances[i] if distances[i] is not None else RadiozoaSensor.FAR_THRESHOLD
-            d_j = distances[j] if distances[j] is not None else RadiozoaSensor.FAR_THRESHOLD
-            # Centering: positive means more space towards i, negative means more towards j
-            results.append((d_i - d_j) / RadiozoaSensor.FAR_THRESHOLD)
-        # compose motor multipliers from these four "center offset" values
-        # PFWD: prefers north/NE/east/SE; PAFT: prefers south/SW/west/NW, etc.
-        # Example weighting: PFWD = 1 - max(0, -results[0]), etc.
-        self._pfwd_multiplier = max(0.0, min(1.0, 1.0 - max(0, -results[0])))
-        self._sfwd_multiplier = max(0.0, min(1.0, 1.0 - max(0, -results[1])))
-        self._paft_multiplier = max(0.0, min(1.0, 1.0 - max(0, results[0])))
-        self._saft_multiplier = max(0.0, min(1.0, 1.0 - max(0, results[1])))
-        self._log.info(Fore.WHITE + "multipliers: pfwd={:4.2f}; sfwd={:4.2f}; paft={:4.2f}; saft={:4.2f}".format(
-                self._pfwd_multiplier, self._sfwd_multiplier, self._paft_multiplier, self._saft_multiplier))
-        # optionally further refine using additional pairs
 
     def _accelerate(self):
         self._log.info("accelerate…")
@@ -277,6 +277,7 @@ class Radiozoa(Behaviour):
             return
         if self._motor_controller:
             self._motor_controller.enable()
+            self._register_motor_vectors()
         Component.enable(self)
         self._loop_instance = asyncio.new_event_loop()
         self._stop_event = ThreadEvent()
@@ -288,7 +289,16 @@ class Radiozoa(Behaviour):
 
     def suppress(self):
         Behaviour.suppress(self)
+        self._remove_motor_vectors()
         self._log.info("radiozoa suppressed.")
+
+    def release(self):
+        '''
+        Releases suppression of the behaviour, re-registering vector functions.
+        '''
+        Behaviour.release(self)
+        self._register_motor_vectors()
+        self._log.info("radiozoa released.")
 
     def disable(self):
         if not self.enabled:
