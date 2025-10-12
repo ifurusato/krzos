@@ -65,7 +65,6 @@ class RadiozoaSensor(Component):
             raise ValueError('no configuration provided.')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._level = level
-        self._poll_interval = 0.2  # 50ms
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._config = config
         _cfg_radiozoa        = config.get('kros').get('hardware').get('radiozoa')
@@ -103,6 +102,7 @@ class RadiozoaSensor(Component):
                 missing.append(sensor.label)
         if missing:
             raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
+        self._poll_interval  = -1
         self._distances      = [None for _ in range(self._sensor_count)]
         self._distances_lock = Lock()
         self._polling_stop_event = Event()
@@ -111,6 +111,27 @@ class RadiozoaSensor(Component):
         self._polling_task   = None
         self._callback       = None
         self._log.info('ready.')
+
+    def _get_poll_interval(self):
+        '''
+        Returns the appropriate poll interval (float seconds) based on enabled sensors' accuracy modes.
+        Uses the sum of timing budgets + margin among enabled sensors.
+        '''
+        budgets = []
+        for sensor in self._sensors:
+            if sensor.enabled:
+                mode = sensor.tof.accuracy_mode
+                budgets.append(mode.timing_budget_ms)
+        if budgets:
+            total_budget = sum(budgets)
+            margin = 20  # ms safety margin
+            poll_interval = (total_budget + margin) / 1000.0
+            self._log.info(Fore.BLUE + "🥣 computed poll interval: {:.3f} seconds (sum timing budgets: {} ms, margin: {} ms)".format(
+                poll_interval, total_budget, margin))
+            return poll_interval
+        else:
+            self._log.warning("no active sensors with timing budget found; using default poll interval: 0.05s")
+            return 0.2
 
     def get_sensor_by_cardinal(self, cardinal):
         return self._sensor_by_cardinal[cardinal]
@@ -139,8 +160,7 @@ class RadiozoaSensor(Component):
             self._log.debug('opening sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 sensor.open()
-        time.sleep(0.5)
-        self._start_polling()
+                time.sleep(0.1)
         # confirm all sensors are available and active
         for sensor in self._sensors:
             self._log.debug('checking availability of sensor {}…'.format(sensor.abbrev))
@@ -151,6 +171,7 @@ class RadiozoaSensor(Component):
             if sensor.enabled:
                 sensor.start_ranging()
         time.sleep(1) # give the sensors a chance before actually using them
+        self._start_polling()
 
     def _create_sensors(self):
         '''
@@ -258,6 +279,8 @@ class RadiozoaSensor(Component):
                     all_connected = False
         if all_connected:
             super().enable()
+            # set polling interval based on sensor accuracy mode
+            self._poll_interval = self._get_poll_interval()
             self._log.info('all sensors connected.')
         else:
             self._log.warning('unable to connect to all sensors.')

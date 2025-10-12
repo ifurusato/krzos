@@ -137,7 +137,7 @@ class ProximitySensor(object):
         '''
         try:
             self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._label, self._i2c_address))
-            self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._label)
+            self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._label, accuracy=Vl53l0xAccuracyMode.HIGH_SPEED)
             self._active = True
             self._log.debug('sensor {} ready.'.format(self._label))
         except Exception as e:
@@ -159,14 +159,12 @@ class ProximitySensor(object):
         if self._active:
 #           _start_time = dt.now()
             _distance = self._tof.get_distance()
-            # TEMP
-            self._log.info(f"😥 get_distance for {self._label} at {self._i2c_address}: {_distance}")
 #           _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
 #           self._log.info('sensor poll complete: {}ms elapsed.'.format(_elapsed_ms))
             return _distance
         raise Exception('cannot get distance: tof not active.')
 
-    def start_ranging(self, mode=Vl53l0xAccuracyMode.BETTER):
+    def start_ranging(self):
         '''
         Starts the ranging process for the sensor.
 
@@ -175,7 +173,7 @@ class ProximitySensor(object):
         '''
         if self._enabled and self._active:
             if not self._is_ranging:
-                self._tof.start_ranging(mode)
+                self._tof.start_ranging()
                 self._is_ranging = True
                 self._log.info('ranging started for sensor ' + Fore.GREEN + '{}'.format(self._label)
                         + Fore.CYAN + ' at 0x{:02X}…'.format(self._i2c_address))

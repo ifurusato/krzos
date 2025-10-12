@@ -39,7 +39,7 @@ class Radiozoa(Behaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._default_speed = _cfg.get('default_speed', 1.0)
-        self._verbose   = True
+        self._verbose   = False
         self._use_color = True
         # per-motor speed (for vectors)
         self._pfwd_speed = 1.0
@@ -157,7 +157,7 @@ class Radiozoa(Behaviour):
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
 #               self._log.warning("all sensors out of range or unavailable.")
-                self._display_info(Fore.RED + '😡 OOR: {}\n'.format(distances) + Fore.CYAN)
+#               self._display_info(Fore.RED + '😡 OOR: {}\n'.format(distances) + Fore.CYAN)
                 self._set_default_speeds()
             else:
                 self._update_motor_speeds(distances)
@@ -247,7 +247,7 @@ class Radiozoa(Behaviour):
             self._display_info()
         else:
 #           self._log.debug(Fore.BLACK + "…")
-            print(Fore.BLACK + "…" + Style.RESET_ALL)
+#           print(Fore.BLACK + "…" + Style.RESET_ALL)
             pass
 
     def _display_info(self, message=''):

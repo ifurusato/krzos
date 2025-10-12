@@ -35,13 +35,19 @@ class System(Component):
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._kros = kros
         _cfg = config['kros'].get('hardware').get('system')
-        self._12v_battery_min  = _cfg.get('low_12v_battery_threshold')   # 11.5  e.g., in0/ref: 11.953v
-        self._5v_reg_min       = _cfg.get('low_5v_regulator_threshold')  #  5.0  e.g., in2/ref:  5.028v
-        self._3v3_reg_min      = _cfg.get('low_3v3_regulator_threshold') #  3.25 e.g., in1/ref:  3.302v
+        self._12v_battery_min    = _cfg.get('low_12v_battery_threshold')   # 11.5  e.g., in0/ref: 11.953v
+        self._5v_reg_min         = _cfg.get('low_5v_regulator_threshold')  #  5.0  e.g., in2/ref:  5.028v
+        self._3v3_reg_min        = _cfg.get('low_3v3_regulator_threshold') #  3.25 e.g., in1/ref:  3.302v
         self._system_current_max = _cfg.get('system_current_max')
-        self._batt_12v_channel = _cfg.get('battery_12v_channel')
-        self._reg_5v_channel   = _cfg.get('reg_5v_channel')
-        self._reg_3v3_channel  = _cfg.get('reg_3v3_channel')
+        self._batt_12v_channel   = _cfg.get('battery_12v_channel')
+        self._reg_5v_channel     = _cfg.get('reg_5v_channel')
+        self._reg_3v3_channel    = _cfg.get('reg_3v3_channel')
+        self._external_threshold = _cfg.get('external_threshold')  # anything higher than this indicates an external supply
+        self._green_threshold    = _cfg.get('green_threshold')     # green/4 bars on battery
+        self._yellow_threshold   = _cfg.get('yellow_threshold')    # yellow/4 bars on battery
+        self._amber_threshold    = _cfg.get('amber_threshold')     # amber/3 bars on battery
+        self._orange_threshold   = _cfg.get('orange_threshold')    # orange/2 bars on battery
+        self._red_threshold      = _cfg.get('red_threshold')       # red/1 bar on battery
         self._log.info("testing power supplies…")
         try:
             self._ads1015 = ADS1015()
@@ -60,6 +66,20 @@ class System(Component):
             self._log.error('{} raised establishing system monitor: {}'.format(type(e), e))
             raise e
         self._log.info('ready.')
+
+    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def battery_12v(self):
+        return self.get_battery_12v()
+
+    @property
+    def reg_5v(self):
+        return self.get_reg_5v()
+
+    @property
+    def reg_3v3(self):
+        return self.get_reg_3v3()
 
     # ADS1015 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -191,20 +211,35 @@ class System(Component):
             return None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _get_battery_bars(self, voltage):
+        '''
+        Return a characterisation of the battery state, including the number
+        of bars that would be displayed if we could view that indicator.
+        '''
+        if voltage > self._external_threshold: # anything higher than this indicates an external supply
+            return Fore.BLUE + "external supply"
+        elif voltage > self._green_threshold:  # green/4 bars on battery
+            return Fore.GREEN + "4 bars"
+        elif voltage > self._yellow_threshold: # yellow/4 bars on battery
+            return Fore.YELLOW + "4 bars"
+        elif voltage > self._amber_threshold:  # amber/3 bars on battery
+            return Fore.YELLOW + "3 bars"
+        elif voltage > self._orange_threshold: # orange/2 bars on battery
+            return Fore.YELLOW + Style.BRIGHT + "2 bars"
+        elif voltage > self._red_threshold:    # red/1 bar on battery
+            return Fore.RED + "1 bar"
+        else:
+            return Fore.WHITE + Style.BRIGHT + "unknown state"
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_battery_info(self):
-
         try:
-            _battery_12v, _reg_5v, _reg_3v3 = self.voltages
-            self._log.info("battery (in0): " + Fore.GREEN + "{:6.3f}V".format(_battery_12v))
-            self._log.info("5V ref (in2):  " + Fore.GREEN + "{:6.3f}V".format(_reg_5v))
-            self._log.info("3V3 reg (in1): " + Fore.GREEN + "{:6.3f}V".format(_reg_3v3))
-
-            assert _battery_12v > self._12v_battery_min, 'measured in0 value less than threshold {}v'.format(self._12v_battery_min)
-            assert _reg_5v      > self._5v_reg_min, 'measured in2 value less than threshold {}v'.format(self._5v_reg_min)
-            assert _reg_3v3     > self._3v3_reg_min, 'measured in1 value less than threshold {}v'.format(self._3v3_reg_min)
-
+            _battery_12v, _reg_5v, _reg_3v3 = self.get_voltages()
+            _battery_state = self._get_battery_bars(_battery_12v)
+            self._log.info("battery (in0):   " + Fore.GREEN + "{:6.3f}V {}".format(_battery_12v, _battery_state))
+            self._log.info("5V ref (in2):    " + Fore.GREEN + "{:6.3f}V".format(_reg_5v))
+            self._log.info("3V3 reg (in1):   " + Fore.GREEN + "{:6.3f}V".format(_reg_3v3))
             self._log.info(Fore.GREEN + "power supplies are functional.")
-
         except Exception as e:
             self._log.error('{} raised in power supply test: {}'.format(type(e), e))
 

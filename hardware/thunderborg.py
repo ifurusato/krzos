@@ -679,7 +679,6 @@ class ThunderBorg:
             level = COMMAND_VALUE_ON
         else:
             level = COMMAND_VALUE_OFF
-
         try:
             self.RawWrite(COMMAND_SET_LED_BATT_MON, [level])
         except KeyboardInterrupt:
@@ -691,11 +690,10 @@ class ThunderBorg:
         '''
         state = GetLedShowBattery()
 
-        Gets if the system is using the LEDs to show the current battery level,
-        true for enabled, false for disabled. If enabled the LED colours will be
-        ignored and will use the current battery reading instead. This sweeps
-        from fully green for maximum voltage (35 V) to fully red for minimum
-        voltage (7 V).
+        Returns True if the system is using the LEDs to show the current battery
+        level, False if disabled. If enabled the LED colours will be ignored and
+        will use the current battery reading instead. This sweeps from fully
+        green for maximum voltage (35 V) to fully red for minimum voltage (7 V).
         '''
         try:
             i2cRecv = self.RawRead(COMMAND_GET_LED_BATT_MON, I2C_MAX_LEN)
@@ -704,7 +702,6 @@ class ThunderBorg:
         except:
             self._log.error('failed reading LED battery monitoring state!')
             return
-
         if i2cRecv[1] == COMMAND_VALUE_OFF:
             return False
         else:

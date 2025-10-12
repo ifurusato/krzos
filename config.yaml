@@ -149,10 +149,16 @@ kros:
             battery_12v_channel:       'in0/ref'           # ADS1015 channel for 12V
             reg_5v_channel:            'in2/ref'           # ADS1015 channel for 5V
             reg_3v3_channel:           'in1/ref'           # ADS1015 channel for 3V3
-            system_current_max:             5.0            # alarm over current
-            temperature_warning:           55.0            # over temperature warning alarm 
-            temperature_error:             65.0            # over temperature error alarm
+            system_current_max:               5.0          # alarm over current
+            temperature_warning:             55.0          # over temperature warning alarm 
+            temperature_error:               65.0          # over temperature error alarm
             loop_delay_sec:                  60            # sample loop delay (sec)
+            external_threshold:              14.0          # anything higher than this indicates an external supply
+            green_threshold:                 11.5          # green/4 bars on battery
+            yellow_threshold:                11.0          # yellow/4 bars on battery
+            amber_threshold:                 10.29         # amber/3 bars on battery
+            orange_threshold:                10.15         # orange/2 bars on battery
+            red_threshold:                    9.85         # red/1 bar on battery
         depth_camera:
             preset_mode:              'ROBOTICS'           # preset depth camera mode
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)

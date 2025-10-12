@@ -58,12 +58,11 @@ def test_radiozoa_sensor_addresses():
         # re-scan after configuration
         _log.info("re-scanning for Radiozoa sensor addresses…")
         time.sleep(1)
-        _has_default = _i2c_scanner.has_hex_address([_default_i2c_address])
+        _has_default = _i2c_scanner.has_hex_address([_default_i2c_address], force_scan=True)
 #       _missing = [ addr for addr in _sensor_addresses if not _i2c_scanner.has_hex_address([addr]) ]
 
-    print("missing: '{}'".format(_missing))
     assert not _has_default, "Default address 0x29 is still present after configuration."
-#   assert not _missing, "Missing sensor addresses after configuration: {}".format(_missing)
+    assert not _missing, "Missing sensor addresses after configuration: {}".format(_missing)
     _log.info(Fore.GREEN + "Radiozoa sensor addresses are configured and present.")
 
 def main():

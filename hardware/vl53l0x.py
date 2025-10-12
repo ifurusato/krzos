@@ -7,11 +7,15 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-07
-# modified: 2025-10-11
+# modified: 2025-10-12
 #
-# As a modification of the library by John Bryan Moore. This adds our own
-# Logger, and doesn't manage smbus itself, instead passing the instance into
-# the constructor, enabling better management of multiple instances.
+# As a modification of the library by John Bryan Moore, this adds our own
+# Logger, doesn't manage smbus itself, instead passing the instance into the
+# constructor, enabling better management of multiple instances, and also sets
+# the accuracy in the constructor, using a new Enum class.
+#
+# If you want to use this implementation outside of its intended context, just
+# replace all calls to self._log with print or your own logging.
 #
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # MIT License
@@ -37,6 +41,7 @@
 # SOFTWARE.
 
 import os
+from enum import Enum
 from ctypes import CDLL, CFUNCTYPE, POINTER, c_int, c_uint, pointer, c_ubyte, c_uint8, c_uint32
 # import sysconfig # we use our own library
 
@@ -46,15 +51,37 @@ init()
 
 from core.logger import Logger, Level
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 class Vl53l0xError(RuntimeError):
     pass
 
-class Vl53l0xAccuracyMode:
-    GOOD = 0        # 33 ms timing budget 1.2m range
-    BETTER = 1      # 66 ms timing budget 1.2m range
-    BEST = 2        # 200 ms 1.2m range
-    LONG_RANGE = 3  # 33 ms timing budget 2m range
-    HIGH_SPEED = 4  # 20 ms timing budget 1.2m range
+class Vl53l0xAccuracyMode(Enum):
+    '''
+    Usage example: Vl53l0xAccuracyMode.GOOD.timing_budget_ms, .max_range, .description
+    '''
+    GOOD       = (0,  33, 1.2, "33 ms timing budget, 1.2m range")
+    BETTER     = (1,  66, 1.2, "66 ms timing budget, 1.2m range")
+    BEST       = (2, 200, 1.2, "200 ms timing budget, 1.2m range")
+    LONG_RANGE = (3,  33, 2.0, "33 ms timing budget, 2m range")
+    HIGH_SPEED = (4,  20, 1.2, "20 ms timing budget, 1.2m range")
+
+    def __init__(self, value, timing_budget_ms, range_m, description):
+        self._value_ = value
+        self.timing_budget_ms = timing_budget_ms
+        self.range_m = range_m
+        self.description = description
+
+    @property
+    def timing_budget(self):
+        return self.timing_budget_ms
+
+    @property
+    def max_range(self):
+        return self.range_m
+
+    def __str__(self):
+        return "{} ({} ms, {} m): {}".format(self.name, self.timing_budget_ms, self.range_m, self.description)
 
 class Vl53l0xDeviceMode:
     SINGLE_RANGING = 0
@@ -84,31 +111,35 @@ class VL53L0X:
     '''
     VL53L0X ToF.
     '''
-    def __init__(self, i2c_bus=None, i2c_address=0x29, label='tof', tca9548a_num=255, tca9548a_addr=0):
+    def __init__(self, i2c_bus=None, i2c_address=0x29, label='tof', accuracy=Vl53l0xAccuracyMode.GOOD, tca9548a_num=255, tca9548a_addr=0):
         '''
         Initialize the VL53L0X ToF Sensor from ST.
         '''
         self._log = Logger('vl53l0x-0x{:02X}'.format(i2c_address), level=Level.INFO)
-#       self._i2c_bus_number = i2c_bus_number
-        self._i2c_address = i2c_address
-        self._label = label
-        self._log.debug('creating sensor at 0x{:02X}…'.format(i2c_address))
-        self._tca9548a_num = tca9548a_num
+        self._log.debug('creating {} sensor at 0x{:02X}…'.format(label, i2c_address))
+        self._i2c_address   = i2c_address
+        self._label         = label
+        self._accuracy_mode = accuracy
+        self._tca9548a_num  = tca9548a_num
         self._tca9548a_addr = tca9548a_addr
-        self._i2c_bus     = i2c_bus
-#       self._i2c_bus     = smbus.SMBus()
-        self._dev         = None
-        self._tof_library = None
-        self._is_ranging  = False
-        # Register Address
+        self._i2c_bus       = i2c_bus
+#       self._i2c_bus       = smbus.SMBus()
+        self._dev           = None
+        self._tof_library   = None
+        self._is_ranging    = False
+        # register Address
         self.ADDR_UNIT_ID_HIGH = 0x16 # Serial number high byte
         self.ADDR_UNIT_ID_LOW  = 0x17 # Serial number low byte
         self.ADDR_I2C_ID_HIGH  = 0x18 # Write serial number high byte for I2C address unlock
         self.ADDR_I2C_ID_LOW   = 0x19 # Write serial number low byte for I2C address unlock
         self.ADDR_I2C_SEC_ADDR = 0x8a # Write new I2C address after unlock
         self._get_tof_library()
-        self._log.info(Fore.GREEN + '{} '.format(self._label) + Fore.CYAN + 'sensor ready at 0x{:02X}…'.format(self._i2c_address))
+        self._log.info(Fore.GREEN + '{} '.format(self._label) + Fore.CYAN
+                + 'sensor ready at 0x{:02X}, with accuracy of {}…'.format(self._i2c_address, self._accuracy_mode))
 
+    @property
+    def accuracy_mode(self):
+        return self._accuracy_mode
     @property
     def i2c_address(self):
         return self._i2c_address
@@ -190,64 +221,42 @@ class VL53L0X:
         self._i2c_write_func = _I2C_WRITE_FUNC(_i2c_write)
         self._tof_library.VL53L0X_set_i2c(self._i2c_read_func, self._i2c_write_func)
 
-    def start_ranging(self, mode=Vl53l0xAccuracyMode.GOOD):
-        """Start VL53L0X ToF Sensor Ranging"""
+    def start_ranging(self):
+        self._log.info("starting ranging for '{}' at 0x{:02X}".format(self._label, self._i2c_address))
         if not self._dev:
-            self._log.error("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
             raise Vl53l0xError("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
-        result = self._tof_library.startRanging(self._dev, mode)
-        self._log.info("startRanging on '{}' at 0x{:02X} returned: {}".format(self._label, self._i2c_address, result))
-        if hasattr(self._tof_library, 'getRangingStatus'):
-            status = self._tof_library.getRangingStatus(self._dev)
-            self._log.info("Ranging status for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, status))
-            if status != 0:
-                self._log.error("Ranging failed for '{}' at 0x{:02X} with status {}".format(self._label, self._i2c_address, status))
-                raise Vl53l0xError("Ranging failed for '{}' at 0x{:02X} with status {}".format(self._label, self._i2c_address, status))
+        result = self._tof_library.startRanging(self._dev, self._accuracy_mode.value)
+#       self._log.info("startRanging on '{}' at 0x{:02X} returned: {}".format(self._label, self._i2c_address, result))
+        if result != 0:
+            raise Vl53l0xError("startRanging failed for '{}' at 0x{:02X} with result {}".format(self._label, self._i2c_address, result))
         self._is_ranging = True
 
     def stop_ranging(self):
-        """Stop VL53L0X ToF Sensor Ranging"""
+        '''
+        Stop VL53L0X ToF Sensor Ranging.
+        '''
         self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
         if self._dev:
             self._tof_library.stopRanging(self._dev)
         self._is_ranging = False
 
     def get_distance(self):
-        """Get distance from VL53L0X ToF Sensor"""
+        '''
+        Get distance from VL53L0X ToF Sensor.
+        '''
         if not self._is_ranging:
             self._log.error("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
             raise Vl53l0xError("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
         distance = self._tof_library.getDistance(self._dev)
-        self._log.info("getDistance for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, distance))
+#       if distance > 4000:
+#           self._log.warning("get_distance for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, distance))
         return distance
 
-    def x_open(self):
-        self._log.debug('open sensor at 0x{:02X}'.format(self._i2c_address))
-        if self._tof_library:
-#           self._i2c_bus.open(bus=self._i2c_bus_number)
-            self._configure_i2c_library_functions()
-            self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
-            return True # added to force wait for value
-        else:
-            raise Exception('no ToF library available.')
-
-    def x_start_ranging(self, mode=Vl53l0xAccuracyMode.GOOD):
-        """Start VL53L0X ToF Sensor Ranging"""
-        self._tof_library.startRanging(self._dev, mode)
-
-    def x_stop_ranging(self):
-        """Stop VL53L0X ToF Sensor Ranging"""
-        self._log.info('stop ranging sensor at 0x{:02X}…'.format(self._i2c_address))
-        self._tof_library.stopRanging(self._dev)
-
-    def x_get_distance(self):
-        """Get distance from VL53L0X ToF Sensor"""
-#       self._log.info('getting distance from sensor at 0x{:02X}'.format(self._i2c_address))
-        return self._tof_library.getDistance(self._dev)
-
-    # This function included to show how to access the ST library directly
-    # from python instead of through the simplified interface
     def get_timing(self):
+        '''
+        This function included to show how to access the ST library directly
+        from python instead of through the simplified interface
+        '''
         budget = c_uint(0)
         budget_p = pointer(budget)
         status = self._tof_library.VL53L0X_GetMeasurementTimingBudgetMicroSeconds(self._dev, budget_p)
@@ -256,12 +265,11 @@ class VL53L0X:
         else:
             return 0
 
-    def configure_gpio_interrupt(
-            self, proximity_alarm_type=Vl53l0xGpioAlarmType.THRESHOLD_CROSSED_LOW,
+    def configure_gpio_interrupt(self, proximity_alarm_type=Vl53l0xGpioAlarmType.THRESHOLD_CROSSED_LOW,
             interrupt_polarity=Vl53l0xInterruptPolarity.HIGH, threshold_low_mm=250, threshold_high_mm=500):
-        """
+        '''
         Configures a GPIO interrupt from device, be sure to call "clear_interrupt" after interrupt is processed.
-        """
+        '''
         pin = c_uint8(0)  # 0 is only GPIO pin.
         device_mode = c_uint8(Vl53l0xDeviceMode.CONTINUOUS_RANGING)
         functionality = c_uint8(proximity_alarm_type)
@@ -295,7 +303,6 @@ class VL53L0X:
             return
         try:
             self._log.debug('changing address to 0x{:02X}…'.format(new_address))
-#           self._i2c_bus.open(bus=self._i2c_bus_number)
             # read value from 0x16,0x17
             high = self._i2c_bus.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_HIGH)
             low = self._i2c_bus.read_byte_data(self._i2c_address, self.ADDR_UNIT_ID_LOW)
@@ -311,3 +318,4 @@ class VL53L0X:
             self._log.error('{} raised changing address: {}'.format(type(e), e))
             raise
 
+#EOF

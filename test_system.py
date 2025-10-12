@@ -42,14 +42,11 @@ def test_power():
         _temperature_error   = _cfg.get('temperature_error')
 
         __log.info("testing power supplies…")
-        # IN0 12V battery
-        _battery_12v = _system.get_battery_12v()
-        __log.info("battery (in0):   " + Fore.GREEN + "{:6.3f}V".format(_battery_12v))
-        _reg_5v = _system.get_reg_5v()
-        __log.info("5V ref (in2):    " + Fore.GREEN + "{:6.3f}V".format(_reg_5v))
-        _ref_3v3 = _system.get_reg_3v3()
-        __log.info("3V3 reg (in1):   "  + Fore.GREEN + "{:6.3f}V".format(_ref_3v3))
+        _system.get_battery_info()
 
+        _battery_12v = _system.get_battery_12v()
+        _reg_5v = _system.get_reg_5v()
+        _ref_3v3 = _system.get_reg_3v3()
         if _battery_12v < _12v_battery_min:
             __log.warning('measured in0 value less than threshold {}v'.format(_12v_battery_min))
 #       assert _battery_12v > _12v_battery_min, 'measured in0 value less than threshold {}v'.format(_12v_battery_min)
