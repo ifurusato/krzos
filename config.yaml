@@ -40,8 +40,8 @@ kros:
 #           idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
 #           loop_freq_hz:                   1              # main loop delay in hz
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour
             min_velocity:                 0.0              # minimum motor target velocity
             max_velocity:               100.0              # maximum motor target velocity
             cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
@@ -50,8 +50,8 @@ kros:
             deadband_threshold:             0.10           # don't drive motors slower than this
             loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour
             dynamic_speed:               True              # if True use digital pot for default speed
             loop_delay_ms:                 50
             default_speed:                  0.8              # cruising speed

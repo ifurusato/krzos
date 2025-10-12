@@ -629,6 +629,30 @@ class MotorController(Component):
     def blend_vectors(self, orientation):
         '''
         Blend all vector functions for this motor (e.g., average).
+        Only supports vector outputs (tuple/list) from registered functions.
+        Returns the resulting vector as a tuple.
+        '''
+        if orientation not in self._vector_functions:
+            raise Exception('unsupported orientation in blend_vectors: {}'.format(orientation))
+        vector_funcs = self._vector_functions[orientation].values()
+        if not vector_funcs:
+            return (0.0, 0.0)  # return zero vector if none registered
+        speeds = [func() for func in vector_funcs]
+        # Only blend if all are vectors (tuple/list)
+        if not all(isinstance(s, (tuple, list)) for s in speeds):
+            raise TypeError("blend_vectors: all vector functions must return tuple or list (vector-style).")
+        n = len(speeds)
+        dim = len(speeds[0])
+        sums = [0.0] * dim
+        for v in speeds:
+            for i in range(dim):
+                sums[i] += v[i]
+        avgs = tuple(s / n for s in sums)
+        return avgs
+
+    def x_blend_vectors(self, orientation):
+        '''
+        Blend all vector functions for this motor (e.g., average).
         Returns the resulting speed for the motor.
         '''
         if orientation not in self._vector_functions:
