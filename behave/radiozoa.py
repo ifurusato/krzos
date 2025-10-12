@@ -47,10 +47,10 @@ class Radiozoa(Behaviour):
         self._verbose   = False
         self._use_color = True
         # per-motor speed (for vectors)
-        self._pfwd_speed = 1.0
-        self._sfwd_speed = 1.0
-        self._paft_speed = 1.0
-        self._saft_speed = 1.0
+        self._pfwd_vector = (0.0, 0.0)
+        self._sfwd_vector = (0.0, 0.0)
+        self._paft_vector = (0.0, 0.0)
+        self._saft_vector = (0.0, 0.0)
         # directional vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
@@ -89,14 +89,10 @@ class Radiozoa(Behaviour):
         '''
         Register vector functions for each motor, replacing speed multiplier lambdas.
         '''
-        self._motor_controller.add_vector(
-            Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME, lambda: self._pfwd_speed, exclusive=True)
-        self._motor_controller.add_vector(
-            Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME, lambda: self._sfwd_speed, exclusive=True)
-        self._motor_controller.add_vector(
-            Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME, lambda: self._paft_speed, exclusive=True)
-        self._motor_controller.add_vector(
-            Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME, lambda: self._saft_speed, exclusive=True)
+        self._motor_controller.add_vector(Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME, lambda: self._pfwd_vector, exclusive=True)
+        self._motor_controller.add_vector(Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME, lambda: self._sfwd_vector, exclusive=True)
+        self._motor_controller.add_vector(Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME, lambda: self._paft_vector, exclusive=True)
+        self._motor_controller.add_vector(Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME, lambda: self._saft_vector, exclusive=True)
         self._log.info('vector functions added to motors.')
 
     def _remove_motor_vectors(self):
@@ -224,6 +220,57 @@ class Radiozoa(Behaviour):
             d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
 
             # TEMP
+    #       d1 = RadiozoaSensor.FAR_THRESHOLD
+    #       d2 = RadiozoaSensor.FAR_THRESHOLD
+
+            # if both sensors are far, ignore this pair (no imbalance to correct)
+            if d1 >= far_threshold and d2 >= far_threshold:
+                continue
+            # imbalance sets amplitude; move toward centering
+            diff = d1 - d2
+            vec = self._directions[(c1, c2)] * diff
+            force_vec += vec
+            pair_active = True
+            # TEMP
+    #       self._log.info('PAIR: {}-{} d1={} d2={} diff={} vec={}'.format(c1.label, c2.label, d1, d2, diff, vec))
+
+        # if no pair contributed, robot is centered or in open space
+        if not pair_active or np.linalg.norm(force_vec) < 1.0:
+            self._pfwd_vector = self._sfwd_vector = self._paft_vector = self._saft_vector = (0.0, 0.0)
+            return
+        # normalize, scale, map to wheel vectors
+        max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
+        vx, vy = force_vec / max_abs
+        self._pfwd_vector = (vx, vy)
+        self._sfwd_vector = (vx, vy)
+        self._paft_vector = (vx, vy)
+        self._saft_vector = (vx, vy)
+        # display
+        if self._verbose:
+            self._display_info()
+        else:
+    #       self._log.debug(Fore.BLACK + "…")
+    #       print(Fore.BLACK + "…" + Style.RESET_ALL)
+            pass
+
+    def x_update_motor_speeds(self, distances):
+        """
+        NOTE: OLDER VERSION
+        Center robot in space using four opposing sensor pairs as force vectors.
+        Robot does not move if both sensors in a pair are far (open space).
+        The amplitude of each pair's contribution is proportional to the imbalance between the two sensors.
+        The resulting vector is mapped to Mecanum wheels.
+        """
+        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95 # use a cutoff just below max range
+        force_vec = np.zeros(2)
+        pair_active = False
+        for c1, c2 in self._pairs:
+            d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
+            d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
+            d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
+            d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
+
+            # TEMP
 #           d1 = RadiozoaSensor.FAR_THRESHOLD
 #           d2 = RadiozoaSensor.FAR_THRESHOLD
 
@@ -264,6 +311,29 @@ class Radiozoa(Behaviour):
             pass
 
     def _display_info(self, message=''):
+        if self._use_color:
+            self._log.info("{} vectors: pfwd={}({:4.2f},{:4.2f}){} sfwd={}({:4.2f},{:4.2f}){} paft={}({:4.2f},{:4.2f}){} saft={}({:4.2f},{:4.2f}){}".format(
+                    message,
+                    self.get_highlight_color(self._pfwd_vector[0]),
+                    self._pfwd_vector[0], self._pfwd_vector[1], Style.RESET_ALL,
+                    self.get_highlight_color(self._sfwd_vector[0]),
+                    self._sfwd_vector[0], self._sfwd_vector[1], Style.RESET_ALL,
+                    self.get_highlight_color(self._paft_vector[0]),
+                    self._paft_vector[0], self._paft_vector[1], Style.RESET_ALL,
+                    self.get_highlight_color(self._saft_vector[0]),
+                    self._saft_vector[0], self._saft_vector[1], Style.RESET_ALL
+                )
+            )
+        else:
+            self._log.info("vectors: pfwd=({:.2f},{:.2f}) sfwd=({:.2f},{:.2f}) paft=({:.2f},{:.2f}) saft=({:.2f},{:.2f})".format(
+                    self._pfwd_vector[0], self._pfwd_vector[1],
+                    self._sfwd_vector[0], self._sfwd_vector[1],
+                    self._paft_vector[0], self._paft_vector[1],
+                    self._saft_vector[0], self._saft_vector[1]
+                )
+            )
+
+    def x_display_info(self, message=''):
         if self._use_color:
             self._log.info("{} speeds: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
                     message,
