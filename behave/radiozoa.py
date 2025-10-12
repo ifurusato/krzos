@@ -110,7 +110,7 @@ class Radiozoa(Behaviour):
         self._log.info('radiozoa behaviour callback.')
 
     def execute(self, message):
-        print('🧭 execute message {}.'.format(message))
+        print('execute message {}.'.format(message))
         if self.suppressed:
             self._log.info(Style.DIM + 'radiozoa suppressed; message: {}'.format(message.event.label))
         else:
@@ -217,6 +217,10 @@ class Radiozoa(Behaviour):
             vec = self._directions[(c1, c2)] * diff
             force_vec += vec
             pair_active = True
+
+            # TEMP
+#           self._log.info('PAIR: {}-{} d1={} d2={} diff={} vec={}'.format(c1.label, c2.label, d1, d2, diff, vec))
+
         # if no pair contributed, robot is centered or in open space
         if not pair_active or np.linalg.norm(force_vec) < 1.0:
             self._pfwd_speed = self._sfwd_speed = self._paft_speed = self._saft_speed = 0.0
@@ -229,10 +233,14 @@ class Radiozoa(Behaviour):
         paft = vy - vx
         saft = vy + vx
         max_motor = max(abs(pfwd), abs(sfwd), abs(paft), abs(saft), 1.0)
-        self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, 0.0, self._default_speed))
-        self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, 0.0, self._default_speed))
-        self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, 0.0, self._default_speed))
-        self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, 0.0, self._default_speed))
+#       self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, 0.0, self._default_speed))
+#       self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, 0.0, self._default_speed))
+#       self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, 0.0, self._default_speed))
+#       self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, 0.0, self._default_speed))
+        self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
+        self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
+        self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, -self._default_speed, self._default_speed))
+        self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, -self._default_speed, self._default_speed))
         # display
         if self._verbose:
             if self._use_color:
