@@ -168,10 +168,10 @@ class Radiozoa(Behaviour):
         '''
         Set default speeds when sensors are unavailable or out of range.
         '''
-        self._pfwd_speed = self._default_speed
-        self._sfwd_speed = self._default_speed
-        self._paft_speed = self._default_speed
-        self._saft_speed = self._default_speed
+        self._pfwd_speed = 0.0
+        self._sfwd_speed = 0.0
+        self._paft_speed = 0.0
+        self._saft_speed = 0.0
 
     def get_highlight_color(self, value):
         """Return colorama color/style for multiplier legend."""
@@ -206,8 +206,8 @@ class Radiozoa(Behaviour):
             d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
 
             # TEMP
-            d1 = RadiozoaSensor.FAR_THRESHOLD
-            d2 = RadiozoaSensor.FAR_THRESHOLD
+#           d1 = RadiozoaSensor.FAR_THRESHOLD
+#           d2 = RadiozoaSensor.FAR_THRESHOLD
 
             # if both sensors are far, ignore this pair (no imbalance to correct)
             if d1 >= far_threshold and d2 >= far_threshold:

@@ -478,7 +478,8 @@ class MotorController(Component):
         '''
         Set all four motors speeds.
         '''
-        self._log.info(Fore.MAGENTA + 'set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
+        if self._verbose:
+            self._log.info(Fore.MAGENTA + '🎀 set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
         self.set_motor_speed(Orientation.PFWD, pfwd_speed)
         self.set_motor_speed(Orientation.SFWD, sfwd_speed)
         self.set_motor_speed(Orientation.PAFT, paft_speed)
@@ -486,7 +487,8 @@ class MotorController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_differential_speeds(self, port_speed, stbd_speed):
-        self._log.info(Fore.MAGENTA + 'set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
+        if self._verbose:
+            self._log.info(Fore.MAGENTA + '🎀 set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
         self.set_speeds(port_speed, stbd_speed, port_speed, stbd_speed)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -506,6 +508,8 @@ class MotorController(Component):
         particularly good idea.
         '''
         _speed = self._clamp(value)
+        if self._verbose:
+            self._log.info(Fore.MAGENTA + '🎀 set {} speed: {:4.2f} clamped to {:4.2f}'.format(orientation.name, value, _speed))
         if orientation is Orientation.ALL:
             self._port_speed = _speed
             self.set_motor_speed(Orientation.PFWD, _speed)
@@ -554,7 +558,8 @@ class MotorController(Component):
             raise ValueError('expected target speed as float not int: {:d}'.format(target_speed))
         if not isinstance(target_speed, float):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
-#       self._log.info('set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
+        if self._verbose:
+            self._log.info(Fore.MAGENTA + '🎀 set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
         if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
             self._pfwd_motor.target_speed = target_speed
         elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
@@ -601,6 +606,7 @@ class MotorController(Component):
         :param vector_function: function returning the desired speed for this motor
         :param exclusive:       if True, clears other vector functions for this motor before adding
         '''
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'motor controller enabled? {} '.format(self.enabled))
         if orientation not in self._vector_functions:
             raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
         if exclusive:
