@@ -201,8 +201,7 @@ kros:
             stddev_threshold:               100
             floor_margin:                    50            # in millimeters
             minimum_free_distance:          500            # minimum required free space, in millimeters
-            ranging_frequency_hz:            15
-            integration_time_ms:             20
+            poll_interval:                    0.05         # how often to poll VL53L5CX
         roam_sensor:
             smoothing:                     True            # enable smoothing of fused distance
             smoothing_window:                 5            # window size for moving average

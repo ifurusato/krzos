@@ -14,12 +14,11 @@ import time
 import numpy as np
 from datetime import datetime as dt
 import multiprocessing
+import queue # for queue.Full and queue.Empty
 from multiprocessing import Process, Queue, Event
 from colorama import init, Fore, Style
 init()
 
-#import vl53l5cx_ctypes as vl53l5cx
-#from vl53l5cx_ctypes import RANGING_MODE_CONTINUOUS
 import hardware.vl53l5cx as vl53l5cx
 from hardware.vl53l5cx import RANGING_MODE_CONTINUOUS
 
@@ -51,6 +50,8 @@ class Vl53l5cxSensor(Component):
         self._calibration_samples = _cfg.get('calibration_samples', 10)
         self._stddev_threshold = _cfg.get('stddev_threshold', 100)
         self._floor_margin = _cfg.get('floor_margin', 50)
+        self._use_multiprocessing = True
+        self._vl53_read_timeout_sec = 2.0 # seconds
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
@@ -76,7 +77,7 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         self._log.info('VL53L5CX hardware ready.')
         # multiprocessing attributes
-        self._queue = Queue(maxsize=1)
+        self._queue = Queue(maxsize=10)
         self._stop_event = Event()
         self._process = None
 
@@ -109,64 +110,89 @@ class Vl53l5cxSensor(Component):
             self._non_floor_rows = non_floor_rows
         return self._non_floor_rows
 
+
     def _polling_loop(self, queue, stop_event, poll_interval):
         '''
         Polls the VL53L5CX sensor as a separate process and puts results into the queue.
+        This is only used when multiprocessing is active.
         '''
-        self._vl53.start_ranging()
-        # wait for data to become available
-        start = dt.now()
-        timeout = 2.0 # seconds
-        while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < timeout:
-            time.sleep(0.01)
         try:
             while not stop_event.is_set():
-                self._log.info(Fore.MAGENTA + "_polling loop")
                 if self._vl53.data_ready():
                     data = self._vl53.get_data()
-                    # convert ctypes array to Python list before adding to queue
-                    _distance_mm = [int(data.distance_mm[i]) for i in range(len(data.distance_mm))]
-                    queue.put(_distance_mm, block=False)
+                    try:
+                        # always convert to a list of ints using numpy, works for both bytes and array
+                        _distance_mm = np.frombuffer(bytes(data.distance_mm), dtype=np.int16).tolist()
+                        try:
+                            queue.put(_distance_mm, block=False)
+                        except queue.Full:
+                            try:
+                                queue.get_nowait()  # Remove one oldest value
+                            except queue.Empty:
+                                pass
+                            queue.put(_distance_mm, block=False)
+                    except Exception as e:
+                        self._log.error("{} raised converting distance_mm: {}".format(type(e), e))
                 else:
                     self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
         except Exception as e:
-            self._log.error("{} raised polling sensor: {}\n{}".format(type(e), e, traceback.format_exc()))
+            self._log.error("{} raised polling sensor: {}".format(type(e), e))
         finally:
             self._vl53.stop_ranging()
 
     def x_polling_loop(self, queue, stop_event, poll_interval):
         '''
         Polls the VL53L5CX sensor as a separate process and puts results into the queue.
+        This is only used when multiprocessing is active.
         '''
-        self._vl53.start_ranging()
         try:
             while not stop_event.is_set():
                 if self._vl53.data_ready():
                     data = self._vl53.get_data()
                     try:
-                        queue.put(data.distance_mm, block=False)
-                    except Exception:
-                        pass
+                        # always convert to a list of ints using numpy, works for both bytes and array
+                        _distance_mm = np.frombuffer(bytes(data.distance_mm), dtype=np.int16).tolist()
+                        while not queue.empty():
+                            try:
+                                queue.get_nowait()
+                            except Exception:
+                                break
+                        queue.put(_distance_mm, block=False)
+                    except Exception as e:
+                        self._log.error("{} raised converting distance_mm: {}".format(type(e), e))
+                else:
+                    self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
         except Exception as e:
-            self._log.error("VL53L5CX polling process error:", e)
+            self._log.error("{} raised polling sensor: {}".format(type(e), e))
         finally:
             self._vl53.stop_ranging()
 
     def enable(self):
         if not self.enabled:
+            self._vl53.start_ranging()
+            # wait for data to become available
+            start = dt.now()
+            while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
+                print('.', end='')
+                time.sleep(0.01)
+            print('')
             super().enable()
-            # Start multiprocessing polling process
-            if self._process is None or not self._process.is_alive():
-                self._log.info(Fore.WHITE + Style.BRIGHT + 'starting external process…')
-                self._stop_event.clear()
-                self._process = Process(
-                    target=self._polling_loop,
-                    args=(self._queue, self._stop_event, self._poll_interval),
-                    daemon=True
-                )
-                self._process.start()
+            if self._use_multiprocessing:
+                # start multiprocessing polling process
+                if self._process is None or not self._process.is_alive():
+                    self._log.info(Fore.WHITE + Style.BRIGHT + 'starting external process…')
+                    self._stop_event.clear()
+                    self._process = Process(
+                        target=self._polling_loop,
+                        args=(self._queue, self._stop_event, self._poll_interval),
+                        daemon=True
+                    )
+                    self._process.start()
+            else:
+                pass
+
             self._calibrate_floor_rows()
             self._log.info('VL53L5CX hardware enabled and ranging.')
         else:
@@ -174,20 +200,57 @@ class Vl53l5cxSensor(Component):
 
     def get_distance_mm(self):
         '''
+        Returns the oldest sensor data from the process queue (non-blocking).
+        '''
+        if not self.enabled:
+            self._log.warning('get_distance_mm called while sensor is not enabled.')
+            return None
+        if self._use_multiprocessing:
+            try:
+                value = self._queue.get_nowait()
+                return value
+            except Exception:
+                return None
+        else:
+            start = dt.now()
+            while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
+                print('.', end='')
+                time.sleep(0.01)
+            try:
+                data = self._vl53.get_data()
+                return data.distance_mm
+            except Exception as e:
+                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
+                return None
+
+    def x_get_distance_mm(self):
+        '''
         Gets the latest sensor data from the process queue (non-blocking).
         Only returns real data if enabled.
         '''
         if not self.enabled:
             self._log.warning('get_distance_mm called while sensor is not enabled.')
             return None
-        # drain queue to get the most recent value
-        value = None
-        while True:
+        if self._use_multiprocessing:
+            value = None
+            while True:
+                try:
+                    # drain queue to get most recent value
+                    value = self._queue.get_nowait()
+                except Exception:
+                    break
+            return value
+        else:
+            start = dt.now()
+            while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
+                print('.', end='')
+                time.sleep(0.01)
             try:
-                value = self._queue.get_nowait()
-            except Exception:
-                break
-        return value
+                data = self._vl53.get_data()
+                return data.distance_mm
+            except Exception as e:
+                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
+                return None
 
     def _calibrate_floor_rows(self):
         self._log.info(Fore.WHITE + 'calibrating floor rows using {} samples…'.format(self._calibration_samples))

@@ -1,6 +1,40 @@
-# note: this is a modification of the original VL53L5CX library,
-#       which includes better handling of KeyboardInterrupt and
-#       shutting down the sensor (using a new close method).
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright 2025 by Murray Altheim. All rights reserved. This file is part of
+# the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Murray Altheim
+# created:  2025-08-06
+# modified: 2025-10-13
+#
+# As a modification of the original Pimoroni VL53L5CX library, this includes
+# better handling of KeyboardInterrupt and shutting down the sensor (using a
+# new close method).
+#
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# MIT License
+#    
+# Copyright (c) 2022 Pimoroni Ltd.
+#    
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#    
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#    
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 import time
 import sysconfig
@@ -11,64 +45,55 @@ from ctypes import CDLL, CFUNCTYPE, POINTER, Structure, byref, c_int, c_int8, c_
 
 __version__ = '0.0.3'
 
-DEFAULT_I2C_ADDRESS = 0x29
-
-NB_TARGET_PER_ZONE = 1
-
-RESOLUTION_4X4 = 16  # For completeness, feels nicer just to use 4*4
-RESOLUTION_8X8 = 64
-
-TARGET_ORDER_CLOSEST = 1
-TARGET_ORDER_STRONGEST = 2
-
+DEFAULT_I2C_ADDRESS     = 0x29
+NB_TARGET_PER_ZONE      = 1
+RESOLUTION_4X4          = 16  # for completeness, feels nicer just to use 4*4
+RESOLUTION_8X8          = 64
+TARGET_ORDER_CLOSEST    = 1
+TARGET_ORDER_STRONGEST  = 2
 RANGING_MODE_CONTINUOUS = 1
 RANGING_MODE_AUTONOMOUS = 3
+POWER_MODE_SLEEP        = 0
+POWER_MODE_WAKEUP       = 1
 
-POWER_MODE_SLEEP = 0
-POWER_MODE_WAKEUP = 1
+STATUS_OK                         = 0
+STATUS_TIMEOUT                    = 1
+STATUS_MCU_ERROR                  = 66
+STATUS_INVALID_PARAM              = 127
+STATUS_ERROR                      = 255
+STATUS_RANGE_NOT_UPDATED          = 0
+STATUS_RANGE_LOW_SIGNAL           = 1
+STATUS_RANGE_TARGET_PHASE         = 2
+STATUS_RANGE_SIGMA_HIGH           = 3
+STATUS_RANGE_TARGET_FAILED        = 4
+STATUS_RANGE_VALID                = 5
+STATUS_RANGE_NOWRAP               = 6
+STATUS_RANGE_RATE_FAILED          = 7
+STATUS_RANGE_SIGNAL_RATE_LOW      = 8
+STATUS_RANGE_VALID_LARGE_PULSE    = 9
+STATUS_RANGE_VALID_NO_TARGET      = 10
+STATUS_RANGE_MEASUREMENT_FAILED   = 11
+STATUS_RANGE_TARGET_BLURRED       = 12
+STATUS_RANGE_TARGET_INCONSISTENT  = 13
+STATUS_RANGE_NO_TARGET            = 255
 
-STATUS_OK = 0
-STATUS_TIMEOUT = 1
-STATUS_MCU_ERROR = 66
-STATUS_INVALID_PARAM = 127
-STATUS_ERROR = 255
-
-STATUS_RANGE_NOT_UPDATED = 0
-STATUS_RANGE_LOW_SIGNAL = 1
-STATUS_RANGE_TARGET_PHASE = 2
-STATUS_RANGE_SIGMA_HIGH = 3
-STATUS_RANGE_TARGET_FAILED = 4
-STATUS_RANGE_VALID = 5
-STATUS_RANGE_NOWRAP = 6
-STATUS_RANGE_RATE_FAILED = 7
-STATUS_RANGE_SIGNAL_RATE_LOW = 8
-STATUS_RANGE_VALID_LARGE_PULSE = 9
-STATUS_RANGE_VALID_NO_TARGET = 10
-STATUS_RANGE_MEASUREMENT_FAILED = 11
-STATUS_RANGE_TARGET_BLURRED = 12
-STATUS_RANGE_TARGET_INCONSISTENT = 13
-STATUS_RANGE_NO_TARGET = 255
-
-_I2C_CHUNK_SIZE = 2048
-
+_I2C_CHUNK_SIZE         = 2048
 _I2C_RD_FUNC = CFUNCTYPE(c_int, c_uint8, c_uint16, POINTER(c_uint8), c_uint32)
 _I2C_WR_FUNC = CFUNCTYPE(c_int, c_uint8, c_uint16, POINTER(c_uint8), c_uint32)
-_SLEEP_FUNC = CFUNCTYPE(c_int, c_uint32)
+_SLEEP_FUNC  = CFUNCTYPE(c_int, c_uint32)
 
-# Path to the library dir
+# path to the library dir
 #_PATH = pathlib.Path(__file__).parent.parent.absolute()
 # local copy:
 _PATH = pathlib.Path(__file__).parent.absolute()
-
-# System OS/Arch dependent module name suffix
+# system OS/arch dependent module name suffix
 _SUFFIX = sysconfig.get_config_var('EXT_SUFFIX')
-
-# Library name
+# library name
 _NAME = pathlib.Path("vl53l5cx_ctypes").with_suffix(_SUFFIX)
-
-# Load the DLL
+# load the DLL
 _VL53 = CDLL(_PATH / _NAME)
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 class VL53L5CX_MotionData(Structure):
     _fields_ = [
