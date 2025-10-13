@@ -9,6 +9,7 @@
 # created:  2025-10-02
 # modified: 2025-10-03
 
+import traceback
 import time
 import numpy as np
 from datetime import datetime as dt
@@ -112,19 +113,25 @@ class Vl53l5cxSensor(Component):
         '''
         Polls the VL53L5CX sensor as a separate process and puts results into the queue.
         '''
+        self._vl53.start_ranging()
+        # wait for data to become available
+        start = dt.now()
+        timeout = 2.0 # seconds
+        while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < timeout:
+            time.sleep(0.01)
         try:
             while not stop_event.is_set():
+                self._log.info(Fore.MAGENTA + "_polling loop")
                 if self._vl53.data_ready():
                     data = self._vl53.get_data()
-                    try:
-                        # convert ctypes array to Python list before adding to queue
-                        _distance_mm = [int(data.distance_mm[i]) for i in range(len(data.distance_mm))]
-                        queue.put(_distance_mm, block=False)
-                    except Exception:
-                        pass
+                    # convert ctypes array to Python list before adding to queue
+                    _distance_mm = [int(data.distance_mm[i]) for i in range(len(data.distance_mm))]
+                    queue.put(_distance_mm, block=False)
+                else:
+                    self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
         except Exception as e:
-            self._log.error("VL53L5CX polling process error:", e)
+            self._log.error("{} raised polling sensor: {}\n{}".format(type(e), e, traceback.format_exc()))
         finally:
             self._vl53.stop_ranging()
 
@@ -149,7 +156,6 @@ class Vl53l5cxSensor(Component):
 
     def enable(self):
         if not self.enabled:
-            self._vl53.start_ranging()
             super().enable()
             # Start multiprocessing polling process
             if self._process is None or not self._process.is_alive():
