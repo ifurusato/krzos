@@ -77,7 +77,7 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         self._log.info('VL53L5CX hardware ready.')
         # multiprocessing attributes
-        self._queue = Queue(maxsize=10)
+        self._queue = Queue(maxsize=20)
         self._stop_event = Event()
         self._process = None
 

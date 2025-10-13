@@ -12,6 +12,7 @@
 # Provides fused distance readings for Roam behaviour, blending PWM and VL53L5CX sensor values.
 
 import time
+from datetime import datetime as dt
 import numpy as np
 from collections import deque
 from colorama import init, Fore, Style
@@ -61,6 +62,7 @@ class RoamSensor(Component):
         self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
         self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
         _easing_value        = _cfg.get('easing', 'logarithmic')
+        self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default 
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
         # sensor instantiation
@@ -79,8 +81,9 @@ class RoamSensor(Component):
             self._distance_sensor = _component_registry.get(DistanceSensor.NAME)
             if self._distance_sensor is None:
                 self._distance_sensor = DistanceSensor(config, level=Level.INFO)
-        self._distance       = -1 # returned value
-        self._last_read_time = time.time()
+#       self._distance       = -1 # returned value
+        self._last_value     = None
+        self._last_read_time = dt.now()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
                 .format(self._sigmoid_d0, self._sigmoid_k, self._smoothing, _smoothing_window))
 
@@ -96,13 +99,13 @@ class RoamSensor(Component):
     def max_distance(self):
         return self._max_distance
 
-    @property
-    def distance(self):
-        '''
-        Returns the latest fused, smoothed distance value (mm).
-        Does not actively poll; use get_distance() for a fresh reading.
-        '''
-        return self._distance
+#   @property
+#   def distance(self):
+#       '''
+#       Returns the latest fused, smoothed distance value (mm).
+#       Does not actively poll; use get_distance() for a fresh reading.
+#       '''
+#       return self._distance
 
     def sigmoid_weight(self, pwm_value):
         '''
@@ -149,7 +152,6 @@ class RoamSensor(Component):
         Fuses PWM and VL53L5CX sensor values according to fusion strategy.
         Returns fused value (mm) or None.
         '''
-#       self._log.info(Fore.WHITE + '_fuse: pwm={}, vl53={}'.format(pwm_value, vl53_value))
         if pwm_value is None and vl53_value is None:
             return None
         elif pwm_value is not None and vl53_value is None:
@@ -157,14 +159,12 @@ class RoamSensor(Component):
         elif pwm_value is None and vl53_value is not None:
             return vl53_value
         elif self._use_sigmoid:
+            # return sigmoid fusion between PWM and VL53
             weight = self.sigmoid_weight(pwm_value)
-            fused = weight * pwm_value + (1.0 - weight) * vl53_value
-            self._log.info(Fore.WHITE + 'fusion(sigmoid): pwm={}, vl53={}, weight={:.3f}, fused={:.2f}'.format(pwm_value, vl53_value, weight, fused))
-            return fused
+            return weight * pwm_value + (1.0 - weight) * vl53_value
         else:
-            fused = min(pwm_value, vl53_value)
-            self._log.info(Fore.WHITE + 'fusion(min): pwm={}, vl53={}, fused={:.2f}'.format(pwm_value, vl53_value, fused))
-            return fused
+            # just return minimum value
+            return min(pwm_value, vl53_value)
 
     def _smooth(self, value):
         '''
@@ -198,10 +198,32 @@ class RoamSensor(Component):
     def get_distance(self, apply_easing=True):
         '''
         Returns a fused, smoothed, and eased value for Roam behaviour.
+        Tries to get a new value; if unavailable, returns previous value up to timeout.
+        Returns None if value is stale.
+        '''
+        new_value = self._smooth(self._fuse(
+            self._distance_sensor.get_distance(),
+            self._get_vl53l5cx_front_distance()
+        ))
+        now = dt.now()
+        if new_value is not None:
+            self._last_value = new_value
+            self._last_read_time = now
+        elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
+        if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
+            # return the last value (eased if requested)
+            return self._last_value if not apply_easing else self._normalise_and_ease(self._last_value)
+        else:
+            # value is stale or never set
+            return None
+
+    def x_get_distance(self, apply_easing=True):
+        '''
+        Returns a fused, smoothed, and eased value for Roam behaviour.
         Values above max_distance are treated as max_distance.
         '''
         self._distance = self._smooth(self._fuse(self._distance_sensor.get_distance(), self._get_vl53l5cx_front_distance()))
-        self._last_read_time = time.time()
+        self._last_read_time = dt.now()
         return self._distance if not apply_easing else self._normalise_and_ease(self._distance)
 
     def check_timeout(self):

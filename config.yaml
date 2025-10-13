@@ -207,7 +207,7 @@ kros:
             smoothing_window:                 5            # window size for moving average
             sigmoid_d0:                     150            # sigmoid inflection point (mm)
             sigmoid_k:                       40            # sigmoid steepness
-            max_distance:                  1000            # maximum distance in mm of VL53L5CX (actual range is 4m)
+            max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
