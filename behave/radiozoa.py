@@ -241,10 +241,11 @@ class Radiozoa(Behaviour):
         # normalize, scale, map to wheel vectors
         max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
         vx, vy = force_vec / max_abs
-        self._pfwd_vector = (vx, vy)
-        self._sfwd_vector = (vx, vy)
-        self._paft_vector = (vx, vy)
-        self._saft_vector = (vx, vy)
+        amplitude = self._default_speed
+        self._pfwd_vector = (vx * amplitude, vy * amplitude)
+        self._sfwd_vector = (vx * amplitude, vy * amplitude)
+        self._paft_vector = (vx * amplitude, vy * amplitude)
+        self._saft_vector = (vx * amplitude, vy * amplitude)
         # display
         if self._verbose:
             self._display_info()

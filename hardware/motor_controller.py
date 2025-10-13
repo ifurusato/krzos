@@ -318,45 +318,34 @@ class MotorController(Component):
         self._motor_loop_callback = callback
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _motor_tick(self):
         '''
         The shared logic for a single motor control loop iteration, used by
         both _motor_loop() and external_callback_method(). Incorporates vector
         blending for per-motor speed control.
-        '''
-        # for each motor, blend vector functions before updating target speed
-        for orientation in [Orientation.PFWD, Orientation.SFWD, Orientation.PAFT, Orientation.SAFT]:
-            blended_vector = self.blend_vectors(orientation)
-            # Convert vector (x, y) to scalar speed for set_motor_speed.
-            # Example: use y-component for forward speed (modify if necessary for your platform)
-            blended_speed = blended_vector[1]
-            self.set_motor_speed(orientation, blended_speed)
-        # execute any callback here…
-        if self._differential_drive_mode:
-            _port_motor_power = self._pfwd_motor.update_target_speed()
-            _stbd_motor_power = self._sfwd_motor.update_target_speed()
-            self._paft_motor.set_motor_power(_port_motor_power)
-            self._saft_motor.set_motor_power(_stbd_motor_power)
-        else:
-            for _motor in self._all_motors:
-                _motor.update_target_speed()
-        if self._verbose: # print stats
-            _count = next(self._event_counter)
-            self.print_info(_count)
-        self._state_change_check()
-        if self._motor_loop_callback is not None:
-            self._motor_loop_callback()
 
-    def x_motor_tick(self):
+        For each motor, blend vector functions, using full Mecanum mapping to
+        convert (vx, vy) vector to per-wheel speeds.
         '''
-        The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and external_callback_method(). Incorporates vector
-        blending for per-motor speed control.
-        '''
-        # for each motor, blend vector functions before updating target speed
-        for orientation in [Orientation.PFWD, Orientation.SFWD, Orientation.PAFT, Orientation.SAFT]:
-            blended_speed = self.blend_vectors(orientation)
-            self.set_motor_speed(orientation, blended_speed)
+        # get blended vector for each orientation
+        pfwd_vec = self.blend_vectors(Orientation.PFWD)
+        sfwd_vec = self.blend_vectors(Orientation.SFWD)
+        paft_vec = self.blend_vectors(Orientation.PAFT)
+        saft_vec = self.blend_vectors(Orientation.SAFT)
+        # average vx, vy from all four wheels' vectors (assuming all have the same intent)
+        vx = (pfwd_vec[0] + sfwd_vec[0] + paft_vec[0] + saft_vec[0]) / 4.0
+        vy = (pfwd_vec[1] + sfwd_vec[1] + paft_vec[1] + saft_vec[1]) / 4.0
+        # calculate per-wheel speeds for Mecanum drive (no rotation component)
+        pfwd_speed = vx + vy
+        sfwd_speed = -vx + vy
+        paft_speed = vx - vy
+        saft_speed = -vx - vy
+        # set motor speeds (clamping may be needed)
+        self.set_motor_speed(Orientation.PFWD, pfwd_speed)
+        self.set_motor_speed(Orientation.SFWD, sfwd_speed)
+        self.set_motor_speed(Orientation.PAFT, paft_speed)
+        self.set_motor_speed(Orientation.SAFT, saft_speed)
         # execute any callback here…
         if self._differential_drive_mode:
             _port_motor_power = self._pfwd_motor.update_target_speed()
@@ -655,26 +644,6 @@ class MotorController(Component):
             ' (exclusive)' if exclusive else ''
         ))
 
-    def x_add_vector(self, orientation, vector_name, vector_function, exclusive=True):
-        '''
-        Adds the named vector function to the specified motor, replacing any others if exclusive.
-        This allows behaviours to register movement vector functions for blending.
-
-        :param orientation:     the motor orientation (PFWD, SFWD, PAFT, SAFT)
-        :param vector_name:     name for the vector function (for update/removal)
-        :param vector_function: function returning the desired speed for this motor
-        :param exclusive:       if True, clears other vector functions for this motor before adding
-        '''
-        if orientation not in self._vector_functions:
-            raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
-        if exclusive:
-            self._vector_functions[orientation].clear()
-        self._vector_functions[orientation][vector_name] = vector_function
-        self._log.info('added vector {} to {} motor{}'.format(
-            vector_name, orientation.name,
-            ' (exclusive)' if exclusive else ''
-        ))
-
     def remove_vector(self, orientation, vector_name):
         '''
         Removes the named vector function from the specified motor.
@@ -712,20 +681,6 @@ class MotorController(Component):
                 sums[i] += v[i]
         avgs = tuple(s / n for s in sums)
         return avgs
-
-    def x_blend_vectors(self, orientation):
-        '''
-        Blend all vector functions for this motor (e.g., average).
-        Returns the resulting speed for the motor.
-        '''
-        if orientation not in self._vector_functions:
-            raise Exception('unsupported orientation in blend_vectors: {}'.format(orientation))
-        vector_funcs = self._vector_functions[orientation].values()
-        if not vector_funcs:
-            return 0.0
-        speeds = [func() for func in vector_funcs]
-        # default: average blend; can be expanded for weighted blending
-        return sum(speeds) / len(speeds)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def rotate(self, rotation):
