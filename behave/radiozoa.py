@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-10
-# modified: 2025-10-11
+# modified: 2025-10-13
 
 import time
 import numpy as np
@@ -22,7 +22,6 @@ from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.cardinal import Cardinal
 from core.event import Event
-from core.orientation import Orientation
 from behave.behaviour import Behaviour
 from hardware.radiozoa_sensor import RadiozoaSensor
 from hardware.digital_pot import DigitalPotentiometer
@@ -30,10 +29,6 @@ from hardware.motor_controller import MotorController
 
 class Radiozoa(Behaviour):
     NAME = 'radiozoa'
-    RADIOZOA_PFWD_VECTOR_NAME = "__radiozoa_pfwd"
-    RADIOZOA_SFWD_VECTOR_NAME = "__radiozoa_sfwd"
-    RADIOZOA_PAFT_VECTOR_NAME = "__radiozoa_paft"
-    RADIOZOA_SAFT_VECTOR_NAME = "__radiozoa_saft"
 
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Radiozoa.NAME, level)
@@ -46,11 +41,8 @@ class Radiozoa(Behaviour):
         _dynamic_speed = _cfg.get('dynamic_speed')
         self._verbose   = False
         self._use_color = True
-        # per-motor speed (for vectors)
-        self._pfwd_vector = (0.0, 0.0)
-        self._sfwd_vector = (0.0, 0.0)
-        self._paft_vector = (0.0, 0.0)
-        self._saft_vector = (0.0, 0.0)
+        # intent vector for MotorController
+        self._intent_vector = (0.0, 0.0)
         # directional vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
@@ -82,28 +74,22 @@ class Radiozoa(Behaviour):
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-        self._register_motor_vectors()
+        self._register_intent_vector()
         self._log.info('ready.')
 
-    def _register_motor_vectors(self):
+    def _register_intent_vector(self):
         '''
-        Register vector functions for each motor, replacing speed multiplier lambdas.
+        Register a single intent vector lambda for the behaviour.
         '''
-        self._motor_controller.add_vector(Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME, lambda: self._pfwd_vector, exclusive=True)
-        self._motor_controller.add_vector(Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME, lambda: self._sfwd_vector, exclusive=True)
-        self._motor_controller.add_vector(Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME, lambda: self._paft_vector, exclusive=True)
-        self._motor_controller.add_vector(Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME, lambda: self._saft_vector, exclusive=True)
-        self._log.info('vector functions added to motors.')
+        self._motor_controller.add_intent_vector("radiozoa", lambda: self._intent_vector)
+        self._log.info('intent vector lambda registered with motor controller.')
 
-    def _remove_motor_vectors(self):
+    def _remove_intent_vector(self):
         '''
-        Remove Radiozoa vector functions from all motors.
+        Remove Radiozoa intent vector from motor controller.
         '''
-        self._motor_controller.remove_vector(Orientation.PFWD, self.RADIOZOA_PFWD_VECTOR_NAME)
-        self._motor_controller.remove_vector(Orientation.SFWD, self.RADIOZOA_SFWD_VECTOR_NAME)
-        self._motor_controller.remove_vector(Orientation.PAFT, self.RADIOZOA_PAFT_VECTOR_NAME)
-        self._motor_controller.remove_vector(Orientation.SAFT, self.RADIOZOA_SAFT_VECTOR_NAME)
-        self._log.info('vector functions removed from motors.')
+        self._motor_controller.remove_intent_vector("radiozoa")
+        self._log.info('intent vector lambda removed from motor controller.')
 
     @property
     def name(self):
@@ -171,18 +157,14 @@ class Radiozoa(Behaviour):
 
     async def _poll(self):
         try:
-#           self._log.debug("polling…")
             if next(self._counter) % 5 == 0:
                 self._dynamic_set_default_speed()
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
                 # stop when sensors are unavailable or out of range.
-                self._pfwd_speed = 0.0
-                self._sfwd_speed = 0.0
-                self._paft_speed = 0.0
-                self._saft_speed = 0.0
+                self._intent_vector = (0.0, 0.0)
             else:
-                self._update_motor_speeds(distances)
+                self._update_intent_vector(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
@@ -203,14 +185,14 @@ class Radiozoa(Behaviour):
         else:  # 0.61 - 0.8
             return Fore.MAGENTA
 
-    def _update_motor_speeds(self, distances):
+    def _update_intent_vector(self, distances):
         """
-        Center robot in space using four opposing sensor pairs as force vectors.
-        Robot does not move if both sensors in a pair are far (open space).
-        The amplitude of each pair's contribution is proportional to the imbalance between the two sensors.
-        The resulting vector is mapped to Mecanum wheels.
+        Compute the robot's movement intent as a single (vx, vy, omega) vector.
+        The amplitude of each pair's contribution is proportional to the
+        imbalance between the two sensors. The resulting vector is normalized
+        and scaled by the default speed.
         """
-        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95 # use a cutoff just below max range
+        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
         for c1, c2 in self._pairs:
@@ -218,49 +200,27 @@ class Radiozoa(Behaviour):
             d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
             d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
             d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
-
-            # TEMP
-    #       d1 = RadiozoaSensor.FAR_THRESHOLD
-    #       d2 = RadiozoaSensor.FAR_THRESHOLD
-
-            # if both sensors are far, ignore this pair (no imbalance to correct)
             if d1 >= far_threshold and d2 >= far_threshold:
                 continue
-            # imbalance sets amplitude; move toward centering
             diff = d1 - d2
             vec = self._directions[(c1, c2)] * diff
             force_vec += vec
             pair_active = True
-            # TEMP
-    #       self._log.info('PAIR: {}-{} d1={} d2={} diff={} vec={}'.format(c1.label, c2.label, d1, d2, diff, vec))
-
-        # if no pair contributed, robot is centered or in open space
         if not pair_active or np.linalg.norm(force_vec) < 1.0:
-            self._pfwd_vector = self._sfwd_vector = self._paft_vector = self._saft_vector = (0.0, 0.0)
+            self._intent_vector = (0.0, 0.0, 0.0)
             return
-        # normalize, scale, map to wheel vectors
         max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
         vx, vy = force_vec / max_abs
         amplitude = self._default_speed
-        self._pfwd_vector = (vx * amplitude, vy * amplitude)
-        self._sfwd_vector = (vx * amplitude, vy * amplitude)
-        self._paft_vector = (vx * amplitude, vy * amplitude)
-        self._saft_vector = (vx * amplitude, vy * amplitude)
-        # display
+        self._intent_vector = (vx * amplitude, vy * amplitude, 0.0)  # 0.0 = no rotation
         if self._verbose:
             self._display_info()
-        else:
-    #       self._log.debug(Fore.BLACK + "…")
-    #       print(Fore.BLACK + "…" + Style.RESET_ALL)
-            pass
 
-    def x_update_motor_speeds(self, distances):
+    def x_update_intent_vector(self, distances):
         """
-        NOTE: OLDER VERSION
-        Center robot in space using four opposing sensor pairs as force vectors.
-        Robot does not move if both sensors in a pair are far (open space).
+        Compute the robot's movement intent as a single (vx, vy) vector.
         The amplitude of each pair's contribution is proportional to the imbalance between the two sensors.
-        The resulting vector is mapped to Mecanum wheels.
+        The resulting vector is normalized and scaled by potentiometer value.
         """
         far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95 # use a cutoff just below max range
         force_vec = np.zeros(2)
@@ -271,11 +231,6 @@ class Radiozoa(Behaviour):
             d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
             d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
 
-            # TEMP
-#           d1 = RadiozoaSensor.FAR_THRESHOLD
-#           d2 = RadiozoaSensor.FAR_THRESHOLD
-
-            # if both sensors are far, ignore this pair (no imbalance to correct)
             if d1 >= far_threshold and d2 >= far_threshold:
                 continue
             # imbalance sets amplitude; move toward centering
@@ -284,80 +239,32 @@ class Radiozoa(Behaviour):
             force_vec += vec
             pair_active = True
 
-            # TEMP
-#           self._log.info('PAIR: {}-{} d1={} d2={} diff={} vec={}'.format(c1.label, c2.label, d1, d2, diff, vec))
-
         # if no pair contributed, robot is centered or in open space
         if not pair_active or np.linalg.norm(force_vec) < 1.0:
-            self._pfwd_speed = self._sfwd_speed = self._paft_speed = self._saft_speed = 0.0
+            self._intent_vector = (0.0, 0.0)
             return
-        # normalize, scale, map to wheel speeds
+        # normalize, scale by potentiometer value
         max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
         vx, vy = force_vec / max_abs
-        pfwd = vy + vx
-        sfwd = vy - vx
-        paft = vy - vx
-        saft = vy + vx
-        max_motor = max(abs(pfwd), abs(sfwd), abs(paft), abs(saft), 1.0)
-        self._pfwd_speed = float(np.clip(pfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
-        self._sfwd_speed = float(np.clip(sfwd * self._default_speed / max_motor, -self._default_speed, self._default_speed))
-        self._paft_speed = float(np.clip(paft * self._default_speed / max_motor, -self._default_speed, self._default_speed))
-        self._saft_speed = float(np.clip(saft * self._default_speed / max_motor, -self._default_speed, self._default_speed))
-        # display
+        amplitude = self._default_speed
+        self._intent_vector = (vx * amplitude, vy * amplitude)
         if self._verbose:
             self._display_info()
-        else:
-#           self._log.debug(Fore.BLACK + "…")
-#           print(Fore.BLACK + "…" + Style.RESET_ALL)
-            pass
 
     def _display_info(self, message=''):
         if self._use_color:
-            self._log.info("{} vectors: pfwd={}({:4.2f},{:4.2f}){} sfwd={}({:4.2f},{:4.2f}){} paft={}({:4.2f},{:4.2f}){} saft={}({:4.2f},{:4.2f}){}".format(
+            self._log.info("{} intent vector: {}({:4.2f},{:4.2f}){}".format(
                     message,
-                    self.get_highlight_color(self._pfwd_vector[0]),
-                    self._pfwd_vector[0], self._pfwd_vector[1], Style.RESET_ALL,
-                    self.get_highlight_color(self._sfwd_vector[0]),
-                    self._sfwd_vector[0], self._sfwd_vector[1], Style.RESET_ALL,
-                    self.get_highlight_color(self._paft_vector[0]),
-                    self._paft_vector[0], self._paft_vector[1], Style.RESET_ALL,
-                    self.get_highlight_color(self._saft_vector[0]),
-                    self._saft_vector[0], self._saft_vector[1], Style.RESET_ALL
+                    self.get_highlight_color(self._intent_vector[0]),
+                    self._intent_vector[0], self._intent_vector[1], Style.RESET_ALL
                 )
             )
         else:
-            self._log.info("vectors: pfwd=({:.2f},{:.2f}) sfwd=({:.2f},{:.2f}) paft=({:.2f},{:.2f}) saft=({:.2f},{:.2f})".format(
-                    self._pfwd_vector[0], self._pfwd_vector[1],
-                    self._sfwd_vector[0], self._sfwd_vector[1],
-                    self._paft_vector[0], self._paft_vector[1],
-                    self._saft_vector[0], self._saft_vector[1]
+            self._log.info("intent vector: ({:.2f},{:.2f})".format(
+                    self._intent_vector[0], self._intent_vector[1]
                 )
             )
 
-    def x_display_info(self, message=''):
-        if self._use_color:
-            self._log.info("{} speeds: pfwd={}{:4.2f}{} sfwd={}{:4.2f}{} paft={}{:4.2f}{} saft={}{:4.2f}{}".format(
-                    message,
-                    self.get_highlight_color(self._pfwd_speed),
-                    self._pfwd_speed,
-                    Style.RESET_ALL,
-                    self.get_highlight_color(self._sfwd_speed),
-                    self._sfwd_speed,
-                    Style.RESET_ALL,
-                    self.get_highlight_color(self._paft_speed),
-                    self._paft_speed,
-                    Style.RESET_ALL,
-                    self.get_highlight_color(self._saft_speed),
-                    self._saft_speed,
-                    Style.RESET_ALL
-                )
-            )
-        else:
-            self._log.info("speeds: pfwd={:.2f} sfwd={:.2f} paft={:.2f} saft={:.2f}".format(
-                    self._pfwd_speed, self._sfwd_speed, self._paft_speed, self._saft_speed
-                )
-            )
- 
     def _accelerate(self):
         self._log.info("accelerate…")
         if self._motor_controller:
@@ -374,7 +281,7 @@ class Radiozoa(Behaviour):
             return
         if self._motor_controller:
             self._motor_controller.enable()
-            self._register_motor_vectors()
+            self._register_intent_vector()
         Component.enable(self)
         self._loop_instance = asyncio.new_event_loop()
         self._stop_event = ThreadEvent()
@@ -386,15 +293,15 @@ class Radiozoa(Behaviour):
 
     def suppress(self):
         Behaviour.suppress(self)
-        self._remove_motor_vectors()
+        self._remove_intent_vector()
         self._log.info("radiozoa suppressed.")
 
     def release(self):
         '''
-        Releases suppression of the behaviour, re-registering vector functions.
+        Releases suppression of the behaviour, re-registering intent vector.
         '''
         Behaviour.release(self)
-        self._register_motor_vectors()
+        self._register_intent_vector()
         self._log.info("radiozoa released.")
 
     def disable(self):
@@ -425,7 +332,6 @@ class Radiozoa(Behaviour):
             self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        # if brake hasn't finished we stop anyway
         self._motor_controller.stop()
         self._loop_instance.stop()
         self._loop_instance.close()
