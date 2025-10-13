@@ -318,8 +318,36 @@ class MotorController(Component):
         self._motor_loop_callback = callback
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def _motor_tick(self):
+        '''
+        The shared logic for a single motor control loop iteration, used by
+        both _motor_loop() and external_callback_method(). Incorporates vector
+        blending for per-motor speed control.
+        '''
+        # for each motor, blend vector functions before updating target speed
+        for orientation in [Orientation.PFWD, Orientation.SFWD, Orientation.PAFT, Orientation.SAFT]:
+            blended_vector = self.blend_vectors(orientation)
+            # Convert vector (x, y) to scalar speed for set_motor_speed.
+            # Example: use y-component for forward speed (modify if necessary for your platform)
+            blended_speed = blended_vector[1]
+            self.set_motor_speed(orientation, blended_speed)
+        # execute any callback here…
+        if self._differential_drive_mode:
+            _port_motor_power = self._pfwd_motor.update_target_speed()
+            _stbd_motor_power = self._sfwd_motor.update_target_speed()
+            self._paft_motor.set_motor_power(_port_motor_power)
+            self._saft_motor.set_motor_power(_stbd_motor_power)
+        else:
+            for _motor in self._all_motors:
+                _motor.update_target_speed()
+        if self._verbose: # print stats
+            _count = next(self._event_counter)
+            self.print_info(_count)
+        self._state_change_check()
+        if self._motor_loop_callback is not None:
+            self._motor_loop_callback()
+
+    def x_motor_tick(self):
         '''
         The shared logic for a single motor control loop iteration, used by
         both _motor_loop() and external_callback_method(). Incorporates vector
@@ -600,6 +628,35 @@ class MotorController(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_vector(self, orientation, vector_name, vector_function, exclusive=True):
         '''
+        Adds a named vector function to the specified motor, replacing any others if
+        exclusive. Behaviours should use this method to register their movement vector
+        functions for blending.
+
+        Only functions that return a tuple or list (i.e., representing a vector such
+        as (x, y)) are permitted. This is enforced at registration time.
+
+        :param orientation:     the motor orientation (PFWD, SFWD, PAFT, SAFT)
+        :param vector_name:     name for the vector function (for update/removal)
+        :param vector_function: function returning the desired vector (tuple/list) for this motor
+        :param exclusive:       if True, clears other vector functions for this motor before adding
+        :raises TypeError:      if vector_function does not return a tuple or list
+        '''
+        # Enforce vector-style function
+        result = vector_function()
+        if not isinstance(result, (tuple, list)):
+            raise TypeError("add_vector: vector_function must return a tuple or list representing a vector, not '{}'.".format(type(result)))
+        if orientation not in self._vector_functions:
+            raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
+        if exclusive:
+            self._vector_functions[orientation].clear()
+        self._vector_functions[orientation][vector_name] = vector_function
+        self._log.info('added vector {} to {} motor{}'.format(
+            vector_name, orientation.name,
+            ' (exclusive)' if exclusive else ''
+        ))
+
+    def x_add_vector(self, orientation, vector_name, vector_function, exclusive=True):
+        '''
         Adds the named vector function to the specified motor, replacing any others if exclusive.
         This allows behaviours to register movement vector functions for blending.
 
@@ -628,9 +685,15 @@ class MotorController(Component):
 
     def blend_vectors(self, orientation):
         '''
-        Blend all vector functions for this motor (e.g., average).
-        Only supports vector outputs (tuple/list) from registered functions.
-        Returns the resulting vector as a tuple.
+        Blends all registered vector functions for the specified motor orientation.
+
+        Each registered function must return a tuple or list (vector-style). The blend is
+        computed as the average of all vectors returned by the functions. If no functions
+        are registered, returns (0.0, 0.0).
+
+        :param orientation: the motor orientation (PFWD, SFWD, PAFT, SAFT)
+        :return:            the blended vector as a tuple
+        :raises TypeError:  if any registered function does not return a tuple or list
         '''
         if orientation not in self._vector_functions:
             raise Exception('unsupported orientation in blend_vectors: {}'.format(orientation))
@@ -943,6 +1006,7 @@ class MotorController(Component):
         '''
         if self._graceful_stop:
             self.brake()
+            time.sleep(3)
         else:
             self.emergency_stop() # just in case
         if self.enabled:

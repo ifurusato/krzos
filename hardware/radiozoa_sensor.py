@@ -93,6 +93,15 @@ class RadiozoaSensor(Component):
                 raise
         else:
             raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+        # variables
+        self._polling_stop_event = Event()
+        self._poll_interval  = -1
+        self._distances      = [None for _ in range(self._sensor_count)]
+        self._distances_lock = Lock()
+        self._polling_thread = None
+        self._polling_loop   = None
+        self._polling_task   = None
+        self._callback       = None
         # create all sensors, raise exception if any are missing
         self._create_sensors()
         self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._sensors}
@@ -102,14 +111,6 @@ class RadiozoaSensor(Component):
                 missing.append(sensor.label)
         if missing:
             raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
-        self._poll_interval  = -1
-        self._distances      = [None for _ in range(self._sensor_count)]
-        self._distances_lock = Lock()
-        self._polling_stop_event = Event()
-        self._polling_thread = None
-        self._polling_loop   = None
-        self._polling_task   = None
-        self._callback       = None
         self._log.info('ready.')
 
     def _get_poll_interval(self):
