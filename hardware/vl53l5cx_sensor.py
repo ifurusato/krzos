@@ -118,6 +118,27 @@ class Vl53l5cxSensor(Component):
                 if self._vl53.data_ready():
                     data = self._vl53.get_data()
                     try:
+                        # convert ctypes array to Python list before adding to queue
+                        _distance_mm = [int(data.distance_mm[i]) for i in range(len(data.distance_mm))]
+                        queue.put(_distance_mm, block=False)
+                    except Exception:
+                        pass
+                time.sleep(poll_interval)
+        except Exception as e:
+            print("VL53L5CX polling process error:", e)
+        finally:
+            self._vl53.stop_ranging()
+
+    def x_polling_loop(self, queue, stop_event, poll_interval):
+        '''
+        Polls the VL53L5CX sensor as a separate process and puts results into the queue.
+        '''
+        self._vl53.start_ranging()
+        try:
+            while not stop_event.is_set():
+                if self._vl53.data_ready():
+                    data = self._vl53.get_data()
+                    try:
                         queue.put(data.distance_mm, block=False)
                     except Exception:
                         pass
@@ -152,7 +173,7 @@ class Vl53l5cxSensor(Component):
         if not self.enabled:
             self._log.warning('get_distance_mm called while sensor is not enabled.')
             return None
-        # Drain queue to get the most recent value
+        # drain queue to get the most recent value
         value = None
         while True:
             try:

@@ -39,22 +39,28 @@ kros:
 #           release:                    False              # release idle behaviour
 #           idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
 #           loop_freq_hz:                   1              # main loop delay in hz
-#       roam:
-#           enable:                      True              # enable roam behaviour
-#           release:                     True              # release roam behaviour
+        roam:
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour
+            verbose:                    False
+
+            loop_delay_ms:                 80              # asyncio loop delay in milliseconds
+            default_speed:                  0.8            # cruising speed
+            dynamic_speed:               True              # if True use digital pot for default speed
+            use_world_coordinates:      False              # use world- or robot-relative coordinates for vector
+
 #           min_velocity:                 0.0              # minimum motor target velocity
 #           max_velocity:               100.0              # maximum motor target velocity
 #           cruising_speed:       'TWO_THIRDS'             # cruising speed (recovery speed), e.g., HALF, TWO_THIRDS, THREE_QUARTERS, FULL
 #           stop_delay_s:                   3              # how many seconds to wait before cruising again
-#           loop_delay_ms:                 80              # asyncio loop delay in milliseconds
 #           deadband_threshold:             0.10           # don't drive motors slower than this
-#           loop_freq_hz:                   1              # main loop delay in hz
-        radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour
-            dynamic_speed:               True              # if True use digital pot for default speed
-            loop_delay_ms:                 50
-            default_speed:                  0.8              # cruising speed
+            loop_freq_hz:                   1              # main loop delay in hz
+#       radiozoa:
+#           enable:                      True              # enable radiozoa behaviour
+#           release:                     True              # release radiozoa behaviour
+#           dynamic_speed:               True              # if True use digital pot for default speed
+#           loop_delay_ms:                 50
+#           default_speed:                  0.8              # cruising speed
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -205,8 +211,8 @@ kros:
             max_distance:                  1000            # maximum distance in mm of VL53L5CX (actual range is 4m)
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
+            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)
@@ -336,8 +342,32 @@ kros:
             name:         "MPU9250 + BMP280 IMU"
             required:                      True
           - address:                       0x29
-            name:   "VL53L5X Ranging ToF Sensor"
+            name:    "VL53L5CX 8x8 Ranging ToF Sensor"
             required:                      True
+          - address:                       0x30  # radiozoa N
+            name:       "VL53L0X ToF Sensor (N)"
+            required:                     False
+          - address:                       0x31  # radiozoa NE
+            name:      "VL53L0X ToF Sensor (NE)"
+            required:                     False
+          - address:                       0x32  # radiozoa E
+            name:       "VL53L0X ToF Sensor (E)"
+            required:                     False
+          - address:                       0x33  # radiozoa SE
+            name:      "VL53L0X ToF Sensor (SE)"
+            required:                     False
+          - address:                       0x34  # radiozoa S
+            name:       "VL53L0X ToF Sensor (S)"
+            required:                     False
+          - address:                       0x35  # radiozoa SW
+            name:      "VL53L0X ToF Sensor (SW)"
+            required:                     False
+          - address:                       0x36  # radiozoa W
+            name:       "VL53L0X ToF Sensor (W)"
+            required:                     False
+          - address:                       0x37  # radiozoa NW
+            name:      "VL53L0X ToF Sensor (NW)"
+            required:                     False
           - address:                       0x38
             name:                "HT0740 Switch"
             required:                     False

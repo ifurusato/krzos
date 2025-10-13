@@ -967,11 +967,12 @@ class MotorController(Component):
         '''
         Disable the motors.
         '''
-        if self._graceful_stop:
-            self.brake()
-            time.sleep(3)
-        else:
-            self.emergency_stop()
+        if not self.is_stopped:
+            if self._graceful_stop:
+                self.brake()
+                time.sleep(3)
+            else:
+                self.emergency_stop()
         if self.enabled:
             if self._external_clock:
                 self._log.info('disabling by removing external clock callback…')

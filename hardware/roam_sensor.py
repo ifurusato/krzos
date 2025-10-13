@@ -55,15 +55,14 @@ class RoamSensor(Component):
         self._sigmoid_k      = _cfg.get('sigmoid_k', 40)    # steepness
         self._smoothing      = _cfg.get('smoothing', True)
         _smoothing_window    = _cfg.get('smoothing_window', 5)
-        self._window = deque(maxlen=_smoothing_window) if self._smoothing else None
-        self._min_distance   = _cfg.get('min_distance', 150)  # mm
-        self._max_distance   = _cfg.get('max_distance', 1000) # mm, the "no obstacle" threshold
+        self._window         = deque(maxlen=_smoothing_window) if self._smoothing else None
+        self._min_distance   = _cfg.get('min_distance')   # mm
+        self._max_distance   = _cfg.get('max_distance')   # mm, the "no obstacle" threshold
+        self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
+        self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
         _easing_value        = _cfg.get('easing', 'logarithmic')
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
-        # PWM sensor range for fusion
-        self._pwm_max_range  = _cfg.get('pwm_max_range', 250)  # mm
-        self._use_sigmoid_fusion = _cfg.get('use_sigmoid_fusion')
         # sensor instantiation
         _component_registry = Component.get_registry()
         # Vl53l5cxSensor class
@@ -126,7 +125,7 @@ class RoamSensor(Component):
             return None
         data = self._vl53l5cx.get_distance_mm()  # now non-blocking
         if data is None:
-            self._log.warning('VL53L5CX returned no data.')
+#           self._log.warning('VL53L5CX returned no data.')
             return None
         # Assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
         try:
@@ -156,7 +155,7 @@ class RoamSensor(Component):
             return pwm_value
         elif pwm_value is None and vl53_value is not None:
             return vl53_value
-        elif self._use_sigmoid_fusion:
+        elif self._use_sigmoid:
             weight = self.sigmoid_weight(pwm_value)
             fused = weight * pwm_value + (1.0 - weight) * vl53_value
             self._log.info(Fore.WHITE + 'fusion(sigmoid): pwm={}, vl53={}, weight={:.3f}, fused={:.2f}'.format(pwm_value, vl53_value, weight, fused))

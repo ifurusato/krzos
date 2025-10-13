@@ -44,14 +44,14 @@ def test_required_devices():
         else:
             found = __i2c_scanner_1.has_hex_address([hex_address])
         if required:
+            if _is_vl53:
+                __log.info("{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (I2C0)")
+            else:
+                __log.info("{}: ".format(hex_address) + Fore.GREEN + "{}".format(name))
             assert found, "{} not found at {}".format(name, hex_address)
-            __log.info("{}: ".format(hex_address) + Fore.GREEN + "{}".format(name))
         elif _show_optional:
             if found:
-                if _is_vl53:
-                    __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional, on I2C0)")
-                else:
-                    __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
+                __log.info(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (optional)")
             else:
                 __log.debug(Style.DIM + "{}: ".format(hex_address) + Fore.GREEN + "{}".format(name) + Fore.CYAN + " (not found, optional)")
     __log.info(Fore.GREEN + "required devices are available.")
