@@ -149,6 +149,7 @@ class RoamSensor(Component):
         Fuses PWM and VL53L5CX sensor values according to fusion strategy.
         Returns fused value (mm) or None.
         '''
+#       self._log.info(Fore.WHITE + '_fuse: pwm={}, vl53={}'.format(pwm_value, vl53_value))
         if pwm_value is None and vl53_value is None:
             return None
         elif pwm_value is not None and vl53_value is None:
@@ -173,11 +174,11 @@ class RoamSensor(Component):
         if value is None:
             return None
         if not self._smoothing:
-            self._log.info(Fore.WHITE + 'unsmoothed: {:.2f}'.format(value))
+#           self._log.info(Fore.WHITE + 'unsmoothed: {:.2f}'.format(value))
             return value
         self._window.append(value)
         smoothed = np.mean(self._window)
-        self._log.info(Fore.WHITE + 'smoothed: {:.2f}'.format(smoothed))
+#       self._log.info(Fore.WHITE + 'smoothed: {:.2f}'.format(smoothed))
         return smoothed
 
     def _normalise_and_ease(self, value):
@@ -191,7 +192,7 @@ class RoamSensor(Component):
         normalised = clamped / self._max_distance
         eased = self._easing.apply(normalised)
         eased_mm = eased * self._max_distance
-        self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
+#       self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
         return eased_mm
 
     def get_distance(self, apply_easing=True):

@@ -43,7 +43,7 @@ class DistanceSensor(Component):
         :param config:        the application configuration
         :param level:         the logging Level
         '''
-        self._log = Logger(DistanceSensor.NAME, level)
+        self._log = Logger(DistanceSensor.NAME, level=Level.INFO)
         if config is None:
             raise ValueError('no configuration provided.')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
@@ -127,7 +127,12 @@ class DistanceSensor(Component):
         Returns the current distance value in millimeters, None if
         out of range.
         '''
-        return self._compute_distance()
+        _distance = self._compute_distance()
+#       if _distance:
+#           self._log.info(Fore.YELLOW + 'raw distance: {:4.2f}'.format(_distance))
+#       else:
+#           self._log.info(Style.DIM + 'raw distance: none')
+        return _distance
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_timeout(self):

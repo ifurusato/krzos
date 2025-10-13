@@ -112,7 +112,6 @@ class Vl53l5cxSensor(Component):
         '''
         Polls the VL53L5CX sensor as a separate process and puts results into the queue.
         '''
-        self._vl53.start_ranging()
         try:
             while not stop_event.is_set():
                 if self._vl53.data_ready():
@@ -125,7 +124,7 @@ class Vl53l5cxSensor(Component):
                         pass
                 time.sleep(poll_interval)
         except Exception as e:
-            print("VL53L5CX polling process error:", e)
+            self._log.error("VL53L5CX polling process error:", e)
         finally:
             self._vl53.stop_ranging()
 
@@ -144,14 +143,17 @@ class Vl53l5cxSensor(Component):
                         pass
                 time.sleep(poll_interval)
         except Exception as e:
-            print("VL53L5CX polling process error:", e)
+            self._log.error("VL53L5CX polling process error:", e)
         finally:
             self._vl53.stop_ranging()
 
     def enable(self):
         if not self.enabled:
+            self._vl53.start_ranging()
+            super().enable()
             # Start multiprocessing polling process
             if self._process is None or not self._process.is_alive():
+                self._log.info(Fore.WHITE + Style.BRIGHT + 'starting external process…')
                 self._stop_event.clear()
                 self._process = Process(
                     target=self._polling_loop,
@@ -159,7 +161,6 @@ class Vl53l5cxSensor(Component):
                     daemon=True
                 )
                 self._process.start()
-            super().enable()
             self._calibrate_floor_rows()
             self._log.info('VL53L5CX hardware enabled and ranging.')
         else:
@@ -183,14 +184,14 @@ class Vl53l5cxSensor(Component):
         return value
 
     def _calibrate_floor_rows(self):
-        self._log.info(Fore.WHITE + 'calibrating floor rows…')
+        self._log.info(Fore.WHITE + 'calibrating floor rows using {} samples…'.format(self._calibration_samples))
         self._floor_row_means   = [None for _ in range(self._rows)]
         self._floor_row_stddevs = [None for _ in range(self._rows)]
         samples = []
         for i in range(self._calibration_samples):
             data = self.get_distance_mm() # returns an 8x8 array
             if data is None:
-                self._log.debug("calibration sample {} is None.".format(i))
+                self._log.info("calibration sample {} is None.".format(i))
                 continue
             arr = np.array(data).reshape((self._rows, self._cols))
             samples.append(arr)
@@ -235,6 +236,7 @@ class Vl53l5cxSensor(Component):
             else:
                 # disable sensor or behaviour?
                 self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row as floor.')
+        self._log.info(Fore.WHITE + 'floor rows calibrated.')
 
     def disable(self):
         if self.enabled:
