@@ -159,7 +159,7 @@ class MotorController(Component):
         self._log.info('ready with {} motors.'.format(len(self._all_motors)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    # NEW INTENT VECTOR BLENDING API
+
     def add_intent_vector(self, name, vector_lambda):
         '''
         Register a behaviour's intent vector lambda.

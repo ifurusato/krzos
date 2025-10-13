@@ -56,6 +56,7 @@ class Vl53l5cxSensor(Component):
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
+        self._vl53 = None
         if _i2c_bus_number == 0:
             _start_time = dt.now()
             try:
@@ -325,7 +326,8 @@ class Vl53l5cxSensor(Component):
     def close(self):
         if not self.closed:
             self.disable()
-            self._vl53.close() # note: custom method in local copy
+            if self._vl53:
+                self._vl53.close() # note: custom method in local copy
             super().close()
             self._log.info('VL53L5CX hardware closed.')
         else:

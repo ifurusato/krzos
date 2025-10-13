@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -38,12 +37,12 @@ class Roam(Behaviour):
 
     Roam now uses a vector-based motor control, allowing for heading-based
     driving (default North, but arbitrary heading supported).
+    Rotational alignment is performed when heading changes.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
         Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self.add_event(Event.AVOID)
-        # configuration
         _cfg = config['kros'].get('behaviour').get('roam')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._counter  = itertools.count()
@@ -51,15 +50,17 @@ class Roam(Behaviour):
         self._use_color = True
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._dynamic_speed = _cfg.get('dynamic_speed', True)
-        self._use_world_coordinates = _cfg.get('use_world_coordinates') # use world- or robot-relative coordinates for vector
-        # use RoamSensor values
+        self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance  = _rs_cfg.get('min_distance')
         self._max_distance  = _rs_cfg.get('max_distance')
-        # variables
+        self._polling_rate_hz = _rs_cfg.get('polling_rate_hz', None)
         self._heading_degrees = 0.0 # default "north"/forward
         self._intent_vector = (0.0, 0.0, 0.0)
-        # registry lookups
+        self._target_heading_degrees = None
+        self._is_rotating = False
+        self._rotation_speed = _cfg.get('rotation_speed', 0.5)
+        self._rotation_decel_window = _cfg.get('rotation_decel_window', 12) # degrees before target to begin decelerating
         _component_registry = Component.get_registry()
         self._digital_pot = None
         if self._dynamic_speed:
@@ -75,39 +76,40 @@ class Roam(Behaviour):
             raise MissingComponentError('motor controller not available.')
         self._register_intent_vector()
         self._log.info('ready.')
+        self._poll_delay_sec = self._get_poll_delay_sec()
+
+    def _get_poll_delay_sec(self):
+        '''
+        Determines polling delay in seconds based on RoamSensor's update rate, if provided.
+        '''
+        if self._polling_rate_hz:
+            return 1.0 / self._polling_rate_hz
+        return self._loop_delay_ms / 1000.0
 
     def _register_intent_vector(self):
-        '''
-        Register a single intent vector lambda for the behaviour.
-        '''
         self._motor_controller.add_intent_vector("roam", lambda: self._intent_vector)
         self._log.info('intent vector lambda registered with motor controller.')
 
     def _remove_intent_vector(self):
-        '''
-        Remove Roam intent vector from motor controller.
-        '''
         self._motor_controller.remove_intent_vector("roam")
         self._log.info('intent vector lambda removed from motor controller.')
 
     def set_heading_degrees(self, degrees):
         '''
         Set the movement heading in degrees (0 = north/forward, 90 = east/starboard).
+        Triggers rotational alignment if heading changes.
         '''
-        self._heading_degrees = float(degrees)
+        degrees = float(degrees)
+        if not isclose(degrees, self._heading_degrees, abs_tol=1e-2):
+            self._target_heading_degrees = degrees
+            self._is_rotating = True
+            self._log.info('heading change requested: rotating to {} degrees.'.format(degrees))
 
     def set_heading_radians(self, radians):
-        '''
-        Set the movement heading in radians.
-        '''
-        self._heading_degrees = np.degrees(radians)
+        self.set_heading_degrees(np.degrees(radians))
 
     def set_heading_cardinal(self, cardinal):
-        '''
-        Set the movement heading using a Cardinal direction.
-        '''
-        # Cardinal.degrees returns the robot-relative heading in degrees
-        self._heading_degrees = cardinal.degrees
+        self.set_heading_degrees(cardinal.degrees)
 
     @property
     def name(self):
@@ -140,7 +142,7 @@ class Roam(Behaviour):
                 self._log.info('roam disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
 
     async def _loop_main(self):
-        self._log.info("roam loop started with {}ms delay…".format(self._loop_delay_ms))
+        self._log.info("roam loop started with {:.2f}s delay…".format(self._poll_delay_sec))
         try:
             if not self.suppressed:
                 self._accelerate()
@@ -149,7 +151,7 @@ class Roam(Behaviour):
                     await self._poll()
                 else:
                     self._log.info(Fore.WHITE + "suppressed…")
-                await asyncio.sleep(self._loop_delay_ms / 1000)
+                await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break
         except asyncio.CancelledError:
@@ -164,7 +166,7 @@ class Roam(Behaviour):
 
     def _dynamic_set_default_speed(self):
         if self._digital_pot:
-            _speed = self._digital_pot.get_scaled_value(False) # values 0.0-1.0
+            _speed = self._digital_pot.get_scaled_value(False)
             if isclose(_speed, 0.0, abs_tol=0.08):
                 self._digital_pot.set_black()
                 self._default_speed = 0.0
@@ -185,11 +187,39 @@ class Roam(Behaviour):
 
     def _update_intent_vector(self):
         '''
-        Update the intent vector based on heading, speed, and obstacle logic.
+        Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
         '''
+        # If in rotation, output rotational intent vector, else normal
+        if self._is_rotating and self._target_heading_degrees is not None:
+            # Calculate shortest rotation direction and difference
+            current = self._heading_degrees % 360.0
+            target = self._target_heading_degrees % 360.0
+            delta = (target - current) % 360.0
+            if delta > 180.0:
+                delta -= 360.0
+            abs_delta = abs(delta)
+            # Decelerate rotation as approach target
+            if abs_delta < self._rotation_decel_window:
+                rot_speed = self._rotation_speed * (abs_delta / self._rotation_decel_window)
+            else:
+                rot_speed = self._rotation_speed
+            # Clamp minimum rotation speed
+            rot_speed = max(rot_speed, 0.08)
+            omega = rot_speed if delta > 0 else -rot_speed
+            # If reached target, finish rotation
+            if abs_delta < 2.0:
+                self._heading_degrees = self._target_heading_degrees
+                self._is_rotating = False
+                self._target_heading_degrees = None
+                omega = 0.0
+                self._log.info('rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
+            self._intent_vector = (0.0, 0.0, omega)
+            if self._verbose:
+                self._display_info('rotating')
+            return
+        # Normal movement intent vector
         radians = np.deg2rad(getattr(self, '_heading_degrees', 0.0))
         amplitude = self._default_speed
-        # If amplitude is zero, ensure no movement
         if amplitude == 0.0:
             self._intent_vector = (0.0, 0.0, 0.0)
             if self._verbose:
@@ -216,41 +246,6 @@ class Roam(Behaviour):
         if self._verbose:
             self._display_info()
 
-    def x_update_intent_vector(self):
-        '''
-        Update the intent vector based on heading, speed, and obstacle logic.
-        '''
-        radians = np.deg2rad(getattr(self, '_heading_degrees', 0.0))
-        amplitude = self._default_speed
-        if self._digital_pot:
-            amplitude = self._digital_pot.get_scaled_value(False)
-
-        # Obstacle logic: scale amplitude if obstacle detected
-        front_distance = self._roam_sensor.get_distance()
-        min_distance = self._min_distance
-        max_distance = self._max_distance
-
-        if front_distance is None or front_distance >= max_distance:
-            obstacle_scale = 1.0
-        elif front_distance <= min_distance:
-            obstacle_scale = 0.0
-        else:
-            # Linear scaling
-            obstacle_scale = (front_distance - min_distance) / (max_distance - min_distance)
-            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-
-        amplitude *= obstacle_scale
-
-        # Calculate movement vector in robot-relative frame
-        vx = np.sin(radians) * amplitude
-        vy = np.cos(radians) * amplitude
-        omega = 0.0
-
-        self._intent_vector = (vx, vy, omega)
-
-        if self._verbose:
-            self._display_info()
-
     def _display_info(self, message=''):
         if self._use_color:
             self._log.info("{} intent vector: {}({:4.2f},{:4.2f}, {:4.2f}){}".format(
@@ -266,9 +261,6 @@ class Roam(Behaviour):
             )
 
     def get_highlight_color(self, value):
-        '''
-        Return colorama color/style for multiplier legend.
-        '''
         from colorama import Fore, Style
         if value <= 0.1:
             return Style.DIM
@@ -317,9 +309,6 @@ class Roam(Behaviour):
         self._log.info("roam suppressed.")
 
     def release(self):
-        '''
-        Releases suppression of the behaviour, re-registering intent vector.
-        '''
         Behaviour.release(self)
         self._register_intent_vector()
         self._log.info("roam released.")

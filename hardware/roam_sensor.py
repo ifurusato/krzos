@@ -62,7 +62,7 @@ class RoamSensor(Component):
         self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
         self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
         _easing_value        = _cfg.get('easing', 'logarithmic')
-        self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default 
+        self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
         # sensor instantiation
@@ -98,14 +98,6 @@ class RoamSensor(Component):
     @property
     def max_distance(self):
         return self._max_distance
-
-#   @property
-#   def distance(self):
-#       '''
-#       Returns the latest fused, smoothed distance value (mm).
-#       Does not actively poll; use get_distance() for a fresh reading.
-#       '''
-#       return self._distance
 
     def sigmoid_weight(self, pwm_value):
         '''
@@ -228,9 +220,10 @@ class RoamSensor(Component):
 
     def check_timeout(self):
         '''
-        Returns True if no reading has been produced recently.
+        Returns True if the last value is stale (timeout exceeded).
         '''
-        return time.time() - self._last_read_time > 2.0 # can be made configurable
+        elapsed_ms = (dt.now() - self._last_read_time).total_seconds() * 1000.0
+        return elapsed_ms > self._stale_timeout_ms
 
     def enable(self):
         '''
