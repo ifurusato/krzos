@@ -90,7 +90,7 @@ class Roam(Behaviour):
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
         # use USFS IMU if available and world coordinates flag set
         self._imu = None
-        if self._use_world_coordinates;
+        if self._use_world_coordinates:
             self._imu = _component_registry.get(Usfs.NAME)
         # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -266,10 +266,133 @@ class Roam(Behaviour):
     def _update_intent_vector(self):
         '''
         Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
+        Delegates to rotation and linear movement handlers.
+        '''
+        if self._is_rotating and self._target_heading_degrees is not None:
+            self._update_rotation_vector()
+        else:
+            self._update_linear_vector()
+
+    def _update_rotation_vector(self):
+        '''
+        Handles rotation intent vector, choosing IMU or encoder logic as appropriate.
+        '''
+        if self._use_world_coordinates and self._imu is not None:
+            self._update_rotation_vector_imu()
+        else:
+            self._update_rotation_vector_encoder()
+
+    def _update_rotation_vector_imu(self):
+        '''
+        IMU-based rotation logic.
+        '''
+        current_heading = self._imu.corrected_yaw
+        current_heading = float(current_heading) % 360.0
+        target = self._target_heading_degrees
+        delta = (target - current_heading + 180.0) % 360.0 - 180.0
+        abs_remaining = abs(delta)
+        self._log.info(
+            'IMU ROTATE: imu_heading={:.2f}, target={:.2f}, delta={:.2f}, tolerance={:.2f}'.format(
+                current_heading, target, delta, self._rotation_tolerance
+            )
+        )
+        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
+            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
+        else:
+            rot_speed = self._rotation_speed
+        rot_speed = max(rot_speed, 0.08)
+        omega = rot_speed * copysign(1, delta)
+        # Stop logic: within tolerance or overshoot in both directions
+        if isclose(current_heading, target, abs_tol=self._rotation_tolerance) or abs_remaining < self._rotation_tolerance:
+            self._heading_degrees = target
+            self._is_rotating = False
+            self._target_heading_degrees = None
+            omega = 0.0
+            self._log.info('IMU rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._display_info('IMU rotating')
+
+    def _update_rotation_vector_encoder(self):
+        '''
+        Encoder-based rotation logic.
+        '''
+        delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
+        delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
+        delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
+        delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
+        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
+        degrees_rotated = abs(rotation_steps / self._steps_per_degree)
+        self._rotation_accumulated_degrees = degrees_rotated
+        abs_remaining = self._rotation_required_degrees - degrees_rotated
+#       self._log.info(
+#           'ENC ROTATE: pfwd: {}, sfwd: {}, paft: {}, saft: {}, steps: {}, deg_rotated: {}, deg_needed: {}, deg_remaining: {}'.format(
+#               delta_pfwd, delta_sfwd, delta_paft, delta_saft, rotation_steps, degrees_rotated, self._rotation_required_degrees, abs_remaining
+#           )
+#       )
+#       self._log.info(
+#           'ENC ROTATION DEBUG: degrees_rotated={}, abs_remaining={}, tolerance={}'.format(degrees_rotated, abs_remaining, self._rotation_tolerance)
+#       )
+        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
+            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
+        else:
+            rot_speed = self._rotation_speed
+        rot_speed = max(rot_speed, 0.08)
+        omega = rot_speed * self._rotation_direction
+        # stop logic: handle overshoot in both directions
+        if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
+           degrees_rotated >= self._rotation_required_degrees:
+            self._heading_degrees = self._target_heading_degrees
+            self._is_rotating = False
+            self._target_heading_degrees = None
+            omega = 0.0
+            self._log.info('Encoder rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._display_info('rotating')
+
+    def _update_linear_vector(self):
+        '''
+        Handles normal movement intent vector, including obstacle scaling and deadband.
+        '''
+        import numpy as np
+        radians = np.deg2rad(self._heading_degrees)
+        amplitude = self._default_speed
+        if amplitude == 0.0:
+            self._intent_vector = (0.0, 0.0, 0.0)
+            if self._verbose:
+                self._display_info()
+            return
+        if self._digital_pot:
+            amplitude = self._digital_pot.get_scaled_value(False)
+        # obstacle logic: scale amplitude if obstacle detected
+        front_distance = self._roam_sensor.get_distance()
+        min_distance = self._min_distance
+        max_distance = self._max_distance
+        if front_distance is None or front_distance >= max_distance:
+            obstacle_scale = 1.0
+        elif front_distance <= min_distance:
+            obstacle_scale = 0.0
+        else:
+            obstacle_scale = (front_distance - min_distance) / (max_distance - min_distance)
+            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+        amplitude *= obstacle_scale
+        if self._deadband_threshold > 0 and (amplitude < self._deadband_threshold):
+            self._intent_vector = (0.0, 0.0, 0.0)
+        else:
+            vx = np.sin(radians) * amplitude
+            vy = np.cos(radians) * amplitude
+            omega = 0.0
+            self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._display_info()
+
+    def x_update_intent_vector(self):
+        '''
+        Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
         For rotation, use all four wheel encoder counts.
         This version handles overshoot in both directions robustly.
         '''
-        import math
         if self._is_rotating and self._target_heading_degrees is not None:
             # Compute deltas
             delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
@@ -299,7 +422,7 @@ class Roam(Behaviour):
             omega = rot_speed * self._rotation_direction
             # stop logic: handle overshoot in both directions
             # if we are within tolerance or have overshot the required rotation in either direction, just stop
-            if math.isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
+            if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
                 degrees_rotated >= self._rotation_required_degrees:
                 self._heading_degrees = self._target_heading_degrees
                 self._is_rotating = False
