@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-09-19
-# modified: 2024-10-31
-#
+# modified: 2025-10-14
 
 import sys, colorsys, traceback
 import ioexpander as io
@@ -43,7 +42,6 @@ class DigitalPotentiometer(Component):
     :param level:        the log level.
     '''
     def __init__(self, config, i2c_address=None, level=Level.INFO):
-#       super().__init__()
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('hardware').get('digital_potentiometer')
@@ -56,15 +54,15 @@ class DigitalPotentiometer(Component):
 #       self._log = Logger('digital-pot-0x{:02X}'.format(self._i2c_addr), level)
         self._log = Logger(DigitalPotentiometer.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
-        self._pin_red    = _cfg.get('pin_red')
-        self._pin_green  = _cfg.get('pin_green')
-        self._pin_blue   = _cfg.get('pin_blue')
+        self._pin_red    = 1
+        self._pin_green  = 7
+        self._pin_blue   = 2
         self._log.info("pins: red: {}; green: {}; blue: {}".format(self._pin_red, self._pin_green, self._pin_blue))
         self._pot_enc_a  = 12
         self._pot_enc_b  = 3
         self._pot_enc_c  = 11
         self._max_value  = 3.3                     # maximum voltage (3.3v supply)
-        self._brightness = _cfg.get('brightness')  # effectively max fraction of period LED will be on
+        self._brightness = _cfg.get('brightness', 1.0)  # effectively max fraction of period LED will be on
         self._period = int(255 / self._brightness) # add a period large enough to get 0-255 steps at the desired brightness
         # min/max analog values from IO Expander
         self._in_min     = 0.0

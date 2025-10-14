@@ -52,7 +52,7 @@ class Roam(Behaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._dynamic_speed = _cfg.get('dynamic_speed', True)
         self._dynamic_heading = _cfg.get('dynamic_heading', True)
-        self._deadband_threshold = _cfg.get('deadband_threshold', 0.12)
+        self._deadband_threshold = _cfg.get('deadband_threshold', 0.07) # set -1 to disable
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance  = _rs_cfg.get('min_distance')
@@ -176,17 +176,20 @@ class Roam(Behaviour):
             if isclose(_speed, 0.0, abs_tol=0.08):
                 self._digital_pot.set_black()
                 self._default_speed = 0.0
-                self._log.info(Fore.BLACK + "default speed: stopped")
+#               self._log.info(Fore.BLACK + "default speed: stopped")
             else:
                 self._digital_pot.set_rgb(self._digital_pot.value)
                 self._default_speed = _speed
                 self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
 
     def _dynamic_set_heading(self):
+        self._log.info(Fore.BLACK + "🍉 a. dynamic heading")
         if self._compass_encoder:
+            self._log.info(Fore.BLACK + "🍉 b. dynamic heading")
             self._compass_encoder.update()
             _degrees = self._compass_encoder.get_degrees()
             self.set_heading_degrees(_degrees)
+            self._log.info(Fore.BLACK + "🍉 c. dynamic heading; degrees: {:4.2f}".format(_degrees))
 
     async def _poll(self):
         try:
@@ -231,7 +234,7 @@ class Roam(Behaviour):
                 self._display_info('rotating')
             return
         # normal movement intent vector
-        radians = np.deg2rad(getattr(self, '_heading_degrees', 0.0))
+        radians = np.deg2rad(self._heading_degrees)
         amplitude = self._default_speed
         if amplitude == 0.0:
             self._intent_vector = (0.0, 0.0, 0.0)
@@ -252,10 +255,14 @@ class Roam(Behaviour):
             obstacle_scale = (front_distance - min_distance) / (max_distance - min_distance)
             obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
         amplitude *= obstacle_scale
-        vx = np.sin(radians) * amplitude
-        vy = np.cos(radians) * amplitude
-        omega = 0.0
-        self._intent_vector = (vx, vy, omega)
+        if self._deadband_threshold > 0 and (amplitude < self._deadband_threshold):
+#           self._display_info('hit deadband with amplitude={:4.2f}'.format(amplitude))
+            self._intent_vector = (0.0, 0.0, 0.0)
+        else:
+            vx = np.sin(radians) * amplitude
+            vy = np.cos(radians) * amplitude
+            omega = 0.0
+            self._intent_vector = (vx, vy, omega)
         if self._verbose:
             self._display_info()
 

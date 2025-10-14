@@ -125,40 +125,12 @@ class Vl53l5cxSensor(Component):
                         _distance_mm = np.frombuffer(bytes(data.distance_mm), dtype=np.int16).tolist()
                         try:
                             queue.put(_distance_mm, block=False)
-                        except queue.full():
-                            try:
-                                queue.get_nowait()  # Remove one oldest value
-                            except queue.empty():
-                                pass
-                            queue.put(_distance_mm, block=False)
-                    except Exception as e:
-                        self._log.error("{} raised converting distance_mm: {}".format(type(e), e))
-                else:
-                    self._log.info(Fore.MAGENTA + "data not ready.")
-                time.sleep(poll_interval)
-        except Exception as e:
-            self._log.error("{} raised polling sensor: {}".format(type(e), e))
-        finally:
-            self._vl53.stop_ranging()
-
-    def x_polling_loop(self, queue, stop_event, poll_interval):
-        '''
-        Polls the VL53L5CX sensor as a separate process and puts results into the queue.
-        This is only used when multiprocessing is active.
-        '''
-        try:
-            while not stop_event.is_set():
-                if self._vl53.data_ready():
-                    data = self._vl53.get_data()
-                    try:
-                        # always convert to a list of ints using numpy, works for both bytes and array
-                        _distance_mm = np.frombuffer(bytes(data.distance_mm), dtype=np.int16).tolist()
-                        while not queue.empty():
+                        except Exception:
                             try:
                                 queue.get_nowait()
                             except Exception:
-                                break
-                        queue.put(_distance_mm, block=False)
+                                pass
+                            queue.put(_distance_mm, block=False)
                     except Exception as e:
                         self._log.error("{} raised converting distance_mm: {}".format(type(e), e))
                 else:

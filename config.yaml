@@ -179,12 +179,13 @@ kros:
             momentary:                     True            # button or toggle?
             pin:                             24            # default GPIO or IO Expander pin used
             led_pin:                         13            # GPIO pin for LED on wait()
-        digital_potentiometer:                             # IO Expander-based RGB Potentiometer board
+        digital_potentiometer:                             # IO Expander-based Digital Potentiometer breakout
             i2c_address:                   0x0C            # I²C address for the device
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
-            pin_red:                          1            # red pin
-            pin_green:                        7            # green pin
-            pin_blue:                         2            # blue pin
+        compass_encoder:                                   # IO Expander-based RGB Encoder breakout
+            i2c_address:                   0x0F            # I²C address for the device
+            brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
+            wrap:                            24            # 24 is one pot turn per compass rotation, 360 is max/very slow
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
         distance_sensor:       
@@ -212,8 +213,8 @@ kros:
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
-            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
-#           easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
+#           easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
+            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)

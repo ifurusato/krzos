@@ -28,17 +28,28 @@ class CompassEncoder(Component):
     - adjustable number of rotary ticks per full 360° sweep (wrap)
     - 8-point compass heading names
     - method get_degrees() to return current compass degrees
+
+    :param config:       the application configuration.
+    :param i2c_address:  the optional I2C address for the IO Expander
+    :param level:        the log level.
     '''
-    def __init__(self, i2c_addr=0x0F, brightness=0.5, wrap=360, level=Level.INFO):
+    def __init__(self, config, i2c_address=0x0F, level=Level.INFO):
+        if config is None:
+            raise ValueError('no configuration provided.')
+        _cfg = config['kros'].get('hardware').get('compass_encoder')
+        # 0x18 for IO Expander, 0x0F for the RGB Encoder breakout
+        if i2c_address is not None:
+            self._i2c_address = i2c_address
+        else:
+            self._i2c_address = _cfg.get('i2c_address')
         self._log = Logger(CompassEncoder.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
-        self._i2c_address = i2c_addr
         self._pin_red    = 1
         self._pin_green  = 7
         self._pin_blue   = 2
-        self._brightness = brightness
-        self._period     = int(255 / brightness)
-        self._wrap       = wrap
+        self._brightness = _cfg.get('brightness', 1.0) # effectively max fraction of period LED will be on
+        self._period     = int(255 / self._brightness)
+        self._wrap       = _cfg.get('wrap', 24) # 24 is one turn per compass rotation, 360 is max/very slow
         self.ioe = io.IOE(i2c_addr=self._i2c_address, interrupt_pin=4)
         if self._i2c_address == 0x0F:
             self.ioe.enable_interrupt_out(pin_swap=True)
@@ -101,8 +112,7 @@ class CompassEncoder(Component):
 
 # usage ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-#   _wrap = 24 # 1 turn per compass rotation
-#   compass = CompassEncoder(wrap=_wrap)
+#   compass = CompassEncoder()
 #
 #   try:
 #       while True:
