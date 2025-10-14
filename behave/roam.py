@@ -40,15 +40,11 @@ class HeadingMode(Enum):
 
     @staticmethod
     def from_string(value):
-        '''
-        Returns the HeadingMode corresponding to the argument.
-        No match raises a NotImplementedError.
-        '''
         value_upper = value.upper()
         for mode in HeadingMode:
             if value_upper == mode.name:
                 return mode
-        raise NotImplementedError(f"HeadingMode not implemented for value: {value}")
+        raise NotImplementedError("HeadingMode not implemented for value: {}".format(value))
 
 class Roam(Behaviour):
     NAME = 'roam'
@@ -61,6 +57,15 @@ class Roam(Behaviour):
     Roam uses a vector-based motor control, allowing for heading-based
     driving. Rotational alignment is performed when heading changes,
     using Mecanum wheel kinematics and encoder counts.
+
+    ===============================
+    DYNAMIC HEADING CONTROL REQUIREMENTS
+    ===============================
+    - The heading target (in RELATIVE or BLENDED mode) can change at any time and will.
+    - The robot MUST always respond immediately and smoothly to the updated target value, without waiting for any state or rotation to "complete".
+    - There MUST be no base heading, snapshot, or lock after rotation—just constant servoing to the current heading target.
+    - The intent vector update methods must poll the heading source (knob, behaviour, etc.) every control loop, and command rotation proportional to the instantaneous error.
+    - If the target changes, robot rotation must adapt instantly—no caching, no wait, no state.
     '''
 
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
@@ -124,12 +129,9 @@ class Roam(Behaviour):
         self._steps_per_rotation = velocity.steps_per_rotation
         self._wheel_diameter_mm = velocity._wheel_diameter
         self._wheel_track_mm = config['kros']['geometry']['wheel_track']
-        # compute steps_per_degree using geometry and velocity
         wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
         rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
         steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
-        # use config override if present, otherwise use calculated value
-        # this could be manually tuned to better approximate the actual rotation by the robot
         self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
         self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._register_intent_vector()
@@ -153,14 +155,11 @@ class Roam(Behaviour):
         degrees = float(degrees) % 360.0
         if self._is_rotating and self._target_heading_degrees is not None and \
                 abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            # only start rotation if not already rotating to this heading
             self._log.debug('already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
             return
         if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            # if already at heading (within tolerance), ignore
             self._log.debug('already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
             return
-        # Otherwise, initiate new rotation
         current = self._heading_degrees % 360.0
         target = degrees
         delta = (target - current + 180.0) % 360.0 - 180.0
@@ -169,7 +168,6 @@ class Roam(Behaviour):
         self._target_heading_degrees = degrees
         self._is_rotating = True
         self._rotation_accumulated_degrees = 0.0
-        # Reset encoder start points for this rotation
         self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
         self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
         self._rotation_start_paft = self._motor_paft.decoder.steps
@@ -282,78 +280,125 @@ class Roam(Behaviour):
                 self._log.info(Fore.BLUE + "BLENDED")
                 self._update_intent_vector_blended()
             case _:
-                raise NotImplementedError(f"Unhandled heading mode: {self._heading_mode}")
+                raise NotImplementedError("Unhandled heading mode: {}".format(self._heading_mode))
 
     def _update_intent_vector_relative(self):
         '''
-        Original relative heading logic (using encoders, no IMU).
+        Dynamic relative heading logic.
+        The heading target is polled every loop (from encoder or behaviour),
+        and the robot continuously aligns to the instantaneous target.
+        There is no caching, base, or state lock.
         '''
-        if self._is_rotating and self._target_heading_degrees is not None:
-            self._update_rotation_vector_encoder()
+        # Example: get target value from encoder/knob or behaviour
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
+        elif self._digital_pot:
+            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
         else:
+            desired_heading = self._get_dynamic_relative_offset()
+
+        # Use encoder-based heading or emulate if not available
+        current_heading = self._heading_degrees % 360.0
+
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
+                desired_heading, current_heading, error, omega))
+            self._display_info('RELATIVE (dynamic)')
+        if omega == 0.0:
             self._update_linear_vector()
 
     def _update_intent_vector_absolute(self):
         '''
         IMU absolute heading logic: always rotate to a fixed compass heading.
-        '''
-        if self._is_rotating and self._target_heading_degrees is not None:
-            self._update_rotation_vector_imu()
-        else:
-            self._update_linear_vector()
-    
-    def _update_intent_vector_blended(self):
-        '''
-        In Blended mode, the robot continuously aligns its heading to a target direction
-        specified in world coordinates (e.g. absolute North, East, or any fixed angle),
-        as provided by a dynamic input. The IMU supplies the robot's current yaw in world
-        coordinates. The controller computes the angular error between the robot's heading
-        and the desired world direction, and commands rotation as a vector to minimize
-        this error.
-
-        The input is interpreted as a world-referenced target heading, not as an offset
-        from the robot's current heading.
+        If you want dynamic absolute targets, poll and respond here as in other modes.
         '''
         if self._imu is None:
             self._update_intent_vector_relative()
             return
 
-        self._imu.poll()
-        # The knob or another behaviour provides world-relative heading (e.g. North=0°, East=90°)
+        current_heading = self._imu.poll() % 360.0
+        desired_heading = self._heading_degrees % 360.0  # or update dynamically if needed
+
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._log.info("ABSOLUTE: desired {}; current {}; error {}; omega {}".format(
+                desired_heading, current_heading, error, omega))
+            self._display_info('ABSOLUTE (static)')
+        if omega == 0.0:
+            self._update_linear_vector()
+    
+    def _update_intent_vector_blended(self):
+        '''
+        BLENDED mode: Track a world-relative heading.
+        The desired heading is the world direction (from the knob or another behaviour).
+        The robot rotates to minimize the error between its IMU heading and this world direction.
+        No base heading, no state, no lock—always dynamic.
+        '''
+        if self._imu is None:
+            self._update_intent_vector_relative()
+            return
+
+        # IMU.poll() returns corrected yaw directly
+        current_heading = self._imu.poll() % 360.0
+
+        # Always poll the current knob/behaviour value
         if self._digital_pot:
             desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
         else:
-            desired_heading = self._get_dynamic_relative_offset()  # Replace/extend as needed
-
-        current_heading = float(self._imu.corrected_yaw) % 360.0
+            desired_heading = self._get_dynamic_relative_offset()
 
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         abs_error = abs(error)
 
-        # Proportional control for rotation speed (tune gain as needed)
         gain = 0.03
-        rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08) if abs_error > self._rotation_tolerance else 0.0
-        omega = rot_speed * (1 if error > 0 else -1) if abs_error > self._rotation_tolerance else 0.0
-
-        # Snap heading if within tolerance
-        if abs_error < self._rotation_tolerance:
-            self._heading_degrees = desired_heading
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
 
         self._intent_vector = (0.0, 0.0, omega)
 
         if self._verbose:
+            self._log.info("BLENDED: knob {}; desired {}; current {}; error {}; omega {}".format(
+                self._digital_pot.get_scaled_value(True) if self._digital_pot else None,
+                desired_heading, current_heading, error, omega))
             self._display_info('BLENDED (tracking world direction)')
         if omega == 0.0:
             self._update_linear_vector()
 
+    def _get_dynamic_relative_offset(self):
+        '''
+        Placeholder for behaviour-provided relative offset.
+        Replace or extend as needed for your architecture.
+        '''
+        return 0.0
 
     def _update_rotation_vector_imu(self):
         '''
         IMU-based rotation logic.
         '''
-        current_heading = self._imu.poll()
-#       current_heading = self._imu.corrected_yaw
-        current_heading = float(current_heading) % 360.0
+        current_heading = self._imu.poll() % 360.0
         target = self._target_heading_degrees
         delta = (target - current_heading + 180.0) % 360.0 - 180.0
         abs_remaining = abs(delta)
@@ -368,7 +413,6 @@ class Roam(Behaviour):
             rot_speed = self._rotation_speed
         rot_speed = max(rot_speed, 0.08)
         omega = rot_speed * copysign(1, delta)
-        # Stop logic: within tolerance or overshoot in both directions
         if isclose(current_heading, target, abs_tol=self._rotation_tolerance) or abs_remaining < self._rotation_tolerance:
             self._heading_degrees = target
             self._is_rotating = False
@@ -391,21 +435,12 @@ class Roam(Behaviour):
         degrees_rotated = abs(rotation_steps / self._steps_per_degree)
         self._rotation_accumulated_degrees = degrees_rotated
         abs_remaining = self._rotation_required_degrees - degrees_rotated
-#       self._log.info(
-#           'ENC ROTATE: pfwd: {}, sfwd: {}, paft: {}, saft: {}, steps: {}, deg_rotated: {}, deg_needed: {}, deg_remaining: {}'.format(
-#               delta_pfwd, delta_sfwd, delta_paft, delta_saft, rotation_steps, degrees_rotated, self._rotation_required_degrees, abs_remaining
-#           )
-#       )
-#       self._log.info(
-#           'ENC ROTATION DEBUG: degrees_rotated={}, abs_remaining={}, tolerance={}'.format(degrees_rotated, abs_remaining, self._rotation_tolerance)
-#       )
         if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
             rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
         else:
             rot_speed = self._rotation_speed
         rot_speed = max(rot_speed, 0.08)
         omega = rot_speed * self._rotation_direction
-        # stop logic: handle overshoot in both directions
         if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
            degrees_rotated >= self._rotation_required_degrees:
             self._heading_degrees = self._target_heading_degrees
@@ -431,7 +466,6 @@ class Roam(Behaviour):
             return
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
-        # obstacle logic: scale amplitude if obstacle detected
         front_distance = self._roam_sensor.get_distance()
         min_distance = self._min_distance
         max_distance = self._max_distance
@@ -508,10 +542,9 @@ class Roam(Behaviour):
         self._task = self._loop_instance.create_task(self._loop_main())
         self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
         self._thread.start()
-        # auto-realign on startup if using world coordinates
         if self._use_world_coordinates and self._imu is not None:
             self._log.info(Fore.YELLOW + "🍿 align to absolute coordinates…")
-            current_heading = float(self._imu.poll()) % 360.0
+            current_heading = self._imu.poll() % 360.0
             logical_heading = float(self._heading_degrees) % 360.0
             delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
             if abs(delta) > self._rotation_tolerance:
