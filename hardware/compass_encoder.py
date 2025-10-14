@@ -19,6 +19,7 @@ from core.logger import Logger, Level
 from core.component import Component
 
 class CompassEncoder(Component):
+    NAME = 'compass-encoder'
     '''
     A compass heading adjuster using a Pimoroni RGB Encoder Breakout.
 
@@ -29,7 +30,7 @@ class CompassEncoder(Component):
     - method get_degrees() to return current compass degrees
     '''
     def __init__(self, i2c_addr=0x0F, brightness=0.5, wrap=360, level=Level.INFO):
-        self._log = Logger('compass-encoder', level=level)
+        self._log = Logger(CompassEncoder.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._i2c_address = i2c_addr
         self._pin_red    = 1

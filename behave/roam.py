@@ -50,6 +50,7 @@ class Roam(Behaviour):
         self._use_color = True
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._dynamic_speed = _cfg.get('dynamic_speed', True)
+        self._dynamic_heading = _cfg.get('dynamic_heading', True)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance  = _rs_cfg.get('min_distance')
@@ -65,6 +66,9 @@ class Roam(Behaviour):
         self._digital_pot = None
         if self._dynamic_speed:
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        self._compass_encoder = None
+        if self._dynamic_heading:
+            self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
             self._log.info(Fore.WHITE + 'creating Roam sensor…')
@@ -103,7 +107,7 @@ class Roam(Behaviour):
         if not isclose(degrees, self._heading_degrees, abs_tol=1e-2):
             self._target_heading_degrees = degrees
             self._is_rotating = True
-            self._log.info('heading change requested: rotating to {} degrees.'.format(degrees))
+            self._log.info('🐹 heading change requested: rotating to {} degrees.'.format(degrees))
 
     def set_heading_radians(self, radians):
         self.set_heading_degrees(np.degrees(radians))
@@ -176,10 +180,17 @@ class Roam(Behaviour):
                 self._default_speed = _speed
                 self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
 
+    def _dynamic_set_heading(self):
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            _degrees = self._compass_encoder.get_degrees()
+            self.set_heading_degrees(_degrees)
+
     async def _poll(self):
         try:
             if next(self._counter) % 5 == 0:
                 self._dynamic_set_default_speed()
+                self._dynamic_set_heading()
             self._update_intent_vector()
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
