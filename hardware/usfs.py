@@ -197,16 +197,18 @@ class Usfs(Component):
 
     def poll(self):
         '''
-        Polls the hardware and sets all the available properties.
-
-        This sets the various values but returns corrected yaw (as that's our primary interest).
+        Polls the hardware and sets all the available properties, returning
+        the corrected yaw (as that's our primary interest).
         '''
         self._log.info(Fore.BLUE + 'poll')
+        if self.closed():
+            self._log.warning('usfs is closed.')
+            return
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
-#           sys.exit(1)
             self.close()
+            return
 
         # Define output variables from updated quaternion---these are Tait-Bryan
         # angles, commonly used in aircraft orientation.  In this coordinate

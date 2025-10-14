@@ -92,6 +92,7 @@ class Roam(Behaviour):
         self._rotation_required_degrees = None
         self._rotation_accumulated_degrees = 0.0
         self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
+        self._last_relative_offset = 0.0
         # component access
         _component_registry = Component.get_registry()
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
@@ -304,23 +305,32 @@ class Roam(Behaviour):
     def _update_intent_vector_blended(self):
         '''
         Blended mode: compute desired heading as absolute + relative offset,
-        and rotate to that heading.
+        and rotate to that heading. Only request a heading change if the knob/offset value changes,
+        or if the robot is not rotating and not at heading.
         '''
-        # Always poll IMU for fresh data
+        # poll IMU for fresh data
+        if self._imu is None:
+            self._update_intent_vector_relative()
+            return
         self._imu.poll()
         absolute_heading = float(self._imu.corrected_yaw) % 360.0
-        # Compute relative offset (e.g., from knob or behaviour)
-        # For example, if using digital pot:
+        # compute relative offset (e.g., from knob or behaviour)
+        relative_offset = 0.0
         if self._digital_pot:
-            relative_offset = self._digital_pot.get_scaled_value(True) * 180.0  # example: scale to +/-180°
-        else:
-            relative_offset = 0.0  # or some other behaviour's value
-        # Calculate desired heading
+            relative_offset = self._digital_pot.get_scaled_value(True) * 180.0
+        # calculate desired heading
         desired_heading = (absolute_heading + relative_offset) % 360.0
-        # If not already rotating to desired heading, request rotation
-        if not self._is_rotating or self._target_heading_degrees != desired_heading:
+        # calculate difference to current heading
+        heading_diff = abs((desired_heading - self._heading_degrees + 180.0) % 360.0 - 180.0)
+        # only request heading change if the relative offset has changed and the
+        # robot is not rotating and not at heading
+        offset_changed = (relative_offset != self._last_relative_offset)
+        should_request = offset_changed or (not self._is_rotating and heading_diff > self._rotation_tolerance)
+        if should_request:
             self.set_heading_degrees(desired_heading)
-        # Delegate to IMU rotation logic if rotating
+            self._last_requested_heading = desired_heading
+        self._last_relative_offset = relative_offset
+        # delegate to IMU rotation logic if rotating
         if self._is_rotating and self._target_heading_degrees is not None:
             self._update_rotation_vector_imu()
         else:
