@@ -11,6 +11,7 @@
 
 import time
 import itertools
+from enum import Enum
 import numpy as np
 from math import isclose, copysign
 from threading import Thread, Event as ThreadEvent
@@ -29,6 +30,25 @@ from hardware.compass_encoder import CompassEncoder
 from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
 from core.orientation import Orientation
+
+from enum import Enum
+
+class HeadingMode(Enum):
+    RELATIVE = 1
+    ABSOLUTE = 2
+    BLENDED = 3
+
+    @staticmethod
+    def from_string(value):
+        '''
+        Returns the HeadingMode corresponding to the argument.
+        No match raises a NotImplementedError.
+        '''
+        value_upper = value.upper()
+        for mode in HeadingMode:
+            if value_upper == mode.name:
+                return mode
+        raise NotImplementedError(f"HeadingMode not implemented for value: {value}")
 
 class Roam(Behaviour):
     NAME = 'roam'
@@ -61,6 +81,7 @@ class Roam(Behaviour):
         self._min_distance  = _rs_cfg.get('min_distance')
         self._max_distance  = _rs_cfg.get('max_distance')
         self._polling_rate_hz = _rs_cfg.get('polling_rate_hz', None)
+        self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'BLENDED'))
         self._heading_degrees = 0.0
         self._intent_vector = (0.0, 0.0, 0.0)
         self._target_heading_degrees = None
@@ -152,27 +173,7 @@ class Roam(Behaviour):
         self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
         self._rotation_start_paft = self._motor_paft.decoder.steps
         self._rotation_start_saft = self._motor_saft.decoder.steps
-        self._log.info('🐹 heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
-            self._rotation_required_degrees,
-            "cw" if self._rotation_direction > 0 else "ccw",
-            degrees))
-
-    def x_set_heading_degrees(self, degrees):
-        degrees = float(degrees) % 360.0
-        current = self._heading_degrees % 360.0
-        target = degrees
-        delta = (target - current + 180.0) % 360.0 - 180.0
-        self._rotation_direction = copysign(1, delta)
-        self._rotation_required_degrees = abs(delta)
-        self._target_heading_degrees = degrees
-        self._is_rotating = True
-        self._rotation_accumulated_degrees = 0.0
-        # Always reset encoder start points on every heading change
-        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
-        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
-        self._rotation_start_paft = self._motor_paft.decoder.steps
-        self._rotation_start_saft = self._motor_saft.decoder.steps
-        self._log.info('🐹 heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
+        self._log.info('heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
             self._rotation_required_degrees,
             "cw" if self._rotation_direction > 0 else "ccw",
             degrees))
@@ -267,20 +268,63 @@ class Roam(Behaviour):
         '''
         Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
         Delegates to rotation and linear movement handlers.
+        Dispatches heading logic based on current mode.
+        '''
+        match self._heading_mode:
+            case HeadingMode.RELATIVE:
+                self._log.info(Fore.BLUE + "RELATIVE")
+                self._update_intent_vector_relative()
+            case HeadingMode.ABSOLUTE:
+                self._log.info(Fore.BLUE + "ABSOLUTE")
+                self._update_intent_vector_absolute()
+            case HeadingMode.BLENDED:
+                self._log.info(Fore.BLUE + "BLENDED")
+                self._update_intent_vector_blended()
+            case _:
+                raise NotImplementedError(f"Unhandled heading mode: {self._heading_mode}")
+
+    def _update_intent_vector_relative(self):
+        '''
+        Original relative heading logic (using encoders, no IMU).
         '''
         if self._is_rotating and self._target_heading_degrees is not None:
-            self._update_rotation_vector()
+            self._update_rotation_vector_encoder()
         else:
             self._update_linear_vector()
 
-    def _update_rotation_vector(self):
+    def _update_intent_vector_absolute(self):
         '''
-        Handles rotation intent vector, choosing IMU or encoder logic as appropriate.
+        IMU absolute heading logic: always rotate to a fixed compass heading.
         '''
-        if self._use_world_coordinates and self._imu is not None:
+        if self._is_rotating and self._target_heading_degrees is not None:
             self._update_rotation_vector_imu()
         else:
-            self._update_rotation_vector_encoder()
+            self._update_linear_vector()
+
+    def _update_intent_vector_blended(self):
+        '''
+        Blended mode: compute desired heading as absolute + relative offset,
+        and rotate to that heading.
+        '''
+        # Always poll IMU for fresh data
+        self._imu.poll()
+        absolute_heading = float(self._imu.corrected_yaw) % 360.0
+        # Compute relative offset (e.g., from knob or behaviour)
+        # For example, if using digital pot:
+        if self._digital_pot:
+            relative_offset = self._digital_pot.get_scaled_value(True) * 180.0  # example: scale to +/-180°
+        else:
+            relative_offset = 0.0  # or some other behaviour's value
+        # Calculate desired heading
+        desired_heading = (absolute_heading + relative_offset) % 360.0
+        # If not already rotating to desired heading, request rotation
+        if not self._is_rotating or self._target_heading_degrees != desired_heading:
+            self.set_heading_degrees(desired_heading)
+        # Delegate to IMU rotation logic if rotating
+        if self._is_rotating and self._target_heading_degrees is not None:
+            self._update_rotation_vector_imu()
+        else:
+            self._update_linear_vector()
 
     def _update_rotation_vector_imu(self):
         '''
@@ -357,84 +401,6 @@ class Roam(Behaviour):
         Handles normal movement intent vector, including obstacle scaling and deadband.
         '''
         import numpy as np
-        radians = np.deg2rad(self._heading_degrees)
-        amplitude = self._default_speed
-        if amplitude == 0.0:
-            self._intent_vector = (0.0, 0.0, 0.0)
-            if self._verbose:
-                self._display_info()
-            return
-        if self._digital_pot:
-            amplitude = self._digital_pot.get_scaled_value(False)
-        # obstacle logic: scale amplitude if obstacle detected
-        front_distance = self._roam_sensor.get_distance()
-        min_distance = self._min_distance
-        max_distance = self._max_distance
-        if front_distance is None or front_distance >= max_distance:
-            obstacle_scale = 1.0
-        elif front_distance <= min_distance:
-            obstacle_scale = 0.0
-        else:
-            obstacle_scale = (front_distance - min_distance) / (max_distance - min_distance)
-            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-        amplitude *= obstacle_scale
-        if self._deadband_threshold > 0 and (amplitude < self._deadband_threshold):
-            self._intent_vector = (0.0, 0.0, 0.0)
-        else:
-            vx = np.sin(radians) * amplitude
-            vy = np.cos(radians) * amplitude
-            omega = 0.0
-            self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._display_info()
-
-    def x_update_intent_vector(self):
-        '''
-        Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
-        For rotation, use all four wheel encoder counts.
-        This version handles overshoot in both directions robustly.
-        '''
-        if self._is_rotating and self._target_heading_degrees is not None:
-            # Compute deltas
-            delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
-            delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
-            delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
-            delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
-            # Mecanum rotation estimation (signs per your wiring):
-            # For rotation-in-place, port motors CW (positive), starboard CCW (negative)
-            rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
-            degrees_rotated = abs(rotation_steps / self._steps_per_degree)
-            self._rotation_accumulated_degrees = degrees_rotated
-            abs_remaining = self._rotation_required_degrees - degrees_rotated
-#           self._log.info(
-#               'ROTATE: pfwd: {}, sfwd: {}, paft: {}, saft: {}, steps: {}, deg_rotated: {}, deg_needed: {}, deg_remaining: {}'.format(
-#                   delta_pfwd, delta_sfwd, delta_paft, delta_saft, rotation_steps, degrees_rotated, self._rotation_required_degrees, abs_remaining
-#               )
-#           )
-            self._log.info(
-                'ROTATION DEBUG: degrees_rotated={}, abs_remaining={}, tolerance={}'.format(degrees_rotated, abs_remaining, self._rotation_tolerance)
-            )
-            # Deceleration and intent vector logic
-            if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
-                rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
-            else:
-                rot_speed = self._rotation_speed
-            rot_speed = max(rot_speed, 0.08)
-            omega = rot_speed * self._rotation_direction
-            # stop logic: handle overshoot in both directions
-            # if we are within tolerance or have overshot the required rotation in either direction, just stop
-            if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
-                degrees_rotated >= self._rotation_required_degrees:
-                self._heading_degrees = self._target_heading_degrees
-                self._is_rotating = False
-                self._target_heading_degrees = None
-                omega = 0.0
-                self._log.info('rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
-            self._intent_vector = (0.0, 0.0, omega)
-            if self._verbose:
-                self._display_info('rotating')
-            return
-        # normal movement intent vector
         radians = np.deg2rad(self._heading_degrees)
         amplitude = self._default_speed
         if amplitude == 0.0:

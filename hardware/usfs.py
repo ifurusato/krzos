@@ -201,7 +201,7 @@ class Usfs(Component):
 
         This sets the various values but returns corrected yaw (as that's our primary interest).
         '''
-        print('poll')
+        self._log.info(Fore.BLUE + 'poll')
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
