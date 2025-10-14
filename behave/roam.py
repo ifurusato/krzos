@@ -524,7 +524,7 @@ class Roam(Behaviour):
         # auto-realign on startup if using world coordinates
         if self._use_world_coordinates and self._imu is not None:
             self._log.info(Fore.YELLOW + "🍿 align to absolute coordinates…")
-            current_heading = float(self._imu.corrected_yaw) % 360.0
+            current_heading = float(self._imu.poll()) % 360.0
             logical_heading = float(self._heading_degrees) % 360.0
             delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
             if abs(delta) > self._rotation_tolerance:
