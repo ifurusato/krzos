@@ -27,6 +27,7 @@ from hardware.roam_sensor import RoamSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.compass_encoder import CompassEncoder
 from hardware.motor_controller import MotorController
+from hardware.usfs import Usfs
 from core.orientation import Orientation
 
 class Roam(Behaviour):
@@ -52,8 +53,8 @@ class Roam(Behaviour):
         self._verbose  = _cfg.get('verbose', False)
         self._use_color = True
         self._default_speed = _cfg.get('default_speed', 0.8)
-        self._dynamic_speed = _cfg.get('dynamic_speed', True)
-        self._dynamic_heading = _cfg.get('dynamic_heading', True)
+        self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
+        self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
@@ -70,14 +71,8 @@ class Roam(Behaviour):
         self._rotation_required_degrees = None
         self._rotation_accumulated_degrees = 0.0
         self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
-        # Motor access
+        # component access
         _component_registry = Component.get_registry()
-        self._digital_pot = None
-        if self._dynamic_speed:
-            self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-        self._compass_encoder = None
-        if self._dynamic_heading:
-            self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
             self._log.info(Fore.WHITE + 'creating Roam sensor…')
@@ -87,12 +82,22 @@ class Roam(Behaviour):
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-        # Get motor objects
+        self._digital_pot = None
+        if self._use_dynamic_speed:
+            self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        self._compass_encoder = None
+        if self._use_dynamic_heading:
+            self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
+        # use USFS IMU if available and world coordinates flag set
+        self._imu = None
+        if self._use_world_coordinates;
+            self._imu = _component_registry.get(Usfs.NAME)
+        # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
         self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
         self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
         self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
-        # geometry from YAML/config & Velocity instance
+        # geometry configuration
         velocity = self._motor_pfwd.get_velocity()
         self._steps_per_rotation = velocity.steps_per_rotation
         self._wheel_diameter_mm = velocity._wheel_diameter
