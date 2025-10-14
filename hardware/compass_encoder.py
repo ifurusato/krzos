@@ -50,6 +50,7 @@ class CompassEncoder(Component):
         self._brightness = _cfg.get('brightness', 1.0) # effectively max fraction of period LED will be on
         self._period     = int(255 / self._brightness)
         self._wrap       = _cfg.get('wrap', 24) # 24 is one turn per compass rotation, 360 is max/very slow
+        self._log.info('wrap set to {}'.format(self._wrap))
         self.ioe = io.IOE(i2c_addr=self._i2c_address, interrupt_pin=4)
         if self._i2c_address == 0x0F:
             self.ioe.enable_interrupt_out(pin_swap=True)
@@ -59,15 +60,16 @@ class CompassEncoder(Component):
         self.ioe.set_mode(self._pin_red, io.PWM, invert=True)
         self.ioe.set_mode(self._pin_green, io.PWM, invert=True)
         self.ioe.set_mode(self._pin_blue, io.PWM, invert=True)
-        self.count = 0
+        self._degrees = 0.0
+        self._count   = 0
         self._mapping = {
-            "N": Fore.BLUE,
+            "N":  Fore.BLUE,
             "NE": Fore.MAGENTA,
-            "E": Fore.MAGENTA,
+            "E":  Fore.MAGENTA,
             "SE": Fore.YELLOW,
-            "S": Fore.YELLOW,
+            "S":  Fore.YELLOW,
             "SW": Fore.GREEN,
-            "W": Fore.GREEN,
+            "W":  Fore.GREEN,
             "NW": Fore.BLUE
         }
         self._dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -96,16 +98,20 @@ class CompassEncoder(Component):
 
     def update(self):
         if self.ioe.get_interrupt():
-            self.count = self.ioe.read_rotary_encoder(1)
+            self._count = self.ioe.read_rotary_encoder(1)
             self.ioe.clear_interrupt()
-        r, g, b, degrees = self.compass_to_rgb(self.count)
+        r, g, b, degrees = self.compass_to_rgb(self._count)
+        self._degrees = degrees
         self.set_color(r, g, b)
         self._log.info(self.get_colorama_fore(degrees)
                 + ("{} {} → RGB({}, {}, {})".format(int(degrees), self.heading_name(degrees), r, g, b)))
 
     def get_degrees(self):
-        _, _, _, degrees = self.compass_to_rgb(self.count)
-        return degrees
+        '''
+        Returns the last degrees value following a call to update(). If you
+        want a fresh value, call update() prior to getting this value.
+        '''
+        return self._degrees
 
     def close(self):
         self.set_color(0, 0, 0)
