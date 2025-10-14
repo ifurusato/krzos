@@ -201,7 +201,7 @@ class Usfs(Component):
         the corrected yaw (as that's our primary interest).
         '''
         self._log.info(Fore.BLUE + 'poll')
-        if self.closed():
+        if self.closed:
             self._log.warning('usfs is closed.')
             return
         self._usfs.checkEventStatus()

@@ -83,7 +83,7 @@ class Roam(Behaviour):
         self._polling_rate_hz = _rs_cfg.get('polling_rate_hz', None)
         self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'BLENDED'))
         self._heading_degrees = 0.0
-        self._intent_vector = (0.0, 0.0, 0.0)
+        self._intent_vector   = (0.0, 0.0, 0.0)
         self._target_heading_degrees = None
         self._is_rotating = False
         self._rotation_speed = _cfg.get('rotation_speed', 0.5)
@@ -301,40 +301,51 @@ class Roam(Behaviour):
             self._update_rotation_vector_imu()
         else:
             self._update_linear_vector()
-
+    
     def _update_intent_vector_blended(self):
         '''
-        Blended mode: compute desired heading as absolute + relative offset,
-        and rotate to that heading. Only request a heading change if the knob/offset value changes,
-        or if the robot is not rotating and not at heading.
+        In Blended mode, the robot continuously aligns its heading to a target direction
+        specified in world coordinates (e.g. absolute North, East, or any fixed angle),
+        as provided by a dynamic input. The IMU supplies the robot's current yaw in world
+        coordinates. The controller computes the angular error between the robot's heading
+        and the desired world direction, and commands rotation as a vector to minimize
+        this error.
+
+        The input is interpreted as a world-referenced target heading, not as an offset
+        from the robot's current heading.
         '''
-        # poll IMU for fresh data
         if self._imu is None:
             self._update_intent_vector_relative()
             return
+
         self._imu.poll()
-        absolute_heading = float(self._imu.corrected_yaw) % 360.0
-        # compute relative offset (e.g., from knob or behaviour)
-        relative_offset = 0.0
+        # The knob or another behaviour provides world-relative heading (e.g. North=0°, East=90°)
         if self._digital_pot:
-            relative_offset = self._digital_pot.get_scaled_value(True) * 180.0
-        # calculate desired heading
-        desired_heading = (absolute_heading + relative_offset) % 360.0
-        # calculate difference to current heading
-        heading_diff = abs((desired_heading - self._heading_degrees + 180.0) % 360.0 - 180.0)
-        # only request heading change if the relative offset has changed and the
-        # robot is not rotating and not at heading
-        offset_changed = (relative_offset != self._last_relative_offset)
-        should_request = offset_changed or (not self._is_rotating and heading_diff > self._rotation_tolerance)
-        if should_request:
-            self.set_heading_degrees(desired_heading)
-            self._last_requested_heading = desired_heading
-        self._last_relative_offset = relative_offset
-        # delegate to IMU rotation logic if rotating
-        if self._is_rotating and self._target_heading_degrees is not None:
-            self._update_rotation_vector_imu()
+            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
         else:
+            desired_heading = self._get_dynamic_relative_offset()  # Replace/extend as needed
+
+        current_heading = float(self._imu.corrected_yaw) % 360.0
+
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+
+        # Proportional control for rotation speed (tune gain as needed)
+        gain = 0.03
+        rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08) if abs_error > self._rotation_tolerance else 0.0
+        omega = rot_speed * (1 if error > 0 else -1) if abs_error > self._rotation_tolerance else 0.0
+
+        # Snap heading if within tolerance
+        if abs_error < self._rotation_tolerance:
+            self._heading_degrees = desired_heading
+
+        self._intent_vector = (0.0, 0.0, omega)
+
+        if self._verbose:
+            self._display_info('BLENDED (tracking world direction)')
+        if omega == 0.0:
             self._update_linear_vector()
+
 
     def _update_rotation_vector_imu(self):
         '''
