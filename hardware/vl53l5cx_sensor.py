@@ -14,7 +14,6 @@ import time
 import numpy as np
 from datetime import datetime as dt
 import multiprocessing
-import queue # for queue.Full and queue.Empty
 from multiprocessing import Process, Queue, Event
 from colorama import init, Fore, Style
 init()
@@ -126,10 +125,10 @@ class Vl53l5cxSensor(Component):
                         _distance_mm = np.frombuffer(bytes(data.distance_mm), dtype=np.int16).tolist()
                         try:
                             queue.put(_distance_mm, block=False)
-                        except queue.Full:
+                        except queue.full():
                             try:
                                 queue.get_nowait()  # Remove one oldest value
-                            except queue.Empty:
+                            except queue.empty():
                                 pass
                             queue.put(_distance_mm, block=False)
                     except Exception as e:
