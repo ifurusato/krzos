@@ -124,14 +124,14 @@ class Roam(Behaviour):
 
     def set_heading_degrees(self, degrees):
         degrees = float(degrees) % 360.0
-        # Only start rotation if not already rotating to this heading
         if self._is_rotating and self._target_heading_degrees is not None and \
-            abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            self._log.info('Already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
+                abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
+            # only start rotation if not already rotating to this heading
+            self._log.debug('already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
             return
-        # If already at heading (within tolerance), ignore
         if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            self._log.info('Already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
+            # if already at heading (within tolerance), ignore
+            self._log.debug('already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
             return
         # Otherwise, initiate new rotation
         current = self._heading_degrees % 360.0

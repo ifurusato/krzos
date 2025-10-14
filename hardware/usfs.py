@@ -8,9 +8,12 @@
 #
 # author:   Murray Altheim
 # created:  2024-09-03
-# modified: 2024-09-04
+# modified: 2025-10-14
 #
-#  The Em7180 class is used for running the USFS SENtral sensor hub as an IMU.
+#  The Usfs class is used for running the USFS (Ultimate Sensor Fusion Solution)
+#  SENtral sensor hub as an IMU. This combines a MPU9250 9 DoF IMU (itself
+# composed of an MPU6500 accel/gyro with an embedded AK8963C magnetometer), then
+# coupled with a Bosch BMP280 pressure/temperature sensor.
 #
 # See:       https://github.com/simondlevy/USFS
 # See:       https://github.com/simondlevy/USFS/tree/master/examples/WarmStartAndAccelCal
@@ -49,10 +52,8 @@ from core.logger import Logger, Level
 from matrix11x7.fonts import font3x5
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class Em7180(Component):
-
-    # constants ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
+class Usfs(Component):
+    NAME = 'usfs'
     MAG_RATE       = 100  # Hz
     ACCEL_RATE     = 200  # Hz
     GYRO_RATE      = 200  # Hz
@@ -74,7 +75,7 @@ class Em7180(Component):
     :param: level      log level
     '''
     def __init__(self, config, matrix11x7=None, trim_pot=None, level=Level.INFO):
-        self._log = Logger('usfs', level)
+        self._log = Logger(Usfs.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising usfs…')
         if not isinstance(config, dict):
@@ -89,7 +90,7 @@ class Em7180(Component):
 #           sys.exit(1)
             self.close()
         self._use_matrix    = matrix11x7 != None
-        self._verbose       = True # if true display to console
+        self._verbose       = False # if true display to console
         self._pitch         = 0.0
         self._roll          = 0.0
         self._yaw           = 0.0
@@ -103,6 +104,7 @@ class Em7180(Component):
         self._gx = self._gy = self._gz = 0.0
         self._log.info('ready.')
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def set_fixed_yaw_trim(self, yaw):
         '''
@@ -112,12 +114,9 @@ class Em7180(Component):
         '''
         self._fixed_yaw_trim = yaw
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_verbose(self, verbose):
-#       self._verbose = verbose
-        pass
+        self._verbose = verbose
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def pitch(self):
         '''
@@ -125,7 +124,6 @@ class Em7180(Component):
         '''
         return self._pitch
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def roll(self):
         '''
@@ -133,7 +131,6 @@ class Em7180(Component):
         '''
         return self._roll
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def yaw(self):
         '''
@@ -141,7 +138,6 @@ class Em7180(Component):
         '''
         return self._yaw
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def corrected_yaw(self):
         '''
@@ -150,7 +146,6 @@ class Em7180(Component):
         '''
         return self._corrected_yaw
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def yaw_trim(self):
         '''
@@ -158,7 +153,6 @@ class Em7180(Component):
         '''
         return self._yaw_trim
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def pressure(self):
         '''
@@ -166,7 +160,6 @@ class Em7180(Component):
         '''
         return self._pressure
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def temperature(self):
         '''
@@ -174,7 +167,6 @@ class Em7180(Component):
         '''
         return self._temperature
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def altitude(self):
         '''
@@ -182,7 +174,6 @@ class Em7180(Component):
         '''
         return self._altitude
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def accelerometer(self):
         '''
@@ -191,7 +182,6 @@ class Em7180(Component):
         '''
         return self._ax, self._ay, self._az
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def gyroscope(self):
         '''
@@ -200,7 +190,6 @@ class Em7180(Component):
         '''
         return self._gx, self._gy, self._gz
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def poll(self):
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
@@ -233,14 +222,14 @@ class Em7180(Component):
             self._yaw   *= 180.0 / math.pi
 #           self._yaw   += 13.8 # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
             self._yaw   += 23.04 # declination at Pukerua Bay, New Zealand is 20 degrees 36 minutes and 0 seconds on 2025-09-12
-            if self._yaw < 0: 
+            if self._yaw < 0:
                 self._yaw += 360.0  # ensure yaw stays between 0 and 360
             self._roll  *= 180.0 / math.pi
 
     #       print('Quaternion Roll, Pitch, Yaw: %+2.2f %+2.2f %+2.2f' % (roll, pitch, yaw))
 
             # if fixed trim is set, overrides use of digital pot (use 145.0 for Pukerua Bay)
-            if self._fixed_yaw_trim: 
+            if self._fixed_yaw_trim:
                 self._yaw_trim = self._fixed_yaw_trim
             else:
                 self._yaw_trim = self._trim_pot.get_scaled_value()
@@ -249,7 +238,7 @@ class Em7180(Component):
             if self._corrected_yaw < 0: self._corrected_yaw += 360.0
             elif self._corrected_yaw > 360: self._corrected_yaw -= 360.0
             if self._verbose:
-                self._log.info('Quaternion roll: {:+2.2f}; '.format(self._roll) 
+                self._log.info('Quaternion roll: {:+2.2f}; '.format(self._roll)
                         + Fore.RED   + 'pitch: {:+2.2f}; '.format(self._pitch)
                         + Fore.GREEN + 'yaw: {:+2.2f}; '.format(self._yaw)
                         + Fore.BLUE  + 'corrected yaw: {:+2.2f}; '.format(self._corrected_yaw)
@@ -288,21 +277,16 @@ class Em7180(Component):
                 self._log.info('  Altimeter pressure = {:+2.2f} mbar'.format(self._pressure))
                 self._log.info('  Altitude = {:+2.2f} m\n'.format(self._altitude))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
-        if self.closed:
-            self._log.warning('cannot enable USFS: already closed.')
-        else:
+        if not self.closed:
             if self.enabled:
                 self._log.warning('USFS already enabled.')
             else:
                 Component.enable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         Component.disable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         Closes the USFS, calling disable.

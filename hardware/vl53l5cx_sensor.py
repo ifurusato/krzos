@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-10-03
+# modified: 2025-10-13
 
 import traceback
 import time
@@ -137,7 +137,7 @@ class Vl53l5cxSensor(Component):
                     self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
         except Exception as e:
-            self._log.error("{} raised polling sensor: {}".format(type(e), e))
+            self._log.error("error raised polling sensor: {}".format(e))
         finally:
             self._vl53.stop_ranging()
 
@@ -147,14 +147,13 @@ class Vl53l5cxSensor(Component):
             # wait for data to become available
             start = dt.now()
             while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
-                print('.', end='')
                 time.sleep(0.01)
             print('')
             super().enable()
             if self._use_multiprocessing:
                 # start multiprocessing polling process
                 if self._process is None or not self._process.is_alive():
-                    self._log.info(Fore.WHITE + Style.BRIGHT + 'starting external process…')
+                    self._log.debug('starting external process…')
                     self._stop_event.clear()
                     self._process = Process(
                         target=self._polling_loop,
@@ -186,36 +185,6 @@ class Vl53l5cxSensor(Component):
         else:
             start = dt.now()
             while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
-                print('.', end='')
-                time.sleep(0.01)
-            try:
-                data = self._vl53.get_data()
-                return data.distance_mm
-            except Exception as e:
-                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
-                return None
-
-    def x_get_distance_mm(self):
-        '''
-        Gets the latest sensor data from the process queue (non-blocking).
-        Only returns real data if enabled.
-        '''
-        if not self.enabled:
-            self._log.warning('get_distance_mm called while sensor is not enabled.')
-            return None
-        if self._use_multiprocessing:
-            value = None
-            while True:
-                try:
-                    # drain queue to get most recent value
-                    value = self._queue.get_nowait()
-                except Exception:
-                    break
-            return value
-        else:
-            start = dt.now()
-            while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
-                print('.', end='')
                 time.sleep(0.01)
             try:
                 data = self._vl53.get_data()
