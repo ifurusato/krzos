@@ -52,9 +52,8 @@ class CompassEncoder(Component):
         self._wrap       = _cfg.get('wrap', 24) # 24 is one turn per compass rotation, 360 is max/very slow
         self._log.info('wrap set to {}'.format(self._wrap))
         self.ioe = io.IOE(i2c_addr=self._i2c_address, interrupt_pin=4)
-        if self._i2c_address == 0x0F:
-            self.ioe.enable_interrupt_out(pin_swap=True)
-        self.ioe.setup_rotary_encoder(1, 12, 3)
+        self.ioe.enable_interrupt_out(pin_swap=True)
+        self.ioe.setup_rotary_encoder(1, 12, 3, 11)
         self.ioe.set_pwm_period(self._period)
         self.ioe.set_pwm_control(divider=2)
         self.ioe.set_mode(self._pin_red, io.PWM, invert=True)
