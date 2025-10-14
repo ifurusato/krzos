@@ -286,7 +286,8 @@ class Roam(Behaviour):
         '''
         IMU-based rotation logic.
         '''
-        current_heading = self._imu.corrected_yaw
+        current_heading = self._imu.poll()
+#       current_heading = self._imu.corrected_yaw
         current_heading = float(current_heading) % 360.0
         target = self._target_heading_degrees
         delta = (target - current_heading + 180.0) % 360.0 - 180.0
@@ -520,6 +521,15 @@ class Roam(Behaviour):
         self._task = self._loop_instance.create_task(self._loop_main())
         self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
         self._thread.start()
+        # auto-realign on startup if using world coordinates
+        if self._use_world_coordinates and self._imu is not None:
+            self._log.info(Fore.YELLOW + "🍿 align to absolute coordinates…")
+            current_heading = float(self._imu.corrected_yaw) % 360.0
+            logical_heading = float(self._heading_degrees) % 360.0
+            delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
+            if abs(delta) > self._rotation_tolerance:
+                self._log.info("Auto-align: realigning from {:.2f}° to IMU {:.2f}°.".format(logical_heading, current_heading))
+                self.set_heading_degrees(current_heading)
         self._log.info("roam enabled.")
 
     def suppress(self):

@@ -82,6 +82,11 @@ class Usfs(Component):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
         self._matrix11x7 = matrix11x7
         self._trim_pot = trim_pot
+        # configuration
+        _cfg = config['kros'].get('hardware').get('usfs')
+        # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+        self._declination = _cfg.get('declination', 13.8) # set for your location
+        self._log.info('declination: {:5.3f}'.format(self._declination))
         # create USFS ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._usfs = USFS_Master(self.MAG_RATE, self.ACCEL_RATE, self.GYRO_RATE, self.BARO_RATE, self.Q_RATE_DIVISOR)
         # start the USFS in master mode ┈┈┈┈┈┈┈┈┈┈
@@ -191,6 +196,11 @@ class Usfs(Component):
         return self._gx, self._gy, self._gz
 
     def poll(self):
+        '''
+        Polls the hardware and sets all the available properties.
+
+        This sets the various values but returns corrected yaw (as that's our primary interest).
+        '''
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
@@ -220,8 +230,8 @@ class Usfs(Component):
             self._yaw   = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
             self._pitch *= 180.0 / math.pi
             self._yaw   *= 180.0 / math.pi
-#           self._yaw   += 13.8 # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-            self._yaw   += 23.04 # declination at Pukerua Bay, New Zealand is 20 degrees 36 minutes and 0 seconds on 2025-09-12
+#           self._yaw   += self._declination # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+            self._yaw   += self._declination # Pukerua Bay, New Zealand is 20 degrees 36 minutes and 0 seconds on 2025-09-12
             if self._yaw < 0:
                 self._yaw += 360.0  # ensure yaw stays between 0 and 360
             self._roll  *= 180.0 / math.pi
@@ -276,6 +286,8 @@ class Usfs(Component):
                 self._log.info('  Altimeter temperature = {:+2.2f} C'.format(self._temperature))
                 self._log.info('  Altimeter pressure = {:+2.2f} mbar'.format(self._pressure))
                 self._log.info('  Altitude = {:+2.2f} m\n'.format(self._altitude))
+
+        return self._corrected_yaw
 
     def enable(self):
         if not self.closed:
