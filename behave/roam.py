@@ -52,6 +52,7 @@ class Roam(Behaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._dynamic_speed = _cfg.get('dynamic_speed', True)
         self._dynamic_heading = _cfg.get('dynamic_heading', True)
+        self._deadband_threshold = _cfg.get('deadband_threshold', 0.12)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance  = _rs_cfg.get('min_distance')
@@ -229,7 +230,7 @@ class Roam(Behaviour):
             if self._verbose:
                 self._display_info('rotating')
             return
-        # Normal movement intent vector
+        # normal movement intent vector
         radians = np.deg2rad(getattr(self, '_heading_degrees', 0.0))
         amplitude = self._default_speed
         if amplitude == 0.0:
