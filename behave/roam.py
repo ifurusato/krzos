@@ -7,12 +7,12 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-10-13
+# modified:  2025-10-14
 
 import time
 import itertools
 import numpy as np
-from math import isclose
+from math import isclose, copysign
 from threading import Thread, Event as ThreadEvent
 import asyncio
 from colorama import init, Fore, Style
@@ -27,6 +27,7 @@ from hardware.roam_sensor import RoamSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.compass_encoder import CompassEncoder
 from hardware.motor_controller import MotorController
+from core.orientation import Orientation
 
 class Roam(Behaviour):
     NAME = 'roam'
@@ -36,10 +37,11 @@ class Roam(Behaviour):
     by RoamSensor (PWM + VL53L5CX). If no obstacle is perceived, the velocity
     limit is removed.
 
-    Roam now uses a vector-based motor control, allowing for heading-based
-    driving (default North, but arbitrary heading supported).
-    Rotational alignment is performed when heading changes.
+    Roam uses a vector-based motor control, allowing for heading-based
+    driving. Rotational alignment is performed when heading changes,
+    using Mecanum wheel kinematics and encoder counts.
     '''
+
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
         Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
@@ -52,18 +54,23 @@ class Roam(Behaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._dynamic_speed = _cfg.get('dynamic_speed', True)
         self._dynamic_heading = _cfg.get('dynamic_heading', True)
-        self._deadband_threshold = _cfg.get('deadband_threshold', 0.07) # set -1 to disable
+        self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance  = _rs_cfg.get('min_distance')
         self._max_distance  = _rs_cfg.get('max_distance')
         self._polling_rate_hz = _rs_cfg.get('polling_rate_hz', None)
-        self._heading_degrees = 0.0 # default "north"/forward
+        self._heading_degrees = 0.0
         self._intent_vector = (0.0, 0.0, 0.0)
         self._target_heading_degrees = None
         self._is_rotating = False
         self._rotation_speed = _cfg.get('rotation_speed', 0.5)
-        self._rotation_decel_window = _cfg.get('rotation_decel_window', 12) # degrees before target to begin decelerating
+        self._rotation_decel_window = _cfg.get('rotation_decel_window', 12)
+        self._rotation_direction = 1
+        self._rotation_required_degrees = None
+        self._rotation_accumulated_degrees = 0.0
+        self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
+        # Motor access
         _component_registry = Component.get_registry()
         self._digital_pot = None
         if self._dynamic_speed:
@@ -80,14 +87,29 @@ class Roam(Behaviour):
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
+        # Get motor objects
+        self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
+        self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
+        self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
+        self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
+        # geometry from YAML/config & Velocity instance
+        velocity = self._motor_pfwd.get_velocity()
+        self._steps_per_rotation = velocity.steps_per_rotation
+        self._wheel_diameter_mm = velocity._wheel_diameter
+        self._wheel_track_mm = config['kros']['geometry']['wheel_track']
+        # compute steps_per_degree using geometry and velocity
+        wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
+        rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
+        steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
+        # use config override if present, otherwise use calculated value
+        # this could be manually tuned to better approximate the actual rotation by the robot
+        self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
+        self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._register_intent_vector()
-        self._log.info('ready.')
         self._poll_delay_sec = self._get_poll_delay_sec()
+        self._log.info('ready.')
 
     def _get_poll_delay_sec(self):
-        '''
-        Determines polling delay in seconds based on RoamSensor's update rate, if provided.
-        '''
         if self._polling_rate_hz:
             return 1.0 / self._polling_rate_hz
         return self._loop_delay_ms / 1000.0
@@ -101,15 +123,54 @@ class Roam(Behaviour):
         self._log.info('intent vector lambda removed from motor controller.')
 
     def set_heading_degrees(self, degrees):
-        '''
-        Set the movement heading in degrees (0 = north/forward, 90 = east/starboard).
-        Triggers rotational alignment if heading changes.
-        '''
-        degrees = float(degrees)
-        if not isclose(degrees, self._heading_degrees, abs_tol=1e-2):
-            self._target_heading_degrees = degrees
-            self._is_rotating = True
-            self._log.info('🐹 heading change requested: rotating to {} degrees.'.format(degrees))
+        degrees = float(degrees) % 360.0
+        # Only start rotation if not already rotating to this heading
+        if self._is_rotating and self._target_heading_degrees is not None and \
+            abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
+            self._log.info('Already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
+            return
+        # If already at heading (within tolerance), ignore
+        if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
+            self._log.info('Already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
+            return
+        # Otherwise, initiate new rotation
+        current = self._heading_degrees % 360.0
+        target = degrees
+        delta = (target - current + 180.0) % 360.0 - 180.0
+        self._rotation_direction = copysign(1, delta)
+        self._rotation_required_degrees = abs(delta)
+        self._target_heading_degrees = degrees
+        self._is_rotating = True
+        self._rotation_accumulated_degrees = 0.0
+        # Reset encoder start points for this rotation
+        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
+        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
+        self._rotation_start_paft = self._motor_paft.decoder.steps
+        self._rotation_start_saft = self._motor_saft.decoder.steps
+        self._log.info('🐹 heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
+            self._rotation_required_degrees,
+            "cw" if self._rotation_direction > 0 else "ccw",
+            degrees))
+
+    def x_set_heading_degrees(self, degrees):
+        degrees = float(degrees) % 360.0
+        current = self._heading_degrees % 360.0
+        target = degrees
+        delta = (target - current + 180.0) % 360.0 - 180.0
+        self._rotation_direction = copysign(1, delta)
+        self._rotation_required_degrees = abs(delta)
+        self._target_heading_degrees = degrees
+        self._is_rotating = True
+        self._rotation_accumulated_degrees = 0.0
+        # Always reset encoder start points on every heading change
+        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
+        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
+        self._rotation_start_paft = self._motor_paft.decoder.steps
+        self._rotation_start_saft = self._motor_saft.decoder.steps
+        self._log.info('🐹 heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
+            self._rotation_required_degrees,
+            "cw" if self._rotation_direction > 0 else "ccw",
+            degrees))
 
     def set_heading_radians(self, radians):
         self.set_heading_degrees(np.degrees(radians))
@@ -176,20 +237,16 @@ class Roam(Behaviour):
             if isclose(_speed, 0.0, abs_tol=0.08):
                 self._digital_pot.set_black()
                 self._default_speed = 0.0
-#               self._log.info(Fore.BLACK + "default speed: stopped")
             else:
                 self._digital_pot.set_rgb(self._digital_pot.value)
                 self._default_speed = _speed
                 self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
 
     def _dynamic_set_heading(self):
-        self._log.info(Fore.BLACK + "🍉 a. dynamic heading")
         if self._compass_encoder:
-            self._log.info(Fore.BLACK + "🍉 b. dynamic heading")
             self._compass_encoder.update()
             _degrees = self._compass_encoder.get_degrees()
             self.set_heading_degrees(_degrees)
-            self._log.info(Fore.BLACK + "🍉 c. dynamic heading; degrees: {:4.2f}".format(_degrees))
 
     async def _poll(self):
         try:
@@ -204,26 +261,41 @@ class Roam(Behaviour):
     def _update_intent_vector(self):
         '''
         Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
+        For rotation, use all four wheel encoder counts.
+        This version handles overshoot in both directions robustly.
         '''
-        # If in rotation, output rotational intent vector, else normal
+        import math
         if self._is_rotating and self._target_heading_degrees is not None:
-            # Calculate shortest rotation direction and difference
-            current = self._heading_degrees % 360.0
-            target = self._target_heading_degrees % 360.0
-            delta = (target - current) % 360.0
-            if delta > 180.0:
-                delta -= 360.0
-            abs_delta = abs(delta)
-            # Decelerate rotation as approach target
-            if abs_delta < self._rotation_decel_window:
-                rot_speed = self._rotation_speed * (abs_delta / self._rotation_decel_window)
+            # Compute deltas
+            delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
+            delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
+            delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
+            delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
+            # Mecanum rotation estimation (signs per your wiring):
+            # For rotation-in-place, port motors CW (positive), starboard CCW (negative)
+            rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
+            degrees_rotated = abs(rotation_steps / self._steps_per_degree)
+            self._rotation_accumulated_degrees = degrees_rotated
+            abs_remaining = self._rotation_required_degrees - degrees_rotated
+#           self._log.info(
+#               'ROTATE: pfwd: {}, sfwd: {}, paft: {}, saft: {}, steps: {}, deg_rotated: {}, deg_needed: {}, deg_remaining: {}'.format(
+#                   delta_pfwd, delta_sfwd, delta_paft, delta_saft, rotation_steps, degrees_rotated, self._rotation_required_degrees, abs_remaining
+#               )
+#           )
+            self._log.info(
+                'ROTATION DEBUG: degrees_rotated={}, abs_remaining={}, tolerance={}'.format(degrees_rotated, abs_remaining, self._rotation_tolerance)
+            )
+            # Deceleration and intent vector logic
+            if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
+                rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
             else:
                 rot_speed = self._rotation_speed
-            # Clamp minimum rotation speed
             rot_speed = max(rot_speed, 0.08)
-            omega = rot_speed if delta > 0 else -rot_speed
-            # If reached target, finish rotation
-            if abs_delta < 2.0:
+            omega = rot_speed * self._rotation_direction
+            # stop logic: handle overshoot in both directions
+            # if we are within tolerance or have overshot the required rotation in either direction, just stop
+            if math.isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
+                degrees_rotated >= self._rotation_required_degrees:
                 self._heading_degrees = self._target_heading_degrees
                 self._is_rotating = False
                 self._target_heading_degrees = None
@@ -256,7 +328,6 @@ class Roam(Behaviour):
             obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
         amplitude *= obstacle_scale
         if self._deadband_threshold > 0 and (amplitude < self._deadband_threshold):
-#           self._display_info('hit deadband with amplitude={:4.2f}'.format(amplitude))
             self._intent_vector = (0.0, 0.0, 0.0)
         else:
             vx = np.sin(radians) * amplitude
