@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-11-16
-# modified: 2025-10-16
+# modified: 2025-10-18
 
 import time
 import warnings
@@ -53,6 +53,8 @@ class DistanceSensor(Component):
         self._log = Logger(self._name, level=Level.INFO)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._timeout         = _cfg.get('timeout')     # time in seconds to consider sensor as timed out
+        self._min_valid_pulse_us = _cfg.get('min_valid_pulse_us', 1000) # anything <1000us is invalid
+        self._max_valid_pulse_us = _cfg.get('max_valid_pulse_us', 1850) # anything >1850us is invalid
         self._smoothing       = _cfg.get('smoothing')   # enable smoothing of distance readings
         _smoothing_window     = _cfg.get('smoothing_window')
         self._window = deque(maxlen=_smoothing_window) if self._smoothing else None
@@ -86,21 +88,25 @@ class DistanceSensor(Component):
     def _measure_pulse_width(self):
         '''
         Polls the GPIO pin to measure pulse width in microseconds.
-        Returns None if no valid pulse found within timeout.
+        Returns None on timeout or if the measured pulse is too short (glitch).
         '''
-        timeout = time.perf_counter() + 0.05
-        # wait for rising edge (start of pulse)
-        while GPIO.input(self._pin) == 0:
-            if time.perf_counter() > timeout:
+        idle = GPIO.input(self._pin)
+        # wait for start edge
+        deadline = time.perf_counter() + 0.05
+        while GPIO.input(self._pin) == idle:
+            if time.perf_counter() > deadline:
                 return None
         start = time.perf_counter()
-        # wait for falling edge (end of pulse)
-        timeout = time.perf_counter() + 0.05
-        while GPIO.input(self._pin) == 1:
-            if time.perf_counter() > timeout:
+        # wait for end edge
+        deadline = start + 0.05
+        while GPIO.input(self._pin) != idle:
+            if time.perf_counter() > deadline:
                 return None
         end = time.perf_counter()
-        pulse_width_us = (end - start) * 1e6  # microseconds
+        pulse_width_us = (end - start) * 1e6
+        if pulse_width_us < self._min_valid_pulse_us:
+            self._log.debug("measured pulse too short: {:.1f} us".format(pulse_width_us))
+            return None
         self._last_read_time = time.time()
         self._log.debug("measured pulse width: {:.1f} us".format(pulse_width_us))
         return pulse_width_us
@@ -109,22 +115,36 @@ class DistanceSensor(Component):
     def _compute_distance(self):
         '''
         Compute and update the distance based on the current pulse width,
-        returning the distance or None if out of range.
+        returning the distance or None if out of range or if we do not have
+        enough recent consistent readings. Requires 3 consecutive readings
+        within a tolerance of their median to report a distance.
         '''
-        pulse_width_us = self._measure_pulse_width()
-        distance = None
-        if pulse_width_us is not None and 1000 <= pulse_width_us <= 1850:
-            distance_mm = (pulse_width_us - 1000) * 3 / 4
-            self._last_read_time = time.time()
-            if self._smoothing:
-#               self._log.debug("\nappend distance: {:4.2f}mm".format(distance_mm))
-                self._window.append(distance_mm)
-                distance = int(sum(self._window) / len(self._window))
-            else:
-                distance = int(distance_mm)
-        else:
-            self._log.debug("pulse width {} out of expected sensor range.".format(pulse_width_us))
-        return distance
+        pulse_us = self._measure_pulse_width()
+        if pulse_us is None:
+            self._log.debug("pulse width reading None.")
+            return None
+        if not (self._min_valid_pulse_us <= pulse_us <= self._max_valid_pulse_us):
+#           self._log.debug("pulse width {} out of expected sensor range.".format(pulse_us))
+            return None
+        distance_mm = (pulse_us - self._min_valid_pulse_us) * 3 / 4
+        self._last_read_time = time.time()
+        if self._smoothing:
+            required_consistent_count = 3     # consecutive recent readings required to agree before reporting
+            tolerance_fraction        = 0.25  # allowed fractional deviation from the median (0.25 == ±25%)
+            # append the new reading to the existing window
+            self._window.append(distance_mm)
+            if len(self._window) < required_consistent_count:
+                return None
+            recent_readings = list(self._window)[-required_consistent_count:]
+            sorted_recent = sorted(recent_readings)
+            median_index = required_consistent_count // 2
+            median_of_recent = sorted_recent[median_index] if required_consistent_count % 2 else \
+                (sorted_recent[median_index - 1] + sorted_recent[median_index]) / 2.0
+            # all recent readings must be within tolerance_fraction of the median
+            if all(abs(v - median_of_recent) <= max(1.0, median_of_recent * tolerance_fraction) for v in recent_readings):
+                return int(median_of_recent)
+            return None
+        return int(distance_mm)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _external_callback_method(self):
