@@ -34,9 +34,10 @@ from core.orientation import Orientation
 from enum import Enum
 
 class HeadingMode(Enum):
+    NONE     = 0
     RELATIVE = 1
     ABSOLUTE = 2
-    BLENDED = 3
+    BLENDED  = 3
 
     @staticmethod
     def from_string(value):
@@ -77,16 +78,16 @@ class Roam(Behaviour):
         self._counter  = itertools.count()
         self._verbose  = True #_cfg.get('verbose', False)
         self._use_color = True
-        self._default_speed = _cfg.get('default_speed', 0.8)
-        self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
-        self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
-        self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
+        self._default_speed         = _cfg.get('default_speed', 0.8)
+        self._use_dynamic_speed     = _cfg.get('use_dynamic_speed', True)
+        self._use_dynamic_heading   = _cfg.get('use_dynamic_heading', True)
+        self._deadband_threshold    = _cfg.get('deadband_threshold', 0.07)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
+        self._heading_mode          = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
-        self._min_distance  = _rs_cfg.get('min_distance')
-        self._max_distance  = _rs_cfg.get('max_distance')
-        self._polling_rate_hz = _rs_cfg.get('polling_rate_hz', None)
-        self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'BLENDED'))
+        self._min_distance          = _rs_cfg.get('min_distance')
+        self._max_distance          = _rs_cfg.get('max_distance')
+        self._polling_rate_hz       = _rs_cfg.get('polling_rate_hz', None)
         self._heading_degrees = 0.0
         self._intent_vector   = (0.0, 0.0, 0.0)
         self._target_heading_degrees = None
@@ -270,6 +271,8 @@ class Roam(Behaviour):
         Dispatches heading logic based on current mode.
         '''
         match self._heading_mode:
+            case HeadingMode.NONE:
+                self._update_linear_vector()
             case HeadingMode.RELATIVE:
                 self._update_intent_vector_relative()
             case HeadingMode.ABSOLUTE:

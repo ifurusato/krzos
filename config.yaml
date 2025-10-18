@@ -49,6 +49,7 @@ kros:
             use_dynamic_speed:           True              # if True use digital pot for default speed
             use_dynamic_heading:         True              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
+            heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
 
 #           min_velocity:                 0.0              # minimum motor target velocity
 #           max_velocity:               100.0              # maximum motor target velocity
