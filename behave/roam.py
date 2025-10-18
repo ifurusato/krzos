@@ -114,7 +114,7 @@ class Roam(Behaviour):
         if self._use_dynamic_speed:
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
         self._compass_encoder = None
-        if self._use_dynamic_heading:
+        if self._heading_mode is not HeadingMode.NONE and self._use_dynamic_heading:
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
         # use USFS IMU if available and world coordinates flag set
         self._imu = None
@@ -246,7 +246,7 @@ class Roam(Behaviour):
             else:
                 self._digital_pot.set_rgb(self._digital_pot.value)
                 self._default_speed = _speed
-                self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
+#               self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
 
     def _dynamic_set_heading(self):
         if self._compass_encoder:
@@ -491,12 +491,20 @@ class Roam(Behaviour):
 
     def _display_info(self, message=''):
         if self._use_color:
-            self._log.info("{} intent vector: {}({:4.2f},{:4.2f}, {:4.2f}){}".format(
-                    message,
-                    self.get_highlight_color(self._intent_vector[0]),
-                    self._intent_vector[0], self._intent_vector[1], self._intent_vector[2], Style.RESET_ALL
+            if self._intent_vector[0] + self._intent_vector[1] == 0.0:
+                self._log.info(Style.DIM + "{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}){}".format(
+                        message,
+                        self.get_highlight_color(self._intent_vector[0]),
+                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2], Style.RESET_ALL
+                    )
                 )
-            )
+            else:
+                self._log.info("{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}){}".format(
+                        message,
+                        self.get_highlight_color(self._intent_vector[0]),
+                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2], Style.RESET_ALL
+                    )
+                )
         else:
             self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
                     self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]
