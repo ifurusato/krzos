@@ -32,6 +32,7 @@ def test_radiozoa_sensor_addresses():
     Test passes only if 0x29 is absent and all eight addresses are present after configuration.
     '''
     _log = Logger('test-radiozoa', level=Level.INFO)
+    _log.info(Style.BRIGHT + "testing radiozoa sensors…")
     _config_path = pathlib.Path(__file__).parent / "config.yaml"
     _config = ConfigLoader().configure(_config_path)
     _cfg_radiozoa = _config.get('kros').get('hardware').get('radiozoa')
@@ -46,7 +47,8 @@ def test_radiozoa_sensor_addresses():
     _missing = [ addr for addr in _sensor_addresses if not _i2c_scanner.has_hex_address([addr]) ]
 
     if _has_default or _missing:
-        _log.warning("initial or error condition detected: 0x29 present={} or missing sensor addresses={}".format(_has_default, _missing))
+#       _log.warning("initial or error condition detected: 0x29 present={} or missing sensor addresses={}".format(_has_default, _missing))
+        _log.info(Style.BRIGHT + "reasssigning radiozoa addresses…")
         try:
             radiozoa_config = RadiozoaConfig(_config, level=Level.INFO)
             radiozoa_config.configure()

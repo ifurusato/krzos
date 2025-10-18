@@ -75,7 +75,7 @@ class Roam(Behaviour):
         _cfg = config['kros'].get('behaviour').get('roam')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._counter  = itertools.count()
-        self._verbose  = _cfg.get('verbose', False)
+        self._verbose  = True #_cfg.get('verbose', False)
         self._use_color = True
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
@@ -100,12 +100,19 @@ class Roam(Behaviour):
         self._last_relative_offset = 0.0
         # component access
         _component_registry = Component.get_registry()
+        print('🍿 A. ')
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
+        print('🍿 B. ')
         if self._roam_sensor is None:
+            print('🍿 C. ')
             self._log.info(Fore.WHITE + 'creating Roam sensor…')
+            print('🍿 D. ')
             self._roam_sensor = RoamSensor(config, level=Level.INFO)
+            print('🍿 E. ')
         else:
+            print('🍿 F. ')
             self._log.info(Fore.WHITE + 'using existing Roam sensor.')
+        print('🍿 G. ')
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
@@ -350,7 +357,52 @@ class Roam(Behaviour):
     def _update_intent_vector_blended(self):
         '''
         BLENDED mode: Track a world-relative heading.
-        The desired heading is the world direction (from the knob or another behaviour).
+        The desired heading is always sourced from the compass encoder, representing the world direction.
+        The robot rotates to minimize the error between its IMU heading and this world direction.
+        The robot will not rotate or move if dynamic speed is 0.0.
+        No base heading, no state, no lock—always dynamic.
+        '''
+        if self._imu is None:
+            self._update_intent_vector_relative()
+            return
+        # check dynamic speed before rotating or moving
+        amplitude = self._default_speed
+        if self._digital_pot:
+            amplitude = self._digital_pot.get_scaled_value(False)
+        if isclose(amplitude, 0.0, abs_tol=0.08):
+            self._intent_vector = (0.0, 0.0, 0.0)
+            if self._verbose:
+                self._log.info("BLENDED: dynamic speed is 0.0, intent vector zeroed.")
+                self._display_info('BLENDED (speed zero)')
+            return
+        current_heading = self._imu.poll() % 360.0
+        # always poll the current encoder value for world-relative heading
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
+        else:
+            desired_heading = self._get_dynamic_relative_offset()
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._log.info("BLENDED: encoder {}; desired {}; current {}; error {}; omega {}".format(
+                self._compass_encoder.get_degrees() if self._compass_encoder else None,
+                desired_heading, current_heading, error, omega))
+            self._display_info('BLENDED (tracking world direction)')
+        if omega == 0.0:
+            self._update_linear_vector()
+
+    def x_update_intent_vector_blended(self):
+        '''
+        BLENDED mode: Track a world-relative heading.
+        The desired heading is always sourced from the compass encoder, representing the world direction.
         The robot rotates to minimize the error between its IMU heading and this world direction.
         No base heading, no state, no lock—always dynamic.
         '''
@@ -358,12 +410,12 @@ class Roam(Behaviour):
             self._update_intent_vector_relative()
             return
 
-        # IMU.poll() returns corrected yaw directly
         current_heading = self._imu.poll() % 360.0
 
-        # Always poll the current knob/behaviour value
-        if self._digital_pot:
-            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
+        # Always poll the current encoder value for world-relative heading
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
         else:
             desired_heading = self._get_dynamic_relative_offset()
 
@@ -378,10 +430,9 @@ class Roam(Behaviour):
             omega = 0.0
 
         self._intent_vector = (0.0, 0.0, omega)
-
         if self._verbose:
-            self._log.info("BLENDED: knob {}; desired {}; current {}; error {}; omega {}".format(
-                self._digital_pot.get_scaled_value(True) if self._digital_pot else None,
+            self._log.info("BLENDED: encoder {}; desired {}; current {}; error {}; omega {}".format(
+                self._compass_encoder.get_degrees() if self._compass_encoder else None,
                 desired_heading, current_heading, error, omega))
             self._display_info('BLENDED (tracking world direction)')
         if omega == 0.0:
@@ -527,23 +578,33 @@ class Roam(Behaviour):
             self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
     def enable(self):
+        print('🍿 a. ')
         if self.enabled:
-            self._log.debug("already enabled.")
+            self._log.warning("already enabled.")
             return
         if self._motor_controller:
+            print('🍿 b. ')
             self._motor_controller.enable()
             self._register_intent_vector()
         if not self._roam_sensor.enabled:
+            print('🍿 c. ')
             self._roam_sensor.enable()
+        print('🍿 d. ')
         Component.enable(self)
         self._loop_instance = asyncio.new_event_loop()
         self._stop_event = ThreadEvent()
+        print('🍿 e. ')
         asyncio.set_event_loop(self._loop_instance)
+        print('🍿 f. ')
         self._task = self._loop_instance.create_task(self._loop_main())
+        print('🍿 g. ')
         self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
+        print('🍿 h. ')
         self._thread.start()
+        print('🍿 i. ')
         if self._use_world_coordinates and self._imu is not None:
-            self._log.info(Fore.YELLOW + "🍿 align to absolute coordinates…")
+            print('🍿 j. ')
+            self._log.info(Fore.YELLOW + "align to absolute coordinates…")
             current_heading = self._imu.poll() % 360.0
             logical_heading = float(self._heading_degrees) % 360.0
             delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
@@ -551,6 +612,7 @@ class Roam(Behaviour):
                 self._log.info("Auto-align: realigning from {:.2f}° to IMU {:.2f}°.".format(logical_heading, current_heading))
                 self.set_heading_degrees(current_heading)
         self._log.info("roam enabled.")
+        print('🍿 z. ')
 
     def suppress(self):
         Behaviour.suppress(self)

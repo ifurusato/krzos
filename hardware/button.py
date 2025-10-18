@@ -7,13 +7,11 @@
 #
 # author:   Murray Altheim
 # created:  2024-05-22
-# modified: 2025-09-01
+# modified: 2025-10-18
 #
 # This is the simple implementation of Button, implemented using gpiozero.
 
-import sys, traceback, time
-import itertools
-import threading
+import traceback
 import RPi.GPIO as GPIO
 import gpiozero
 from colorama import init, Fore, Style
@@ -37,12 +35,11 @@ class Button(Component):
     :param pin:           the optional pin number (overrides config)
     :param level:         the log level
     '''
-    def __init__(self, config, name='btn', pin=None, level=Level.INFO):
+    def __init__(self, config, level=Level.INFO):
         _cfg = config['kros'].get('hardware').get('button')
-        self._pin = _cfg.get('pin') if pin is None else pin
-        self._log = Logger('btn:{}-{}'.format(self._pin, name), level)
+        self._pin = _cfg.get('pin')
+        self._log = Logger('btn-{}'.format(self._pin), level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        self._button               = None       # used with gpiozero
         self._callbacks = [] # list of callback functions
         self._button = gpiozero.Button(self._pin, pull_up=True)  # create a Button object for the specified pin
         self._button.when_pressed = self._gpiozero_button_pressed  # set the internal callback
@@ -63,10 +60,8 @@ class Button(Component):
         Internal method called when the button is pressed.
         '''
         self._log.info(Fore.MAGENTA + "button pressed!")
-#       self._close_gpzio()
         for callback in self._callbacks:  # execute registered callbacks
             callback()
-#       self._callbacks.clear() # only if one-shot
 
     def _close_gpzio(self):
         if self._button:
@@ -76,7 +71,7 @@ class Button(Component):
                 self._button.when_pressed = None
                 self._button.close()
             except Exception as e:
-                self._log.error("error during gpiozero cleanup: {e}".format(e))
+                self._log.error("{} raised gpiozero cleanup: {}\n{}".format(type(e), e, traceback.format_exc()))
             finally:
                 self._button = None
 

@@ -54,10 +54,14 @@ class Vl53l5cxSensor(Component):
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
+        # multiprocessing attributes
+        self._queue = Queue(maxsize=20)
+        self._stop_event = Event()
+        self._process = None
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
+        _start_time = dt.now()
         self._vl53 = None
         if _i2c_bus_number == 0:
-            _start_time = dt.now()
             try:
                 from smbus2 import SMBus
                 _i2c_bus_dev = SMBus(0)
@@ -66,20 +70,14 @@ class Vl53l5cxSensor(Component):
             except Exception as e:
                 self._log.error('{} raised connecting to VL53L5CX on I2C bus 0: {}'.format(type(e), e))
                 raise e
-            finally:
-                _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-                self._log.info(Fore.MAGENTA + 'VL53L5CX ready: elapsed: {:d}ms'.format(_elapsed_ms))
         else:
             self._vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
         self._vl53.set_resolution(self._cols * self._rows)
         self._vl53.set_ranging_frequency_hz(_cfg.get('ranging_frequency_hz', 15))
         self._vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
-        self._log.info('VL53L5CX hardware ready.')
-        # multiprocessing attributes
-        self._queue = Queue(maxsize=20)
-        self._stop_event = Event()
-        self._process = None
+        _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+        self._log.info(Fore.MAGENTA + 'VL53L5CX device ready: elapsed: {:d}ms'.format(_elapsed_ms))
 
     @property
     def floor_margin(self):

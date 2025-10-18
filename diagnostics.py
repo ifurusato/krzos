@@ -164,9 +164,9 @@ class Diagnostics:
             if not test_files:
                 self._log.warning("no unit test files found.")
             elif test_files:
-                self._log.info("found the following unit test files:")
+                self._log.debug("found the following unit test files:")
                 for _file in test_files:
-                    self._log.info(Fore.BLUE + "    {}".format(_file))
+                    self._log.debug(Fore.BLUE + "    {}".format(_file))
                 if run_tests:
                     there_were_errors = self._execute_tests(test_files)
                 else:

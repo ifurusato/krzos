@@ -7,11 +7,10 @@
 #
 # author:   Murray Altheim
 # created:  2024-11-16
-# modified: 2025-10-07
+# modified: 2025-10-16
 
 import time
 import warnings
-from threading import Thread
 from collections import deque
 import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
@@ -19,56 +18,69 @@ init()
 
 from core.logger import Logger, Level
 from core.component import Component
+from core.orientation import Orientation
 from core.util import Util
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensor(Component):
-    NAME = 'distance'
     '''
     Provides distance information in millimeters from a Pololu PWM-based
     infrared proximity sensor. The maximum range seems to be around 270mm,
     reliably to about 250mm, and the returned value is quite accurate.
-
-    Previous versions of this sensor included Orientation as it supported
-    multiple sensors; this supports only a single sensor. It also supported
-    use with the MessageBus; this has been eliminated to simplify the class.
-
-    This can run either in a Thread, or by simply calling get_distance()
-    directly.
     '''
-    def __init__(self, config, message_bus=None, level=Level.INFO):
+    def __init__(self, config, orientation=None, level=Level.INFO):
         '''
         Initializes the DistanceSensor.
 
         :param config:        the application configuration
+        :param orientation:   the orientation of the sensor (PSID, SSID or FWD)
         :param level:         the logging Level
         '''
-        self._log = Logger(DistanceSensor.NAME, level=Level.INFO)
         if config is None:
             raise ValueError('no configuration provided.')
-        Component.__init__(self, self._log, suppressed=False, enabled=False)
         _cfg = config['kros'].get('hardware').get('distance_sensor')
-        self._pin = _cfg.get('pin') # pin connected to the center sensor
-        self._task_name = '__distance-sensor-loop'
+        match orientation:
+            case Orientation.FWD: # forward
+                self._pin = _cfg.get('pin-fwd') # pin connected to the forward sensor
+            case Orientation.PSID: # port side
+                self._pin = _cfg.get('pin-psid') # pin connected to the port side sensor
+            case Orientation.SSID: # starboard side
+                self._pin = _cfg.get('pin-ssid') # pin connected to the starboard side sensor
+            case _:
+                raise ValueError('unsupported orientation: {}'.format(orientation.label))
+        self._orientation     = orientation
+        self._name = 'distance={}'.format(orientation.label)
+        self._log = Logger(self._name, level=Level.INFO)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._timeout         = _cfg.get('timeout')     # time in seconds to consider sensor as timed out
         self._smoothing       = _cfg.get('smoothing')   # enable smoothing of distance readings
         _smoothing_window     = _cfg.get('smoothing_window')
         self._window = deque(maxlen=_smoothing_window) if self._smoothing else None
         self._loop_interval   = _cfg.get('loop_interval') # interval between distance polling, in seconds
+        _use_ext_clock   = _cfg.get('use_ext_clock') # poll on callback from external clock if available
+        self._external_clock  = None
+        if _use_ext_clock:
+            _component_registry = Component.get_registry()
+            self._external_clock = _component_registry.get('irq-clock')
+            if self._external_clock:
+                self._log.warning(Fore.WHITE + 'external clock available.')
+                self._external_clock.add_callback(self._external_callback_method)
+            else:
+                self._log.warning('no external clock available.')
         self._distance        = -1
-        self._enable_thread   = False # don't permit thread to start if False
-        self._thread          = None
-        self._running         = False
-        self._use_message_bus = False
         self._last_read_time  = time.time()
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self._pin, GPIO.IN)
-        self._log.info('distance sensor ready on pin {}.'.format(self._pin))
+        self._log.info('{} distance sensor ready on pin {}.'.format(self._orientation.label, self._pin))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def name(self):
-        return DistanceSensor.NAME
+        return self._name
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def orientation(self):
+        return self._orientation
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _measure_pulse_width(self):
@@ -77,12 +89,12 @@ class DistanceSensor(Component):
         Returns None if no valid pulse found within timeout.
         '''
         timeout = time.perf_counter() + 0.05
-        # Wait for rising edge (start of pulse)
+        # wait for rising edge (start of pulse)
         while GPIO.input(self._pin) == 0:
             if time.perf_counter() > timeout:
                 return None
         start = time.perf_counter()
-        # Wait for falling edge (end of pulse)
+        # wait for falling edge (end of pulse)
         timeout = time.perf_counter() + 0.05
         while GPIO.input(self._pin) == 1:
             if time.perf_counter() > timeout:
@@ -90,7 +102,7 @@ class DistanceSensor(Component):
         end = time.perf_counter()
         pulse_width_us = (end - start) * 1e6  # microseconds
         self._last_read_time = time.time()
-        self._log.debug(f"Measured pulse width: {pulse_width_us:.1f} us")
+        self._log.debug("measured pulse width: {:.1f} us".format(pulse_width_us))
         return pulse_width_us
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -105,34 +117,30 @@ class DistanceSensor(Component):
             distance_mm = (pulse_width_us - 1000) * 3 / 4
             self._last_read_time = time.time()
             if self._smoothing:
+#               self._log.debug("\nappend distance: {:4.2f}mm".format(distance_mm))
                 self._window.append(distance_mm)
                 distance = int(sum(self._window) / len(self._window))
             else:
                 distance = int(distance_mm)
         else:
-            self._log.debug(f"Pulse width {pulse_width_us} out of expected sensor range.")
+            self._log.debug("pulse width {} out of expected sensor range.".format(pulse_width_us))
         return distance
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def distance(self):
+    def _external_callback_method(self):
+        ''' 
+        The callback called by the external clock as an alternative to the
+        asyncio _loop() method.
         '''
-        Get the last computed distance in millimeters as a property.
-        Note that this does not return the current value.
-        '''
-        return self._distance
+        _distance_mm = self._compute_distance()
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_distance(self):
         '''
         Returns the current distance value in millimeters, None if
         out of range.
         '''
-        _distance = self._compute_distance()
-#       if _distance:
-#           self._log.info(Fore.YELLOW + 'raw distance: {:4.2f}'.format(_distance))
-#       else:
-#           self._log.info(Style.DIM + 'raw distance: none')
-        return _distance
+        return self._compute_distance()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_timeout(self):
@@ -142,39 +150,13 @@ class DistanceSensor(Component):
         return time.time() - self._last_read_time > self._timeout
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _sensor_loop(self):
-        '''
-        Loop to continuously compute distances.
-        '''
-        while self._running:
-            self._distance = self._compute_distance()
-            time.sleep(self._loop_interval)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def stop(self):
-        '''
-        Stop the sensor's loop and clean up resources.
-        '''
-        self._running = False
-        if self._thread:
-            try:
-                self._thread.join(timeout=0.2)
-            except Exception as e:
-                self._log.warning('{} raised joining thread: {}.'.format(type(e), e))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
-        Enable the sensor, starting the polling loop if the disable thread flag is false.
+        Enable the sensor, setting up the GPIO pin.
         '''
         if not self.enabled:
             Component.enable(self)
-            if self._enable_thread:
-                self._running = True
-                self._thread = Thread(name='sensor-loop', target=self._sensor_loop)
-                self._thread.start()
-            else:
-                self._log.info('😡 thread use is disabled.')
+            GPIO.setup(self._pin, GPIO.IN)
         else:
             self._log.warning('already enabled distance sensor.')
 
@@ -183,7 +165,6 @@ class DistanceSensor(Component):
         '''
         Disable the sensor and clean up resources.
         '''
-        self.stop()
         # we know of this warning so make it pretty
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", RuntimeWarning)

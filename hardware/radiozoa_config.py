@@ -58,12 +58,12 @@ class RadiozoaConfig(object):
             import smbus2 as smbus
         self._i2c_bus = smbus.SMBus()
         self._i2c_bus.open(bus=self._i2c_bus_number)
-        self._log.info(Fore.BLUE + 'I2C{} open.'.format(self._i2c_bus_number))
+        self._log.info('I2C{} open.'.format(self._i2c_bus_number))
 
     def _setup_ioe(self):
         try:
             self._ioe = io.IOE(i2c_addr=self._ioe_i2c_address, smbus_id=self._i2c_bus_number)
-            self._log.info(Fore.BLUE + Style.BRIGHT + 'found IO Expander at 0x{:02X} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
+            self._log.info('found IO Expander at 0x{:02X} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
         except Exception as e:
             self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
             raise
@@ -87,17 +87,18 @@ class RadiozoaConfig(object):
         Shuts down all sensors by setting their XSHUT pins LOW.
         '''
         for sensor_id, sensor_config in self._cfg_devices.items():
-            xshut_pin = sensor_config.get('xshut')
             label = sensor_config.get('label')
+            xshut_pin = sensor_config.get('xshut')
             self._log.info("shutting down sensor {} at XSHUT pin {}…".format(label, xshut_pin))
             self._set_xshut(xshut_pin, False)
             time.sleep(0.05)
 
     def _configure_pins(self):
         for sensor_id, sensor_config in self._cfg_devices.items():
-            _xshut_pin = sensor_config.get('xshut')
-            self._ioe.set_mode(_xshut_pin, io.OUT)
-            self._log.info(Fore.MAGENTA + "configured pin {} as output.".format(_xshut_pin))
+            label = sensor_config.get('label')
+            xshut_pin = sensor_config.get('xshut')
+            self._ioe.set_mode(xshut_pin, io.OUT)
+            self._log.info("configured pin {} for sensor {} as output…".format(xshut_pin, label))
 
     def _configure_sensor_addresses(self):
         '''
@@ -108,7 +109,7 @@ class RadiozoaConfig(object):
             xshut_pin = sensor_config.get('xshut')
             i2c_address = sensor_config.get('i2c_address')
             label = sensor_config.get('label')
-            self._log.info("configuring sensor {} at XSHUT pin {}…".format(label, xshut_pin))
+            self._log.info(Style.DIM + "configuring sensor {} at XSHUT pin {}…".format(label, xshut_pin))
             self._set_xshut(xshut_pin, True)
             time.sleep(1.0) # delay for sensor startup
             found = self._i2c_scanner.has_hex_address(['0x29'], force_scan=needs_scan)

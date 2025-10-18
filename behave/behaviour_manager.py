@@ -78,11 +78,11 @@ class BehaviourManager(Subscriber):
         dynamic import: each behaviour key should correspond to a module named
         '{key}_behaviour' containing a class '{Key}Behaviour'.
         '''
-        registry = Component.get_registry()
+        _component_registry = Component.get_registry()
         for behaviour_key in self._configured_behaviour_names:
             module_name = 'behave.{}'.format(behaviour_key.lower())
             class_name = '{}'.format(behaviour_key.capitalize())
-            if registry.has(behaviour_key):
+            if _component_registry.has(behaviour_key):
                 self._log.info("behaviour '{}' already registered; skipping instantiation.".format(behaviour_key))
                 continue
             try:

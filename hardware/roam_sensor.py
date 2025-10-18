@@ -20,15 +20,15 @@ init()
 
 from core.logger import Logger, Level
 from core.component import Component
-
+from core.orientation import Orientation
 from hardware.easing import Easing
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
-from hardware.distance_sensor import DistanceSensor
+from hardware.distance_sensors import DistanceSensors
 
 class RoamSensor(Component):
     NAME = 'roam-sensor'
     '''
-    RoamSensor fuses the near-field PWM-based sensor (DistanceSensor)
+    RoamSensor fuses the forward-facing near-field PWM-based DistanceSensor
     with the VL53L5CX multi-zone ToF sensor to provide a single front-facing
     distance value optimized for obstacle avoidance and speed limiting.
 
@@ -40,10 +40,10 @@ class RoamSensor(Component):
 
     :param config:             the application configuration
     :param vl53l5cx_sensor:    optional VL53L5CX sensor instance
-    :param distance_sensor:    optional DistanceSensor instance
+    :param distance_sensors:   optional DistanceSensors instance
     :param level:              the log level
     '''
-    def __init__(self, config, vl53l5cx_sensor=None, distance_sensor=None, level=Level.INFO):
+    def __init__(self, config, vl53l5cx_sensor=None, distance_sensors=None, level=Level.INFO):
         self._log = Logger(RoamSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None or not isinstance(config, dict):
@@ -74,14 +74,23 @@ class RoamSensor(Component):
             self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
             if self._vl53l5cx is None:
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
-        # DistanceSensor
-        if distance_sensor is not None:
-            self._distance_sensor = distance_sensor
+        # DistanceSensor (FWD from DistanceSensors)
+        print('🍿 1. ')
+        self._distance_sensor = None
+        if distance_sensors is None:
+            print('🍿 2. ')
+            self._distance_sensors = _component_registry.get(DistanceSensors.NAME)
+            if self._distance_sensors is None:
+                print('🍿 3. ')
+                _distance_sensors = DistanceSensors(config, level=Level.INFO)
+            print('🍿 4. ')
+            self._distance_sensor = _distance_sensors.get(Orientation.FWD)
+            print('🍿 5. ')
+
         else:
-            self._distance_sensor = _component_registry.get(DistanceSensor.NAME)
-            if self._distance_sensor is None:
-                self._distance_sensor = DistanceSensor(config, level=Level.INFO)
-#       self._distance       = -1 # returned value
+            print('🍿 6. ')
+            self._distance_sensor = distance_sensors.get(Orientation.FWD)
+        print('🍿 7. distance sensor: {}'.format(self._distance_sensor))
         self._last_value     = None
         self._last_read_time = dt.now()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
@@ -209,15 +218,6 @@ class RoamSensor(Component):
             # value is stale or never set
             return None
 
-    def x_get_distance(self, apply_easing=True):
-        '''
-        Returns a fused, smoothed, and eased value for Roam behaviour.
-        Values above max_distance are treated as max_distance.
-        '''
-        self._distance = self._smooth(self._fuse(self._distance_sensor.get_distance(), self._get_vl53l5cx_front_distance()))
-        self._last_read_time = dt.now()
-        return self._distance if not apply_easing else self._normalise_and_ease(self._distance)
-
     def check_timeout(self):
         '''
         Returns True if the last value is stale (timeout exceeded).
@@ -242,8 +242,10 @@ class RoamSensor(Component):
         Disables both sensors.
         '''
         if self.enabled:
-            self._distance_sensor.disable()
-            self._vl53l5cx.disable()
+            if self._distance_sensor:
+                self._distance_sensor.disable()
+            if self._vl53l5cx:
+                self._vl53l5cx.disable()
             Component.disable(self)
             self._log.info('roam sensor disabled.')
         else:
@@ -255,8 +257,10 @@ class RoamSensor(Component):
         '''
         self.disable()
         if not self.closed:
-            self._distance_sensor.close()
-            self._vl53l5cx.close()
+            if self._distance_sensor:
+                self._distance_sensor.close()
+            if self._vl53l5cx:
+                self._vl53l5cx.close()
             Component.close(self)
             self._log.info('roam sensor closed.')
         else:

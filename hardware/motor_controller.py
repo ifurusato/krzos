@@ -86,28 +86,28 @@ class MotorController(Component):
         _i2c_scanner = I2CScanner(config=config, i2c_bus_number=1, i2c_bus=None, level=level)
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._verbose        = _cfg.get('verbose')
-        _create_ext_clock    = _cfg.get('create_ext_clock')
         self._loop_freq_hz   = _cfg.get('loop_freq_hz') # main loop frequency
         self._loop_delay_sec = 1 / self._loop_freq_hz
         self._accel_step     = _cfg.get('accel_step', 0.02)
         self._accel_step_delay_ms = _cfg.get('accel_step_delay_ms', 20)
         self._decel_step     = _cfg.get('decel_step', 0.02)
         self._decel_step_delay_ms = _cfg.get('decel_step_delay_ms', 20)
-        if external_clock is None:
-            self._rate = Rate(self._loop_freq_hz, Level.ERROR)
-        else:
-            self._rate = None
-        self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         self._halt_slew_rate = SlewRate.from_string(_cfg.get('halt_rate'))
         self._log.info('halt rate: {}'.format(self._halt_slew_rate.name))
         # slew limiters are on motors, not here
         self._slew_limiter_enabled = config['kros'].get('motor').get('enable_slew_limiter')
+        _create_ext_clock    = _cfg.get('create_external_clock')
         if external_clock:
             self._external_clock = external_clock
         elif _create_ext_clock:
             self._log.info('creating IRQ clock…')
             self._external_clock = IrqClock(config, level=Level.INFO)
             self._external_clock.enable()
+        if self._external_clock is None:
+            self._rate = Rate(self._loop_freq_hz, Level.ERROR)
+        else:
+            self._rate = None
+        self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._all_motors     = []
         _motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
@@ -284,7 +284,7 @@ class MotorController(Component):
             self._log.info(Style.BRIGHT + 'enabling motor controller…')
             Component.enable(self)
             if self._external_clock:
-                self._external_clock.add_callback(self.external_callback_method)
+                self._external_clock.add_callback(self._external_callback_method)
                 for _motor in self._all_motors:
                     _motor.enable()
             elif not self.loop_is_running:
@@ -340,7 +340,7 @@ class MotorController(Component):
     def _motor_tick(self):
         '''
         The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and external_callback_method(). Incorporates intent vector 
+        both _motor_loop() and _external_callback_method(). Incorporates intent vector 
         blending and full Mecanum wheel kinematic mapping and normalization.
         '''
         intent = self.blend_intent_vectors()
@@ -380,60 +380,6 @@ class MotorController(Component):
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()
 
-    def x_motor_tick(self):
-        '''
-        The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and external_callback_method(). Incorporates vector
-        blending for per-motor speed control.
-
-        Uses intent vector blending to compute a single robot movement vector,
-        then applies Mecanum mapping to convert (vx, vy[, omega]) to per-wheel speeds.
-        '''
-        # --- NEW INTENT VECTOR LOGIC ---
-        intent = self.blend_intent_vectors()
-        # Support both (vx, vy) and (vx, vy, omega) forms
-        if len(intent) == 2:
-            vx, vy = intent
-            omega = 0.0
-        elif len(intent) == 3:
-            vx, vy, omega = intent
-        else:
-            vx = vy = omega = 0.0
-
-        # Mecanum wheel kinematic mapping (no rotation by default)
-        pfwd_speed = vx + vy + omega
-        sfwd_speed = -vx + vy - omega
-        paft_speed = vx - vy - omega
-        saft_speed = -vx - vy + omega
-
-        # Clamp speeds to allowed range
-        pfwd_speed = self._clamp(pfwd_speed)
-        sfwd_speed = self._clamp(sfwd_speed)
-        paft_speed = self._clamp(paft_speed)
-        saft_speed = self._clamp(saft_speed)
-
-        self.set_motor_speed(Orientation.PFWD, pfwd_speed)
-        self.set_motor_speed(Orientation.SFWD, sfwd_speed)
-        self.set_motor_speed(Orientation.PAFT, paft_speed)
-        self.set_motor_speed(Orientation.SAFT, saft_speed)
-        # --- END NEW INTENT VECTOR LOGIC ---
-
-        # execute any callback here…
-        if self._differential_drive_mode:
-            _port_motor_power = self._pfwd_motor.update_target_speed()
-            _stbd_motor_power = self._sfwd_motor.update_target_speed()
-            self._paft_motor.set_motor_power(_port_motor_power)
-            self._saft_motor.set_motor_power(_stbd_motor_power)
-        else:
-            for _motor in self._all_motors:
-                _motor.update_target_speed()
-        if self._verbose: # print stats
-            _count = next(self._event_counter)
-            self.print_info(_count)
-        self._state_change_check()
-        if self._motor_loop_callback is not None:
-            self._motor_loop_callback()
-
     def _motor_loop(self, f_is_enabled):
         '''
         The motors loop, which executes while the flag argument lambda is True.
@@ -448,7 +394,7 @@ class MotorController(Component):
         finally:
             self._log.info(Fore.GREEN + 'exited motor control loop.')
 
-    def external_callback_method(self):
+    def _external_callback_method(self):
         '''
         The callback called by the external clock as an alternative to the
         asyncio _loop() method.
@@ -976,7 +922,7 @@ class MotorController(Component):
         if self.enabled:
             if self._external_clock:
                 self._log.info('disabling by removing external clock callback…')
-                self._external_clock.remove_callback(self.external_callback_method)
+                self._external_clock.remove_callback(self._external_callback_method)
             else:
                 self._log.info('disabling by stopping loop…')
                 self._stop_loop() 

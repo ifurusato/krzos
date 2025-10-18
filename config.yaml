@@ -85,7 +85,7 @@ kros:
             verbose:                       True            # noisy sensor output
     motor_controller:
         closed_loop:                       True            # open or closed loop control
-        create_ext_clock:                  True            # create external clock if not provided
+        create_external_clock:             True            # create external clock if not provided
         loop_freq_hz:                        20            # main loop delay in hz (only used when no ext clock)
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
@@ -173,12 +173,7 @@ kros:
             subpixel:                     False            # better accuracy for longer distance, fractional disparity 32-levels
             left_right_check:              True            # better handling for occlusions
         button:                                            # GPIO or IO Expander-based simple button or switch
-            i2c_address:                   0x18            # I²C address of the IO Expander (if used)
-            impl:                    'gpiozero'            # either 'gpio', 'lpgio', 'gpiod', 'ioe', 'gpiozero' or 'pigpio'
-            edge_detect:              'falling'            # either 'falling', 'rising' or 'both'
-            momentary:                     True            # button or toggle?
-            pin:                             24            # default GPIO or IO Expander pin used
-            led_pin:                         13            # GPIO pin for LED on wait()
+            pin:                             24            # GPIO pin used
         digital_potentiometer:                             # IO Expander-based Digital Potentiometer breakout
             i2c_address:                   0x0C            # I²C address for the device
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
@@ -189,11 +184,18 @@ kros:
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
         distance_sensor:       
-            pin:                             18            # the input pin
+            pin-fwd:                         18            # the input pin for the forward sensor
+            pin-psid:                        14            # the input pin for the port side sensor
+            pin-ssid:                        15            # the input pin for the starboard side sensor
             timeout:                          1            # time in seconds to consider sensor as timed out 
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 5            # number of samples to use for smoothing
+            use_ext_clock:                 True            # if True poll on callback from external clock if available
             loop_interval:                  0.1            # interval between distance polling, in seconds
+        distance_sensors:                                  # distance sensors (trio of distance sensors)
+            min_distance:                     1            # practical minimum distance in mm
+            max_distance:                   270            # practical maximum distance in mm
+            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
         vl53l5cx:
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
@@ -209,11 +211,10 @@ kros:
             smoothing_window:                 5            # window size for moving average
             sigmoid_d0:                     150            # sigmoid inflection point (mm)
             sigmoid_k:                       40            # sigmoid steepness
-            max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             min_distance:                   200            # minimum distance in mm of VL53L5CX
+            max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
-#           easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
             easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm

@@ -78,11 +78,10 @@ def test_extclock():
         __log.info('Ctrl-C caught; exiting…')
 
     finally:
-        # Stop event listener before processing results
+        # stop event listener before processing results
         device.when_activated = None
-
         if frequency_readings:
-            # Calculate the average frequency
+            # calculate the average frequency
             average_frequency = sum(frequency_readings) / len(frequency_readings)
             __log.info("-" * 40)
             __log.info("test complete.")
@@ -96,11 +95,13 @@ def test_extclock():
                 "the sampled average frequency of {:.2f} Hz is NOT within {:.2f}% of the target {} Hz."
                 .format(average_frequency, TOLERANCE_PERCENT, TARGET_FREQUENCY)
             )
-            __log.info("the sampled average frequency of {:.2f} Hz is within {:.2f}% of the target {} Hz.".format(
-                    average_frequency, TOLERANCE_PERCENT, TARGET_FREQUENCY))
+            difference_hz = average_frequency - TARGET_FREQUENCY
+            percent_error = (abs(difference_hz) / TARGET_FREQUENCY) * 100
+            __log.info("the sampled average frequency: {:.2f} Hz (Δ {:+.2f} Hz, {:.2f}% relative to target {:.2f} Hz)".format(
+                    average_frequency, difference_hz, percent_error, TARGET_FREQUENCY))
+            __log.info(Fore.GREEN + "external clock is functional.")
         else:
             pytest.fail("no frequency data was collected.")
-        __log.info(Fore.GREEN + "external clock is functional.")
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

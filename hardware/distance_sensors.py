@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-05-07
-# modified: 2025-10-06
-#
+# modified: 2025-10-16
 
 from colorama import init, Fore, Style
 init()
@@ -21,13 +20,15 @@ from hardware.easing import Easing
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensors(Component):
+    NAME = 'distances'
     '''
     Collects the three IR distance sensors into a class. This is a raw sensing
     class with no timing or integration into the rest of the operating system.
     It does support weighted averages of the center and port, and center and
     starboard sensors.
 
-    This version has been modified for a single center sensor.
+    This uses PSID (port side), SSID (starboard side) and FWD (forward) as the
+    three orientations for the sensors, matching the current hardware layout.
 
     :param config:            the application configuration
     :param level:             the log level
@@ -36,24 +37,24 @@ class DistanceSensors(Component):
         if not isinstance(level, Level):
             raise ValueError('wrong type for log level argument: {}'.format(type(level)))
         self._level = level
-        self._log = Logger('dists', level)
+        self._log = Logger(DistanceSensors.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         if config is None:
             raise ValueError('no configuration provided.')
-        _cfg = config['krzos'].get('hardware').get('distance_sensors')
+        _cfg = config['kros'].get('hardware').get('distance_sensors')
         self._min_distance     = _cfg.get('min_distance', 80)
-        self._default_distance = _cfg.get('max_distance', 300)
-        _easing_value          = _cfg.get('easing', 'logarithmic')
-        self._easing           = Easing.SIGMOID # Easing.from_string(_easing_value)
+        self._default_distance = _cfg.get('max_distance', 270)
+        _easing_value          = _cfg.get('easing', 'linear')
+        self._easing           = Easing.from_string(_easing_value)
         # sensors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#       self._port_sensor = DistanceSensor(config, Orientation.PORT)
-        self._cntr_sensor = DistanceSensor(config, Orientation.CNTR)
-#       self._stbd_sensor = DistanceSensor(config, Orientation.STBD)
+        self._psid_sensor = DistanceSensor(config, Orientation.PSID)
+        self._fwd_sensor  = DistanceSensor(config, Orientation.FWD)
+        self._ssid_sensor = DistanceSensor(config, Orientation.SSID)
         self._sensors = {
-#          Orientation.PORT: self._port_sensor,
-           Orientation.CNTR: self._cntr_sensor,
-#          Orientation.STBD: self._stbd_sensor
+           Orientation.PORT: self._psid_sensor,
+           Orientation.CNTR: self._fwd_sensor,
+           Orientation.STBD: self._ssid_sensor
         }
         self._log.info('ready.')
 
@@ -76,20 +77,6 @@ class DistanceSensors(Component):
         return self._sensors
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def __getattr__(self, name):
-        '''
-        Access individual sensors via attributes, e.g.,
-
-            _sensors = DistanceSensors(config)
-            _cntr_sensor = _sensors.CNTR
-        '''
-        if name in Orientation.__members__: # check if the name is a valid orientation
-            orientation = Orientation[name]
-            if hasattr(self, '_{}_sensor'.format(orientation.name.lower())):
-                return getattr(self, '_{}_sensor'.format(orientation.name.lower()))
-        raise AttributeError("'{}' object has no attribute '{}'".format(self.__class__.__name__, name))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __iter__(self):
         '''
         Iterate over the sensors, permitting this construction:
@@ -100,21 +87,21 @@ class DistanceSensors(Component):
         return iter(self._sensors.values())
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#   @property
-#   def port(self):
-#       return self._port_sensor.distance
+    @property
+    def psid(self):
+        return self._psid_sensor.distance
 
     @property
-    def cntr(self):
-        return self._cntr_sensor.distance
+    def fwd(self):
+        return self._fwd_sensor.distance
 
-#   @property
-#   def stbd(self):
-#       return self._stbd_sensor.distance
+    @property
+    def ssid(self):
+        return self._ssid_sensor.distance
 
-#   @property
-#   def all(self):
-#       return self._port_sensor.distance, self._cntr_sensor.distance, self._stbd_sensor.distance
+    @property
+    def all(self):
+        return self._psid_sensor.distance, self._fwd_sensor.distance, self._ssid_sensor.distance
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get(self, orientation: Orientation):
@@ -137,19 +124,24 @@ class DistanceSensors(Component):
     def get_weighted_averages(self):
         '''
         Read current distances or substitute default. This returns a tuple
-        containing the port and starboard values.
+        containing the port and starboard values, normalised with the center
+        value.
+
+        NOTE: This only has validity if the three sensors are all aiming
+        relatively forward, e.g., the center sensor is 0°, the port sensor is
+        at -45°, the starboard sensor 45°. This is kept in the code based for
+        use with robots that have that configuration.
         '''
-#       port = self._port_sensor.distance or self._default_distance
-        cntr = self._cntr_sensor.distance or self._default_distance
-#       stbd = self._stbd_sensor.distance or self._default_distance
+        port = self._psid_sensor.distance or self._default_distance
+        cntr = self._fwd_sensor.distance  or self._default_distance
+        stbd = self._ssid_sensor.distance or self._default_distance
         # compute pairwise averages
-#       port_avg = (port + cntr) / 2
-#       stbd_avg = (stbd + cntr) / 2
+        port_avg = (port + cntr) / 2
+        stbd_avg = (stbd + cntr) / 2
         # normalise using instance method
-#       port_norm = self.normalise_distance(port_avg)
-#       stbd_norm = self.normalise_distance(stbd_avg)
-#       return port_norm, stbd_norm
-        return cntr
+        port_norm = self.normalise_distance(port_avg)
+        stbd_norm = self.normalise_distance(stbd_avg)
+        return port_norm, stbd_norm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
