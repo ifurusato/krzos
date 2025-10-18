@@ -52,9 +52,9 @@ class DistanceSensors(Component):
         self._fwd_sensor  = DistanceSensor(config, Orientation.FWD)
         self._ssid_sensor = DistanceSensor(config, Orientation.SSID)
         self._sensors = {
-           Orientation.PORT: self._psid_sensor,
-           Orientation.CNTR: self._fwd_sensor,
-           Orientation.STBD: self._ssid_sensor
+           Orientation.PSID: self._psid_sensor,
+           Orientation.FWD:  self._fwd_sensor,
+           Orientation.SSID: self._ssid_sensor
         }
         self._log.info('ready.')
 

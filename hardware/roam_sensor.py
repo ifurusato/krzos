@@ -74,23 +74,19 @@ class RoamSensor(Component):
             self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
             if self._vl53l5cx is None:
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
-        # DistanceSensor (FWD from DistanceSensors)
-        print('🍿 1. ')
         self._distance_sensor = None
         if distance_sensors is None:
-            print('🍿 2. ')
-            self._distance_sensors = _component_registry.get(DistanceSensors.NAME)
-            if self._distance_sensors is None:
-                print('🍿 3. ')
+            _distance_sensors = _component_registry.get(DistanceSensors.NAME)
+            if _distance_sensors is None:
                 _distance_sensors = DistanceSensors(config, level=Level.INFO)
-            print('🍿 4. ')
+                _distance_sensors.enable()
             self._distance_sensor = _distance_sensors.get(Orientation.FWD)
-            print('🍿 5. ')
-
         else:
-            print('🍿 6. ')
             self._distance_sensor = distance_sensors.get(Orientation.FWD)
-        print('🍿 7. distance sensor: {}'.format(self._distance_sensor))
+        if not self._distance_sensor:
+            raise Exception('no forward distance sensor available.')
+        if not self._distance_sensor.enabled:
+            raise Exception('forward distance sensor not enabled.')
         self._last_value     = None
         self._last_read_time = dt.now()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
