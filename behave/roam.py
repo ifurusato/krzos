@@ -99,6 +99,7 @@ class Roam(Behaviour):
         self._rotation_accumulated_degrees = 0.0
         self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
         self._last_relative_offset = 0.0
+        self._front_distance = 0.0
         # component access
         _component_registry = Component.get_registry()
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
@@ -116,9 +117,9 @@ class Roam(Behaviour):
         self._compass_encoder = None
         if self._heading_mode is not HeadingMode.NONE and self._use_dynamic_heading:
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
-        # use USFS IMU if available and world coordinates flag set
+        # use IMU if world coordinates flag set, IMU is available, and heading mode is not NONE
         self._imu = None
-        if self._use_world_coordinates:
+        if self._use_world_coordinates and self._heading_mode is not HeadingMode.NONE:
             self._imu = _component_registry.get(Usfs.NAME)
         # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -266,9 +267,18 @@ class Roam(Behaviour):
 
     def _update_intent_vector(self):
         '''
-        Update the intent vector based on heading, speed, obstacle logic, and rotation alignment.
-        Delegates to rotation and linear movement handlers.
+        Update the intent vector based on heading, speed, obstacle logic, and
+        rotation alignment. Delegates to rotation and linear movement handlers.
         Dispatches heading logic based on current mode.
+
+        Robot-relative components of the vector:
+
+            vx:    lateral velocity component (robot‑relative). Positive vx produces
+                   lateral motion to starboard, negative to port.
+            vy:    longitudinal velocity component (robot‑relative). Positive vy
+                   produces forward motion, negative reverse motion.
+            omega: angular velocity (rotation) component. Positive omega produces a
+                   clockwise rotation, negative a counter-clockwise rotation.
         '''
         match self._heading_mode:
             case HeadingMode.NONE:
@@ -343,7 +353,7 @@ class Roam(Behaviour):
             self._display_info('ABSOLUTE (static)')
         if omega == 0.0:
             self._update_linear_vector()
-    
+
     def _update_intent_vector_blended(self):
         '''
         BLENDED mode: Track a world-relative heading.
@@ -457,54 +467,54 @@ class Roam(Behaviour):
     def _update_linear_vector(self):
         '''
         Handles normal movement intent vector, including obstacle scaling and deadband.
+
+        Minimal implementation: use stored heading_degrees (0.0 in NONE mode),
+        compute radians once, then vx/vy. No IMU polling here.
         '''
-        import numpy as np
-        radians = np.deg2rad(self._heading_degrees)
         amplitude = self._default_speed
         if amplitude == 0.0:
             self._intent_vector = (0.0, 0.0, 0.0)
             if self._verbose:
-                self._display_info()
+                self._display_info('update_linear_vector[1]')
             return
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
-        front_distance = self._roam_sensor.get_distance()
-        min_distance = self._min_distance
-        max_distance = self._max_distance
-        if front_distance is None or front_distance >= max_distance:
+        # obstacle scaling
+        self._front_distance = self._roam_sensor.get_distance()
+        if self._front_distance is None or self._front_distance >= self._max_distance:
             obstacle_scale = 1.0
-        elif front_distance <= min_distance:
+        elif self._front_distance <= self._min_distance:
             obstacle_scale = 0.0
         else:
-            obstacle_scale = (front_distance - min_distance) / (max_distance - min_distance)
+            obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
             obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
         amplitude *= obstacle_scale
-        if self._deadband_threshold > 0 and (amplitude < self._deadband_threshold):
+        # deadband
+        if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
             self._intent_vector = (0.0, 0.0, 0.0)
         else:
-            vx = np.sin(radians) * amplitude
-            vy = np.cos(radians) * amplitude
+            angle_rad = np.deg2rad(self._heading_degrees)
+            vx = np.sin(angle_rad) * amplitude
+            vy = np.cos(angle_rad) * amplitude
             omega = 0.0
             self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._display_info()
+            self._display_info('update_linear_vector[2]')
 
     def _display_info(self, message=''):
         if self._use_color:
             if self._intent_vector[0] + self._intent_vector[1] == 0.0:
-                self._log.info(Style.DIM + "{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}){}".format(
+                self._log.info(Style.DIM + "{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}); ".format(
                         message,
                         self.get_highlight_color(self._intent_vector[0]),
-                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2], Style.RESET_ALL
-                    )
-                )
+                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2])
+                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance))
             else:
-                self._log.info("{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}){}".format(
+                self._log.info("{} intent vector: {}({:4.2f}, {:4.2f}, {:4.2f}); ".format(
                         message,
                         self.get_highlight_color(self._intent_vector[0]),
-                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2], Style.RESET_ALL
-                    )
-                )
+                        self._intent_vector[0], self._intent_vector[1], self._intent_vector[2])
+                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance))
         else:
             self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
                     self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]
@@ -552,7 +562,7 @@ class Roam(Behaviour):
         self._task = self._loop_instance.create_task(self._loop_main())
         self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
         self._thread.start()
-        if self._use_world_coordinates and self._imu is not None:
+        if self._use_world_coordinates and self._imu is not None and self._heading_mode is not HeadingMode.NONE:
             self._log.info(Fore.YELLOW + "align to absolute coordinates…")
             current_heading = self._imu.poll() % 360.0
             logical_heading = float(self._heading_degrees) % 360.0

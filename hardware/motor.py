@@ -6,8 +6,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-18
-# modified: 2025-09-22
-#
+# modified: 2025-10-20
 
 import sys, itertools, time
 from math import isclose
@@ -306,7 +305,11 @@ class Motor(Component):
         '''
         Returns True if the motor is entirely stopped, or very nearly stopped.
         '''
-        return isclose(self.get_current_power(settle_to_zero=False), 0.0, abs_tol=1e-2)
+        _current_power = self.get_current_power(settle_to_zero=False)
+        if _current_power:
+            return isclose(_current_power, 0.0, abs_tol=1e-2)
+        else:
+            return False
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property

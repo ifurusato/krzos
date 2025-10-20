@@ -216,7 +216,7 @@ kros:
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
-            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
+            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)

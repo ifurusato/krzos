@@ -79,12 +79,15 @@ class RoamSensor(Component):
             _distance_sensors = _component_registry.get(DistanceSensors.NAME)
             if _distance_sensors is None:
                 _distance_sensors = DistanceSensors(config, level=Level.INFO)
-                _distance_sensors.enable()
             self._distance_sensor = _distance_sensors.get(Orientation.FWD)
         else:
             self._distance_sensor = distance_sensors.get(Orientation.FWD)
         if not self._distance_sensor:
             raise Exception('no forward distance sensor available.')
+        if not self._distance_sensor.enabled:
+            self._distance_sensor.enable()
+            print('enable distance sensor ................................................................... ')
+            time.sleep(1)
         if not self._distance_sensor.enabled:
             raise Exception('forward distance sensor not enabled.')
         self._last_value     = None
@@ -127,13 +130,13 @@ class RoamSensor(Component):
         if data is None:
 #           self._log.warning('VL53L5CX returned no data.')
             return None
-        # Assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
+        # assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
         try:
             grid = np.array(data).reshape((8, 8))
             center_rows = [3, 4]  # middle two rows
             center_cols = [3, 4]  # middle two cols
             values = [grid[row, col] for row in center_rows for col in center_cols]
-            # Filter out invalid readings (e.g., 0 or None)
+            # filter out invalid readings (e.g., 0 or None)
             values = [v for v in values if v is not None and v > 0]
             if not values:
                 self._log.warning('No valid VL53L5CX center values.')
@@ -198,6 +201,7 @@ class RoamSensor(Component):
         Tries to get a new value; if unavailable, returns previous value up to timeout.
         Returns None if value is stale.
         '''
+#       self._log.info(Fore.WHITE + "get_distance.")
         new_value = self._smooth(self._fuse(
             self._distance_sensor.get_distance(),
             self._get_vl53l5cx_front_distance()

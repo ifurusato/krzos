@@ -72,6 +72,7 @@ class DistanceSensor(Component):
         self._distance        = -1
         self._last_read_time  = time.time()
         GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self._pin, GPIO.IN)
         self._log.info('{} distance sensor ready on pin {}.'.format(self._orientation.label, self._pin))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -176,7 +177,6 @@ class DistanceSensor(Component):
         '''
         if not self.enabled:
             Component.enable(self)
-            GPIO.setup(self._pin, GPIO.IN)
         else:
             self._log.warning('already enabled distance sensor.')
 

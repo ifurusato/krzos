@@ -99,14 +99,19 @@ class MotorController(Component):
         _create_ext_clock    = _cfg.get('create_external_clock')
         if external_clock:
             self._external_clock = external_clock
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using existing external clock.')
         elif _create_ext_clock:
             self._log.info('creating IRQ clock…')
             self._external_clock = IrqClock(config, level=Level.INFO)
             self._external_clock.enable()
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using created external clock.')
         if self._external_clock is None:
             self._rate = Rate(self._loop_freq_hz, Level.ERROR)
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using thread loop.')
         else:
             self._rate = None
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'using external clock.')
+
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._all_motors     = []
@@ -123,15 +128,8 @@ class MotorController(Component):
         self._motor_loop_callback = None
         self._graceful_stop  = True
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        # --- Begin new intent vector registry ---
+        # intent vector registry
         self._intent_vectors = {}  # {name: lambda}
-        # --- End new intent vector registry ---
-        self._vector_functions = {
-            Orientation.PFWD: {},
-            Orientation.SFWD: {},
-            Orientation.PAFT: {},
-            Orientation.SAFT: {},
-        }
         self.__callback      = None
         self._is_stopped     = True # used to capture state transitions
         self.__state_change_callbacks = [] # anyone who wants to be informed if the robot is moving or stopped
@@ -163,8 +161,10 @@ class MotorController(Component):
     def add_intent_vector(self, name, vector_lambda):
         '''
         Register a behaviour's intent vector lambda.
-        The lambda should return (vx, vy) or (vx, vy, omega).
+        The lambda should return (vx, vy, omega).
         '''
+        if vector_lambda.__name__ != "<lambda>":
+            raise TypeError('expected lambda function, not {}'.format(type(vector_lambda)))
         self._intent_vectors[name] = vector_lambda
         self._log.info('added intent vector: {}'.format(name))
 
@@ -176,17 +176,18 @@ class MotorController(Component):
             del self._intent_vectors[name]
             self._log.info('removed intent vector: {}'.format(name))
 
-    def blend_intent_vectors(self):
+    def _blend_intent_vectors(self):
         '''
         Blends all registered intent vectors, returning a single (vx, vy[, omega]) tuple.
         '''
         vectors = [fn() for fn in self._intent_vectors.values()]
         if not vectors:
             return (0.0, 0.0)
-        dim = len(vectors[0])
-        sum_vector = [0.0] * dim
+#       dim = len(vectors[0])
+#       sum_vector = [0.0] * dim
+        sum_vector = [0.0, 0.0, 0.0]
         for v in vectors:
-            for i in range(dim):
+            for i in range(3):
                 sum_vector[i] += v[i]
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
         return avg_vector
@@ -343,7 +344,7 @@ class MotorController(Component):
         both _motor_loop() and _external_callback_method(). Incorporates intent vector 
         blending and full Mecanum wheel kinematic mapping and normalization.
         '''
-        intent = self.blend_intent_vectors()
+        intent = self._blend_intent_vectors()
         if len(intent) == 2:
             vx, vy = intent
             omega = 0.0
@@ -372,9 +373,9 @@ class MotorController(Component):
         else:
             for _motor in self._all_motors:
                 _motor.update_target_speed()
-        if self._verbose: # print stats
-            _count = next(self._event_counter)
-            self.print_info(_count)
+#       if self._verbose: # print stats
+        _count = next(self._event_counter)
+        self.print_info(_count, vx, vy, omega)
         self._state_change_check()
         # execute any callback here…
         if self._motor_loop_callback is not None:
@@ -506,7 +507,7 @@ class MotorController(Component):
         Set all four motors speeds.
         '''
         if self._verbose:
-            self._log.info(Fore.MAGENTA + '🎀 set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
+            self._log.info(Fore.MAGENTA + 'set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
         self.set_motor_speed(Orientation.PFWD, pfwd_speed)
         self.set_motor_speed(Orientation.SFWD, sfwd_speed)
         self.set_motor_speed(Orientation.PAFT, paft_speed)
@@ -514,7 +515,7 @@ class MotorController(Component):
 
     def set_differential_speeds(self, port_speed, stbd_speed):
         if self._verbose:
-            self._log.info(Fore.MAGENTA + '🎀 set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
+            self._log.info(Fore.MAGENTA + 'set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
         self.set_speeds(port_speed, stbd_speed, port_speed, stbd_speed)
 
     def get_differential_speeds(self):
@@ -533,7 +534,7 @@ class MotorController(Component):
         '''
         _speed = self._clamp(value)
         if self._verbose:
-            self._log.info(Fore.MAGENTA + '🎀 set {} speed: {:4.2f} clamped to {:4.2f}'.format(orientation.name, value, _speed))
+            self._log.info(Fore.MAGENTA + 'set {} speed: {:4.2f} clamped to {:4.2f}'.format(orientation.name, value, _speed))
         if orientation is Orientation.ALL:
             self._port_speed = _speed
             self.set_motor_speed(Orientation.PFWD, _speed)
@@ -582,7 +583,7 @@ class MotorController(Component):
         if not isinstance(target_speed, float):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
         if self._verbose:
-            self._log.info(Fore.MAGENTA + '🎀 set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
+            self._log.info(Fore.MAGENTA + 'set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
         if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
             self._pfwd_motor.target_speed = target_speed
         elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
@@ -606,71 +607,6 @@ class MotorController(Component):
             self._paft_motor.add_speed_multiplier(lambda_name, lambda_function, exclusive)
         elif orientation is Orientation.SAFT:
             self._saft_motor.add_speed_multiplier(lambda_name, lambda_function, exclusive)
-
-    def add_vector(self, orientation, vector_name, vector_function, exclusive=True):
-        '''
-        Adds a named vector function to the specified motor, replacing any others if
-        exclusive. Behaviours should use this method to register their movement vector
-        functions for blending.
-
-        Only functions that return a tuple or list (i.e., representing a vector such
-        as (x, y)) are permitted. This is enforced at registration time.
-
-        :param orientation:     the motor orientation (PFWD, SFWD, PAFT, SAFT)
-        :param vector_name:     name for the vector function (for update/removal)
-        :param vector_function: function returning the desired vector (tuple/list) for this motor
-        :param exclusive:       if True, clears other vector functions for this motor before adding
-        :raises TypeError:      if vector_function does not return a tuple or list
-        '''
-        result = vector_function()
-        if not isinstance(result, (tuple, list)):
-            raise TypeError("add_vector: vector_function must return a tuple or list representing a vector, not '{}'.".format(type(result)))
-        if orientation not in self._vector_functions:
-            raise Exception('unsupported orientation in add_vector: {}'.format(orientation))
-        if exclusive:
-            self._vector_functions[orientation].clear()
-        self._vector_functions[orientation][vector_name] = vector_function
-        self._log.info('added vector {} to {} motor{}'.format(
-            vector_name, orientation.name,
-            ' (exclusive)' if exclusive else ''
-        ))
-
-    def remove_vector(self, orientation, vector_name):
-        '''
-        Removes the named vector function from the specified motor.
-        '''
-        if orientation in self._vector_functions and vector_name in self._vector_functions[orientation]:
-            del self._vector_functions[orientation][vector_name]
-            self._log.info('removed vector {} from {} motor'.format(vector_name, orientation.name))
-
-    def blend_vectors(self, orientation):
-        '''
-        Blends all registered vector functions for the specified motor orientation.
-
-        Each registered function must return a tuple or list (vector-style). The blend is
-        computed as the average of all vectors returned by the functions. If no functions
-        are registered, returns (0.0, 0.0).
-
-        :param orientation: the motor orientation (PFWD, SFWD, PAFT, SAFT)
-        :return:            the blended vector as a tuple
-        :raises TypeError:  if any registered function does not return a tuple or list
-        '''
-        if orientation not in self._vector_functions:
-            raise Exception('unsupported orientation in blend_vectors: {}'.format(orientation))
-        vector_funcs = self._vector_functions[orientation].values()
-        if not vector_funcs:
-            return (0.0, 0.0)
-        speeds = [func() for func in vector_funcs]
-        if not all(isinstance(s, (tuple, list)) for s in speeds):
-            raise TypeError("blend_vectors: all vector functions must return tuple or list (vector-style).")
-        n = len(speeds)
-        dim = len(speeds[0])
-        sums = [0.0] * dim
-        for v in speeds:
-            for i in range(dim):
-                sums[i] += v[i]
-        avgs = tuple(s / n for s in sums)
-        return avgs
 
     def rotate(self, rotation):
         '''
@@ -941,11 +877,31 @@ class MotorController(Component):
         else:
             self._log.warning('motor controller already closed.')
 
-    def print_info(self, count):
+    def print_info(self, count, vx, vy, omega):
+        return
+        self._simple = True
         if self.is_stopped:
             if not self._print_info_done:
                 self._log.info(('[{:04d}] '.format(count) if count else '') + 'speed: stopped.')
             self._print_info_done = True
+        elif self._simple:
+            self._print_info_done = False
+            if vx > 0.0 or omega > 0.0:
+                _color = Fore.WHITE + Style.BRIGHT
+            else:
+                _color = Fore.WHITE 
+            self._log.info(('[{:04d}] '.format(count) if count else '')
+                    + 'sp: '
+                    + Fore.RED   + 'pfwd: {:<4.2f}'.format(self._pfwd_motor.target_speed)
+                    + Fore.CYAN  + ' :: '
+                    + Fore.GREEN + 'sfwd: {:<4.2f}'.format(self._sfwd_motor.target_speed)
+                    + Fore.CYAN  + ' :: '
+                    + Fore.RED   + 'paft: {:<4.2f}'.format(self._paft_motor.target_speed)
+                    + Fore.CYAN  + ' :: '
+                    + Fore.GREEN + 'saft: {:<4.2f}'.format(self._saft_motor.target_speed)
+                    + Fore.CYAN  + ' :: '
+                    + _color + '({:<4.2f}, {:4.2f}, {:4.2f})'.format(vx, vy, omega)
+                )
         else:
             self._print_info_done = False
             self._log.info(('[{:04d}] '.format(count) if count else '')
@@ -955,10 +911,11 @@ class MotorController(Component):
                     + Fore.CYAN  + ' :: '
                     + Fore.GREEN + 'sfwd: {:<4.2f} / {:<4.2f}'.format(
                             self._sfwd_motor.target_speed, self._sfwd_motor.modified_speed)
-                    + ' :: '
+                    + Fore.CYAN  + ' :: '
                     + Fore.RED   + 'paft: {:<4.2f} / {:<4.2f}'.format(
                             self._paft_motor.target_speed, self._paft_motor.modified_speed)
                     + Fore.CYAN  + ' :: '
                     + Fore.GREEN + 'saft: {:<4.2f} / {:<4.2f}'.format(
                             self._saft_motor.target_speed, self._saft_motor.modified_speed))
+
 #EOF
