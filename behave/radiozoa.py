@@ -42,7 +42,7 @@ class Radiozoa(Behaviour):
         self._verbose   = False
         self._use_color = True
         # intent vector for MotorController
-        self._intent_vector = (0.0, 0.0)
+        self._intent_vector = (0.0, 0.0, 0.0)
         # directional vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
@@ -162,7 +162,7 @@ class Radiozoa(Behaviour):
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
                 # stop when sensors are unavailable or out of range.
-                self._intent_vector = (0.0, 0.0)
+                self._intent_vector = (0.0, 0.0, 0.0)
             else:
                 self._update_intent_vector(distances)
         except Exception as e:
@@ -241,13 +241,13 @@ class Radiozoa(Behaviour):
 
         # if no pair contributed, robot is centered or in open space
         if not pair_active or np.linalg.norm(force_vec) < 1.0:
-            self._intent_vector = (0.0, 0.0)
+            self._intent_vector = (0.0, 0.0, 0.0)
             return
         # normalize, scale by potentiometer value
         max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
         vx, vy = force_vec / max_abs
         amplitude = self._default_speed
-        self._intent_vector = (vx * amplitude, vy * amplitude)
+        self._intent_vector = (vx * amplitude, vy * amplitude, 0.0)
         if self._verbose:
             self._display_info()
 

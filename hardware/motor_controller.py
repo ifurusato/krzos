@@ -182,11 +182,13 @@ class MotorController(Component):
         '''
         vectors = [fn() for fn in self._intent_vectors.values()]
         if not vectors:
-            return (0.0, 0.0)
+            return (0.0, 0.0, 0.0)
 #       dim = len(vectors[0])
 #       sum_vector = [0.0] * dim
         sum_vector = [0.0, 0.0, 0.0]
         for v in vectors:
+            if len(v) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
             for i in range(3):
                 sum_vector[i] += v[i]
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
@@ -345,13 +347,9 @@ class MotorController(Component):
         blending and full Mecanum wheel kinematic mapping and normalization.
         '''
         intent = self._blend_intent_vectors()
-        if len(intent) == 2:
-            vx, vy = intent
-            omega = 0.0
-        elif len(intent) == 3:
-            vx, vy, omega = intent
-        else:
-            vx = vy = omega = 0.0
+        if len(intent) != 3:
+            raise ValueError('expected 3 values, not {}.'.format(len(intent)))
+        vx, vy, omega = intent
         # Mecanum equations
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
@@ -776,9 +774,9 @@ class MotorController(Component):
         This is a lambda function that will slow the motors to zero speed
         very quickly. This additionally directly calls stop() on all motors.
         '''
-        print('_stopping_function')
         _stop_ratio = 0.25
         target_speed = target_speed * _stop_ratio
+        print(Fore.BLACK + 'stopping function; target speed: {:4.2f}'.format(target_speed) + Style.RESET_ALL)
         if self.all_motors_are_stopped:
             self._log.info('full stop now…')
             for _motor in self._all_motors:
@@ -878,30 +876,30 @@ class MotorController(Component):
             self._log.warning('motor controller already closed.')
 
     def print_info(self, count, vx, vy, omega):
-        return
         self._simple = True
         if self.is_stopped:
             if not self._print_info_done:
                 self._log.info(('[{:04d}] '.format(count) if count else '') + 'speed: stopped.')
             self._print_info_done = True
         elif self._simple:
-            self._print_info_done = False
-            if vx > 0.0 or omega > 0.0:
-                _color = Fore.WHITE + Style.BRIGHT
-            else:
-                _color = Fore.WHITE 
-            self._log.info(('[{:04d}] '.format(count) if count else '')
-                    + 'sp: '
-                    + Fore.RED   + 'pfwd: {:<4.2f}'.format(self._pfwd_motor.target_speed)
-                    + Fore.CYAN  + ' :: '
-                    + Fore.GREEN + 'sfwd: {:<4.2f}'.format(self._sfwd_motor.target_speed)
-                    + Fore.CYAN  + ' :: '
-                    + Fore.RED   + 'paft: {:<4.2f}'.format(self._paft_motor.target_speed)
-                    + Fore.CYAN  + ' :: '
-                    + Fore.GREEN + 'saft: {:<4.2f}'.format(self._saft_motor.target_speed)
-                    + Fore.CYAN  + ' :: '
-                    + _color + '({:<4.2f}, {:4.2f}, {:4.2f})'.format(vx, vy, omega)
-                )
+            if count % 10 == 0:
+                self._print_info_done = False
+                if vx > 0.0 or omega > 0.0:
+                    _color = Fore.WHITE + Style.BRIGHT
+                else:
+                    _color = Fore.WHITE 
+                self._log.info(('[{:04d}] '.format(count) if count else '')
+                        + 'sp: '
+                        + Fore.RED   + 'pfwd: {:<4.2f}'.format(self._pfwd_motor.target_speed)
+                        + Fore.CYAN  + ' :: '
+                        + Fore.GREEN + 'sfwd: {:<4.2f}'.format(self._sfwd_motor.target_speed)
+                        + Fore.CYAN  + ' :: '
+                        + Fore.RED   + 'paft: {:<4.2f}'.format(self._paft_motor.target_speed)
+                        + Fore.CYAN  + ' :: '
+                        + Fore.GREEN + 'saft: {:<4.2f}'.format(self._saft_motor.target_speed)
+                        + Fore.CYAN  + ' :: '
+                        + _color + '({:<4.2f}, {:4.2f}, {:4.2f})'.format(vx, vy, omega)
+                    )
         else:
             self._print_info_done = False
             self._log.info(('[{:04d}] '.format(count) if count else '')

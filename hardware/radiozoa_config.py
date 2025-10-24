@@ -164,38 +164,4 @@ class RadiozoaConfig(object):
         self._i2c_bus.write_byte_data(current_addr, reg, new_addr)
         time.sleep(0.01)
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-def main():
-
-    from core.orientation import Orientation
-    from core.logger import Logger, Level
-    from core.config_loader import ConfigLoader
-#   from hardware.radiozoa_config import RadiozoaConfig
-
-    _log = Logger('radiozoa-config', Level.INFO)
-    _radiozoa_config = None
-
-    config_file = 'radiozoa_conf.yaml'
-
-    try:
-        _log.info('loading configuration…')
-        _loader = ConfigLoader()
-        _config = _loader.configure(config_file)
-        _log.info('starting sensor address configuration...')
-        _radiozoa_config = RadiozoaConfig(_config, level=Level.INFO)
-        _radiozoa_config.configure()
-        _log.info(Fore.WHITE + 'waiting 60 seconds…')
-    except KeyboardInterrupt:
-        _log.info('Ctrl-C caught; exiting…')
-    except Exception as e:
-        _log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-    finally:
-        if _radiozoa_config:
-            _radiozoa_config.close()
-
-    _log.info('complete.')
-
-if __name__ == '__main__':
-    main()
-
 #EOF

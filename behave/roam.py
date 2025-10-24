@@ -59,22 +59,20 @@ class Roam(Behaviour):
     driving. Rotational alignment is performed when heading changes,
     using Mecanum wheel kinematics and encoder counts.
 
-    ===============================
     DYNAMIC HEADING CONTROL REQUIREMENTS
-    ===============================
     - The heading target (in RELATIVE or BLENDED mode) can change at any time and will.
-    - The robot MUST always respond immediately and smoothly to the updated target value, without waiting for any state or rotation to "complete".
-    - There MUST be no base heading, snapshot, or lock after rotation—just constant servoing to the current heading target.
+    - The robot must always respond immediately and smoothly to the updated target value, without waiting for any state or rotation to "complete".
+    - There must be no base heading, snapshot, or lock after rotation, just constant servoing to the current heading target.
     - The intent vector update methods must poll the heading source (knob, behaviour, etc.) every control loop, and command rotation proportional to the instantaneous error.
-    - If the target changes, robot rotation must adapt instantly—no caching, no wait, no state.
+    - If the target changes, robot rotation must adapt instantly,no caching, no wait, no state.
     '''
-
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
         Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('roam')
-        self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
+        _poll_delay_ms = _cfg.get('poll_delay_ms', 50)
+        self._poll_delay_sec = _poll_delay_ms / 1000.0
         self._counter  = itertools.count()
         self._verbose  = True #_cfg.get('verbose', False)
         self._use_color = True
@@ -87,7 +85,6 @@ class Roam(Behaviour):
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance          = _rs_cfg.get('min_distance')
         self._max_distance          = _rs_cfg.get('max_distance')
-        self._polling_rate_hz       = _rs_cfg.get('polling_rate_hz', None)
         self._heading_degrees = 0.0
         self._intent_vector   = (0.0, 0.0, 0.0)
         self._target_heading_degrees = None
@@ -137,13 +134,7 @@ class Roam(Behaviour):
         self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
         self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._register_intent_vector()
-        self._poll_delay_sec = self._get_poll_delay_sec()
         self._log.info('ready.')
-
-    def _get_poll_delay_sec(self):
-        if self._polling_rate_hz:
-            return 1.0 / self._polling_rate_hz
-        return self._loop_delay_ms / 1000.0
 
     def _register_intent_vector(self):
         self._motor_controller.add_intent_vector("roam", lambda: self._intent_vector)
@@ -360,7 +351,7 @@ class Roam(Behaviour):
         The desired heading is always sourced from the compass encoder, representing the world direction.
         The robot rotates to minimize the error between its IMU heading and this world direction.
         The robot will not rotate or move if dynamic speed is 0.0.
-        No base heading, no state, no lock—always dynamic.
+        No base heading, no state, no lock, always dynamic.
         '''
         if self._imu is None:
             self._update_intent_vector_relative()

@@ -80,13 +80,18 @@ class BehaviourManager(Subscriber):
         '''
         _component_registry = Component.get_registry()
         for behaviour_key in self._configured_behaviour_names:
-            module_name = 'behave.{}'.format(behaviour_key.lower())
-            class_name = '{}'.format(behaviour_key.capitalize())
+            enable = self._config['kros']['behaviour'][behaviour_key.lower()]['enable']
+            if not enable:
+                self._log.info('skipping disabled behaviour: {}'.format(behaviour_key))
+                continue
             if _component_registry.has(behaviour_key):
                 self._log.info("behaviour '{}' already registered; skipping instantiation.".format(behaviour_key))
                 continue
             try:
+                self._log.info('instantiating behaviour {}…'.format(behaviour_key))
+                module_name = 'behave.{}'.format(behaviour_key.lower())
                 module = importlib.import_module(module_name)
+                class_name = '{}'.format(behaviour_key.capitalize())
                 behaviour_class = None
                 for name, obj in inspect.getmembers(module, inspect.isclass):
                     if name == class_name:
@@ -101,7 +106,7 @@ class BehaviourManager(Subscriber):
                     self._message_factory,
                     self._level
                 )
-                self._log.info("instantiated behaviour '{}' as '{}'".format(behaviour_key, _behaviour.name))
+                self._log.info("instantiated behaviour '{}' as '{}'.".format(behaviour_key, _behaviour.name))
             except ImportError as e:
                 self._log.warning("Could not import module '{}' for behaviour '{}': {}".format(module_name, behaviour_key, e))
             except Exception as e:
