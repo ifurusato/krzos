@@ -6,10 +6,10 @@
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
-# created:  2025-10-07
-# modified:  2025-10-07
+# created:  2025-10-25
+# modified: 2025-10-25
 #
-# Provides fused distance readings for Roam behaviour, blending PWM and VL53L5CX sensor values.
+# Provides fused distance readings for sensing directly sideways.
 
 import time
 from datetime import datetime as dt
@@ -19,77 +19,86 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
+from core.cardinal import Cardinal
 from core.component import Component
 from core.orientation import Orientation
-from hardware.easing import Easing
-from hardware.vl53l5cx_sensor import Vl53l5cxSensor
+from hardware.radiozoa_sensor import RadiozoaSensor
 from hardware.distance_sensors import DistanceSensors
 
-class RoamSensor(Component):
-    NAME = 'roam-sensor'
+class SideSensor(Component):
     '''
-    RoamSensor fuses the forward-facing near-field PWM-based DistanceSensor
-    with the VL53L5CX multi-zone ToF sensor to provide a single front-facing
-    distance value optimized for obstacle avoidance and speed limiting.
+    SideSensor fuses the side-facing near-field PWM-based DistanceSensors
+    with one of the VL53L0X ToF sensors from Radiozoa to provide a single
+    side-facing distance value optimized for obstacle avoidance.
 
     The fusion optionally uses a sigmoid weighting: the PWM sensor is
-    prioritized for close range (0–max_range), VL53L5CX for mid-to-far range.
-    Smoothing is optionally applied to stabilize the output.
+    prioritized for close range (0–max_range), VL53L0X for mid-to-far
+    range. Smoothing is optionally applied to stabilize the output.
 
-    If either sensor is not provided, RoamSensor will instantiate its own.
+    The RadiozoaSensor and DistanceSensor can already exist in the Component
+    Registry or be passed as arguments.
 
     :param config:             the application configuration
-    :param vl53l5cx_sensor:    optional VL53L5CX sensor instance
+    :param radiozoa_sensor:    optional radiozoa sensor instance
     :param distance_sensors:   optional DistanceSensors instance
     :param level:              the log level
     '''
-    def __init__(self, config, vl53l5cx_sensor=None, distance_sensors=None, level=Level.INFO):
-        self._log = Logger(RoamSensor.NAME, level)
+    def __init__(self, config, orientation=None, radiozoa_sensor=None, distance_sensors=None, level=Level.INFO):
+        if not orientation:
+            raise ValueError('missing required orientation argument.')
+        self._orientation = orientation
+        self._name = '{}-side-sensor'.format(orientation.name)
+        self._log = Logger(self._name, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None or not isinstance(config, dict):
             raise ValueError('invalid configuration argument.')
-        _cfg = config['kros'].get('hardware').get('roam_sensor')
+        _cfg = config['kros'].get('hardware').get('side_sensor')
         if _cfg is None:
-            raise ValueError('missing kros.hardware.roam_sensor config section.')
-        # sigmoid fusion parameters
-        self._sigmoid_d0     = _cfg.get('sigmoid_d0', 150)  # inflection point (mm)
-        self._sigmoid_k      = _cfg.get('sigmoid_k', 40)    # steepness
+            raise ValueError('missing kros.hardware.side_sensor config section.')
         self._smoothing      = _cfg.get('smoothing', True)
         _smoothing_window    = _cfg.get('smoothing_window', 5)
         self._window         = deque(maxlen=_smoothing_window) if self._smoothing else None
         self._min_distance   = _cfg.get('min_distance')   # mm
         self._max_distance   = _cfg.get('max_distance')   # mm, the "no obstacle" threshold
         self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
-        self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
-        _easing_value        = _cfg.get('easing', 'logarithmic')
-        self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
-        self._easing         = Easing.from_string(_easing_value)
-        self._log.info('easing function: {}'.format(self._easing.name))
+        self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 100) # 100ms default
+        # we use roam's config for fusion
+        _roam_cfg = config['kros'].get('hardware').get('roam_sensor')
+        if _roam_cfg is None:
+            raise ValueError('missing kros.hardware.roam_sensor config section.')
+        # sigmoid fusion parameters
+        self._sigmoid_d0     = _roam_cfg.get('sigmoid_d0', 150)  # inflection point (mm)
+        self._sigmoid_k      = _roam_cfg.get('sigmoid_k', 40)    # steepness
+        self._use_sigmoid    = _roam_cfg.get('use_sigmoid_fusion')
         # sensor instantiation
         _component_registry = Component.get_registry()
-        # Vl53l5cxSensor class
-        if vl53l5cx_sensor is not None:
-            self._vl53l5cx = vl53l5cx_sensor
+        # Vl53l0x sensors, obtained from Radiozoa ┈┈┈┈┈┈┈┈┈┈
+        self._proximity_sensor = None
+        if radiozoa_sensor is None:
+            radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
+        if radiozoa_sensor is not None:
+            if orientation is Orientation.PORT:
+                self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.WEST)
+            elif orientation is Orientation.STBD:
+                self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.EAST)
+            else:
+                raise ValueError('required EAST or WEST orientation, not {}'.format(orientation.name))
         else:
-            self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
-            if self._vl53l5cx is None:
-                self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
+            raise ValueError('radiozoa sensor not available.')
+        # get distance sensor for orientation ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._distance_sensor = None
         if distance_sensors is None:
-            _distance_sensors = _component_registry.get(DistanceSensors.NAME)
-            if _distance_sensors is None:
-                _distance_sensors = DistanceSensors(config, level=Level.INFO)
-            self._distance_sensor = _distance_sensors.get(Orientation.FWD)
+            distance_sensors = _component_registry.get(DistanceSensors.NAME)
+        if distance_sensors is not None:
+            self._distance_sensor = distance_sensors.get_sensor(orientation)
         else:
-            self._distance_sensor = distance_sensors.get(Orientation.FWD)
+            raise Exception('no distance sensors available.')
         if not self._distance_sensor:
-            raise Exception('no forward distance sensor available.')
-        if not self._distance_sensor.enabled:
+            raise Exception('no {} distance sensor available.'.format(orientation.name))
+        elif not self._distance_sensor.enabled:
             self._distance_sensor.enable()
-            print('enable distance sensor ................................................................... ')
-            time.sleep(1)
-        if not self._distance_sensor.enabled:
-            raise Exception('forward distance sensor not enabled.')
+            time.sleep(0.5)
+
         self._last_value     = None
         self._last_read_time = dt.now()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
@@ -97,7 +106,7 @@ class RoamSensor(Component):
 
     @property
     def name(self):
-        return RoamSensor.NAME
+        return self._name
 
     @property
     def min_distance(self):
@@ -118,38 +127,9 @@ class RoamSensor(Component):
         w = 1.0 / (1.0 + np.exp((d - self._sigmoid_d0) / self._sigmoid_k))
         return w
 
-    def _get_vl53l5cx_front_distance(self):
-        '''
-        Returns the median distance from the central 4 pixels of the VL53L5CX grid.
-        Now reads the latest value from the queue (via Vl53l5cxSensor.get_distance_mm()).
-        '''
-        if not self._vl53l5cx.enabled:
-            self._log.warning('VL53L5CX not enabled.')
-            return None
-        data = self._vl53l5cx.get_distance_mm()  # now non-blocking
-        if data is None:
-#           self._log.warning('VL53L5CX returned no data.')
-            return None
-        # assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
-        try:
-            grid = np.array(data).reshape((8, 8))
-            center_rows = [3, 4]  # middle two rows
-            center_cols = [3, 4]  # middle two cols
-            values = [grid[row, col] for row in center_rows for col in center_cols]
-            # filter out invalid readings (e.g., 0 or None)
-            values = [v for v in values if v is not None and v > 0]
-            if not values:
-                self._log.warning('No valid VL53L5CX center values.')
-                return None
-            median = float(np.median(values))
-            return median
-        except Exception as e:
-            self._log.error('Error extracting VL53L5CX center values: {}'.format(e))
-            return None
-
     def _fuse(self, pwm_value, vl53_value):
         '''
-        Fuses PWM and VL53L5CX sensor values according to fusion strategy.
+        Fuses PWM and VL53L0X sensor values according to fusion strategy.
         Returns fused value (mm) or None.
         '''
         if pwm_value is None and vl53_value is None:
@@ -174,37 +154,20 @@ class RoamSensor(Component):
         if value is None:
             return None
         if not self._smoothing:
-#           self._log.info(Fore.WHITE + 'unsmoothed: {:.2f}'.format(value))
             return value
         self._window.append(value)
         smoothed = np.mean(self._window)
-#       self._log.info(Fore.WHITE + 'smoothed: {:.2f}'.format(smoothed))
         return smoothed
 
-    def _normalise_and_ease(self, value):
+    def get_distance(self):
         '''
-        Clamps, normalises, eases, and rescales the value.
-        Returns eased value (mm) or None.
+        Returns a fused and smoothed value. Tries to get a new value; if
+        unavailable, returns previous value up to timeout, returning None
+        if the value is stale.
         '''
-        if value is None:
-            return None
-        clamped = min(value, self._max_distance)
-        normalised = clamped / self._max_distance
-        eased = self._easing.apply(normalised)
-        eased_mm = eased * self._max_distance
-#       self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
-        return eased_mm
-
-    def get_distance(self, apply_easing=True):
-        '''
-        Returns a fused, smoothed, and eased value for Roam behaviour.
-        Tries to get a new value; if unavailable, returns previous value up to timeout.
-        Returns None if value is stale.
-        '''
-#       self._log.info(Fore.WHITE + "get_distance.")
         new_value = self._smooth(self._fuse(
             self._distance_sensor.get_distance(),
-            self._get_vl53l5cx_front_distance()
+            self._proximity_sensor.get_distance()
         ))
         now = dt.now()
         if new_value is not None:
@@ -212,8 +175,7 @@ class RoamSensor(Component):
             self._last_read_time = now
         elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
         if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
-            # return the last value (eased if requested)
-            return self._last_value if not apply_easing else self._normalise_and_ease(self._last_value)
+            return self._last_value
         else:
             # value is stale or never set
             return None
@@ -231,7 +193,10 @@ class RoamSensor(Component):
         '''
         if not self.enabled:
             self._distance_sensor.enable()
-            self._vl53l5cx.enable()
+            if not self._proximity_sensor.enabled:
+                self._proximity_sensor.enable()
+            if not self._proximity_sensor.is_ranging():
+                self._proximity_sensor.start_ranging()
             Component.enable(self)
             self._log.info('roam sensor enabled.')
         else:
@@ -244,8 +209,8 @@ class RoamSensor(Component):
         if self.enabled:
             if self._distance_sensor:
                 self._distance_sensor.disable()
-            if self._vl53l5cx:
-                self._vl53l5cx.disable()
+            if self._proximity_sensor:
+                self._proximity_sensor.disable()
             Component.disable(self)
             self._log.info('roam sensor disabled.')
         else:
@@ -259,8 +224,8 @@ class RoamSensor(Component):
         if not self.closed:
             if self._distance_sensor:
                 self._distance_sensor.close()
-            if self._vl53l5cx:
-                self._vl53l5cx.close()
+            if self._proximity_sensor:
+                self._proximity_sensor.close()
             Component.close(self)
             self._log.info('roam sensor closed.')
         else:

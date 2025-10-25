@@ -20,14 +20,14 @@ from hardware.easing import Easing
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensors(Component):
-    NAME = 'distances'
+    NAME = 'distance-sensors'
     '''
     Collects the three IR distance sensors into a class. This is a raw sensing
     class with no timing or integration into the rest of the operating system.
     It does support weighted averages of the center and port, and center and
     starboard sensors.
 
-    This uses PSID (port side), SSID (starboard side) and FWD (forward) as the
+    This uses PORT (port side), STBD (starboard side) and FWD (forward) as the
     three orientations for the sensors, matching the current hardware layout.
 
     :param config:            the application configuration
@@ -48,13 +48,13 @@ class DistanceSensors(Component):
         _easing_value          = _cfg.get('easing', 'linear')
         self._easing           = Easing.from_string(_easing_value)
         # sensors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._psid_sensor = DistanceSensor(config, Orientation.PSID)
+        self._port_sensor = DistanceSensor(config, Orientation.PORT)
         self._fwd_sensor  = DistanceSensor(config, Orientation.FWD)
-        self._ssid_sensor = DistanceSensor(config, Orientation.SSID)
+        self._stbd_sensor = DistanceSensor(config, Orientation.STBD)
         self._sensors = {
-           Orientation.PSID: self._psid_sensor,
+           Orientation.PORT: self._port_sensor,
            Orientation.FWD:  self._fwd_sensor,
-           Orientation.SSID: self._ssid_sensor
+           Orientation.STBD: self._stbd_sensor
         }
         self._log.info('ready.')
 
@@ -87,24 +87,42 @@ class DistanceSensors(Component):
         return iter(self._sensors.values())
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def psid(self):
-        return self._psid_sensor.distance
 
-    @property
-    def fwd(self):
-        return self._fwd_sensor.distance
+    def get_distance(self, orientation):
+        '''
+        Return the distance for the PORT, FWD, or STBD sensor, or a tuple of
+        all three with ALL.
+        '''
+        match orientation:
+            case Orientation.PORT:
+                return self._port_sensor.distance
+            case Orientation.FWD:
+                return self._fwd_sensor.distance
+            case Orientation.STBD:
+                return self._stbd_sensor.distance
+            case Orientation.ALL:
+                return self._port_sensor.distance, self._fwd_sensor.distance, self._stbd_sensor.distance
+            case _:
+                raise ValueError('unsupported orientation: {}'.format(orientation.name))
 
-    @property
-    def ssid(self):
-        return self._ssid_sensor.distance
+#   @property
+#   def port_distance(self):
+#       return self._port_sensor.distance
 
-    @property
-    def all(self):
-        return self._psid_sensor.distance, self._fwd_sensor.distance, self._ssid_sensor.distance
+#   @property
+#   def fwd_distance(self):
+#       return self._fwd_sensor.distance
+
+#   @property
+#   def stbd_distance(self):
+#       return self._stbd_sensor.distance
+
+#   @property
+#   def all(self):
+#       return self._port_sensor.distance, self._fwd_sensor.distance, self._stbd_sensor.distance
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def get(self, orientation: Orientation):
+    def get_sensor(self, orientation: Orientation):
         '''
         Get method to retrieve the sensor by Orientation.
         '''
@@ -132,9 +150,9 @@ class DistanceSensors(Component):
         at -45°, the starboard sensor 45°. This is kept in the code based for
         use with robots that have that configuration.
         '''
-        port = self._psid_sensor.distance or self._default_distance
+        port = self._port_sensor.distance or self._default_distance
         cntr = self._fwd_sensor.distance  or self._default_distance
-        stbd = self._ssid_sensor.distance or self._default_distance
+        stbd = self._stbd_sensor.distance or self._default_distance
         # compute pairwise averages
         port_avg = (port + cntr) / 2
         stbd_avg = (stbd + cntr) / 2

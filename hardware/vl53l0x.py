@@ -170,9 +170,14 @@ class VL53L0X:
         else:
             raise OSError('Could not find vl53l0x_python' + suffix)
 
+    def is_open(self):
+        return self._dev is not None
+
     def open(self):
         self._log.debug('open sensor at 0x{:02X}'.format(self._i2c_address))
-        if self._tof_library:
+        if self._dev:
+            raise Exception('ToF already open.')
+        elif self._tof_library:
             self._configure_i2c_library_functions()
             self._dev = self._tof_library.initialise(self._i2c_address, self._tca9548a_num, self._tca9548a_addr)
             self._log.debug("device pointer after initialise for '{}' at 0x{:02X}: {}".format(self._label, self._i2c_address, self._dev))

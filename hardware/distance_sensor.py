@@ -42,10 +42,10 @@ class DistanceSensor(Component):
         match orientation:
             case Orientation.FWD: # forward
                 self._pin = _cfg.get('pin-fwd') # pin connected to the forward sensor
-            case Orientation.PSID: # port side
-                self._pin = _cfg.get('pin-psid') # pin connected to the port side sensor
-            case Orientation.SSID: # starboard side
-                self._pin = _cfg.get('pin-ssid') # pin connected to the starboard side sensor
+            case Orientation.PORT: # port side
+                self._pin = _cfg.get('pin-port') # pin connected to the port side sensor
+            case Orientation.STBD: # starboard side
+                self._pin = _cfg.get('pin-stbd') # pin connected to the starboard side sensor
             case _:
                 raise ValueError('unsupported orientation: {}'.format(orientation.label))
         self._orientation     = orientation

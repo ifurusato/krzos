@@ -179,8 +179,8 @@ kros:
             lux_threshold:                200.0            # threshold of light/dark
         distance_sensor:       
             pin-fwd:                         18            # the input pin for the forward sensor
-            pin-psid:                        14            # the input pin for the port side sensor
-            pin-ssid:                        15            # the input pin for the starboard side sensor
+            pin-port:                        14            # the input pin for the port side sensor
+            pin-stbd:                        15            # the input pin for the starboard side sensor
             timeout:                          1            # time in seconds to consider sensor as timed out 
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 5            # number of samples to use for smoothing
@@ -200,6 +200,13 @@ kros:
             floor_margin:                    50            # in millimeters
             minimum_free_distance:          500            # minimum required free space, in millimeters
             poll_interval:                    0.05         # how often to poll VL53L5CX
+        side_sensor:
+            smoothing:                     True            # enable smoothing of fused distance
+            smoothing_window:                 5            # window size for moving average
+            min_distance:                   200            # minimum distance in mm of VL53L0X
+            max_distance:                  1000            # maximum distance in mm of VL53L0X (actual range is 1m)
+            pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
+            stale_timeout_ms:               250            # value cannot be older than this
         roam_sensor:
             smoothing:                     True            # enable smoothing of fused distance
             smoothing_window:                 5            # window size for moving average
@@ -210,6 +217,7 @@ kros:
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
+            stale_timeout_ms:               250            # value cannot be older than this
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)

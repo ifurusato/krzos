@@ -20,11 +20,12 @@ init()
 import ioexpander as io
 
 from hardware.vl53l0x import VL53L0X, Vl53l0xAccuracyMode
+from core.component import Component
 from core.config_loader import ConfigLoader
 from core.logger import Logger, Level
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-class ProximitySensor(object):
+class ProximitySensor(Component):
     '''
     Encapsulates a single VL53L0X proximity sensor.
     Initializes the sensor with a configuration information.
@@ -46,12 +47,12 @@ class ProximitySensor(object):
         self._cardinal    = cardinal
         self._id          = cardinal.id
         self._log = Logger('proximity-{}'.format(self._id), level=level)
+        Component.__init__(self, self._log, suppressed=False, enabled=enabled)
         self._label       = cardinal.label 
         self._abbrev      = cardinal.abbrev
         self._i2c_bus     = i2c_bus 
         self._i2c_address = i2c_address
         self._ioe         = ioe
-        self._enabled     = enabled
         self._is_ranging  = False
         self._active      = False # set True by connect()
         self._tof         = None
@@ -106,13 +107,6 @@ class ProximitySensor(object):
         return self._i2c_address
 
     @property
-    def enabled(self):
-        '''
-        Returns whether the sensor is enabled.
-        '''
-        return self._enabled
-
-    @property
     def active(self):
         '''
         Returns whether the sensor is active (connected and ready to operate).
@@ -156,13 +150,15 @@ class ProximitySensor(object):
         Returns:
             int: The distance in millimeters, or -1 if an error occurred.
         '''
-        if self._active:
-#           _start_time = dt.now()
-            _distance = self._tof.get_distance()
-#           _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-#           self._log.info('sensor poll complete: {}ms elapsed.'.format(_elapsed_ms))
-            return _distance
-        raise Exception('cannot get distance: tof not active.')
+        if not self.enabled:
+            raise Exception('not enabled.')
+        elif self._active:
+            return self._tof.get_distance()
+        else:
+            raise Exception('cannot get distance: tof not active.')
+
+    def is_ranging(self):
+        return self._is_ranging
 
     def start_ranging(self):
         '''
@@ -171,8 +167,10 @@ class ProximitySensor(object):
         Args:
             mode: The optional accuracy mode for ranging.
         '''
-        if self._enabled and self._active:
+        if self.enabled and self._active:
             if not self._is_ranging:
+                if not self._tof.is_open():
+                    self._tof.open()
                 self._tof.start_ranging()
                 self._is_ranging = True
                 self._log.info('ranging started for sensor ' + Fore.GREEN + '{}'.format(self._label)
@@ -186,7 +184,7 @@ class ProximitySensor(object):
         '''
         Stops ranging for the sensor.
         '''
-        if self._enabled and self._active:
+        if self.enabled and self._active:
             self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             if not self._tof:
                 raise Exception('cannot stop ranging: sensor {} at 0x{:02X} does not exist.'.format(self._label, self._i2c_address))
@@ -199,15 +197,20 @@ class ProximitySensor(object):
         else:
             self._log.debug('cannot stop ranging: sensor {} at 0x{:02X} not enabled or active.'.format(self._label, self._i2c_address))
 
-    def open(self):
+    def enable(self):
         '''
         Opens the sensor's ranging object.
         '''
-        if self._tof:
-            self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
-            self._tof.open()
+        if not self.enabled:
+            Component.enable(self)
+            if self._tof:
+                self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
+                self._tof.open()
+            else:
+#               self._log.warning('cannot open: sensor {} at 0x{:02X} not available.'.format(self._label, self._i2c_address))
+                raise Exception('cannot open: sensor {} at 0x{:02X} not available.'.format(self._label, self._i2c_address))
         else:
-            self._log.warning('cannot open: sensor {} at 0x{:02X} not available.'.format(self._label, self._i2c_address))
+            self._log.warning('already enabled distance sensor.')
 
     def close(self):
         '''
@@ -218,9 +221,10 @@ class ProximitySensor(object):
             self.stop_ranging()
             if self._tof:
                 self._tof.close()
-            self._enabled = False
         except Exception as e:
             self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._label, self._i2c_address, e))
+        finally:
+            Component.close(self)
 
     def __str__(self):
         return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, xshut_pin={}, enabled={})".format(

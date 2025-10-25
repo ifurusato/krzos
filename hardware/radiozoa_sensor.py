@@ -79,7 +79,6 @@ class RadiozoaSensor(Component):
         self._log.debug('I2C{} open.'.format(self._i2c_bus_number))
         self._sensor_count   = 8
         self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
-        self._sensors = []
         _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
         # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._ioe = None
@@ -103,10 +102,11 @@ class RadiozoaSensor(Component):
         self._polling_task   = None
         self._callback       = None
         # create all sensors, raise exception if any are missing
+        self._sensors = {}
         self._create_sensors()
-        self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._sensors}
+#       self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._sensors.values()}
         missing = []
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             if not self._i2c_scanner.has_hex_address(["0x{:02X}".format(sensor.i2c_address)]):
                 missing.append(sensor.label)
         if missing:
@@ -119,7 +119,7 @@ class RadiozoaSensor(Component):
         Uses the sum of timing budgets + margin among enabled sensors.
         '''
         budgets = []
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             if sensor.enabled:
                 mode = sensor.tof.accuracy_mode
                 budgets.append(mode.timing_budget_ms)
@@ -134,8 +134,14 @@ class RadiozoaSensor(Component):
             self._log.warning("no active sensors with timing budget found; using default poll interval: 0.05s")
             return 0.2
 
+    def get_sensor(self, cardinal):
+        '''
+        Return the ProximitySensor corresponding to the Cardinal direction.
+        '''
+        return self._sensors[cardinal]
+
     def get_sensor_by_cardinal(self, cardinal):
-        return self._sensor_by_cardinal[cardinal]
+        return self._sensors[cardinal]
 
     def set_visualisation(self, enable):
         if enable:
@@ -157,17 +163,17 @@ class RadiozoaSensor(Component):
         Raises MissingComponentError if any sensor is not active.
         '''
         self._log.info(Fore.GREEN + 'start ranging…')
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             self._log.debug('opening sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 sensor.open()
                 time.sleep(0.1)
         # confirm all sensors are available and active
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             self._log.debug('checking availability of sensor {}…'.format(sensor.abbrev))
             if sensor.enabled and not sensor.active:
                 raise MissingComponentError('Sensor {} is inactive.'.format(sensor.abbrev))
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             self._log.debug('start ranging sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 sensor.start_ranging()
@@ -189,7 +195,7 @@ class RadiozoaSensor(Component):
                     enabled     = sensor_config.get('enabled'),
                     level       = self._level
             )
-            self._sensors.append(proximity_sensor)
+            self._sensors[_cardinal] = proximity_sensor
 
     def _start_polling(self):
         '''
@@ -220,7 +226,7 @@ class RadiozoaSensor(Component):
 #           self._log.debug('polling sensors…; stop event: {}'.format(self._polling_stop_event.is_set()))
             distances = [None for _ in range(self._sensor_count)]
             _start_time = dt.now()
-            for sensor in self._sensors:
+            for sensor in self._sensors.values():
                 if sensor.enabled:
                     try:
                         distance = sensor.get_distance()
@@ -259,7 +265,7 @@ class RadiozoaSensor(Component):
                 # return all eight distances
                 return list(self._distances)
             else:
-                # Return only those specified by Cardinal enum values, in argument order
+                # return only those specified by Cardinal enum values, in argument order
                 indices = [c.value[0] for c in cardinals]
                 return [self._distances[i] if 0 <= i < self._sensor_count else None for i in indices]
 
@@ -273,7 +279,7 @@ class RadiozoaSensor(Component):
 
     def enable(self):
         all_connected = True
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             self._log.debug('connecting to sensor {}…'.format(sensor.abbrev))
             if sensor.enabled:
                 if not sensor.connect():
@@ -291,7 +297,7 @@ class RadiozoaSensor(Component):
         Stops ranging and shuts down all active sensors.
         '''
         self._log.info('stop ranging…')
-        for sensor in self._sensors:
+        for sensor in self._sensors.values():
             sensor.stop_ranging()
 
     def _stop_polling(self):
@@ -308,7 +314,7 @@ class RadiozoaSensor(Component):
         self._polling_task   = None
         self._log.info('background polling stopped.')
 
-    # display ...........
+    # display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     
     def _color_for_distance(self, dist):
         '''
