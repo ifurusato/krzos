@@ -76,12 +76,12 @@ class Roam(Behaviour):
         self._counter  = itertools.count()
         self._verbose  = True #_cfg.get('verbose', False)
         self._use_color = True
+        self._heading_mode          = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
         self._default_speed         = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed     = _cfg.get('use_dynamic_speed', True)
-        self._use_dynamic_heading   = _cfg.get('use_dynamic_heading', True)
+        self._use_dynamic_heading   = _cfg.get('use_dynamic_heading', True) and self._heading_mode is not HeadingMode.NONE
         self._deadband_threshold    = _cfg.get('deadband_threshold', 0.07)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
-        self._heading_mode          = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance          = _rs_cfg.get('min_distance')
         self._max_distance          = _rs_cfg.get('max_distance')
@@ -112,11 +112,11 @@ class Roam(Behaviour):
         if self._use_dynamic_speed:
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
         self._compass_encoder = None
-        if self._heading_mode is not HeadingMode.NONE and self._use_dynamic_heading:
+        if self._use_dynamic_heading:
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
         # use IMU if world coordinates flag set, IMU is available, and heading mode is not NONE
         self._imu = None
-        if self._use_world_coordinates and self._heading_mode is not HeadingMode.NONE:
+        if self._use_world_coordinates and self._use_dynamic_heading:
             self._imu = _component_registry.get(Usfs.NAME)
         # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -133,15 +133,20 @@ class Roam(Behaviour):
         steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
         self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
         self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
+        self._intent_vector_registered = False
         self._register_intent_vector()
         self._log.info('ready.')
 
     def _register_intent_vector(self):
+        if self._intent_vector_registered:
+            raise Exception('intent vector already registered with motor controller.')
         self._motor_controller.add_intent_vector("roam", lambda: self._intent_vector)
+        self._intent_vector_registered = True
         self._log.info('intent vector lambda registered with motor controller.')
 
     def _remove_intent_vector(self):
         self._motor_controller.remove_intent_vector("roam")
+        self._intent_vector_registered = False
         self._log.info('intent vector lambda removed from motor controller.')
 
     def set_heading_degrees(self, degrees):
@@ -250,7 +255,8 @@ class Roam(Behaviour):
         try:
             if next(self._counter) % 5 == 0:
                 self._dynamic_set_default_speed()
-                self._dynamic_set_heading()
+                if self._use_dynamic_heading:
+                    self._dynamic_set_heading()
             self._update_intent_vector()
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
@@ -274,12 +280,12 @@ class Roam(Behaviour):
         match self._heading_mode:
             case HeadingMode.NONE:
                 self._update_linear_vector()
-            case HeadingMode.RELATIVE:
-                self._update_intent_vector_relative()
-            case HeadingMode.ABSOLUTE:
-                self._update_intent_vector_absolute()
-            case HeadingMode.BLENDED:
-                self._update_intent_vector_blended()
+#           case HeadingMode.RELATIVE:
+#               self._update_intent_vector_relative()
+#           case HeadingMode.ABSOLUTE:
+#               self._update_intent_vector_absolute()
+#           case HeadingMode.BLENDED:
+#               self._update_intent_vector_blended()
             case _:
                 raise NotImplementedError("Unhandled heading mode: {}".format(self._heading_mode))
 
@@ -484,6 +490,10 @@ class Roam(Behaviour):
         if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
             self._intent_vector = (0.0, 0.0, 0.0)
         else:
+            if self._heading_degrees != 0.0: # TEMP
+                self._log.error('heading should not be non-zero when dynamic heading is disabled.')
+                sys.exit(1)
+                return
             angle_rad = np.deg2rad(self._heading_degrees)
             vx = np.sin(angle_rad) * amplitude
             vy = np.cos(angle_rad) * amplitude
@@ -543,7 +553,8 @@ class Roam(Behaviour):
             return
         if self._motor_controller:
             self._motor_controller.enable()
-            self._register_intent_vector()
+            if not self._intent_vector_registered:
+                self._register_intent_vector()
         if not self._roam_sensor.enabled:
             self._roam_sensor.enable()
         Component.enable(self)
@@ -553,7 +564,7 @@ class Roam(Behaviour):
         self._task = self._loop_instance.create_task(self._loop_main())
         self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
         self._thread.start()
-        if self._use_world_coordinates and self._imu is not None and self._heading_mode is not HeadingMode.NONE:
+        if self._use_world_coordinates and self._imu is not None and self._use_dynamic_heading:
             self._log.info(Fore.YELLOW + "align to absolute coordinates…")
             current_heading = self._imu.poll() % 360.0
             logical_heading = float(self._heading_degrees) % 360.0
@@ -570,7 +581,8 @@ class Roam(Behaviour):
 
     def release(self):
         Behaviour.release(self)
-        self._register_intent_vector()
+        if not self._intent_vector_registered:
+            self._register_intent_vector()
         self._log.info("roam released.")
 
     def disable(self):

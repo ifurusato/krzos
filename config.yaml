@@ -40,8 +40,8 @@ kros:
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # main loop delay in hz
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False
             poll_delay_ms:                 80              # asyncio poll delay in milliseconds
             default_speed:                  0.8            # cruising speed
@@ -51,8 +51,8 @@ kros:
             heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
             loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             dynamic_speed:               True              # if True use digital pot for default speed
             loop_delay_ms:                 50
             default_speed:                  0.8            # cruising speed
@@ -107,7 +107,7 @@ kros:
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
         scale_factor_open:                  1.5            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
         scale_factor_closed:                5.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
-        enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
+        enable_slew_limiter:              False            # initial enabled state for slew limiter (if disabled, no halt or brake)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
         reverse_motor_pfwd:               False            # in case you wire up the motors backwards
         reverse_motor_sfwd:                True            # ditto

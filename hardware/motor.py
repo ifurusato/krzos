@@ -71,7 +71,6 @@ class Motor(Component):
         self._scale_factor_closed = _cfg.get('scale_factor_closed') # constant converts target speed to motor speed (closed loop)
         self._scale_factor_open   = _cfg.get('scale_factor_open')   # constant converts target speed to motor speed (open loop)
         self._max_observed_speed = 0.0                     # the observed max forward speed
-#       self._log.info('max speed:\t{:<5.2f}'.format(self._speed_multiplier))
         _max_speed = 1.0
         self._motor_power_limit = _cfg.get('motor_power_limit') # power limit to motor
         self._log.info('motor power limit: {:<5.2f}'.format(self._motor_power_limit))
@@ -90,7 +89,7 @@ class Motor(Component):
         self._decoder            = None  # motor encoder
         self._jerk_limiter       = None
         self.__speed_lambdas     = {}
-        self._verbose            = False
+        self._verbose            = True
         self._allow_speed_multipliers = False
         # provides closed loop speed feedback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._velocity           = Velocity(config, self, level=level)
@@ -141,7 +140,8 @@ class Motor(Component):
         :param optional exclusive if True, clear all existing multipliers before adding
         '''
         if not self._allow_speed_multipliers:
-            raise Exception('speed multipliers are disabled.')
+            self._log.warning('speed multipliers are disabled.')
+            return
         if exclusive:
             self.__speed_lambdas.clear()
         if name in self.__speed_lambdas:
@@ -156,6 +156,9 @@ class Motor(Component):
         Removes a named (or partial-named) speed multiplier from the dict of
         lambda functions.
         '''
+        if not self._allow_speed_multipliers:
+            self._log.warning('speed multipliers are disabled.')
+            return
         for _name, _lambda in self.__speed_lambdas.copy().items():
             if name == _name or name in _name:
 #               self._log.info('removing \'{}\' lambda from motor {}…'.format(_name, self.orientation.name))
@@ -166,6 +169,9 @@ class Motor(Component):
         '''
         Returns true if a named speed multiplier exists in the dict of lambda functions.
         '''
+        if not self._allow_speed_multipliers:
+            self._log.warning('speed multipliers are disabled.')
+            return False
         return name in self.__speed_lambdas
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -173,6 +179,9 @@ class Motor(Component):
         '''
         Resets the speed multipliers to None, i.e., no function.
         '''
+        if not self._allow_speed_multipliers:
+            self._log.warning('speed multipliers are disabled.')
+            return
         _count = len(self.__speed_lambdas)
         if _count > 0:
             self._log.info('clearing {:d} speed multipliers…'.format(_count))
@@ -184,6 +193,9 @@ class Motor(Component):
         '''
         Resets the number of speed multipliers.
         '''
+        if not self._allow_speed_multipliers:
+            self._log.warning('speed multipliers are disabled.')
+            return 0
         return len(self.__speed_lambdas)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -191,6 +203,9 @@ class Motor(Component):
         '''
         Lists the current speed multipliers to the log.
         '''
+        if not self._allow_speed_multipliers:
+            self._log.warning('speed multipliers are disabled.')
+            return
         _count = len(self.__speed_lambdas)
         if _count == 0:
             self._log.info(Fore.GREEN + '  motor {} contains no lambdas.')
@@ -279,10 +294,19 @@ class Motor(Component):
             _new_target_speed = target_speed 
             self.__target_speed = self._slew_limiter.limit(_current_target_speed, _new_target_speed)
             if self._verbose:
-                self._log.info(Fore.WHITE + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
-                        _current_target_speed, _new_target_speed, self.__target_speed))
+                if ( _current_target_speed < 0.0 ) or ( _new_target_speed < 0.0 ) or ( self.__target_speed < 0 ):
+                    self._log.info(Fore.RED + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
+                            _current_target_speed, _new_target_speed, self.__target_speed))
+                else: 
+                    self._log.info('current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
+                            _current_target_speed, _new_target_speed, self.__target_speed))
         else:
             self.__target_speed = target_speed
+            if self._verbose:
+                if ( target_speed < 0.0 ) or ( self.__target_speed < 0 ):
+                    self._log.info(Fore.RED + 'target speed: {:5.2f}'.format(self.__target_speed))
+                else: 
+                    self._log.info('target speed: {:5.2f}'.format(self.__target_speed))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -417,13 +441,11 @@ class Motor(Component):
 #       if self._jerk_limiter:
 #           target_power = self._jerk_limiter.limit(self.get_current_power(), target_power)
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
-
         # temporary clamp
 #       _driving_power = min(0.5, max(-0.5, _driving_power))
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
             _driving_power *= -1.0
-
         if self._orientation is Orientation.PFWD:
             if _is_zero:
                 self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))

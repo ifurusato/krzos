@@ -101,7 +101,11 @@ except Exception as e:
     _log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
 finally:
     if _motor_controller:
-        _motor_controller.emergency_stop()
+        _log.info('braking…')
+        _motor_controller.brake()
+        time.sleep(5)
+        _log.info('stopping…')
+        _motor_controller.stop()
     if _pot:
         _pot.close()
 
