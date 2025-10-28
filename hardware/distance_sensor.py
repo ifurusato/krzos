@@ -65,7 +65,7 @@ class DistanceSensor(Component):
             _component_registry = Component.get_registry()
             self._external_clock = _component_registry.get('irq-clock')
             if self._external_clock:
-                self._log.warning(Fore.WHITE + 'external clock available.')
+                self._log.info('external clock available.')
                 self._external_clock.add_callback(self._external_callback_method)
             else:
                 self._log.warning('no external clock available.')
