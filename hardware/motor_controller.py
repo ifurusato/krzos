@@ -188,6 +188,53 @@ class MotorController(Component):
         '''
         Blends all registered intent vectors using magnitude-weighted averaging.
         
+        Each behavior returns (vx, vy, omega). The magnitude of the (vx, vy) vector
+        serves as its weight in the blend. Omega is blended using the same weights
+        but doesn't contribute to the weight calculation itself.
+        
+        Behaviors with stronger sensor confidence naturally output larger
+        magnitudes and thus have more influence. Zero or near-zero magnitude
+        vectors don't participate in the blend.
+        '''
+        vectors = [fn() for fn in self._intent_vectors.values()]
+        if not vectors:
+            return (0.0, 0.0, 0.0)
+        
+#       self._log.info(Fore.CYAN + '=== BLENDING {} INTENT VECTORS ==='.format(len(vectors)))
+        
+        weighted_sum = [0.0, 0.0, 0.0]
+        total_weight = 0.0
+        
+        for i, (name, fn) in enumerate(self._intent_vectors.items()):
+            v = fn()
+            if len(v) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
+            
+            vx, vy, omega = v
+            # magnitude based on motion vector only (vx, vy), NOT omega
+            magnitude = (vx**2 + vy**2) ** 0.5
+            
+#           self._log.info(Fore.YELLOW + '  [{}] {}: vx={:5.2f}, vy={:5.2f}, omega={:5.2f}, mag={:5.2f}'.format(i, name, vx, vy, omega, magnitude))
+            
+            if not isclose(magnitude, 0.0, abs_tol=1e-6):
+                total_weight += magnitude
+                weighted_sum[0] += vx * magnitude
+                weighted_sum[1] += vy * magnitude
+                weighted_sum[2] += omega * magnitude
+        
+        if total_weight > 0.0:
+            result = tuple(s / total_weight for s in weighted_sum)
+#           self._log.info(Fore.GREEN + '  RESULT: vx={:5.2f}, vy={:5.2f}, omega={:5.2f} (total_weight={:5.2f})'.format(
+#               result[0], result[1], result[2], total_weight))
+            return result
+        
+#       self._log.info(Fore.RED + '  RESULT: ALL ZERO (no non-zero vectors)')
+        return (0.0, 0.0, 0.0)
+
+    def z_blend_intent_vectors(self):
+        '''
+        Blends all registered intent vectors using magnitude-weighted averaging.
+        
         Each behavior returns (vx, vy, omega). The magnitude of the vector
         (sqrt(vx² + vy² + omega²)) serves as its weight in the blend.
         

@@ -468,6 +468,10 @@ class Roam(Behaviour):
         Minimal implementation: use stored heading_degrees (0.0 in NONE mode),
         compute radians once, then vx/vy. No IMU polling here.
         '''
+        if self._imu:
+            raise Exception('HAS IMU!')
+        if self._use_dynamic_heading:
+            raise Exception('DYNAMIC HEADING!')
         amplitude = self._default_speed
         if amplitude == 0.0:
             self._intent_vector = (0.0, 0.0, 0.0)
