@@ -142,9 +142,18 @@ class MotorController(Component):
         # lambdas for rotating motors
         self._fwd_reposition_rotate_lambda = lambda speed: speed * self._rotation_speed_multiplier
         self._rev_reposition_rotate_lambda = lambda speed: -1.0 * speed * self._rotation_speed_multiplier
-        self._theta          = 0.0
-        self._stbd_speed     = 0.0
-        self._port_speed     = 0.0
+        # base per-motor target speeds used to form a persistent base intent vector
+        self._base_pfwd_speed = 0.0
+        self._base_sfwd_speed = 0.0
+        self._base_paft_speed = 0.0
+        self._base_saft_speed = 0.0
+        # register the base intent vector so it is always included in blending;
+        # returns (vx, vy, omega) derived from the four base motor targets
+        self.add_intent_vector("base", lambda: (
+            float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
+            float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
+            float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
+        ))
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-100)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
@@ -333,8 +342,8 @@ class MotorController(Component):
 
     def _motor_tick(self):
         '''
-        The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and _external_callback_method(). Incorporates intent vector 
+        The shared logic for a single motor control loop iteration, used by both
+        _motor_loop() and _external_callback_method(). Incorporates intent vector 
         blending and full Mecanum wheel kinematic mapping and normalization.
         '''
         intent = self._blend_intent_vectors()
@@ -350,10 +359,18 @@ class MotorController(Component):
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
-        self.set_motor_speed(Orientation.PFWD, speeds[0])
-        self.set_motor_speed(Orientation.SFWD, speeds[1])
-        self.set_motor_speed(Orientation.PAFT, speeds[2])
-        self.set_motor_speed(Orientation.SAFT, speeds[3])
+        # ensure native Python floats (avoid numpy types) so Motor.target_speed checks pass
+        speeds = [float(s) for s in speeds]
+        # apply computed wheel speeds directly to Motor.target_speed properties
+        if self._pfwd_motor and self._pfwd_motor.enabled:
+            self._pfwd_motor.target_speed = speeds[0]
+        if self._sfwd_motor and self._sfwd_motor.enabled:
+            self._sfwd_motor.target_speed = speeds[1]
+        if self._paft_motor and self._paft_motor.enabled:
+            self._paft_motor.target_speed = speeds[2]
+        if self._saft_motor and self._saft_motor.enabled:
+            self._saft_motor.target_speed = speeds[3]
+        # update motors (apply slew/pid/etc.)
         for _motor in self._all_motors:
             _motor.update_target_speed()
 #       if self._verbose: # print stats
@@ -496,17 +513,6 @@ class MotorController(Component):
         self.set_motor_speed(Orientation.PAFT, paft_speed)
         self.set_motor_speed(Orientation.SAFT, saft_speed)
 
-    def set_differential_speeds(self, port_speed, stbd_speed):
-        if self._verbose:
-            self._log.info(Fore.MAGENTA + 'set diff speeds: {:4.2f} | {:4.2f}'.format(port_speed, stbd_speed))
-        self.set_speeds(port_speed, stbd_speed, port_speed, stbd_speed)
-
-    def get_differential_speeds(self):
-        '''
-        Returns a tuple containing the port and starboard motors speeds.
-        '''
-        return self._port_speed, self._stbd_speed
-
     def set_speed(self, orientation, value):
         '''
         Sets the speed of all motors associated with the port or starboard
@@ -519,18 +525,14 @@ class MotorController(Component):
         if self._verbose:
             self._log.info(Fore.MAGENTA + 'set {} speed: {:4.2f} clamped to {:4.2f}'.format(orientation.name, value, _speed))
         if orientation is Orientation.ALL:
-            self._port_speed = _speed
             self.set_motor_speed(Orientation.PFWD, _speed)
             self.set_motor_speed(Orientation.PAFT, _speed)
-            self._stbd_speed = _speed
             self.set_motor_speed(Orientation.SFWD, _speed)
             self.set_motor_speed(Orientation.SAFT, _speed)
         elif orientation is Orientation.PORT:
-            self._port_speed = _speed
             self.set_motor_speed(Orientation.PFWD, _speed)
             self.set_motor_speed(Orientation.PAFT, _speed)
         elif orientation is Orientation.STBD:
-            self._stbd_speed = _speed
             self.set_motor_speed(Orientation.SFWD, _speed)
             self.set_motor_speed(Orientation.SAFT, _speed)
         elif orientation is Orientation.PFWD:
@@ -546,39 +548,26 @@ class MotorController(Component):
 
     def set_motor_speed(self, orientation, target_speed):
         '''
-        A convenience method that sets the target speed and motor power of
-        the specified motor, as identified by Orientation. Accepts either
-        ints or floats between -1.0 and 1.0.
-
-        This precedes setting the target speed by reseting the Velocity
-        step count, otherwise it would be polluted by previous data.
-
-        When the motor controller is disabled any calls to this method will
-        override the target speed argument and set it to zero.
-
-        The values are scaled on the motor side, not here.
+        Update the internal base per-motor target speed variable.
+        The actual Motor.target_speed is set in _motor_tick() after intent blending.
         '''
         if not self.enabled:
             self._log.error('motor controller not enabled.')
-            target_speed = 0.0
+            # still record base values even if controller not enabled
         if isinstance(target_speed, int):
             raise ValueError('expected target speed as float not int: {:d}'.format(target_speed))
         if not isinstance(target_speed, float):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
         if self._verbose:
-            self._log.info(Fore.MAGENTA + 'set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
-        if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
-            print('🍆 PFWD: {:4.2f}'.format(target_speed))
-            self._pfwd_motor.target_speed = target_speed
-        elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
-            print('🍆 SFWD: {:4.2f}'.format(target_speed))
-            self._sfwd_motor.target_speed = target_speed
-        elif orientation is Orientation.PAFT and self._paft_motor.enabled:
-            print('🍆 PAFT: {:4.2f}'.format(target_speed))
-            self._paft_motor.target_speed = target_speed
-        elif orientation is Orientation.SAFT and self._saft_motor.enabled:
-            print('🍆 SAFT: {:4.2f}'.format(target_speed))
-            self._saft_motor.target_speed = target_speed
+            self._log.info(Fore.MAGENTA + 'set {} motor base target: {:5.2f}'.format(orientation.name, target_speed))
+        if orientation is Orientation.PFWD:
+            self._base_pfwd_speed = target_speed
+        elif orientation is Orientation.SFWD:
+            self._base_sfwd_speed = target_speed
+        elif orientation is Orientation.PAFT:
+            self._base_paft_speed = target_speed
+        elif orientation is Orientation.SAFT:
+            self._base_saft_speed = target_speed
         else:
             raise TypeError('expected a motor orientation, not {}'.format(orientation))
 
