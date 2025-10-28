@@ -23,6 +23,7 @@ from core.component import Component
 from core.direction import Direction
 from core.orientation import Orientation
 from core.rate import Rate
+from core.util import Util
 from core.rotation import Rotation
 from core.steering_mode import SteeringMode
 from core.logger import Logger, Level
@@ -148,7 +149,7 @@ class MotorController(Component):
             float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
             float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
         ))
-        _max_speed           = _cfg.get('max_speed') # max speed of motors (0-100)
+        _max_speed           = _cfg.get('max_speed') # max speed of motors (0-1.0)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
         self._clamp          = lambda n: max(min(_max_speed, n), _min_speed)
@@ -184,6 +185,37 @@ class MotorController(Component):
             self._log.info('removed intent vector: {}'.format(name))
 
     def _blend_intent_vectors(self):
+        '''
+        Blends all registered intent vectors using magnitude-weighted averaging.
+        
+        Each behavior returns (vx, vy, omega). The magnitude of the vector
+        (sqrt(vx² + vy² + omega²)) serves as its weight in the blend.
+        
+        Behaviors with stronger sensor confidence naturally output larger
+        magnitudes and thus have more influence. Zero or near-zero magnitude
+        vectors don't participate in the blend.
+        '''
+        vectors = [fn() for fn in self._intent_vectors.values()]
+        if not vectors:
+            return (0.0, 0.0, 0.0)
+        weighted_sum = [0.0, 0.0, 0.0]
+        total_weight = 0.0
+        for v in vectors:
+            if len(v) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
+            vx, vy, omega = v
+            # magnitude is this behavior's "confidence" or "strength"
+            magnitude = (vx**2 + vy**2 + omega**2) ** 0.5
+            if not isclose(magnitude, 0.0, abs_tol=1e-6):
+                total_weight += magnitude
+                weighted_sum[0] += vx * magnitude
+                weighted_sum[1] += vy * magnitude
+                weighted_sum[2] += omega * magnitude
+        if total_weight > 0.0:
+            return tuple(s / total_weight for s in weighted_sum)
+        return (0.0, 0.0, 0.0)
+
+    def x_blend_intent_vectors(self):
         '''
         Blends all registered intent vectors, returning a single (vx, vy[, omega]) tuple.
         '''

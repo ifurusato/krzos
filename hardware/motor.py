@@ -89,7 +89,7 @@ class Motor(Component):
         self._decoder            = None  # motor encoder
         self._jerk_limiter       = None
         self.__speed_lambdas     = {}
-        self._verbose            = True
+        self._verbose            = False
         self._allow_speed_multipliers = False
         # provides closed loop speed feedback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._velocity           = Velocity(config, self, level=level)

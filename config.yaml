@@ -84,7 +84,7 @@ kros:
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
         brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
-        max_speed:                          100.0          # maximum motor speed (0.0-1.0)
+        max_speed:                            1.0          # maximum motor speed (0.0-1.0)
         rotation_speed:                       0.25         # motor speed when rotating in place
 #       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
 #       use_speed_indicator:              False            # publish RGB events for motor speed indication
