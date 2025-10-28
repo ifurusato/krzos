@@ -74,14 +74,20 @@ class Radiozoa(Behaviour):
         self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-        self._register_intent_vector()
+        self._intent_vector_registered = False
+#       self._register_intent_vector()
         self._log.info('ready.')
 
     def _register_intent_vector(self):
         '''
         Register a single intent vector lambda for the behaviour.
         '''
+        if self._intent_vector_registered:
+            self._log.warning('intent vector already registered with motor controller.')
+#           raise Exception('intent vector already registered with motor controller.')
+            return
         self._motor_controller.add_intent_vector("radiozoa", lambda: self._intent_vector)
+        self._intent_vector_registered = True
         self._log.info('intent vector lambda registered with motor controller.')
 
     def _remove_intent_vector(self):
@@ -89,6 +95,7 @@ class Radiozoa(Behaviour):
         Remove Radiozoa intent vector from motor controller.
         '''
         self._motor_controller.remove_intent_vector("radiozoa")
+        self._intent_vector_registered = False
         self._log.info('intent vector lambda removed from motor controller.')
 
     @property
@@ -281,7 +288,8 @@ class Radiozoa(Behaviour):
             return
         if self._motor_controller:
             self._motor_controller.enable()
-            self._register_intent_vector()
+            if not self._intent_vector_registered:
+                self._register_intent_vector()
         Component.enable(self)
         self._loop_instance = asyncio.new_event_loop()
         self._stop_event = ThreadEvent()
@@ -301,7 +309,8 @@ class Radiozoa(Behaviour):
         Releases suppression of the behaviour, re-registering intent vector.
         '''
         Behaviour.release(self)
-        self._register_intent_vector()
+        if not self._intent_vector_registered:
+            self._register_intent_vector()
         self._log.info("radiozoa released.")
 
     def disable(self):

@@ -134,17 +134,20 @@ class Roam(Behaviour):
         self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
         self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._intent_vector_registered = False
-        self._register_intent_vector()
+#       self._register_intent_vector()
         self._log.info('ready.')
 
     def _register_intent_vector(self):
         if self._intent_vector_registered:
-            raise Exception('intent vector already registered with motor controller.')
+            self._log.warning('intent vector already registered with motor controller.')
+#           raise Exception('intent vector already registered with motor controller.')
+            return
         self._motor_controller.add_intent_vector("roam", lambda: self._intent_vector)
         self._intent_vector_registered = True
         self._log.info('intent vector lambda registered with motor controller.')
 
     def _remove_intent_vector(self):
+        self._log.warning('removing Roam intent vector from motor controller.')
         self._motor_controller.remove_intent_vector("roam")
         self._intent_vector_registered = False
         self._log.info('intent vector lambda removed from motor controller.')
