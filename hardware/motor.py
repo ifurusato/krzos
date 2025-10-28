@@ -90,7 +90,8 @@ class Motor(Component):
         self._decoder            = None  # motor encoder
         self._jerk_limiter       = None
         self.__speed_lambdas     = {}
-        self._verbose            = True
+        self._verbose            = False
+        self._allow_speed_multipliers = False
         # provides closed loop speed feedback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._velocity           = Velocity(config, self, level=level)
         # add callback from motor's update method
@@ -139,6 +140,8 @@ class Motor(Component):
 
         :param optional exclusive if True, clear all existing multipliers before adding
         '''
+        if not self._allow_speed_multipliers:
+            raise Exception('speed multipliers are disabled.')
         if exclusive:
             self.__speed_lambdas.clear()
         if name in self.__speed_lambdas:
@@ -275,8 +278,9 @@ class Motor(Component):
             _current_target_speed = self.__target_speed
             _new_target_speed = target_speed 
             self.__target_speed = self._slew_limiter.limit(_current_target_speed, _new_target_speed)
-#           self._log.info(Fore.WHITE + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
-#                   _current_target_speed, _new_target_speed, self.__target_speed))
+            if self._verbose:
+                self._log.info(Fore.WHITE + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
+                        _current_target_speed, _new_target_speed, self.__target_speed))
         else:
             self.__target_speed = target_speed
 

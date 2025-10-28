@@ -102,13 +102,13 @@ class RadiozoaSensor(Component):
         self._polling_task   = None
         self._callback       = None
         # create all sensors, raise exception if any are missing
-        self._sensors = {}
+        self._proximity_sensors = {}
         self._create_sensors()
-#       self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._sensors.values()}
+#       self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._proximity_sensors.values()}
         missing = []
-        for sensor in self._sensors.values():
-            if not self._i2c_scanner.has_hex_address(["0x{:02X}".format(sensor.i2c_address)]):
-                missing.append(sensor.label)
+        for proximity_sensor in self._proximity_sensors.values():
+            if not self._i2c_scanner.has_hex_address(["0x{:02X}".format(proximity_sensor.i2c_address)]):
+                missing.append(proximity_sensor.label)
         if missing:
             raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
         self._log.info('ready.')
@@ -119,9 +119,9 @@ class RadiozoaSensor(Component):
         Uses the sum of timing budgets + margin among enabled sensors.
         '''
         budgets = []
-        for sensor in self._sensors.values():
-            if sensor.enabled:
-                mode = sensor.tof.accuracy_mode
+        for proximity_sensor in self._proximity_sensors.values():
+            if proximity_sensor.enabled:
+                mode = proximity_sensor.tof.accuracy_mode
                 budgets.append(mode.timing_budget_ms)
         if budgets:
             total_budget = sum(budgets)
@@ -138,10 +138,10 @@ class RadiozoaSensor(Component):
         '''
         Return the ProximitySensor corresponding to the Cardinal direction.
         '''
-        return self._sensors[cardinal]
+        return self._proximity_sensors[cardinal]
 
     def get_sensor_by_cardinal(self, cardinal):
-        return self._sensors[cardinal]
+        return self._proximity_sensors[cardinal]
 
     def set_visualisation(self, enable):
         if enable:
@@ -163,20 +163,21 @@ class RadiozoaSensor(Component):
         Raises MissingComponentError if any sensor is not active.
         '''
         self._log.info(Fore.GREEN + 'start ranging…')
-        for sensor in self._sensors.values():
-            self._log.debug('opening sensor {}…'.format(sensor.abbrev))
-            if sensor.enabled:
-                sensor.open()
-                time.sleep(0.1)
+#       for proximity_sensor in self._proximity_sensors.values():
+#           self._log.debug('opening sensor {}…'.format(proximity_sensor.abbrev))
+#           if proximity_sensor.enabled:
+#               proximity_sensor.open()
+#               time.sleep(0.1)
         # confirm all sensors are available and active
-        for sensor in self._sensors.values():
-            self._log.debug('checking availability of sensor {}…'.format(sensor.abbrev))
-            if sensor.enabled and not sensor.active:
-                raise MissingComponentError('Sensor {} is inactive.'.format(sensor.abbrev))
-        for sensor in self._sensors.values():
-            self._log.debug('start ranging sensor {}…'.format(sensor.abbrev))
-            if sensor.enabled:
-                sensor.start_ranging()
+        for proximity_sensor in self._proximity_sensors.values():
+            self._log.debug('checking availability of sensor {}…'.format(proximity_sensor.abbrev))
+            if proximity_sensor.enabled and not proximity_sensor.active:
+                raise MissingComponentError('Sensor {} is inactive.'.format(proximity_sensor.abbrev))
+
+        for proximity_sensor in self._proximity_sensors.values():
+            self._log.debug('start ranging sensor {}…'.format(proximity_sensor.abbrev))
+            if proximity_sensor.enabled:
+                proximity_sensor.start_ranging()
         time.sleep(1) # give the sensors a chance before actually using them
         self._start_polling()
 
@@ -195,7 +196,7 @@ class RadiozoaSensor(Component):
                     enabled     = sensor_config.get('enabled'),
                     level       = self._level
             )
-            self._sensors[_cardinal] = proximity_sensor
+            self._proximity_sensors[_cardinal] = proximity_sensor
 
     def _start_polling(self):
         '''
@@ -226,16 +227,16 @@ class RadiozoaSensor(Component):
 #           self._log.debug('polling sensors…; stop event: {}'.format(self._polling_stop_event.is_set()))
             distances = [None for _ in range(self._sensor_count)]
             _start_time = dt.now()
-            for sensor in self._sensors.values():
-                if sensor.enabled:
+            for proximity_sensor in self._proximity_sensors.values():
+                if proximity_sensor.enabled:
                     try:
-                        distance = sensor.get_distance()
-                        distances[sensor.id] = distance
+                        distance = proximity_sensor.get_distance()
+                        distances[proximity_sensor.id] = distance
                     except Exception as e:
-                        self._log.warning("{} reading sensor {}: {}".format(type(e), sensor.abbrev, e))
-                        distances[sensor.id] = None
+                        self._log.warning("{} reading sensor {}: {}".format(type(e), proximity_sensor.abbrev, e))
+                        distances[proximity_sensor.id] = None
                 else:
-                    distances[sensor.id] = None
+                    distances[proximity_sensor.id] = None
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
 #           self._log.info('sensor polling complete: {}ms elapsed.'.format(_elapsed_ms))
             with self._distances_lock:
@@ -279,10 +280,10 @@ class RadiozoaSensor(Component):
 
     def enable(self):
         all_connected = True
-        for sensor in self._sensors.values():
-            self._log.debug('connecting to sensor {}…'.format(sensor.abbrev))
-            if sensor.enabled:
-                if not sensor.connect():
+        for proximity_sensor in self._proximity_sensors.values():
+            self._log.debug('connecting to sensor {}…'.format(proximity_sensor.abbrev))
+            if proximity_sensor.enabled:
+                if not proximity_sensor.connect():
                     all_connected = False
         if all_connected:
             super().enable()
@@ -297,8 +298,8 @@ class RadiozoaSensor(Component):
         Stops ranging and shuts down all active sensors.
         '''
         self._log.info('stop ranging…')
-        for sensor in self._sensors.values():
-            sensor.stop_ranging()
+        for proximity_sensor in self._proximity_sensors.values():
+            proximity_sensor.stop_ranging()
 
     def _stop_polling(self):
         '''

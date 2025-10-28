@@ -77,21 +77,21 @@ try:
         if isclose(_target_speed, 0.0, abs_tol=0.08):
             _pot.set_black() # only on digital pot
             if _test_orientation is Orientation.ALL:
-                _motor_controller.set_speed(Orientation.PORT, 0.0)
-                _motor_controller.set_speed(Orientation.STBD, 0.0)
+#               _motor_controller.set_speed(Orientation.PORT, 0.0)
+#               _motor_controller.set_speed(Orientation.STBD, 0.0)
+                _motor_controller.set_speeds(0.0, 0.0, 0.0, 0.0)
             else:
                 _motor_controller.set_speed(_test_orientation, 0.0)
-            _log.info(Style.DIM + 'target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+            _log.info(Style.DIM + '🍎 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
         else:
 #           _target_speed = 0.1
             _pot.set_rgb(_pot.value) # only on digital pot
             if _test_orientation is Orientation.ALL:
-#               _motor_controller.set_speed(Orientation.PORT, _target_speed)
-#               _motor_controller.set_speed(Orientation.STBD, _target_speed)
-                _motor_controller.set_differential_speeds(_target_speed, _target_speed)
+                _motor_controller.set_speeds(_target_speed, _target_speed, _target_speed, _target_speed)
+#               _motor_controller.set_differential_speeds(_target_speed, _target_speed)
             else:
                 _motor_controller.set_speed(_test_orientation, _target_speed)
-            _log.info('target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+            _log.info('🍏 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
 
         _rate.wait()
 

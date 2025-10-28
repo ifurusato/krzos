@@ -165,7 +165,7 @@ class KROS(Component, FiniteStateMachine):
             raise ValueError('no component registry available.')
         _cfg = self._config['kros'].get('component')
 
-        if _cfg.get('enable_queue_publisher') or 'q' in _pubs:
+        if _cfg.get('enable_queue_publisher'): # or 'q' in _pubs:
             self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
 
         self._use_external_clock = _cfg.get('enable_external_clock')
@@ -195,7 +195,7 @@ class KROS(Component, FiniteStateMachine):
 
         # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-        if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher') or 'g' in _pubs:
+        if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher'): # or 'g' in _pubs:
             from gamepad.gamepad_publisher import GamepadPublisher
             from gamepad.gamepad_controller import GamepadController
 

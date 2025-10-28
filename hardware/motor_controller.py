@@ -145,7 +145,6 @@ class MotorController(Component):
         self._theta          = 0.0
         self._stbd_speed     = 0.0
         self._port_speed     = 0.0
-        self._differential_drive_mode      = False
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-100)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
@@ -183,8 +182,6 @@ class MotorController(Component):
         vectors = [fn() for fn in self._intent_vectors.values()]
         if not vectors:
             return (0.0, 0.0, 0.0)
-#       dim = len(vectors[0])
-#       sum_vector = [0.0] * dim
         sum_vector = [0.0, 0.0, 0.0]
         for v in vectors:
             if len(v) != 3:
@@ -193,12 +190,6 @@ class MotorController(Component):
                 sum_vector[i] += v[i]
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
         return avg_vector
-
-    def set_differential_drive(self, enabled):
-        '''
-        In differential drive mode, the aft wheels are set to the same speed as the fore.
-        '''
-        self._differential_drive_mode = enabled
 
     def is_closed_loop(self):
         return self._closed_loop
@@ -363,14 +354,8 @@ class MotorController(Component):
         self.set_motor_speed(Orientation.SFWD, speeds[1])
         self.set_motor_speed(Orientation.PAFT, speeds[2])
         self.set_motor_speed(Orientation.SAFT, speeds[3])
-        if self._differential_drive_mode:
-            _port_motor_power = self._pfwd_motor.update_target_speed()
-            _stbd_motor_power = self._sfwd_motor.update_target_speed()
-            self._paft_motor.set_motor_power(_port_motor_power)
-            self._saft_motor.set_motor_power(_stbd_motor_power)
-        else:
-            for _motor in self._all_motors:
-                _motor.update_target_speed()
+        for _motor in self._all_motors:
+            _motor.update_target_speed()
 #       if self._verbose: # print stats
         _count = next(self._event_counter)
         self.print_info(_count, vx, vy, omega)
@@ -583,12 +568,16 @@ class MotorController(Component):
         if self._verbose:
             self._log.info(Fore.MAGENTA + 'set {} motor speed: {:5.2f}'.format(orientation.name, target_speed))
         if orientation is Orientation.PFWD and self._pfwd_motor.enabled:
+            print('🍆 PFWD: {:4.2f}'.format(target_speed))
             self._pfwd_motor.target_speed = target_speed
         elif orientation is Orientation.SFWD and self._sfwd_motor.enabled:
+            print('🍆 SFWD: {:4.2f}'.format(target_speed))
             self._sfwd_motor.target_speed = target_speed
         elif orientation is Orientation.PAFT and self._paft_motor.enabled:
+            print('🍆 PAFT: {:4.2f}'.format(target_speed))
             self._paft_motor.target_speed = target_speed
         elif orientation is Orientation.SAFT and self._saft_motor.enabled:
+            print('🍆 SAFT: {:4.2f}'.format(target_speed))
             self._saft_motor.target_speed = target_speed
         else:
             raise TypeError('expected a motor orientation, not {}'.format(orientation))

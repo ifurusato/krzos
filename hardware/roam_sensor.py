@@ -79,9 +79,9 @@ class RoamSensor(Component):
             _distance_sensors = _component_registry.get(DistanceSensors.NAME)
             if _distance_sensors is None:
                 _distance_sensors = DistanceSensors(config, level=Level.INFO)
-            self._distance_sensor = _distance_sensors.get(Orientation.FWD)
+            self._distance_sensor = _distance_sensors.get_sensor(Orientation.FWD)
         else:
-            self._distance_sensor = distance_sensors.get(Orientation.FWD)
+            self._distance_sensor = distance_sensors.get_sensor(Orientation.FWD)
         if not self._distance_sensor:
             raise Exception('no forward distance sensor available.')
         if not self._distance_sensor.enabled:

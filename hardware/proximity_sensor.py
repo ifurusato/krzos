@@ -162,7 +162,8 @@ class ProximitySensor(Component):
 
     def start_ranging(self):
         '''
-        Starts the ranging process for the sensor.
+        Starts the ranging process for the sensor. If the sensor is not already
+        open, calls open() first.
 
         Args:
             mode: The optional accuracy mode for ranging.
