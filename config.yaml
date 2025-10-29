@@ -34,22 +34,24 @@ kros:
 #       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
         enable_sound_subscriber:           True            # enable sounds for various events
     behaviour:
+        async_behaviour:                                   # abstract superclass
+            loop_freq_hz:                   1              # main loop delay in hz
+            poll_delay_ms:                 80              # asyncio poll delay in milliseconds
         idle:
             enable:                     False              # enable idle behaviour
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
-            loop_freq_hz:                   1              # main loop delay in hz
+#           loop_freq_hz:                   1              # main loop delay in hz
         roam:
             enable:                     False              # enable roam behaviour
             release:                    False              # release roam behaviour on startup
             verbose:                    False
-            poll_delay_ms:                 80              # asyncio poll delay in milliseconds
             default_speed:                  0.8            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
             use_dynamic_heading:         True              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
             heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
-            loop_freq_hz:                   1              # main loop delay in hz
+#           loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
             enable:                      True              # enable radiozoa behaviour
             release:                     True              # release radiozoa behaviour on startup
@@ -92,8 +94,11 @@ kros:
         accel_step_delay_ms:                 20            # acceleration step delay in milliseconds
         decel_step:                           0.01         # step size for deceleration
         decel_step_delay_ms:                 20            # deceleration step delay in milliseconds
-        coasting_steps:                     300            # determines coasting deceleration (unused)
-        braking_steps:                       60            # determines braking deceleration (unused)
+        coast_step:                           0.007        # determines coasting deceleration
+        brake_step:                           0.03         # determines braking deceleration
+        halt_step:                            0.067        # determines halt deceleration
+        stop_step:                            0.09         # determines stop deceleration
+        emergency_stop_step:                  0.25         # determines emergency stop deceleration
         stopping_steps:                      10            # determines stopping deceleration (unused)
     geometry:                                              # robot geometry (e.g., KR01)
         wheel_diameter:                     104            # wheel diameter (mm)

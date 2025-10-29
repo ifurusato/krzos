@@ -26,7 +26,7 @@ class PID(object):
     '''
     The PID controller itself.
 
-    :param label:       a label for logging
+    :param orientation: the orientation of the motor
     :param kp:          proportional gain constant
     :param ki:          integral gain constant
     :param kd:          derivative gain constant
@@ -36,8 +36,9 @@ class PID(object):
     :param period:      period (sample time in seconds), used as a limit to determine if called too soon
     :param level:       log level
     '''
-    def __init__(self, label, kp, ki, kd, min_output, max_output, setpoint=0.0, period=0.01, level=Level.INFO):
-        self._log = Logger('pid:{}'.format(label), level)
+    def __init__(self, orientation, kp, ki, kd, min_output, max_output, setpoint=0.0, period=0.01, level=Level.INFO):
+        self._orientation = orientation
+        self._log = Logger('pid:{}'.format(orientation.label), level)
         self._kp           = kp # proportional gain
         self._ki           = ki # integral gain
         self._kd           = kd # derivative gain
@@ -46,6 +47,7 @@ class PID(object):
         self._max_output   = max_output
         self._sp_limit     = None
         self._target       = 0.0
+        self._verbose      = False
         self._setpoint_clip = lambda n: ( -1.0 * self._sp_limit ) if n <= ( -1.0 * self._sp_limit ) \
                 else self._sp_limit if n >= self._sp_limit \
                 else n
@@ -61,6 +63,11 @@ class PID(object):
         self._log.info('period: {:7.4f} sec'.format(self._period_sec))
         self.reset()
         self._log.info('ready.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def orientation(self):
+        return self._orientation
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -176,11 +183,12 @@ class PID(object):
             output = self._clip(self._proportional + self._integral + self._derivative)
             kp, ki, kd = self.constants
             cp, ci, cd = self.components
-#           self._log.info('dt={:7.4f}ms '.format(dt * 1000.0) \
-#                   + Fore.CYAN + Style.DIM + 'self._target={:5.2f}; error={:6.3f};'.format(self._target, _error) \
-#                   + Fore.MAGENTA + ' KP={:<8.5f}; KD={:<8.5f};'.format(kp, kd) \
-#                   + Fore.CYAN + Style.BRIGHT + ' P={:8.5f}; I={:8.5f}; D={:8.5f}; sp={:6.3f};'.format(cp, ci, cd, self._setpoint) \
-#                   + Style.BRIGHT + ' out: {:<8.5f}'.format(output))
+            if self._verbose and self._orientation is Orientation.PFWD:
+                self._log.info('dt={:7.4f}ms '.format(dt * 1000.0) \
+                        + Fore.CYAN + Style.DIM + 'target={:5.2f}; error={:6.3f};'.format(self._target, _error) \
+                        + Fore.MAGENTA + ' KP={:<8.5f}; KI={:<8.5f}; KD={:<8.5f};'.format(kp, ki, kd) \
+                        + Fore.CYAN + Style.BRIGHT + ' P={:8.5f}; I={:8.5f}; D={:8.5f}; sp={:6.3f};'.format(cp, ci, cd, self._setpoint) \
+                        + Style.BRIGHT + ' out: {:<8.5f}'.format(output))
             self._last_output = output
 
         # keep track of state

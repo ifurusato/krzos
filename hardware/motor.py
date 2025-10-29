@@ -592,6 +592,7 @@ class Motor(Component):
                 self._slew_limiter.disable()
             if self._jerk_limiter:
                 self._jerk_limiter.disable()
+            self.pid_controller.disable()
             self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')

@@ -22,25 +22,33 @@ from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.cardinal import Cardinal
 from core.event import Event
-from behave.behaviour import Behaviour
+from behave.async_behaviour import AsyncBehaviour
 from hardware.radiozoa_sensor import RadiozoaSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 
-class Radiozoa(Behaviour):
+class Radiozoa(AsyncBehaviour):
     NAME = 'radiozoa'
 
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Radiozoa.NAME, level)
-        Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
+        _component_registry = Component.get_registry()
+        _motor_controller = _component_registry.get(MotorController.NAME)
+        if _motor_controller is None:
+            raise MissingComponentError('motor controller not available.')
+#       Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
+        AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
-        self._counter  = itertools.count()
-        _default_speed = _cfg.get('default_speed', 1.0)
-        _dynamic_speed = _cfg.get('dynamic_speed')
-        self._verbose   = False
-        self._use_color = True
+        self._counter    = itertools.count()
+        _default_speed   = _cfg.get('default_speed', 1.0)
+        _dynamic_speed   = _cfg.get('dynamic_speed')
+        self._verbose    = False
+        self._use_color  = True
+        self._loop_instance  = None
+        self._thread     = None
+        self._stop_event = ThreadEvent()
         # intent vector for MotorController
         self._intent_vector = (0.0, 0.0, 0.0)
         # directional vectors
@@ -71,32 +79,9 @@ class Radiozoa(Behaviour):
             self._radiozoa_sensor = RadiozoaSensor(config, level=Level.INFO)
         else:
             self._log.info(Fore.WHITE + 'using existing Radiozoa sensor.')
-        self._motor_controller = _component_registry.get(MotorController.NAME)
-        if self._motor_controller is None:
-            raise MissingComponentError('motor controller not available.')
         self._intent_vector_registered = False
 #       self._register_intent_vector()
         self._log.info('ready.')
-
-    def _register_intent_vector(self):
-        '''
-        Register a single intent vector lambda for the behaviour.
-        '''
-        if self._intent_vector_registered:
-            self._log.warning('intent vector already registered with motor controller.')
-#           raise Exception('intent vector already registered with motor controller.')
-            return
-        self._motor_controller.add_intent_vector("radiozoa", lambda: self._intent_vector)
-        self._intent_vector_registered = True
-        self._log.info('intent vector lambda registered with motor controller.')
-
-    def _remove_intent_vector(self):
-        '''
-        Remove Radiozoa intent vector from motor controller.
-        '''
-        self._motor_controller.remove_intent_vector("radiozoa")
-        self._intent_vector_registered = False
-        self._log.info('intent vector lambda removed from motor controller.')
 
     @property
     def name(self):
@@ -106,50 +91,34 @@ class Radiozoa(Behaviour):
     def is_ballistic(self):
         return False
 
-    def callback(self):
-        self._log.info('radiozoa behaviour callback.')
+#   def callback(self):
+#       self._log.info('radiozoa behaviour callback.')
 
     def execute(self, message):
         print('execute message {}.'.format(message))
-        if self.suppressed:
-            self._log.info(Style.DIM + 'radiozoa suppressed; message: {}'.format(message.event.label))
-        else:
-            self._log.info('radiozoa execute; message: {}'.format(message.event.label))
-            _payload = message.payload
-            _event = _payload.event
-            _timestamp = self._message_bus.last_message_timestamp
-            if _timestamp is None:
-                self._log.info('radiozoa loop execute; no previous messages.')
-            else:
-                _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
-                self._log.info('radiozoa loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
-            if self.enabled:
-                self._log.info('radiozoa enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
-            else:
-                self._log.info('radiozoa disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
+        raise Exception('UNSUPPORTED execute') # TEMP
+#       if self.suppressed:
+#           self._log.info(Style.DIM + 'radiozoa suppressed; message: {}'.format(message.event.label))
+#       else:
+#           self._log.info('radiozoa execute; message: {}'.format(message.event.label))
+#           _payload = message.payload
+#           _event = _payload.event
+#           _timestamp = self._message_bus.last_message_timestamp
+#           if _timestamp is None:
+#               self._log.info('radiozoa loop execute; no previous messages.')
+#           else:
+#               _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
+#               self._log.info('radiozoa loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
+#           if self.enabled:
+#               self._log.info('radiozoa enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
+#           else:
+#               self._log.info('radiozoa disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
 
-    async def _loop_main(self):
-        self._log.info("radiozoa loop started with {}ms delay…".format(self._loop_delay_ms))
-        try:
-            if not self.suppressed:
-                self._accelerate()
-            while not self._stop_event.is_set():
-                if not self.suppressed:
-                    await self._poll()
-                else:
-                    self._log.info(Fore.WHITE + "suppressed…")
-                await asyncio.sleep(self._loop_delay_ms / 1000)
-                if not self.enabled:
-                    break
-        except asyncio.CancelledError:
-            self._log.info("radiozoa loop cancelled.")
-        except Exception as e:
-            self._log.error('{} encountered in radiozoa loop: {}'.format(type(e), e))
-            self.disable()
-        finally:
-            if not self.suppressed:
-                self._decelerate()
-            self._log.info("radiozoa loop stopped.")
+    def start_loop_action(self):
+        self._accelerate()
+
+    def stop_loop_action(self):
+        self._decelerate()
 
     def _dynamic_set_default_speed(self):
         _speed = self._digital_pot.get_scaled_value(False) # values 0.0-1.0
@@ -169,7 +138,7 @@ class Radiozoa(Behaviour):
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
                 # stop when sensors are unavailable or out of range.
-                self._intent_vector = (0.0, 0.0, 0.0)
+                self.clear_intent_vector()
             else:
                 self._update_intent_vector(distances)
         except Exception as e:
@@ -282,72 +251,56 @@ class Radiozoa(Behaviour):
         if self._motor_controller:
             self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
-    def enable(self):
-        if self.enabled:
-            self._log.debug("already enabled.")
-            return
-        if self._motor_controller:
-            self._motor_controller.enable()
-            if not self._intent_vector_registered:
-                self._register_intent_vector()
-        Component.enable(self)
-        self._loop_instance = asyncio.new_event_loop()
-        self._stop_event = ThreadEvent()
-        asyncio.set_event_loop(self._loop_instance)
-        self._task = self._loop_instance.create_task(self._loop_main())
-        self._thread = Thread(target=self._loop_instance.run_forever, daemon=True)
-        self._thread.start()
-        self._log.info("radiozoa enabled.")
+#   def enable(self):
+#       if self.enabled:
+#           self._log.debug("already enabled.")
+#           return
+#       AsyncBehaviour.enable(self)
 
-    def suppress(self):
-        Behaviour.suppress(self)
-        self._remove_intent_vector()
-        self._log.info("radiozoa suppressed.")
+    def _accelerate(self):
+        self._log.info("accelerate…")
+        if self._motor_controller: #TEMP
+            self._motor_controller.accelerate(self._default_speed, enabled=lambda: not self._stop_event.is_set())
 
-    def release(self):
-        '''
-        Releases suppression of the behaviour, re-registering intent vector.
-        '''
-        Behaviour.release(self)
-        if not self._intent_vector_registered:
-            self._register_intent_vector()
-        self._log.info("radiozoa released.")
+    def _decelerate(self):
+        self._log.info("decelerate…")
+        if self._motor_controller: # TEMP
+            self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
-    def disable(self):
-        if not self.enabled:
-            self._log.debug("already disabled.")
-            return
-        self._log.info("radiozoa disabling…")
-        self._stop_event.set()
-        time.sleep(0.1)
-        if self._loop_instance:
-            self._loop_instance.stop()
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-        if self._motor_controller:
-            self._motor_controller.disable()
-        Component.disable(self)
-        self._log.info(Fore.YELLOW + 'disabled.')
+#   def disable(self):
+#       if not self.enabled:
+#           self._log.debug("already disabled.")
+#           return
+#       AsyncBehaviour.disable(self)
+#       self._log.info(Fore.YELLOW + 'disabled.')
 
-    def _shutdown(self):
-        self._log.info("shutting down tasks and event loop…")
-        self._motor_controller.brake()
-        time.sleep(2)
-        try:
-            tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
-            for task in tasks:
-                task.cancel()
-            self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
-        except Exception as e:
-            self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        self._motor_controller.stop()
-        self._loop_instance.stop()
-        self._loop_instance.close()
-        self._log.info(Fore.YELLOW + 'shut down complete.')
+#   def _stop_loop(self):
+#       if self._loop_instance:
+#           self._loop_instance.stop()
+#           self._loop_instance.call_soon_threadsafe(self._shutdown)
+#           self._loop_instance.close()
+#           if self._thread and self._thread.is_alive():
+#               self._thread.join(timeout=1.0)
+#           self._loop_instance = None
 
-    def close(self):
-        super().close()
-        self._log.info(Fore.YELLOW + 'closed.')
+#   def _shutdown(self):
+#       self._log.info("shutting down tasks and event loop…")
+#       self._motor_controller.brake()
+#       time.sleep(2)
+#       try:
+#           tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
+#           for task in tasks:
+#               task.cancel()
+#           self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+#       except Exception as e:
+#           self._log.error("{} raised during shutdown: {}".format(type(e), e))
+#       finally:
+#           self._stop_loop()
+#       self._motor_controller.stop()
+#       self._log.info(Fore.YELLOW + 'shut down complete.')
+
+#   def close(self):
+#       super().close()
+#       self._log.info(Fore.YELLOW + 'closed.')
 
 #EOF

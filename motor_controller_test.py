@@ -58,7 +58,7 @@ try:
 
     _log.info('starting motor controller…')
     _motor_controller = MotorController(_config, external_clock=_irq_clock, level=_level)
-#   _motor_controller.set_closed_loop(True)
+#   _motor_controller.set_closed_loop(False)
 #   _motor_controller.set_differential_drive(True)
     _motor_controller.enable()
 
@@ -82,7 +82,7 @@ try:
                 _motor_controller.set_speeds(0.0, 0.0, 0.0, 0.0)
             else:
                 _motor_controller.set_speed(_test_orientation, 0.0)
-            _log.info(Style.DIM + '🍎 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+#           _log.info(Style.DIM + '🍎 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
         else:
 #           _target_speed = 0.1
             _pot.set_rgb(_pot.value) # only on digital pot
@@ -91,7 +91,7 @@ try:
 #               _motor_controller.set_differential_speeds(_target_speed, _target_speed)
             else:
                 _motor_controller.set_speed(_test_orientation, _target_speed)
-            _log.info('🍏 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
+#           _log.info('🍏 target speed: {:.2f}; current: {:4.2f}A'.format(_target_speed, _current))
 
         _rate.wait()
 
@@ -100,14 +100,12 @@ except KeyboardInterrupt:
 except Exception as e:
     _log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
 finally:
-    if _motor_controller:
-        _log.info('braking…')
-        _motor_controller.brake()
-        time.sleep(5)
-        _log.info('stopping…')
-        _motor_controller.stop()
     if _pot:
         _pot.close()
+    if _motor_controller:
+        _log.info('closing motor controller…')
+        _motor_controller.close()
+        _log.info('motor controller closed.')
 
 _elapsed_ms = round(( dt.now() - _start_time ).total_seconds() * 1000.0)
 _log.info(Fore.YELLOW + 'complete: elapsed: {:d}ms'.format(_elapsed_ms))

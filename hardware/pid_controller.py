@@ -62,7 +62,7 @@ class PIDController(Component):
         _freq_hz    = _cfg.get('sample_freq_hz')
         _period_sec = 1.0 / _freq_hz
         self._log.info('sample frequency: {:d}Hz; period: {:5.2f} sec.'.format(_freq_hz, _period_sec))
-        self._pid = PID(self._orientation.label, _kp, _ki, _kd, _min_output, _max_output, period=_period_sec, level=level)
+        self._pid = PID(self._orientation, _kp, _ki, _kd, _min_output, _max_output, period=_period_sec, level=level)
         # used for hysteresis, if queue too small will zero-out motor power too quickly
         _queue_len = _cfg.get('hyst_queue_len')
         self._deque = Deque([], maxlen=_queue_len)

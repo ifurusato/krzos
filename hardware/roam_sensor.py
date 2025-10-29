@@ -73,6 +73,7 @@ class RoamSensor(Component):
         else:
             self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
             if self._vl53l5cx is None:
+                self._log.info('💮 creating VL53L5CX sensor…')
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
         self._distance_sensor = None
         if distance_sensors is None:

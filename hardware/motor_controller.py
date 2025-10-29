@@ -93,6 +93,11 @@ class MotorController(Component):
         self._accel_step_delay_ms = _cfg.get('accel_step_delay_ms', 20)
         self._decel_step     = _cfg.get('decel_step', 0.02)
         self._decel_step_delay_ms = _cfg.get('decel_step_delay_ms', 20)
+        self._coast_step          = _cfg.get('coast_step', 0.01)   # rate for coasting to a stop (very slowly)
+        self._brake_step          = _cfg.get('brake_step', 0.03)   # rate for braking
+        self._halt_step           = _cfg.get('halt_step', 0.067)   # rate for halting (quickly)
+        self._stop_step           = _cfg.get('stop_step', 0.09)    # rate for stopping (abrupt)
+        self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
         self._halt_slew_rate = SlewRate.from_string(_cfg.get('halt_rate'))
         self._log.info('halt rate: {}'.format(self._halt_slew_rate.name))
         # slew limiters are on motors, not here
@@ -112,7 +117,6 @@ class MotorController(Component):
         else:
             self._rate = None
             self._log.info(Fore.WHITE + Style.BRIGHT + 'using external clock.')
-
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._all_motors     = []
@@ -127,7 +131,7 @@ class MotorController(Component):
         self._loop_enabled   = False
         self._event_counter  = itertools.count()
         self._motor_loop_callback = None
-        self._graceful_stop  = True
+        self._use_graceful_stop  = True
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         # intent vector registry
         self._intent_vectors = {}  # {name: lambda}
@@ -142,13 +146,15 @@ class MotorController(Component):
         # controller-level speed modifiers applied after blending (name -> fn)
         # modifier fn signature: fn(speeds:list[4]) -> list[4] | str (name to remove) | None
         self._speed_modifiers = {}
-        # register the base intent vector so it is always included in blending;
-        # returns (vx, vy, omega) derived from the four base motor targets
-        self.add_intent_vector("base", lambda: (
-            float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
-            float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
-            float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
-        ))
+        self._include_base_intent_vector = True
+        if self._include_base_intent_vector:
+            # register the base intent vector so it is always included in blending;
+            # returns (vx, vy, omega) derived from the four base motor targets
+            self.add_intent_vector("base", lambda: (
+                float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
+                float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
+                float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
+            ))
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-1.0)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
@@ -173,6 +179,7 @@ class MotorController(Component):
                 raise Exception("intent vector '{}' already registered; ignoring duplicate.".format(name))
         if vector_lambda.__name__ != "<lambda>":
             raise TypeError('expected lambda function, not {}'.format(type(vector_lambda)))
+        self._log.info('adding intent vector: {}'.format(name))
         self._intent_vectors[name] = vector_lambda
         self._log.info('added intent vector: {}'.format(name))
 
@@ -181,10 +188,28 @@ class MotorController(Component):
         Remove a behaviour's intent vector lambda.
         '''
         if name in self._intent_vectors:
+            self._log.info('removing intent vector: {}'.format(name))
             del self._intent_vectors[name]
             self._log.info('removed intent vector: {}'.format(name))
 
     def _blend_intent_vectors(self):
+        '''
+        Simple unweighted averaging of all intent vectors.
+        '''
+        vectors = [fn() for fn in self._intent_vectors.values()]
+        if not vectors:
+            return (0.0, 0.0, 0.0)
+        sum_vector = [0.0, 0.0, 0.0]
+        for v in vectors:
+            if len(v) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
+            for i in range(3):
+                sum_vector[i] += v[i]
+        
+        avg_vector = tuple(s / len(vectors) for s in sum_vector)
+        return avg_vector
+
+    def weighted_blend_intent_vectors(self):
         '''
         Blends all registered intent vectors using magnitude-weighted averaging.
         
@@ -199,36 +224,23 @@ class MotorController(Component):
         vectors = [fn() for fn in self._intent_vectors.values()]
         if not vectors:
             return (0.0, 0.0, 0.0)
-        
-#       self._log.info(Fore.CYAN + '=== BLENDING {} INTENT VECTORS ==='.format(len(vectors)))
-        
         weighted_sum = [0.0, 0.0, 0.0]
         total_weight = 0.0
-        
         for i, (name, fn) in enumerate(self._intent_vectors.items()):
             v = fn()
             if len(v) != 3:
                 raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
-            
             vx, vy, omega = v
             # magnitude based on motion vector only (vx, vy), NOT omega
             magnitude = (vx**2 + vy**2) ** 0.5
-            
-#           self._log.info(Fore.YELLOW + '  [{}] {}: vx={:5.2f}, vy={:5.2f}, omega={:5.2f}, mag={:5.2f}'.format(i, name, vx, vy, omega, magnitude))
-            
             if not isclose(magnitude, 0.0, abs_tol=1e-6):
                 total_weight += magnitude
                 weighted_sum[0] += vx * magnitude
                 weighted_sum[1] += vy * magnitude
                 weighted_sum[2] += omega * magnitude
-        
         if total_weight > 0.0:
             result = tuple(s / total_weight for s in weighted_sum)
-#           self._log.info(Fore.GREEN + '  RESULT: vx={:5.2f}, vy={:5.2f}, omega={:5.2f} (total_weight={:5.2f})'.format(
-#               result[0], result[1], result[2], total_weight))
             return result
-        
-#       self._log.info(Fore.RED + '  RESULT: ALL ZERO (no non-zero vectors)')
         return (0.0, 0.0, 0.0)
 
     def z_blend_intent_vectors(self):
@@ -362,14 +374,15 @@ class MotorController(Component):
         if self.enabled:
             self._log.debug('already enabled.')
         else:
-            self._log.info(Style.BRIGHT + 'enabling motor controller…')
+            self._log.info('enabling motor controller…')
             Component.enable(self)
             if self._external_clock:
                 self._external_clock.add_callback(self._external_callback_method)
                 for _motor in self._all_motors:
                     _motor.enable()
-            elif not self.loop_is_running:
-                self._start_loop()
+            else:
+                if not self.loop_is_running:
+                    self._start_loop()
             self._log.info('enabled.')
 
     def _start_loop(self):
@@ -430,7 +443,7 @@ class MotorController(Component):
         """
         if name in self._speed_modifiers:
             del self._speed_modifiers[name]
-            self._log.info('removed speed modifier: {}'.format(name))
+            self._log.info('🚙 removed speed modifier: {}'.format(name))
 
     def list_speed_modifiers(self):
         """
@@ -472,12 +485,10 @@ class MotorController(Component):
         paft = vy - vx + omega
         saft = vy + vx - omega
         speeds = [pfwd, sfwd, paft, saft]
-
         # normalize if any magnitude > 1.0
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
-
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))
@@ -493,25 +504,22 @@ class MotorController(Component):
                 if not hasattr(result, '__iter__') or len(result) != 4:
                     raise Exception('speed modifier {} returned invalid value: {}'.format(name, result))
                 speeds = [float(x) for x in result]
-
         # renormalize after modifiers
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
-
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
         self._pfwd_motor.target_speed = speeds[0]
         self._sfwd_motor.target_speed = speeds[1]
         self._paft_motor.target_speed = speeds[2]
         self._saft_motor.target_speed = speeds[3]
-
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
             _motor.update_target_speed()
-
         _count = next(self._event_counter)
-        self.print_info(_count, vx, vy, omega)
+        if self._verbose:
+            self.print_info(_count, vx, vy, omega)
         self._state_change_check()
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()
@@ -708,10 +716,24 @@ class MotorController(Component):
                 return False
         return True
 
+    @property
+    def is_stopped_target(self):
+        '''
+        Returns True if the target speed of all motors is zero, False if any
+        have a non-zero target speed.
+        '''
+        for _motor in self._all_motors:
+            if _motor.target_speed > 0.0:
+                return False
+        return True
+
     def set_speeds(self, pfwd_speed, sfwd_speed, paft_speed, saft_speed):
         '''
         Set all four motors speeds.
         '''
+        if not self.enabled:
+            self._log.error('motor controller not enabled.')
+            return
         if self._verbose:
             self._log.info(Fore.MAGENTA + 'set speeds: {:4.2f} | {:4.2f} | {:4.2f} | {:4.2f}'.format(pfwd_speed, sfwd_speed, paft_speed, saft_speed))
         self.set_motor_speed(Orientation.PFWD, pfwd_speed)
@@ -727,6 +749,9 @@ class MotorController(Component):
         For testing we permit a single SAFT motor, which otherwise is not a
         particularly good idea.
         '''
+        if not self.enabled:
+            self._log.error('motor controller not enabled.')
+            return
         _speed = self._clamp(value)
         if self._verbose:
             self._log.info(Fore.MAGENTA + 'set {} speed: {:4.2f} clamped to {:4.2f}'.format(orientation.name, value, _speed))
@@ -759,6 +784,7 @@ class MotorController(Component):
         """
         if not self.enabled:
             self._log.error('motor controller not enabled.')
+            return
         if isinstance(target_speed, int):
             raise ValueError('expected target speed as float not int: {:d}'.format(target_speed))
         if not isinstance(target_speed, float):
@@ -885,84 +911,59 @@ class MotorController(Component):
             return modified
         return _modifier
 
-    def _stopping_function(self, step=0.15):
+    def coast(self):
         '''
-        Return a controller-level stopping modifier closure (aggressive).
+        Stops the robot smoothly over a longer distance than braking.
+        '''
+        self._log.info(Fore.YELLOW + 'coast.')
+        self._brake(step=self._coast_step)
 
-        Similar to _braking_function but with a larger decrement so stopping
-        completes faster. Returns the modifier function that will reduce the
-        final wheel speeds and remove itself when the motors have been brought
-        to a practical zero and stopped.
+    def brake(self):
         '''
-        name = MotorController.STOP_LAMBDA_NAME
-        _step = float(step) if step and step > 0.0 else 0.15
-        factor = 1.0
-        def _modifier(speeds):
-            nonlocal factor, _step
-            factor = max(0.0, factor - _step)
-            modified = [s * factor for s in speeds]
-            if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
-                for _m in self._all_motors:
-                    try:
-                        _m.stop()
-                    except Exception:
-                        pass
-                return name
-            return modified
-        return _modifier
+        Stops the robot smoothly within a short distance. 
+        '''
+        self._log.info(Fore.YELLOW + 'brake.')
+        self._brake(step=self._brake_step)
+
+    def halt(self):
+        '''
+        Stops the robot quickly but without a jerk.
+        '''
+        self._log.info(Fore.YELLOW + 'halt.')
+        self._brake(step=self._halt_step)
+
+    def stop(self):
+        '''
+        Stops the robot abruptly.
+        '''
+        self._log.info(Fore.YELLOW + 'stop.')
+        self._brake(step=self._stop_step)
 
     def emergency_stop(self):
-        """
+        '''
         Immediate hard stop: clear controller-level modifiers and stop every motor.
-        """
-        self._log.info('emergency stop…')
+        This is not recoverable as it clears both the intent vectors and speed modifiers.
+        '''
+        self._log.warning('emergency stop…')
+        self._brake(step=self._emergency_stop_step)
         self._speed_modifiers.clear()
+        self._intent_vectors.clear()
         for _motor in self._all_motors:
             _motor.stop()
         self._log.info('emergency stopped.')
 
-    def stop(self):
-        """
-        Aggressive stop: register a fast controller-level modifier to ramp down motors and
-        remove itself when complete.
-        """
-        self._log.info(Fore.YELLOW + 'stop')
-        if self.is_stopped:
-            for _motor in self._all_motors:
-                _motor.stop()
-            self._log.warning('already stopped.')
-            return
-
-        name = MotorController.STOP_LAMBDA_NAME
-        factor = 1.0
-        _step = self._decel_step * 3.0
-        def _stop_modifier(speeds):
-            nonlocal factor, _step
-            factor = max(0.0, factor - _step)
-            modified = [s * factor for s in speeds]
-            if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
-                for _m in self._all_motors:
-                    _m.stop()
-                return name
-            return modified
-
-        self.remove_speed_modifier(name)
-        # register a lambda (so add_speed_modifier's guard accepts it)
-        self.add_speed_modifier(name, (lambda speeds, _fn=_stop_modifier: _fn(speeds)), exclusive=True)
-        self._log.info('registered controller-level stopping modifier.')
-
-    def brake(self):
-        """
-        Soft brake: register a gentle modifier to progressively reduce speeds.
-        """
-        self._log.info(Fore.YELLOW + 'brake')
+    def _brake(self, step=0.02, closing=False):
+        '''
+        Brake: register a modifier to progressively reduce speeds, with the rate
+        determined by the step argument.
+        If closing is True this clears all intent vectors as part of shutting down.
+        '''
+        self._log.info('🍋 _brake with step {}'.format(step))
         if self.is_stopped:
             self._log.warning('already stopped.')
             return
-
-        name = MotorController.BRAKE_LAMBDA_NAME
         factor = 1.0
-        _step = self._decel_step
+        _step = step
         def _brake_modifier(speeds):
             nonlocal factor, _step
             factor = max(0.0, factor - _step)
@@ -970,35 +971,60 @@ class MotorController(Component):
             if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
                 for _m in self._all_motors:
                     _m.stop()
-                return name
+                # wait until stopped
+                _start = time.time(); 
+                while not self.is_stopped_target and time.time() - _start < 3: time.sleep(0.01)
+                time.sleep(2)
+                if closing:
+                    self._speed_modifiers.clear()
+                    self._intent_vectors.clear()
+                return MotorController.BRAKE_LAMBDA_NAME
             return modified
-
-        self.remove_speed_modifier(name)
+        self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
         # register a lambda (so add_speed_modifier's guard accepts it)
-        self.add_speed_modifier(name, (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
+        self.add_speed_modifier(MotorController.BRAKE_LAMBDA_NAME, (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
         self._log.info('registered controller-level braking modifier.')
+        try:
+            timeout = 10.0
+            start = time.monotonic()
+            while not self.is_stopped_target:
+                elapsed = time.monotonic() - start
+                if elapsed >= timeout:
+                    self._log.warning('timeout reached on brake: {:4.2f}s'.format(elapsed))
+                    break
+                else:
+                    self._log.warning('waiting for timeout; {:4.2f}s elapsed.'.format(elapsed))
+                time.sleep(0.05)  # small delay to avoid busy waiting
+        finally:
+            self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
+        self._log.info('brake complete.')
 
     def disable(self):
         '''
         Disable the motors.
         '''
-        if not self.is_stopped:
-            if self._graceful_stop:
-                self.brake()
-                time.sleep(3)
-            else:
-                self.emergency_stop()
         if self.enabled:
+            if not self.is_stopped:
+                if self._use_graceful_stop:
+                    self._brake(step=self._coast_step, closing=True)
+#                   self._brake(step=self._brake_step, closing=True)
+                else:
+                    self._brake(step=self._stop_step, closing=True)
+                time.sleep(3)
+            if not self.is_stopped_target:
+                self.emergency_stop()
+            Component.disable(self)
+            self._log.info('disabled.')
+            [ motor.disable() for motor in self._all_motors ]
             if self._external_clock:
                 self._log.info('disabling by removing external clock callback…')
                 self._external_clock.remove_callback(self._external_callback_method)
-            else:
+            if self._loop_enabled:
                 self._log.info('disabling by stopping loop…')
+                time.sleep(1)
                 self._stop_loop() 
-            Component.disable(self)
-            self._log.info('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         '''

@@ -23,6 +23,7 @@ from core.message import Message
 from core.message_factory import MessageFactory
 from core.subscriber import Subscriber
 from core.util import Util
+from behave.async_behaviour import AsyncBehaviour
 from behave.behaviour import Behaviour
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -80,6 +81,8 @@ class BehaviourManager(Subscriber):
         '''
         _component_registry = Component.get_registry()
         for behaviour_key in self._configured_behaviour_names:
+            if behaviour_key == AsyncBehaviour.NAME: # skip abstract class
+                continue
             enable = self._config['kros']['behaviour'][behaviour_key.lower()]['enable']
             if not enable:
                 self._log.info('skipping disabled behaviour: {}'.format(behaviour_key))
