@@ -58,6 +58,9 @@ kros:
             dynamic_speed:               True              # if True use digital pot for default speed
             loop_delay_ms:                 50
             default_speed:                  0.8            # cruising speed
+            smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
+            min_sensor_diff_mm:           100              # 50; minimum difference to react
+            settling_threshold_mm:         60              # 30; all pairs within this is considered settled
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -112,7 +115,7 @@ kros:
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
         scale_factor_open:                  1.5            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
         scale_factor_closed:                5.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
-        enable_slew_limiter:              False            # initial enabled state for slew limiter (if disabled, no halt or brake)
+        enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
         reverse_motor_pfwd:               False            # in case you wire up the motors backwards
         reverse_motor_sfwd:                True            # ditto
