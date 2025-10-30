@@ -477,7 +477,7 @@ class Roam(AsyncBehaviour):
             raise Exception('DYNAMIC HEADING!')
         amplitude = self._default_speed
         if amplitude == 0.0:
-            self._intent_vector = (0.0, 0.0, 0.0)
+            self.clear_intent_vector()
             if self._verbose:
                 self._display_info('update_linear_vector (stopped)')
             return
@@ -485,8 +485,10 @@ class Roam(AsyncBehaviour):
             amplitude = self._digital_pot.get_scaled_value(False)
         # obstacle scaling
         self._front_distance = self._roam_sensor.get_distance()
+        self._log.info(Fore.YELLOW + '🍯 roam sensor returned: {}'.format(self._front_distance))
         if self._front_distance < 0.0:
             self._log.warning('braking: no long range distance available.')
+            self.clear_intent_vector()
             self._motor_controller.brake()
             return
         elif self._front_distance is None or self._front_distance >= self._max_distance:
@@ -499,7 +501,7 @@ class Roam(AsyncBehaviour):
         amplitude *= obstacle_scale
         # deadband
         if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
-            self._intent_vector = (0.0, 0.0, 0.0)
+            self.clear_intent_vector()
         else:
             if self._heading_degrees != 0.0: # TEMP
                 self._log.error('heading should not be non-zero when dynamic heading is disabled.')
