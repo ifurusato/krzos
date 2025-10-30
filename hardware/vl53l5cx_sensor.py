@@ -55,7 +55,8 @@ class Vl53l5cxSensor(Component):
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
         # multiprocessing attributes
-        self._queue = Queue(maxsize=20)
+        _queue_maxsize = 50 # was 20 TODO config?
+        self._queue = Queue(maxsize=_queue_maxsize)
         self._stop_event = Event()
         self._process = None
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))

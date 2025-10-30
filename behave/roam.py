@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-10-30
+# modified: 2025-10-31
 
 import time
 import itertools
