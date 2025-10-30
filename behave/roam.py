@@ -485,7 +485,11 @@ class Roam(AsyncBehaviour):
             amplitude = self._digital_pot.get_scaled_value(False)
         # obstacle scaling
         self._front_distance = self._roam_sensor.get_distance()
-        if self._front_distance is None or self._front_distance >= self._max_distance:
+        if self._front_distance < 0.0:
+            self._log.warning('braking: no long range distance available.')
+            self._motor_controller.brake()
+            return
+        elif self._front_distance is None or self._front_distance >= self._max_distance:
             obstacle_scale = 1.0
         elif self._front_distance <= self._min_distance:
             obstacle_scale = 0.0

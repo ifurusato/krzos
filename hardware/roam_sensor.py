@@ -200,11 +200,16 @@ class RoamSensor(Component):
         Returns a fused, smoothed, and eased value for Roam behaviour.
         Tries to get a new value; if unavailable, returns previous value up to timeout.
         Returns None if value is stale.
+        Returns -1.0 (a negative flag) if the long range sensor provides no value.
         '''
 #       self._log.info(Fore.WHITE + "get_distance.")
+        _vl53_distance = self._get_vl53l5cx_front_distance()
+        if _vl53_distance is None:
+            # no long range data
+            return -1.0
         new_value = self._smooth(self._fuse(
             self._distance_sensor.get_distance(),
-            self._get_vl53l5cx_front_distance()
+            _vl53_distance
         ))
         now = dt.now()
         if new_value is not None:
