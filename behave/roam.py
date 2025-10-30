@@ -509,12 +509,14 @@ class Roam(AsyncBehaviour):
 
         amplitude *= obstacle_scale
 
-        # smooth amplitude changes to prevent PID instability in closed loop
-        max_amplitude_change = 0.05  # only allow 5% change per 200ms update
-        delta = amplitude - self._last_amplitude
-        if abs(delta) > max_amplitude_change:
-            amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
-        self._last_amplitude = amplitude
+        RATE_LIMIT = True
+        if RATE_LIMIT:
+            # smooth amplitude changes to prevent PID instability in closed loop
+            max_amplitude_change = 0.10  # was 0.05; only allow 5% change per 200ms update
+            delta = amplitude - self._last_amplitude
+            if abs(delta) > max_amplitude_change:
+                amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
+            self._last_amplitude = amplitude
 
         # log every 10 cycles to see what's happening
         if next(self._counter) % 10 == 0:

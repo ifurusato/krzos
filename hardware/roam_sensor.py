@@ -65,6 +65,9 @@ class RoamSensor(Component):
         self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
+        self._last_fused_distance = None
+        self._max_distance_change_per_update = 150  # mm per 200ms
+        self._counter = itertools.count()
         # sensor instantiation
         _component_registry = Component.get_registry()
         # Vl53l5cxSensor class
@@ -195,6 +198,42 @@ class RoamSensor(Component):
         return eased_mm
 
     def get_distance(self, apply_easing=True):
+        _short_range_distance = self._distance_sensor.get_distance()
+        _long_range_distance  = self._get_vl53l5cx_front_distance()
+        # DIAGNOSTIC
+        if next(self._counter) % 5 == 0:
+            print (Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
+                '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
+                '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
+        if _short_range_distance is None and _long_range_distance is None:
+            return -1.0
+        # fuse sensors (using repository version)
+        value = self._fuse(_short_range_distance, _long_range_distance)
+        # rate-limit fused output to prevent jumps
+        if value is not None and self._last_fused_distance is not None:
+            delta = value - self._last_fused_distance
+            if abs(delta) > self._max_distance_change_per_update:
+                value = self._last_fused_distance + np.sign(delta) * self._max_distance_change_per_update
+                self._log.info('distance jump limited: {:.1f}mm clamped to {:.1f}mm'.format(delta, value))
+        if value is not None:
+            self._last_fused_distance = value
+        # apply smoothing if enabled
+        if self._smoothing:
+            value = self._smooth(value)
+        now = dt.now()
+        if value is not None:
+            self._last_value = value
+            self._last_read_time = now
+        elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
+        if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
+            if apply_easing:
+                return self._normalise_and_ease(self._last_value)
+            else:
+                return self._last_value
+        else:
+            return None
+
+    def z_get_distance(self, apply_easing=True):
         '''
         Returns a fused, smoothed, and optionally eased value for Roam behaviour.
         Tries to get a new value; if unavailable, returns previous value up to timeout.
@@ -203,10 +242,15 @@ class RoamSensor(Component):
         '''
         _short_range_distance = self._distance_sensor.get_distance()
         _long_range_distance  = self._get_vl53l5cx_front_distance()
-#       # DIAGNOSTIC: log both sensors
-#       self._log.info('sensors: PWM={}, VL53={}'.format(
-#           '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
-#           '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None'))
+        # outlier rejection - if VL53 jumps >300mm from last value, ignore it
+        if _long_range_distance is not None and self._last_value is not None:
+            if abs(_long_range_distance - self._last_value) > 300:
+                self._log.warning('VL53 outlier rejected: {} vs last {}'.format(_long_range_distance, self._last_value))
+                _long_range_distance = None  # reject the outlier
+        # DIAGNOSTIC: log both sensors
+        print('sensors: PWM={}, VL53={}'.format(
+            '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
+            '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None'))
         if _short_range_distance is None and _long_range_distance is None:
             return -1.0
         # fuse first
