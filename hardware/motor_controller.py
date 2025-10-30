@@ -169,6 +169,13 @@ class MotorController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    @property
+    def braking_active(self):
+        '''
+        Returns true if braking is currently active.
+        '''
+        return self._braking_active
+
     def add_intent_vector(self, name, vector_lambda, exclusive=False):
         '''
         Register a behaviour's intent vector lambda.

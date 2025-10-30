@@ -475,6 +475,9 @@ class Roam(AsyncBehaviour):
             raise Exception('HAS IMU!')
         if self._use_dynamic_heading:
             raise Exception('DYNAMIC HEADING!')
+        if self._motor_controller.braking_active:
+            self._log.warning('braking active: intent vector suppressed')
+            return
         amplitude = self._default_speed
         if amplitude == 0.0:
             self.clear_intent_vector()
@@ -485,13 +488,12 @@ class Roam(AsyncBehaviour):
             amplitude = self._digital_pot.get_scaled_value(False)
         # obstacle scaling
         self._front_distance = self._roam_sensor.get_distance()
-        self._log.info(Fore.YELLOW + '🍯 roam sensor returned: {}'.format(self._front_distance))
         if self._front_distance < 0.0:
             self._log.warning('braking: no long range distance available.')
-            self.clear_intent_vector()
             self._motor_controller.brake()
             return
-        elif self._front_distance is None or self._front_distance >= self._max_distance:
+        self._log.info(Fore.BLUE + '📘 roam sensor returned: {}'.format(self._front_distance))
+        if self._front_distance is None or self._front_distance >= self._max_distance:
             obstacle_scale = 1.0
         elif self._front_distance <= self._min_distance:
             obstacle_scale = 0.0
