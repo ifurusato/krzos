@@ -73,7 +73,7 @@ class Vl53l5cxSensor(Component):
         else:
             self._vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
         self._vl53.set_resolution(self._cols * self._rows)
-        self._vl53.set_ranging_frequency_hz(_cfg.get('ranging_frequency_hz', 15))
+        self._vl53.set_ranging_frequency_hz(_cfg.get('ranging_frequency_hz', 10))
         self._vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)

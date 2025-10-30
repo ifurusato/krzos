@@ -483,17 +483,18 @@ class MotorController(Component):
           - apply controller-level speed modifiers (in registration order)
           - write final speeds into Motor.target_speed and call update_target_speed()
         '''
-        intent = self.weighted_blend_intent_vectors()
+        intent = self._blend_intent_vectors()
+#       intent = self.weighted_blend_intent_vectors()
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         vx, vy, omega = intent
-
         # mecanum -> wheel speeds
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
         paft = vy - vx + omega
         saft = vy + vx - omega
         speeds = [pfwd, sfwd, paft, saft]
+#       self._log.info('A. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         # normalize if any magnitude > 1.0
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
@@ -519,6 +520,7 @@ class MotorController(Component):
             speeds = [s / max_abs for s in speeds]
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
+#       self._log.info('B. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         self._pfwd_motor.target_speed = speeds[0]
         self._sfwd_motor.target_speed = speeds[1]
         self._paft_motor.target_speed = speeds[2]
@@ -960,16 +962,28 @@ class MotorController(Component):
         # continue...
         factor = 1.0
         _step = step
+        speed_signs = None  # capture initial direction on first call
         def _brake_modifier(speeds):
-            nonlocal factor, _step
+            nonlocal factor, _step, speed_signs
+            # capture the sign of each speed at start of braking
+            if speed_signs is None:
+                speed_signs = [1.0 if s >= 0.0 else -1.0 for s in speeds]
             factor = max(0.0, factor - _step)
-            modified = [s * factor for s in speeds]
+            # scale and clamp to original direction
+            modified = []
+            for i, s in enumerate(speeds):
+                scaled = s * factor
+                # if sign would flip, clamp to zero instead
+                if speed_signs[i] >= 0.0:
+                    modified.append(max(0.0, scaled))
+                else:
+                    modified.append(min(0.0, scaled))
             if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
                 for _m in self._all_motors:
                     _m.stop()
-                # wait until stopped
-                _start = time.time(); 
-                while not self.is_stopped_target and time.time() - _start < 3: time.sleep(0.01)
+                _start = time.time()
+                while not self.is_stopped_target and time.time() - _start < 3: 
+                    time.sleep(0.01)
                 time.sleep(2)
                 if closing:
                     self._speed_modifiers.clear()

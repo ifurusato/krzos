@@ -174,7 +174,6 @@ class RoamSensor(Component):
         if value is None:
             return None
         if not self._smoothing:
-#           self._log.info(Fore.WHITE + 'unsmoothed: {:.2f}'.format(value))
             return value
         self._window.append(value)
         smoothed = np.mean(self._window)
@@ -196,6 +195,41 @@ class RoamSensor(Component):
         return eased_mm
 
     def get_distance(self, apply_easing=True):
+        '''
+        Returns a fused, smoothed, and optionally eased value for Roam behaviour.
+        Tries to get a new value; if unavailable, returns previous value up to timeout.
+        Returns None if value is stale.
+        Returns -1.0 (a negative flag) if neither sensor provides a value.
+        '''
+        _short_range_distance = self._distance_sensor.get_distance()
+        _long_range_distance  = self._get_vl53l5cx_front_distance()
+#       # DIAGNOSTIC: log both sensors
+#       self._log.info('sensors: PWM={}, VL53={}'.format(
+#           '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
+#           '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None'))
+        if _short_range_distance is None and _long_range_distance is None:
+            return -1.0
+        # fuse first
+        value = self._fuse(_short_range_distance, _long_range_distance)
+        if self._smoothing:
+            # smooth the fused result
+            value = self._smooth(value)
+        now = dt.now()
+        if value is not None:
+            self._last_value = value
+            self._last_read_time = now
+        elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
+        if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
+            # return raw smoothed value or eased version
+            if apply_easing:
+                return self._normalise_and_ease(self._last_value)
+            else:
+                return self._last_value
+        else:
+            # value is stale or never set
+            return None
+
+    def x_get_distance(self, apply_easing=True):
         '''
         Returns a fused, smoothed, and eased value for Roam behaviour.
         Tries to get a new value; if unavailable, returns previous value up to timeout.

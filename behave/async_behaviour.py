@@ -27,13 +27,9 @@ class AsyncBehaviour(Behaviour):
         Behaviour.__init__(self, log_or_name, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self._motor_controller = motor_controller
         _cfg = config['kros'].get('behaviour').get(AsyncBehaviour.NAME)
-        _poll_delay_ms = _cfg.get('poll_delay_ms')
-        self._poll_delay_sec = _poll_delay_ms / 1000.0
-        self._log.info("poll delay: {}ms".format(_poll_delay_ms))
-        _loop_freq_hz = _cfg.get('loop_freq_hz')
-        self._loop_delay_sec = 1.0 / _loop_freq_hz
-        self._loop_delay_ms  = int(self._loop_delay_sec * 1000.0)
-        self._log.info("loop delay: {}ms; frequency: {}Hz".format(self._loop_delay_ms, _loop_freq_hz))
+        self._poll_delay_ms = _cfg.get('poll_delay_ms')
+        self._poll_delay_sec = self._poll_delay_ms / 1000.0
+        self._log.info("🌸 poll delay: {}ms".format(self._poll_delay_ms))
         self._intent_vector   = (0.0, 0.0, 0.0)
         self._intent_vector_registered = False
         self._loop_instance  = None
@@ -132,7 +128,7 @@ class AsyncBehaviour(Behaviour):
         pass
 
     async def _loop_main(self):
-        self._log.info("roam loop started with {:.2f}s delay…".format(self._poll_delay_sec))
+        self._log.info("roam loop started with {}ms delay…".format(self._poll_delay_ms))
         try:
             if not self.suppressed:
                 self.start_loop_action()

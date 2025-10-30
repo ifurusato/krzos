@@ -41,7 +41,6 @@ class Radiozoa(AsyncBehaviour):
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('radiozoa')
-        self._loop_delay_ms = _cfg.get('loop_delay_ms', 50)
         self._counter    = itertools.count()
         _default_speed   = _cfg.get('default_speed', 1.0)
         _dynamic_speed   = _cfg.get('dynamic_speed')

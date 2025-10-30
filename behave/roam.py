@@ -101,6 +101,7 @@ class Roam(AsyncBehaviour):
         self._rotation_accumulated_degrees = 0.0
         self._last_relative_offset = 0.0
         self._front_distance = 0.0
+        self._last_amplitude = 0.0
         # component access
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
@@ -487,20 +488,39 @@ class Roam(AsyncBehaviour):
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
         # obstacle scaling
-        self._front_distance = self._roam_sensor.get_distance()
+        self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
         if self._front_distance < 0.0:
             self._log.warning('braking: no long range distance available.')
             self._motor_controller.brake()
             return
-        self._log.info(Fore.BLUE + '📘 roam sensor returned: {}'.format(self._front_distance))
-        if self._front_distance is None or self._front_distance >= self._max_distance:
+        elif self._front_distance is None:
+            self._log.info(Fore.BLUE + '📘 roam sensor returned: None; maintaining current vector')
+            return
+        elif self._front_distance >= self._max_distance:
+#           self._log.info('📘 > roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = 1.0
         elif self._front_distance <= self._min_distance:
+#           self._log.info('📘 < roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = 0.0
         else:
+#           self._log.info('📘   roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
             obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+
         amplitude *= obstacle_scale
+
+        # smooth amplitude changes to prevent PID instability in closed loop
+        max_amplitude_change = 0.05  # only allow 5% change per 200ms update
+        delta = amplitude - self._last_amplitude
+        if abs(delta) > max_amplitude_change:
+            amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
+        self._last_amplitude = amplitude
+
+        # log every 10 cycles to see what's happening
+        if next(self._counter) % 10 == 0:
+            self._log.info('dist: {:.0f}mm, scale: {:.3f}, base_amp: {:.2f}, final_amp: {:.3f}'.format(
+                self._front_distance, obstacle_scale, self._default_speed, amplitude))
+
         # deadband
         if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
             self.clear_intent_vector()
@@ -513,6 +533,7 @@ class Roam(AsyncBehaviour):
             vx = np.sin(angle_rad) * amplitude
             vy = np.cos(angle_rad) * amplitude
             omega = 0.0
+            print(Fore.CYAN + 'vector: ({:.3f}, {:.3f}, {:.3f}); distance: {:4.2f}mm'.format(vx, vy, omega, self._front_distance) + Style.RESET_ALL)
             self._intent_vector = (vx, vy, omega)
         if self._verbose:
             self._display_info('update_linear_vector (active)')

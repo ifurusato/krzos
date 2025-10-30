@@ -35,8 +35,7 @@ kros:
         enable_sound_subscriber:           True            # enable sounds for various events
     behaviour:
         async_behaviour:                                   # abstract superclass
-            loop_freq_hz:                   1              # main loop delay in hz
-            poll_delay_ms:                 80              # asyncio poll delay in milliseconds
+            poll_delay_ms:                200              # asyncio poll delay in milliseconds
         idle:
             enable:                     False              # enable idle behaviour
             release:                    False              # release idle behaviour on startup
@@ -47,8 +46,8 @@ kros:
             release:                     True              # release roam behaviour on startup
             verbose:                    False
             default_speed:                  0.8            # cruising speed
-            use_dynamic_speed:           True              # if True use digital pot for default speed
-            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
+            use_dynamic_speed:          False              # if True use digital pot for default speed
+            use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
             heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
 #           loop_freq_hz:                   1              # main loop delay in hz
@@ -56,7 +55,6 @@ kros:
             enable:                     False              # enable radiozoa behaviour
             release:                    False              # release radiozoa behaviour on startup
             dynamic_speed:               True              # if True use digital pot for default speed
-            loop_delay_ms:                 50
             default_speed:                  0.8            # cruising speed
             smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
             min_sensor_diff_mm:           100              # 50; minimum difference to react
@@ -83,7 +81,7 @@ kros:
         distance_sensors:
             verbose:                       True            # noisy sensor output
     motor_controller:
-        closed_loop:                       True            # open or closed loop control
+        closed_loop:                      False            # open or closed loop control
         create_external_clock:             True            # create external clock if not provided
         loop_freq_hz:                        20            # main loop delay in hz (only used when no ext clock)
         verbose:                          False            # noisy messaging
@@ -208,6 +206,7 @@ kros:
             floor_margin:                    50            # in millimeters
             minimum_free_distance:          500            # minimum required free space, in millimeters
             poll_interval:                    0.05         # how often to poll VL53L5CX
+            ranging_frequency_hz:            10            # ranging frequency
         side_sensor:
             smoothing:                     True            # enable smoothing of fused distance
             smoothing_window:                 5            # window size for moving average
@@ -217,14 +216,14 @@ kros:
             stale_timeout_ms:               250            # value cannot be older than this
         roam_sensor:
             smoothing:                     True            # enable smoothing of fused distance
-            smoothing_window:                 5            # window size for moving average
+            smoothing_window:                15            # window size for moving average
             sigmoid_d0:                     150            # sigmoid inflection point (mm)
             sigmoid_k:                       40            # sigmoid steepness
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             use_sigmoid_fusion:           False            # use either sigmoid or minimum fusion
-            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
+            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
             stale_timeout_ms:               250            # value cannot be older than this
         open_path_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm

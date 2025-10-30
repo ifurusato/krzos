@@ -79,9 +79,18 @@ class RadiozoaSensor(Component):
         self._log.debug('I2C{} open.'.format(self._i2c_bus_number))
         self._sensor_count   = 8
         self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
-        _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
+        # variables
+        self._polling_stop_event = Event()
+        self._poll_interval  = -1
+        self._distances      = [None for _ in range(self._sensor_count)]
+        self._distances_lock = Lock()
+        self._polling_thread = None
+        self._polling_loop   = None
+        self._polling_task   = None
+        self._callback       = None
         # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._ioe = None
+#       _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
         _ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
         if self._i2c_scanner.has_hex_address([_ioe_i2c_address]):
             try:
@@ -92,15 +101,6 @@ class RadiozoaSensor(Component):
                 raise
         else:
             raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
-        # variables
-        self._polling_stop_event = Event()
-        self._poll_interval  = -1
-        self._distances      = [None for _ in range(self._sensor_count)]
-        self._distances_lock = Lock()
-        self._polling_thread = None
-        self._polling_loop   = None
-        self._polling_task   = None
-        self._callback       = None
         # create all sensors, raise exception if any are missing
         self._proximity_sensors = {}
         self._create_sensors()
