@@ -45,7 +45,7 @@ kros:
             enable:                      True              # enable roam behaviour
             release:                     True              # release roam behaviour on startup
             verbose:                    False
-            default_speed:                  0.8            # cruising speed
+            default_speed:                  0.9            # cruising speed
             use_dynamic_speed:          False              # if True use digital pot for default speed
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
@@ -188,8 +188,8 @@ kros:
             pin-port:                        14            # the input pin for the port side sensor
             pin-stbd:                        15            # the input pin for the starboard side sensor
             timeout:                          1            # time in seconds to consider sensor as timed out 
-            smoothing:                     True            # enable smoothing of distance readings
-            smoothing_window:                 5            # number of samples to use for smoothing
+            smoothing:                    False            # enable smoothing of distance readings
+            smoothing_window:                 3            # number of samples to use for smoothing
             use_ext_clock:                 True            # if True poll on callback from external clock if available
             loop_interval:                  0.1            # interval between distance polling, in seconds
         distance_sensors:                                  # distance sensors (trio of distance sensors)
@@ -209,17 +209,17 @@ kros:
             ranging_frequency_hz:            10            # ranging frequency
         side_sensor:
             smoothing:                     True            # enable smoothing of fused distance
-            smoothing_window:                 5            # window size for moving average
+            smoothing_window:                 2            # window size for moving average
             min_distance:                   200            # minimum distance in mm of VL53L0X
             max_distance:                  1000            # maximum distance in mm of VL53L0X (actual range is 1m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             stale_timeout_ms:               250            # value cannot be older than this
         roam_sensor:
-            smoothing:                    False            # enable smoothing of fused distance
-            smoothing_window:                 5            # window size for moving average
             use_sigmoid_fusion:            True            # use either sigmoid or minimum fusion
-            sigmoid_d0:                     250            # sigmoid inflection point (at 250mm)
-            sigmoid_k:                       50            # sigmoid steepness (higher = wider transition)
+            sigmoid_d0:                     200            # sigmoid inflection point (at 250mm)
+            sigmoid_k:                       40            # sigmoid steepness (higher = wider transition)
+            smoothing:                     True            # enable smoothing of fused distance
+            smoothing_window:                 3            # window size for moving average
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor

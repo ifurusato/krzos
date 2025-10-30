@@ -14,6 +14,7 @@
 import time
 from datetime import datetime as dt
 import numpy as np
+import itertools
 from collections import deque
 from colorama import init, Fore, Style
 init()
@@ -66,7 +67,7 @@ class RoamSensor(Component):
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
         self._last_fused_distance = None
-        self._max_distance_change_per_update = 150  # mm per 200ms
+        self._max_distance_change_per_update = 400  # mm per 200ms
         self._counter = itertools.count()
         # sensor instantiation
         _component_registry = Component.get_registry()
@@ -196,8 +197,52 @@ class RoamSensor(Component):
         eased_mm = eased * self._max_distance
 #       self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
         return eased_mm
-
     def get_distance(self, apply_easing=True):
+        _short_range_distance = self._distance_sensor.get_distance()
+        _long_range_distance  = self._get_vl53l5cx_front_distance()
+        # outlier rejection for VL53 before fusion
+        if _long_range_distance is not None and self._last_fused_distance is not None:
+            outlier_rejection_threshold = 400 # TODO config
+            if abs(_long_range_distance - self._last_fused_distance) >  outlier_rejection_threshold:
+                self._log.warning('VL53 outlier rejected: {:.1f}mm vs last {:.1f}mm'.format(
+                    _long_range_distance, self._last_fused_distance))
+                _long_range_distance = None
+        # DIAGNOSTIC
+        if next(self._counter) % 5 == 0:
+            print(Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
+                '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
+                '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
+        if _short_range_distance is None and _long_range_distance is None:
+            return -1.0
+        # fuse sensors
+        value = self._fuse(_short_range_distance, _long_range_distance)
+        RATE_LIMITING = False
+        if RATE_LIMITING:
+            # rate-limit fused output to prevent jumps
+            if value is not None and self._last_fused_distance is not None:
+                delta = value - self._last_fused_distance
+                if abs(delta) > self._max_distance_change_per_update:
+                    value = self._last_fused_distance + np.sign(delta) * self._max_distance_change_per_update
+                    self._log.info('distance jump limited: {:.1f}mm clamped to {:.1f}mm'.format(delta, value))
+        if value is not None:
+            self._last_fused_distance = value
+        # apply smoothing if enabled
+        if self._smoothing:
+            value = self._smooth(value)
+        now = dt.now()
+        if value is not None:
+            self._last_value = value
+            self._last_read_time = now
+        elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
+        if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
+            if apply_easing:
+                return self._normalise_and_ease(self._last_value)
+            else:
+                return self._last_value
+        else:
+            return None
+
+    def b_get_distance(self, apply_easing=True):
         _short_range_distance = self._distance_sensor.get_distance()
         _long_range_distance  = self._get_vl53l5cx_front_distance()
         # DIAGNOSTIC
