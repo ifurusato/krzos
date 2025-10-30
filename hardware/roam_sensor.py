@@ -87,7 +87,6 @@ class RoamSensor(Component):
             raise Exception('no forward distance sensor available.')
         if not self._distance_sensor.enabled:
             self._distance_sensor.enable()
-            print('enable distance sensor ................................................................... ')
             time.sleep(1)
         if not self._distance_sensor.enabled:
             raise Exception('forward distance sensor not enabled.')

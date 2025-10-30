@@ -443,7 +443,7 @@ class MotorController(Component):
         """
         if name in self._speed_modifiers:
             del self._speed_modifiers[name]
-            self._log.info('🚙 removed speed modifier: {}'.format(name))
+            self._log.info('removed speed modifier: {}'.format(name))
 
     def list_speed_modifiers(self):
         """

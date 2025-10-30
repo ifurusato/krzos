@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified:  2025-10-14
+# modified: 2025-10-30
 
 import time
 import itertools
@@ -23,7 +23,6 @@ from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.cardinal import Cardinal
 from core.event import Event
-#from behave.behaviour import Behaviour
 from behave.async_behaviour import AsyncBehaviour
 from hardware.roam_sensor import RoamSensor
 from hardware.digital_pot import DigitalPotentiometer
@@ -62,9 +61,12 @@ class Roam(AsyncBehaviour):
 
     DYNAMIC HEADING CONTROL REQUIREMENTS
     - The heading target (in RELATIVE or BLENDED mode) can change at any time and will.
-    - The robot must always respond immediately and smoothly to the updated target value, without waiting for any state or rotation to "complete".
-    - There must be no base heading, snapshot, or lock after rotation, just constant servoing to the current heading target.
-    - The intent vector update methods must poll the heading source (knob, behaviour, etc.) every control loop, and command rotation proportional to the instantaneous error.
+    - The robot must always respond immediately and smoothly to the updated target value,
+      without waiting for any state or rotation to "complete".
+    - There must be no base heading, snapshot, or lock after rotation, just constant 
+      servoing to the current heading target.
+    - The intent vector update methods must poll the heading source (knob, behaviour, etc.)
+      every control loop, and command rotation proportional to the instantaneous error.
     - If the target changes, robot rotation must adapt instantly,no caching, no wait, no state.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
@@ -76,11 +78,9 @@ class Roam(AsyncBehaviour):
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('roam')
-#       _poll_delay_ms = _cfg.get('poll_delay_ms', 50)
-#       self._poll_delay_sec = _poll_delay_ms / 1000.0
-        self._counter  = itertools.count()
-        self._verbose  = True #_cfg.get('verbose', False)
-        self._use_color = True
+        self._counter = itertools.count()
+        self._verbose               = _cfg.get('verbose', False)
+        self._use_color             = True
         self._heading_mode          = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
         self._default_speed         = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed     = _cfg.get('use_dynamic_speed', True)
@@ -93,12 +93,12 @@ class Roam(AsyncBehaviour):
         self._heading_degrees = 0.0
         self._target_heading_degrees = None
         self._is_rotating = False
-        self._rotation_speed = _cfg.get('rotation_speed', 0.5)
+        self._rotation_speed        = _cfg.get('rotation_speed', 0.5)
         self._rotation_decel_window = _cfg.get('rotation_decel_window', 12)
-        self._rotation_direction = 1
+        self._rotation_tolerance    = _cfg.get('rotation_tolerance', 2.0)
+        self._rotation_direction    = 1
         self._rotation_required_degrees = None
         self._rotation_accumulated_degrees = 0.0
-        self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
         self._last_relative_offset = 0.0
         self._front_distance = 0.0
         # component access
@@ -137,38 +137,38 @@ class Roam(AsyncBehaviour):
 
     def set_heading_degrees(self, degrees):
         raise Exception('UNSUPPORTED set_heading_degrees') # TEMP
-#        degrees = float(degrees) % 360.0
-#        if self._is_rotating and self._target_heading_degrees is not None and \
-#                abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-#            self._log.debug('already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
-#            return
-#        if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-#            self._log.debug('already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
-#            return
-#        current = self._heading_degrees % 360.0
-#        target = degrees
-#        delta = (target - current + 180.0) % 360.0 - 180.0
-#        self._rotation_direction = copysign(1, delta)
-#        self._rotation_required_degrees = abs(delta)
-#        self._target_heading_degrees = degrees
-#        self._is_rotating = True
-#        self._rotation_accumulated_degrees = 0.0
-#        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
-#        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
-#        self._rotation_start_paft = self._motor_paft.decoder.steps
-#        self._rotation_start_saft = self._motor_saft.decoder.steps
-#        self._log.info('heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
-#            self._rotation_required_degrees,
-#            "cw" if self._rotation_direction > 0 else "ccw",
-#            degrees))
+        degrees = float(degrees) % 360.0
+        if self._is_rotating and self._target_heading_degrees is not None and \
+                abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
+            self._log.debug('already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
+            return
+        if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
+            self._log.debug('already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
+            return
+        current = self._heading_degrees % 360.0
+        target = degrees
+        delta = (target - current + 180.0) % 360.0 - 180.0
+        self._rotation_direction = copysign(1, delta)
+        self._rotation_required_degrees = abs(delta)
+        self._target_heading_degrees = degrees
+        self._is_rotating = True
+        self._rotation_accumulated_degrees = 0.0
+        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
+        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
+        self._rotation_start_paft = self._motor_paft.decoder.steps
+        self._rotation_start_saft = self._motor_saft.decoder.steps
+        self._log.info('heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
+            self._rotation_required_degrees,
+            "cw" if self._rotation_direction > 0 else "ccw",
+            degrees))
 
     def set_heading_radians(self, radians):
         raise Exception('UNSUPPORTED set_heading_radians') # TEMP
-#       self.set_heading_degrees(np.degrees(radians))
+        self.set_heading_degrees(np.degrees(radians))
 
     def set_heading_cardinal(self, cardinal):
         raise Exception('UNSUPPORTED set_heading_cardinal') # TEMP
-#       self.set_heading_degrees(cardinal.degrees)
+        self.set_heading_degrees(cardinal.degrees)
 
     @property
     def name(self):
@@ -185,22 +185,22 @@ class Roam(AsyncBehaviour):
     def execute(self, message):
         print('execute message {}.'.format(message))
         raise Exception('UNSUPPORTED execute') # TEMP
-#        if self.suppressed:
-#            self._log.info(Style.DIM + 'roam suppressed; message: {}'.format(message.event.label))
-#        else:
-#            self._log.info('roam execute; message: {}'.format(message.event.label))
-#            _payload = message.payload
-#            _event = _payload.event
-#            _timestamp = self._message_bus.last_message_timestamp
-#            if _timestamp is None:
-#                self._log.info('roam loop execute; no previous messages.')
-#            else:
-#                _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
-#                self._log.info('roam loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
-#            if self.enabled:
-#                self._log.info('roam enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
-#            else:
-#                self._log.info('roam disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
+        if self.suppressed:
+            self._log.info(Style.DIM + 'roam suppressed; message: {}'.format(message.event.label))
+        else:
+            self._log.info('roam execute; message: {}'.format(message.event.label))
+            _payload = message.payload
+            _event = _payload.event
+            _timestamp = self._message_bus.last_message_timestamp
+            if _timestamp is None:
+                self._log.info('roam loop execute; no previous messages.')
+            else:
+                _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
+                self._log.info('roam loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
+            if self.enabled:
+                self._log.info('roam enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
+            else:
+                self._log.info('roam disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
 
     def start_loop_action(self):
         self._accelerate()
@@ -281,12 +281,12 @@ class Roam(AsyncBehaviour):
         match self._heading_mode:
             case HeadingMode.NONE:
                 self._update_linear_vector()
-#           case HeadingMode.RELATIVE: # TEMP
-#               self._update_intent_vector_relative()
-#           case HeadingMode.ABSOLUTE:
-#               self._update_intent_vector_absolute()
-#           case HeadingMode.BLENDED:
-#               self._update_intent_vector_blended()
+            case HeadingMode.RELATIVE: # TEMP
+                self._update_intent_vector_relative()
+            case HeadingMode.ABSOLUTE:
+                self._update_intent_vector_absolute()
+            case HeadingMode.BLENDED:
+                self._update_intent_vector_blended()
             case _:
                 raise NotImplementedError("Unhandled heading mode: {}".format(self._heading_mode))
 
@@ -298,31 +298,31 @@ class Roam(AsyncBehaviour):
         There is no caching, base, or state lock.
         '''
         raise Exception('UNSUPPORTED _update_intent_vector_relative') # TEMP
-#        # example: get target value from encoder/knob or behaviour
-#        if self._compass_encoder:
-#            self._compass_encoder.update()
-#            desired_heading = self._compass_encoder.get_degrees() % 360.0
-#        elif self._digital_pot:
-#            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
-#        else:
-#            desired_heading = self._get_dynamic_relative_offset()
-#        # use encoder-based heading or emulate if not available
-#        current_heading = self._heading_degrees % 360.0
-#        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-#        abs_error = abs(error)
-#        gain = 0.03
-#        if abs_error > self._rotation_tolerance:
-#            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-#            omega = rot_speed * (1 if error > 0 else -1)
-#        else:
-#            omega = 0.0
-#        self._intent_vector = (0.0, 0.0, omega)
-#        if self._verbose:
-##           self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
-##               desired_heading, current_heading, error, omega))
-#            self._display_info('RELATIVE (dynamic)')
-#        if omega == 0.0:
-#            self._update_linear_vector()
+        # example: get target value from encoder/knob or behaviour
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
+        elif self._digital_pot:
+            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
+        else:
+            desired_heading = self._get_dynamic_relative_offset()
+        # use encoder-based heading or emulate if not available
+        current_heading = self._heading_degrees % 360.0
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+#           self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
+#               desired_heading, current_heading, error, omega))
+            self._display_info('RELATIVE (dynamic)')
+        if omega == 0.0:
+            self._update_linear_vector()
 
     def _update_intent_vector_absolute(self):
         '''
@@ -330,26 +330,26 @@ class Roam(AsyncBehaviour):
         If you want dynamic absolute targets, poll and respond here as in other modes.
         '''
         raise Exception('UNSUPPORTED _update_intent_vector_absolute') # TEMP
-#        if self._imu is None:
-#            self._update_intent_vector_relative()
-#            return
-#        current_heading = self._imu.poll() % 360.0
-#        desired_heading = self._heading_degrees % 360.0  # or update dynamically if needed
-#        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-#        abs_error = abs(error)
-#        gain = 0.03
-#        if abs_error > self._rotation_tolerance:
-#            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-#            omega = rot_speed * (1 if error > 0 else -1)
-#        else:
-#            omega = 0.0
-#        self._intent_vector = (0.0, 0.0, omega)
-#        if self._verbose:
-#            self._log.info("ABSOLUTE: desired {}; current {}; error {}; omega {}".format(
-#                desired_heading, current_heading, error, omega))
-#            self._display_info('ABSOLUTE (static)')
-#        if omega == 0.0:
-#            self._update_linear_vector()
+        if self._imu is None:
+            self._update_intent_vector_relative()
+            return
+        current_heading = self._imu.poll() % 360.0
+        desired_heading = self._heading_degrees % 360.0  # or update dynamically if needed
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._log.info("ABSOLUTE: desired {}; current {}; error {}; omega {}".format(
+                desired_heading, current_heading, error, omega))
+            self._display_info('ABSOLUTE (static)')
+        if omega == 0.0:
+            self._update_linear_vector()
 
     def _update_intent_vector_blended(self):
         '''
@@ -360,42 +360,42 @@ class Roam(AsyncBehaviour):
         No base heading, no state, no lock, always dynamic.
         '''
         raise Exception('UNSUPPORTED _update_intent_vector_blended') # TEMP
-#        if self._imu is None:
-#            self._update_intent_vector_relative()
-#            return
-#        # check dynamic speed before rotating or moving
-#        amplitude = self._default_speed
-#        if self._digital_pot:
-#            amplitude = self._digital_pot.get_scaled_value(False)
-#        if isclose(amplitude, 0.0, abs_tol=0.08):
-#            self._intent_vector = (0.0, 0.0, 0.0)
-#            if self._verbose:
-#                self._log.info("BLENDED: dynamic speed is 0.0, intent vector zeroed.")
-#                self._display_info('BLENDED (speed zero)')
-#            return
-#        current_heading = self._imu.poll() % 360.0
-#        # always poll the current encoder value for world-relative heading
-#        if self._compass_encoder:
-#            self._compass_encoder.update()
-#            desired_heading = self._compass_encoder.get_degrees() % 360.0
-#        else:
-#            desired_heading = self._get_dynamic_relative_offset()
-#        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-#        abs_error = abs(error)
-#        gain = 0.03
-#        if abs_error > self._rotation_tolerance:
-#            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-#            omega = rot_speed * (1 if error > 0 else -1)
-#        else:
-#            omega = 0.0
-#        self._intent_vector = (0.0, 0.0, omega)
-#        if self._verbose:
-#            self._log.info("BLENDED: encoder {}; desired {}; current {}; error {}; omega {}".format(
-#                self._compass_encoder.get_degrees() if self._compass_encoder else None,
-#                desired_heading, current_heading, error, omega))
-#            self._display_info('BLENDED (tracking world direction)')
-#        if omega == 0.0:
-#            self._update_linear_vector()
+        if self._imu is None:
+            self._update_intent_vector_relative()
+            return
+        # check dynamic speed before rotating or moving
+        amplitude = self._default_speed
+        if self._digital_pot:
+            amplitude = self._digital_pot.get_scaled_value(False)
+        if isclose(amplitude, 0.0, abs_tol=0.08):
+            self._intent_vector = (0.0, 0.0, 0.0)
+            if self._verbose:
+                self._log.info("BLENDED: dynamic speed is 0.0, intent vector zeroed.")
+                self._display_info('BLENDED (speed zero)')
+            return
+        current_heading = self._imu.poll() % 360.0
+        # always poll the current encoder value for world-relative heading
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
+        else:
+            desired_heading = self._get_dynamic_relative_offset()
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._log.info("BLENDED: encoder {}; desired {}; current {}; error {}; omega {}".format(
+                self._compass_encoder.get_degrees() if self._compass_encoder else None,
+                desired_heading, current_heading, error, omega))
+            self._display_info('BLENDED (tracking world direction)')
+        if omega == 0.0:
+            self._update_linear_vector()
 
     def _get_dynamic_relative_offset(self):
         '''
@@ -409,65 +409,62 @@ class Roam(AsyncBehaviour):
         IMU-based rotation logic.
         '''
         raise Exception('UNSUPPORTED _update_rotation_vector_imu') # TEMP
-#        current_heading = self._imu.poll() % 360.0
-#        target = self._target_heading_degrees
-#        delta = (target - current_heading + 180.0) % 360.0 - 180.0
-#        abs_remaining = abs(delta)
-#        self._log.info(
-#            'IMU ROTATE: imu_heading={:.2f}, target={:.2f}, delta={:.2f}, tolerance={:.2f}'.format(
-#                current_heading, target, delta, self._rotation_tolerance
-#            )
-#        )
-#        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
-#            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
-#        else:
-#            rot_speed = self._rotation_speed
-#        rot_speed = max(rot_speed, 0.08)
-#        omega = rot_speed * copysign(1, delta)
-#        if isclose(current_heading, target, abs_tol=self._rotation_tolerance) or abs_remaining < self._rotation_tolerance:
-#            self._heading_degrees = target
-#            self._is_rotating = False
-#            self._target_heading_degrees = None
-#            omega = 0.0
-#            self._log.info('IMU rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
-#        self._intent_vector = (0.0, 0.0, omega)
-#        if self._verbose:
-#            self._display_info('IMU rotating')
+        current_heading = self._imu.poll() % 360.0
+        target = self._target_heading_degrees
+        delta = (target - current_heading + 180.0) % 360.0 - 180.0
+        abs_remaining = abs(delta)
+        self._log.info(
+            'IMU ROTATE: imu_heading={:.2f}, target={:.2f}, delta={:.2f}, tolerance={:.2f}'.format(
+                current_heading, target, delta, self._rotation_tolerance
+            )
+        )
+        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
+            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
+        else:
+            rot_speed = self._rotation_speed
+        rot_speed = max(rot_speed, 0.08)
+        omega = rot_speed * copysign(1, delta)
+        if isclose(current_heading, target, abs_tol=self._rotation_tolerance) or abs_remaining < self._rotation_tolerance:
+            self._heading_degrees = target
+            self._is_rotating = False
+            self._target_heading_degrees = None
+            omega = 0.0
+            self._log.info('IMU rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._display_info('IMU rotating')
 
     def _update_rotation_vector_encoder(self):
         '''
         Encoder-based rotation logic.
         '''
         raise Exception('UNSUPPORTED _update_rotation_vector_encoder') # TEMP
-#        delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
-#        delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
-#        delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
-#        delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
-#        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
-#        degrees_rotated = abs(rotation_steps / self._steps_per_degree)
-#        self._rotation_accumulated_degrees = degrees_rotated
-#        abs_remaining = self._rotation_required_degrees - degrees_rotated
-#        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
-#            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
-#        else:
-#            rot_speed = self._rotation_speed
-#        rot_speed = max(rot_speed, 0.08)
-#        omega = rot_speed * self._rotation_direction
-#        if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
-#           degrees_rotated >= self._rotation_required_degrees:
-#            self._heading_degrees = self._target_heading_degrees
-#            self._is_rotating = False
-#            self._target_heading_degrees = None
-#            omega = 0.0
-#            self._log.info('Encoder rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
-#        self._intent_vector = (0.0, 0.0, omega)
-#        if self._verbose:
-#            self._display_info('rotating')
+        delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
+        delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
+        delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
+        delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
+        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
+        degrees_rotated = abs(rotation_steps / self._steps_per_degree)
+        self._rotation_accumulated_degrees = degrees_rotated
+        abs_remaining = self._rotation_required_degrees - degrees_rotated
+        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
+            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
+        else:
+            rot_speed = self._rotation_speed
+        rot_speed = max(rot_speed, 0.08)
+        omega = rot_speed * self._rotation_direction
+        if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
+           degrees_rotated >= self._rotation_required_degrees:
+            self._heading_degrees = self._target_heading_degrees
+            self._is_rotating = False
+            self._target_heading_degrees = None
+            omega = 0.0
+            self._log.info('Encoder rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
+        self._intent_vector = (0.0, 0.0, omega)
+        if self._verbose:
+            self._display_info('rotating')
 
-    def _update_linear_vector(self): # TEMP
-        self._intent_vector = (0.0, 0.25, 0.0)
-
-    def x_update_linear_vector(self):
+    def _update_linear_vector(self):
         '''
         Handles normal movement intent vector, including obstacle scaling and deadband.
 
@@ -568,12 +565,12 @@ class Roam(AsyncBehaviour):
         if self._use_world_coordinates and self._imu is not None and self._use_dynamic_heading:
             self._log.info(Fore.YELLOW + "align to absolute coordinates…")
             raise Exception('should not be setting heading.') # TEMP
-#           current_heading = self._imu.poll() % 360.0
-#           logical_heading = float(self._heading_degrees) % 360.0
-#           delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
-#           if abs(delta) > self._rotation_tolerance:
-#               self._log.info("Auto-align: realigning from {:.2f}° to IMU {:.2f}°.".format(logical_heading, current_heading))
-#               self.set_heading_degrees(current_heading)
+            current_heading = self._imu.poll() % 360.0
+            logical_heading = float(self._heading_degrees) % 360.0
+            delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0
+            if abs(delta) > self._rotation_tolerance:
+                self._log.info("Auto-align: realigning from {:.2f}° to IMU {:.2f}°.".format(logical_heading, current_heading))
+                self.set_heading_degrees(current_heading)
         self._log.info("roam enabled.")
 
     def disable(self):

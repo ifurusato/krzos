@@ -43,8 +43,8 @@ kros:
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
 #           loop_freq_hz:                   1              # main loop delay in hz
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False
             default_speed:                  0.8            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -53,8 +53,8 @@ kros:
             heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
 #           loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             dynamic_speed:               True              # if True use digital pot for default speed
             loop_delay_ms:                 50
             default_speed:                  0.8            # cruising speed
