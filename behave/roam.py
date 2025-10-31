@@ -34,6 +34,42 @@ from core.orientation import Orientation
 from enum import Enum
 
 class HeadingMode(Enum):
+    '''
+    Roam is the primary locomotion behavior that moves the robot forward while
+    avoiding obstacles. The heading mode determines how directional control is
+    applied. Other behaviors or sensors set the target heading via the
+    set_heading_degrees() API, and Roam executes the movement.
+
+    NONE (HeadingMode.NONE):
+        Pure obstacle avoidance with no directional control. Robot moves straight
+        forward (0°) while scaling speed based on detected obstacles. This is the
+        default mode for simple roaming without external direction.
+
+    RELATIVE (HeadingMode.RELATIVE):
+        Encoder-based rotation to a relative heading offset from the robot's current
+        orientation. When set_heading_degrees(45) is called, the robot rotates 45°
+        clockwise from its current facing using motor encoder odometry, then maintains
+        that orientation while moving forward. Suitable for behaviors that command
+        relative direction changes (e.g., "turn 30° right").
+
+    ABSOLUTE (HeadingMode.ABSOLUTE):
+        IMU compass-based servo to an absolute world heading. When set_heading_degrees(270)
+        is called, the robot continuously servos to face west (270°) using the IMU
+        magnetometer, correcting for drift in real-time. The robot moves forward while
+        maintaining the absolute compass bearing. Suitable for behaviors that command
+        cardinal directions (e.g., "go north", "face bearing 135°").
+        Requires IMU (USFS) to be available.
+
+    BLENDED (HeadingMode.BLENDED):
+        Absolute compass heading with dynamic offset adjustments. A base absolute heading
+        is set via set_heading_degrees(), and a real-time offset is provided by the
+        compass encoder (or other dynamic source). The robot servos to (base + offset)
+        in world coordinates, allowing behaviors to specify a primary direction while
+        permitting adjustments for obstacle avoidance or path optimization. For example,
+        OpenPathSensor might set base=270° (west) while dynamically adjusting ±30° to
+        find the clearest path.
+        Requires IMU (USFS) to be available.
+    '''
     NONE     = 0
     RELATIVE = 1
     ABSOLUTE = 2
@@ -55,19 +91,9 @@ class Roam(AsyncBehaviour):
     by RoamSensor (PWM + VL53L5CX). If no obstacle is perceived, the velocity
     limit is removed.
 
-    Roam uses a vector-based motor control, allowing for heading-based
-    driving. Rotational alignment is performed when heading changes,
-    using Mecanum wheel kinematics and encoder counts.
-
-    DYNAMIC HEADING CONTROL REQUIREMENTS
-    - The heading target (in RELATIVE or BLENDED mode) can change at any time and will.
-    - The robot must always respond immediately and smoothly to the updated target value,
-      without waiting for any state or rotation to "complete".
-    - There must be no base heading, snapshot, or lock after rotation, just constant 
-      servoing to the current heading target.
-    - The intent vector update methods must poll the heading source (knob, behaviour, etc.)
-      every control loop, and command rotation proportional to the instantaneous error.
-    - If the target changes, robot rotation must adapt instantly,no caching, no wait, no state.
+    Roam uses a vector-based motor control, allowing for heading-based driving.
+    Rotational alignment is performed when the heading changes, using Mecanum
+    wheel kinematics and encoder counts.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Roam.NAME, level)
@@ -290,12 +316,10 @@ class Roam(AsyncBehaviour):
 
     def _update_intent_vector_relative(self):
         '''
-        Dynamic relative heading logic.
-        The heading target is polled every loop (from encoder or behaviour),
-        and the robot continuously aligns to the instantaneous target.
-        There is no caching, base, or state lock.
+        RELATIVE mode: Rotate relative to robot's current orientation
+        while performing obstacle-aware forward movement.
         '''
-        # example: get target value from encoder/knob or behaviour
+        # get desired relative heading from encoder/knob
         if self._compass_encoder:
             self._compass_encoder.update()
             desired_heading = self._compass_encoder.get_degrees() % 360.0
@@ -303,127 +327,54 @@ class Roam(AsyncBehaviour):
             desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
         else:
             desired_heading = self._get_dynamic_relative_offset()
-        # use encoder-based heading or emulate if not available
         current_heading = self._heading_degrees % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        abs_error = abs(error)
-        gain = 0.03
-        if abs_error > self._rotation_tolerance:
-            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-            omega = rot_speed * (1 if error > 0 else -1)
-        else:
-            omega = 0.0
-        self._intent_vector = (0.0, 0.0, omega)
+        omega = self._calculate_omega(error)
+        # let _update_linear_vector handle forward movement, then add rotation
+        self._update_linear_vector()
+        vx, vy, _ = self._intent_vector
+        self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
+            self._log.info("RELATIVE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
                 desired_heading, current_heading, error, omega))
-            self._display_info('RELATIVE (dynamic)')
-        if omega == 0.0:
-            self._update_linear_vector()
+            self._display_info('RELATIVE')
 
     def _update_intent_vector_absolute(self):
         '''
-        ABSOLUTE mode: Rotate to match a fixed compass heading (from encoder),
-        while simultaneously performing obstacle-aware forward movement.
-        The robot rotates toward the target heading while moving forward.
+        ABSOLUTE mode: Rotate to match compass heading (from IMU)
+        while performing obstacle-aware forward movement.
         '''
         if self._imu is None:
             self._log.warning("ABSOLUTE mode requires IMU, falling back to RELATIVE")
             self._update_intent_vector_relative()
             return
-        # get current compass heading from IMU
         current_heading = self._imu.poll() % 360.0
-        # get desired heading from compass encoder
         if self._compass_encoder:
             self._compass_encoder.update()
             desired_heading = self._compass_encoder.get_degrees() % 360.0
         else:
             desired_heading = self._heading_degrees % 360.0
-        # calculate rotation needed
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        abs_error = abs(error)
-        # calculate omega (rotation component)
-        gain = 0.03
-        if abs_error > self._rotation_tolerance:
-            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-            omega = rot_speed * (1 if error > 0 else -1)
-        else:
-            omega = 0.0
-        # get forward movement amplitude (from digital pot if available)
-        amplitude = self._default_speed
-        if self._digital_pot:
-            amplitude = self._digital_pot.get_scaled_value(False)
-        if isclose(amplitude, 0.0, abs_tol=0.08):
-            # no forward movement, only rotation
-            self._intent_vector = (0.0, 0.0, omega)
-            if self._verbose:
-                self._log.info("ABSOLUTE: speed zero, rotation only. desired={:.2f}; current={:.2f}; omega={:.3f}".format(
-                    desired_heading, current_heading, omega))
-                self._display_info('ABSOLUTE (rotation only)')
-            return
-        # get obstacle distance and scale amplitude
-        self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
-        if self._front_distance < 0.0:
-            self._log.warning('braking: no distance available.')
-            self._motor_controller.brake()
-            return
-        elif self._front_distance is None:
-            self._log.info('sensor returned None; maintaining current vector')
-            return
-        elif self._front_distance >= self._max_distance:
-            obstacle_scale = 1.0
-        elif self._front_distance <= self._min_distance:
-            obstacle_scale = 0.0
-        else:
-            obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
-            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-        amplitude *= obstacle_scale
-        # rate limiting (same as NONE mode)
-        max_amplitude_change = 0.10
-        delta = amplitude - self._last_amplitude
-        if abs(delta) > max_amplitude_change:
-            amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
-        self._last_amplitude = amplitude
-        # deadband check
-        if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
-            # below deadband: rotation only
-            self._intent_vector = (0.0, 0.0, omega)
-        else:
-            # combine forward movement with rotation
-            # always move in robot-forward direction (0° in robot frame)
-            vx = 0.0        # no lateral movement
-            vy = amplitude  # forward movement
-            self._intent_vector = (vx, vy, omega)
+        omega = self._calculate_omega(error)
+        # let _update_linear_vector handle forward movement, then add rotation
+        self._update_linear_vector()
+        vx, vy, _ = self._intent_vector
+        self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("ABSOLUTE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}; amp={:.3f}; dist={:.1f}mm".format(
-                desired_heading, current_heading, error, omega, amplitude, self._front_distance))
-            self._display_info('ABSOLUTE (moving + rotating)')
-
-    def x_update_intent_vector_absolute(self):
-        '''
-        IMU absolute heading logic: always rotate to a fixed compass heading.
-        If you want dynamic absolute targets, poll and respond here as in other modes.
-        '''
-        if self._imu is None:
-            self._update_intent_vector_relative()
-            return
-        current_heading = self._imu.poll() % 360.0
-        desired_heading = self._heading_degrees % 360.0  # or update dynamically if needed
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        abs_error = abs(error)
-        gain = 0.03
-        if abs_error > self._rotation_tolerance:
-            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-            omega = rot_speed * (1 if error > 0 else -1)
-        else:
-            omega = 0.0
-        self._intent_vector = (0.0, 0.0, omega)
-        if self._verbose:
-            self._log.info("ABSOLUTE: desired {}; current {}; error {}; omega {}".format(
+            self._log.info("ABSOLUTE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
                 desired_heading, current_heading, error, omega))
-            self._display_info('ABSOLUTE (static)')
-        if omega == 0.0:
-            self._update_linear_vector()
+            self._display_info('ABSOLUTE')
+
+    def _calculate_omega(self, error):
+        '''
+        Calculate rotation speed from heading error.
+        '''
+        abs_error = abs(error)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            return rot_speed * (1 if error > 0 else -1)
+        return 0.0
 
     def _update_intent_vector_blended(self):
         '''

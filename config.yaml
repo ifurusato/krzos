@@ -49,7 +49,7 @@ kros:
             use_dynamic_speed:           True              # if True use digital pot for default speed
             use_dynamic_heading:         True              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
-            heading_mode:           'ABSOLUTE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
+            heading_mode:           'RELATIVE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
 #           loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
             enable:                      True              # enable radiozoa behaviour
