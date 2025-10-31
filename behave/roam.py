@@ -79,29 +79,29 @@ class Roam(AsyncBehaviour):
         self.add_event(Event.AVOID)
         _cfg = config['kros'].get('behaviour').get('roam')
         self._counter = itertools.count()
-        self._verbose               = _cfg.get('verbose', False)
-        self._use_color             = True
-        self._heading_mode          = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
-        self._default_speed         = _cfg.get('default_speed', 0.8)
-        self._use_dynamic_speed     = _cfg.get('use_dynamic_speed', True)
-        self._use_dynamic_heading   = _cfg.get('use_dynamic_heading', True) and self._heading_mode is not HeadingMode.NONE
-        self._deadband_threshold    = _cfg.get('deadband_threshold', 0.07)
-        self._use_world_coordinates = _cfg.get('use_world_coordinates')
+        self._verbose                = _cfg.get('verbose', False)
+        self._use_color              = True
+        self._heading_mode           = HeadingMode.from_string(_cfg.get('heading_mode', 'NONE'))
+        self._default_speed          = _cfg.get('default_speed', 0.8)
+        self._use_dynamic_speed      = _cfg.get('use_dynamic_speed', True)
+        self._use_dynamic_heading    = _cfg.get('use_dynamic_heading', True) and self._heading_mode is not HeadingMode.NONE
+        self._deadband_threshold     = _cfg.get('deadband_threshold', 0.07)
+        self._use_world_coordinates  = _cfg.get('use_world_coordinates')
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
-        self._min_distance          = _rs_cfg.get('min_distance')
-        self._max_distance          = _rs_cfg.get('max_distance')
-        self._heading_degrees = 0.0
+        self._min_distance           = _rs_cfg.get('min_distance')
+        self._max_distance           = _rs_cfg.get('max_distance')
+        self._heading_degrees        = 0.0
         self._target_heading_degrees = None
-        self._is_rotating = False
-        self._rotation_speed        = _cfg.get('rotation_speed', 0.5)
-        self._rotation_decel_window = _cfg.get('rotation_decel_window', 12)
-        self._rotation_tolerance    = _cfg.get('rotation_tolerance', 2.0)
-        self._rotation_direction    = 1
+        self._is_rotating            = False
+        self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
+        self._rotation_decel_window  = _cfg.get('rotation_decel_window', 12)
+        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 2.0)
+        self._rotation_direction     = 1
         self._rotation_required_degrees = None
         self._rotation_accumulated_degrees = 0.0
-        self._last_relative_offset = 0.0
-        self._front_distance = 0.0
-        self._last_amplitude = 0.0
+        self._last_relative_offset   = 0.0
+        self._front_distance         = 0.0
+        self._last_amplitude         = 0.0
         # component access
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
@@ -137,7 +137,6 @@ class Roam(AsyncBehaviour):
         self._log.info('ready.')
 
     def set_heading_degrees(self, degrees):
-        raise Exception('UNSUPPORTED set_heading_degrees') # TEMP
         degrees = float(degrees) % 360.0
         if self._is_rotating and self._target_heading_degrees is not None and \
                 abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
@@ -164,11 +163,9 @@ class Roam(AsyncBehaviour):
             degrees))
 
     def set_heading_radians(self, radians):
-        raise Exception('UNSUPPORTED set_heading_radians') # TEMP
         self.set_heading_degrees(np.degrees(radians))
 
     def set_heading_cardinal(self, cardinal):
-        raise Exception('UNSUPPORTED set_heading_cardinal') # TEMP
         self.set_heading_degrees(cardinal.degrees)
 
     @property
@@ -248,6 +245,7 @@ class Roam(AsyncBehaviour):
             self._compass_encoder.update()
             _degrees = self._compass_encoder.get_degrees()
             self.set_heading_degrees(_degrees)
+            self._log.info(Fore.BLUE + "💮 dynamic heading: {:4.2f} degrees".format(_degrees))
 
     async def _poll(self):
         '''
@@ -257,8 +255,7 @@ class Roam(AsyncBehaviour):
             if next(self._counter) % 5 == 0:
                 self._dynamic_set_default_speed()
                 if self._use_dynamic_heading:
-#                   self._dynamic_set_heading()
-                    raise Exception('UNSUPPORTED _poll:set_dynamic_heading') # TEMP
+                    self._dynamic_set_heading()
             self._update_intent_vector()
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
@@ -298,7 +295,6 @@ class Roam(AsyncBehaviour):
         and the robot continuously aligns to the instantaneous target.
         There is no caching, base, or state lock.
         '''
-        raise Exception('UNSUPPORTED _update_intent_vector_relative') # TEMP
         # example: get target value from encoder/knob or behaviour
         if self._compass_encoder:
             self._compass_encoder.update()
@@ -319,8 +315,8 @@ class Roam(AsyncBehaviour):
             omega = 0.0
         self._intent_vector = (0.0, 0.0, omega)
         if self._verbose:
-#           self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
-#               desired_heading, current_heading, error, omega))
+            self._log.info("RELATIVE: desired {}; current {}; error {}; omega {}".format(
+                desired_heading, current_heading, error, omega))
             self._display_info('RELATIVE (dynamic)')
         if omega == 0.0:
             self._update_linear_vector()
@@ -330,7 +326,6 @@ class Roam(AsyncBehaviour):
         IMU absolute heading logic: always rotate to a fixed compass heading.
         If you want dynamic absolute targets, poll and respond here as in other modes.
         '''
-        raise Exception('UNSUPPORTED _update_intent_vector_absolute') # TEMP
         if self._imu is None:
             self._update_intent_vector_relative()
             return
@@ -360,7 +355,6 @@ class Roam(AsyncBehaviour):
         The robot will not rotate or move if dynamic speed is 0.0.
         No base heading, no state, no lock, always dynamic.
         '''
-        raise Exception('UNSUPPORTED _update_intent_vector_blended') # TEMP
         if self._imu is None:
             self._update_intent_vector_relative()
             return
@@ -409,7 +403,6 @@ class Roam(AsyncBehaviour):
         '''
         IMU-based rotation logic.
         '''
-        raise Exception('UNSUPPORTED _update_rotation_vector_imu') # TEMP
         current_heading = self._imu.poll() % 360.0
         target = self._target_heading_degrees
         delta = (target - current_heading + 180.0) % 360.0 - 180.0
@@ -439,7 +432,6 @@ class Roam(AsyncBehaviour):
         '''
         Encoder-based rotation logic.
         '''
-        raise Exception('UNSUPPORTED _update_rotation_vector_encoder') # TEMP
         delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
         delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
         delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
@@ -472,10 +464,6 @@ class Roam(AsyncBehaviour):
         Minimal implementation: use stored heading_degrees (0.0 in NONE mode),
         compute radians once, then vx/vy. No IMU polling here.
         '''
-        if self._imu:
-            raise Exception('HAS IMU!')
-        if self._use_dynamic_heading:
-            raise Exception('DYNAMIC HEADING!')
         if self._motor_controller.braking_active:
             self._log.warning('braking active: intent vector suppressed')
             return
@@ -595,7 +583,6 @@ class Roam(AsyncBehaviour):
         AsyncBehaviour.enable(self)
         if self._use_world_coordinates and self._imu is not None and self._use_dynamic_heading:
             self._log.info(Fore.YELLOW + "align to absolute coordinates…")
-            raise Exception('should not be setting heading.') # TEMP
             current_heading = self._imu.poll() % 360.0
             logical_heading = float(self._heading_degrees) % 360.0
             delta = (current_heading - logical_heading + 180.0) % 360.0 - 180.0

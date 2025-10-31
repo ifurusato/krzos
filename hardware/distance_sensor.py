@@ -49,7 +49,7 @@ class DistanceSensor(Component):
             case _:
                 raise ValueError('unsupported orientation: {}'.format(orientation.label))
         self._orientation     = orientation
-        self._name = 'distance={}'.format(orientation.label)
+        self._name = 'distance-{}'.format(orientation.label)
         self._log = Logger(self._name, level=Level.INFO)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._timeout         = _cfg.get('timeout')     # time in seconds to consider sensor as timed out
@@ -66,7 +66,6 @@ class DistanceSensor(Component):
             self._external_clock = _component_registry.get('irq-clock')
             if self._external_clock:
                 self._log.info('external clock available.')
-                self._external_clock.add_callback(self._external_callback_method)
             else:
                 self._log.warning('no external clock available.')
         self._distance        = -1
@@ -108,12 +107,50 @@ class DistanceSensor(Component):
         if pulse_width_us < self._min_valid_pulse_us:
             self._log.debug("measured pulse too short: {:.1f} us".format(pulse_width_us))
             return None
-        self._last_read_time = time.time()
         self._log.debug("measured pulse width: {:.1f} us".format(pulse_width_us))
         return pulse_width_us
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _compute_distance(self):
+        '''
+        Compute and update the distance based on the current pulse width,
+        returning the distance or None if out of range or if we do not have
+        enough recent consistent readings. Requires 3 consecutive readings
+        within a tolerance of their median to report a distance.
+        '''
+        if not self.enabled:
+            raise Exception('not enabled.')
+        pulse_us = self._measure_pulse_width()
+        if pulse_us is None:
+            self._log.debug("pulse width reading None.")
+            return None
+        # DIAGNOSTIC - always log what pulse we got
+#       self._log.info('measured pulse: {:.1f}µs'.format(pulse_us))
+        if not (self._min_valid_pulse_us <= pulse_us <= self._max_valid_pulse_us):
+            return None
+        distance_mm = (pulse_us - self._min_valid_pulse_us) * 3 / 4
+        if self._smoothing:
+            required_consistent_count = 3
+            tolerance_fraction = 0.25
+            self._window.append(distance_mm)
+            # DIAGNOSTIC - show window contents
+#           self._log.info('window: {}'.format(list(self._window)))
+            if len(self._window) < required_consistent_count:
+                return None
+            recent_readings = list(self._window)[-required_consistent_count:]
+            sorted_recent = sorted(recent_readings)
+            median_index = required_consistent_count // 2
+            median_of_recent = sorted_recent[median_index] if required_consistent_count % 2 else \
+                (sorted_recent[median_index - 1] + sorted_recent[median_index]) / 2.0
+            if all(abs(v - median_of_recent) <= max(1.0, median_of_recent * tolerance_fraction) for v in recent_readings):
+                self._last_read_time = time.time()
+                return int(median_of_recent)
+            return None
+        self._last_read_time = time.time()
+        return int(distance_mm)
+
+    def x_compute_distance(self):
         '''
         Compute and update the distance based on the current pulse width,
         returning the distance or None if out of range or if we do not have
@@ -164,12 +201,12 @@ class DistanceSensor(Component):
         Returns None if out of range or timed out.
         '''
         if self._external_clock is not None:
-            # Using external clock - return cached value
+            # using external clock - return cached value
             if self._distance != -1 and not self.check_timeout():
                 return self._distance
             return None
         else:
-            # No external clock - compute on demand AND cache it
+            # no external clock - compute on demand AND cache it
             distance_mm = self._compute_distance()
             if distance_mm is not None:
                 self._distance = distance_mm
@@ -189,7 +226,11 @@ class DistanceSensor(Component):
         Enable the sensor, setting up the GPIO pin.
         '''
         if not self.enabled:
+            if self._external_clock:
+                self._log.info('adding callback to external clock…')
+                self._external_clock.add_callback(self._external_callback_method)
             Component.enable(self)
+            self._log.info('🐭 enabled.')
         else:
             self._log.warning('already enabled distance sensor.')
 
@@ -198,14 +239,18 @@ class DistanceSensor(Component):
         '''
         Disable the sensor and clean up resources.
         '''
-        # we know of this warning so make it pretty
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", RuntimeWarning)
-            GPIO.cleanup(self._pin)
-            for warning in w:
-                msg = Util.ellipsis('{}'.format(warning.message), 33)
-                self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
-        Component.disable(self)
+        if self.enabled:
+            if self._external_clock:
+                self._log.info('removing callback from external clock…')
+                self._external_clock.remove_callback(self._external_callback_method)
+            # we know of this warning so make it pretty
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", RuntimeWarning)
+                GPIO.cleanup(self._pin)
+                for warning in w:
+                    msg = Util.ellipsis('{}'.format(warning.message), 33)
+                    self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
+            Component.disable(self)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):

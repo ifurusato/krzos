@@ -200,7 +200,6 @@ class Usfs(Component):
         Polls the hardware and sets all the available properties, returning
         the corrected yaw (as that's our primary interest).
         '''
-        self._log.info(Fore.BLUE + 'poll')
         if self.closed:
             self._log.warning('usfs is closed.')
             return

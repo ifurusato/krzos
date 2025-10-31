@@ -44,12 +44,12 @@ kros:
         roam:
             enable:                      True              # enable roam behaviour
             release:                     True              # release roam behaviour on startup
-            verbose:                    False
+            verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
-            use_dynamic_speed:          False              # if True use digital pot for default speed
-            use_dynamic_heading:        False              # if True use RGB encoder for setting heading
+            use_dynamic_speed:           True              # if True use digital pot for default speed
+            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
             use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
-            heading_mode:               'NONE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
+            heading_mode:           'ABSOLUTE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
 #           loop_freq_hz:                   1              # main loop delay in hz
         radiozoa:
             enable:                     False              # enable radiozoa behaviour
@@ -187,8 +187,8 @@ kros:
             pin-fwd:                         18            # the input pin for the forward sensor
             pin-port:                        14            # the input pin for the port side sensor
             pin-stbd:                        15            # the input pin for the starboard side sensor
-            timeout:                          1            # time in seconds to consider sensor as timed out 
-            smoothing:                    False            # enable smoothing of distance readings
+            timeout:                          0.334        # time in seconds to consider sensor as timed out 
+            smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 3            # number of samples to use for smoothing
             use_ext_clock:                 True            # if True poll on callback from external clock if available
             loop_interval:                  0.1            # interval between distance polling, in seconds

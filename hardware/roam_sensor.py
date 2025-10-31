@@ -25,6 +25,7 @@ from core.orientation import Orientation
 from hardware.easing import Easing
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from hardware.distance_sensors import DistanceSensors
+from hardware.distance_sensor import DistanceSensor
 
 class RoamSensor(Component):
     NAME = 'roam-sensor'
@@ -79,13 +80,19 @@ class RoamSensor(Component):
                 self._log.info('💮 creating VL53L5CX sensor…')
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
         self._distance_sensor = None
-        if distance_sensors is None:
-            _distance_sensors = _component_registry.get(DistanceSensors.NAME)
-            if _distance_sensors is None:
-                _distance_sensors = DistanceSensors(config, level=Level.INFO)
-            self._distance_sensor = _distance_sensors.get_sensor(Orientation.FWD)
-        else:
+        if distance_sensors:
             self._distance_sensor = distance_sensors.get_sensor(Orientation.FWD)
+        else:
+            # first see if DistanceSensors already exists, if so use that
+            _distance_sensors = _component_registry.get(DistanceSensors.NAME)
+            if _distance_sensors:
+                print('getting distance sensors...')
+                self._distance_sensor = _distance_sensors.get_sensor(Orientation.FWD)
+            else: # next see if we can just get or create the FWD sensor
+                _fwd_sensor_name = 'distance-fwd'
+                self._distance_sensor = _component_registry.get(_fwd_sensor_name) 
+                if not self._distance_sensor:
+                    self._distance_sensor = DistanceSensor(config, orientation=Orientation.FWD, level=Level.INFO)
         if not self._distance_sensor:
             raise Exception('no forward distance sensor available.')
         if not self._distance_sensor.enabled:
@@ -205,10 +212,10 @@ class RoamSensor(Component):
         _short_range_distance = self._distance_sensor.get_distance()
         _long_range_distance  = self._get_vl53l5cx_front_distance()
         # DIAGNOSTIC
-        if next(self._counter) % 5 == 0:
-            print(Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
-                '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
-                '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
+#       if next(self._counter) % 5 == 0:
+#           print(Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
+#               '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
+#               '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
         # handle case where both sensors return None
         if _short_range_distance is None and _long_range_distance is None:
             now = dt.now()
