@@ -67,8 +67,6 @@ class RoamSensor(Component):
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
         self._verbose        = False
-        self._last_fused_distance = None
-        self._max_distance_change_per_update = 400  # mm per 200ms
         self._counter = itertools.count()
         # sensor instantiation
         _component_registry = Component.get_registry()
@@ -200,60 +198,43 @@ class RoamSensor(Component):
         return eased_mm
 
     def get_distance(self, apply_easing=True):
+        '''
+        Returns a fused, smoothed, and optionally eased value for Roam behaviour.
+        Uses sigmoid weighting to blend PWM (close range) and VL53 (long range).
+        '''
         _short_range_distance = self._distance_sensor.get_distance()
         _long_range_distance  = self._get_vl53l5cx_front_distance()
-        # outlier rejection for VL53
-        if _long_range_distance is not None and self._last_fused_distance is not None:
-            outlier_rejection_threshold = 400 # was 400 TODO config
-            if abs(_long_range_distance - self._last_fused_distance) >  outlier_rejection_threshold:
-                self._log.warning('VL53 outlier rejected: {:.1f}mm vs last {:.1f}mm'.format(
-                    _long_range_distance, self._last_fused_distance))
-                _long_range_distance = None
         # DIAGNOSTIC
         if next(self._counter) % 5 == 0:
             print(Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
                 '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
                 '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
-        # if both sensors are None, check if we have a recent last value
+        # handle case where both sensors return None
         if _short_range_distance is None and _long_range_distance is None:
             now = dt.now()
             elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
             if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
-                self._log.info('both sensors None, using last value: {:.1f}mm (age: {:.0f}ms)'.format(self._last_value, elapsed_ms))
+                self._log.info('both sensors None, using last value: {:.1f}mm (age: {:.0f}ms)'.format(
+                    self._last_value, elapsed_ms))
                 if apply_easing:
                     return self._normalise_and_ease(self._last_value)
                 else:
                     return self._last_value
-            # last value is too old or doesn't exist
             return -1.0
-        # fuse sensors
+        # fuse sensors using sigmoid or min strategy
         value = self._fuse(_short_range_distance, _long_range_distance)
-        RATE_LIMITING = True
-        if RATE_LIMITING:
-            # rate-limit fused output to prevent jumps
-            if value is not None and self._last_fused_distance is not None:
-                delta = value - self._last_fused_distance
-                if abs(delta) > self._max_distance_change_per_update:
-                    value = self._last_fused_distance + np.sign(delta) * self._max_distance_change_per_update
-                    self._log.info('distance jump limited: {:.1f}mm clamped to {:.1f}mm'.format(delta, value))
-        if value is not None:
-            self._last_fused_distance = value
         # apply smoothing if enabled
-        if self._smoothing:
+        if self._smoothing and value is not None:
             value = self._smooth(value)
-        # update last value and timestamp with fresh data
+        # update cache with fresh data
         if value is not None:
-            if self._verbose:
-                self._log.info('distance: {:.1f}mm (age: {:.0f}ms)'.format(value))
             self._last_value = value
             self._last_read_time = dt.now()
             if apply_easing:
                 return self._normalise_and_ease(value)
             else:
                 return value
-        else:
-            # fusion/smoothing produced None, return None (don't use stale data here)
-            return None
+        return None
 
     def check_timeout(self):
         '''
