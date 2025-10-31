@@ -196,7 +196,8 @@ kros:
             min_distance:                     1            # practical minimum distance in mm
             max_distance:                   270            # practical maximum distance in mm
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
-        vl53l5cx:
+        vl53l5cx_sensor:
+            use_multiprocessing:           True            # handle sensor inside external multiprocessing process
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8

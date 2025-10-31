@@ -125,7 +125,7 @@ class DistanceSensor(Component):
             self._log.debug("pulse width reading None.")
             return None
         if not (self._min_valid_pulse_us <= pulse_us <= self._max_valid_pulse_us):
-#           self._log.debug("pulse width {} out of expected sensor range.".format(pulse_us))
+    #       self._log.debug("pulse width {} out of expected sensor range.".format(pulse_us))
             return None
         distance_mm = (pulse_us - self._min_valid_pulse_us) * 3 / 4
         self._last_read_time = time.time()
@@ -150,18 +150,31 @@ class DistanceSensor(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _external_callback_method(self):
         ''' 
-        The callback called by the external clock as an alternative to the
-        asyncio _loop() method.
+        The callback called by the external clock as an alternative to the asyncio _loop() method.
+        Computes distance and caches it.
         '''
-        _distance_mm = self._compute_distance()
+        distance_mm = self._compute_distance()
+        if distance_mm is not None:
+            self._distance = distance_mm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_distance(self):
         '''
-        Returns the current distance value in millimeters, None if
-        out of range.
+        Returns the current cached distance value in millimeters.
+        Returns None if out of range or timed out.
         '''
-        return self._compute_distance()
+        if self._external_clock is not None:
+            # Using external clock - return cached value
+            if self._distance != -1 and not self.check_timeout():
+                return self._distance
+            return None
+        else:
+            # No external clock - compute on demand AND cache it
+            distance_mm = self._compute_distance()
+            if distance_mm is not None:
+                self._distance = distance_mm
+                # _last_read_time already updated in _compute_distance() line 131
+            return distance_mm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_timeout(self):
