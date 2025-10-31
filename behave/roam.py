@@ -513,6 +513,22 @@ class Roam(AsyncBehaviour):
         if not self._roam_sensor.enabled:
             self._roam_sensor.enable()
         AsyncBehaviour.enable(self)
+        # only auto-align for RELATIVE mode when using world coordinates
+        if self._heading_mode == HeadingMode.RELATIVE and self._use_world_coordinates:
+            self._log.info(Fore.YELLOW + "initialize RELATIVE mode to current orientation…")
+            current_heading = self._imu.poll() % 360.0
+            self._heading_degrees = current_heading
+            self._log.info("RELATIVE mode initialized at IMU heading: {:.2f}°".format(current_heading))
+        self._log.info("roam enabled.")
+
+    def x_enable(self):
+        if self.enabled:
+            self._log.warning("already enabled.")
+            return
+        self._log.info("enabling roam…")
+        if not self._roam_sensor.enabled:
+            self._roam_sensor.enable()
+        AsyncBehaviour.enable(self)
         if self._use_world_coordinates and self._imu is not None and self._use_dynamic_heading:
             self._log.info(Fore.YELLOW + "align to absolute coordinates…")
             current_heading = self._imu.poll() % 360.0

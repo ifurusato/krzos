@@ -23,19 +23,40 @@ from hardware.vl53l5cx import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
 from core.logger import Logger, Level
+from core.boot_session_marker import BootSessionMarker
 
 class Vl53l5cxSensor(Component):
     NAME = 'vl53l5cx-sensor'
     '''
-    Wrapper for VL53L5CX sensor.
-    Handles sensor initialization, configuration, and data acquisition.
-    Uses its own config section: "kros.hardware.vl53l5cx".
-    Extends Component for lifecycle management.
+    Wrapper for VL53L5CX sensor, handling sensor initialization, configuration,
+    and data acquisition.
+
+    Args:
+        config:    application configuration
+        skip:      True = skip firmware load; False = force firmware load; None = use uptime marker
+        level:     loggin level
     '''
-    def __init__(self, config, skip=False, level=Level.INFO):
+    def __init__(self, config, skip=None, level=Level.INFO):
         self._log = Logger(Vl53l5cxSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=True, enabled=False)
         self._log.info('initialising Vl53l5cxSensor…')
+        self._firmware_marker = BootSessionMarker('vl53l5cx_firmware', level=level)
+        # check if we should skip firmware loading
+        if skip is False:  # explicitly force load
+            self._log.info('force loading firmware (skip=False)')
+            _skip_init = False
+            self._firmware_marker.mark()
+        elif skip is True:  # Explicitly skip
+            self._log.info('Skipping firmware load (skip=True)')
+            _skip_init = True
+        else:  # skip is None - use marker auto-detection
+            if self._firmware_marker.is_marked():
+                _skip_init = True
+                self._log.info('skipping firmware load (already loaded)')
+            else:
+                self._log.info('scheduled firmware loading to VL53L5CX.')
+                _skip_init = False
+                self._firmware_marker.mark()
         # configuration
         _cfg = config['kros'].get('hardware').get('vl53l5cx_sensor')
         if _cfg is None or not isinstance(_cfg, dict):
@@ -62,7 +83,7 @@ class Vl53l5cxSensor(Component):
         self._queue = Queue(maxsize=_queue_maxsize)
         self._stop_event = Event()
         self._process = None
-        self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if skip else '', _i2c_bus_number))
+        self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if _skip_init else '', _i2c_bus_number))
         _start_time = dt.now()
         self._vl53 = None
         if _i2c_bus_number == 0:
@@ -70,12 +91,12 @@ class Vl53l5cxSensor(Component):
                 from smbus2 import SMBus
                 _i2c_bus_dev = SMBus(0)
                 # __init__(self, i2c_addr=DEFAULT_I2C_ADDRESS, i2c_dev=None, skip_init=False):
-                self._vl53 = vl53l5cx.VL53L5CX(i2c_dev=_i2c_bus_dev, skip_init=skip)
+                self._vl53 = vl53l5cx.VL53L5CX(i2c_dev=_i2c_bus_dev, skip_init=_skip_init)
             except Exception as e:
                 self._log.error('{} raised connecting to VL53L5CX on I2C bus 0: {}'.format(type(e), e))
                 raise e
         else:
-            self._vl53 = vl53l5cx.VL53L5CX(skip_init=skip)
+            self._vl53 = vl53l5cx.VL53L5CX(skip_init=_skip_init)
         self._vl53.set_resolution(self._cols * self._rows)
         self._vl53.set_ranging_frequency_hz(_cfg.get('ranging_frequency_hz', 10))
         self._vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))
