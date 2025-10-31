@@ -245,7 +245,7 @@ class Roam(AsyncBehaviour):
             self._compass_encoder.update()
             _degrees = self._compass_encoder.get_degrees()
             self.set_heading_degrees(_degrees)
-            self._log.info(Fore.BLUE + "💮 dynamic heading: {:4.2f} degrees".format(_degrees))
+            self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
 
     async def _poll(self):
         '''
@@ -322,6 +322,84 @@ class Roam(AsyncBehaviour):
             self._update_linear_vector()
 
     def _update_intent_vector_absolute(self):
+        '''
+        ABSOLUTE mode: Rotate to match a fixed compass heading (from encoder),
+        while simultaneously performing obstacle-aware forward movement.
+        The robot rotates toward the target heading while moving forward.
+        '''
+        if self._imu is None:
+            self._log.warning("ABSOLUTE mode requires IMU, falling back to RELATIVE")
+            self._update_intent_vector_relative()
+            return
+        # get current compass heading from IMU
+        current_heading = self._imu.poll() % 360.0
+        # get desired heading from compass encoder
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            desired_heading = self._compass_encoder.get_degrees() % 360.0
+        else:
+            desired_heading = self._heading_degrees % 360.0
+        # calculate rotation needed
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        abs_error = abs(error)
+        # calculate omega (rotation component)
+        gain = 0.03
+        if abs_error > self._rotation_tolerance:
+            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
+            omega = rot_speed * (1 if error > 0 else -1)
+        else:
+            omega = 0.0
+        # get forward movement amplitude (from digital pot if available)
+        amplitude = self._default_speed
+        if self._digital_pot:
+            amplitude = self._digital_pot.get_scaled_value(False)
+        if isclose(amplitude, 0.0, abs_tol=0.08):
+            # no forward movement, only rotation
+            self._intent_vector = (0.0, 0.0, omega)
+            if self._verbose:
+                self._log.info("ABSOLUTE: speed zero, rotation only. desired={:.2f}; current={:.2f}; omega={:.3f}".format(
+                    desired_heading, current_heading, omega))
+                self._display_info('ABSOLUTE (rotation only)')
+            return
+        # get obstacle distance and scale amplitude
+        self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
+        if self._front_distance < 0.0:
+            self._log.warning('braking: no distance available.')
+            self._motor_controller.brake()
+            return
+        elif self._front_distance is None:
+            self._log.info('sensor returned None; maintaining current vector')
+            return
+        elif self._front_distance >= self._max_distance:
+            obstacle_scale = 1.0
+        elif self._front_distance <= self._min_distance:
+            obstacle_scale = 0.0
+        else:
+            obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
+            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+        amplitude *= obstacle_scale
+        # rate limiting (same as NONE mode)
+        max_amplitude_change = 0.10
+        delta = amplitude - self._last_amplitude
+        if abs(delta) > max_amplitude_change:
+            amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
+        self._last_amplitude = amplitude
+        # deadband check
+        if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
+            # below deadband: rotation only
+            self._intent_vector = (0.0, 0.0, omega)
+        else:
+            # combine forward movement with rotation
+            # always move in robot-forward direction (0° in robot frame)
+            vx = 0.0        # no lateral movement
+            vy = amplitude  # forward movement
+            self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._log.info("ABSOLUTE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}; amp={:.3f}; dist={:.1f}mm".format(
+                desired_heading, current_heading, error, omega, amplitude, self._front_distance))
+            self._display_info('ABSOLUTE (moving + rotating)')
+
+    def x_update_intent_vector_absolute(self):
         '''
         IMU absolute heading logic: always rotate to a fixed compass heading.
         If you want dynamic absolute targets, poll and respond here as in other modes.

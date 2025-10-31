@@ -942,7 +942,7 @@ class MotorController(Component):
             coast < brake < halt < stop < emergency_stop
         A more urgent brake request interrupts a less urgent one.
         '''
-        self._log.info('🍋 _brake with step {}'.format(step))
+        self._log.info('brake with step {}'.format(step))
         if self.is_stopped:
             self._log.warning('already stopped.')
             self._braking_active = False
