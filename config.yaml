@@ -216,10 +216,10 @@ kros:
             stale_timeout_ms:               250            # value cannot be older than this
         roam_sensor:
             use_sigmoid_fusion:            True            # use either sigmoid or minimum fusion
-            sigmoid_d0:                     200            # sigmoid inflection point (at 250mm)
-            sigmoid_k:                       40            # sigmoid steepness (higher = wider transition)
+            sigmoid_d0:                     250            # sigmoid inflection point (at 250mm)
+            sigmoid_k:                       50            # sigmoid steepness (higher = wider transition)
             smoothing:                     True            # enable smoothing of fused distance
-            smoothing_window:                 3            # window size for moving average
+            smoothing_window:                 5            # window size for moving average
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
