@@ -57,7 +57,6 @@ class HeadingMode(Enum):
         magnetometer, correcting for drift in real-time. The robot moves forward while
         maintaining the absolute compass bearing. Suitable for behaviors that command
         cardinal directions (e.g., "go north", "face bearing 135°").
-        Requires IMU (USFS) to be available.
 
     BLENDED (HeadingMode.BLENDED):
         Absolute compass heading with dynamic offset adjustments. A base absolute heading
@@ -67,7 +66,6 @@ class HeadingMode(Enum):
         permitting adjustments for obstacle avoidance or path optimization. For example,
         OpenPathSensor might set base=270° (west) while dynamically adjusting ±30° to
         find the clearest path.
-        Requires IMU (USFS) to be available.
     '''
     NONE     = 0
     RELATIVE = 1
@@ -278,7 +276,7 @@ class Roam(AsyncBehaviour):
         current_sfwd = self._motor_sfwd.decoder.steps
         current_paft = self._motor_paft.decoder.steps
         current_saft = self._motor_saft.decoder.steps
-        
+
         # Initialize baseline on first call
         if self._last_encoder_pfwd is None:
             self._last_encoder_pfwd = current_pfwd
@@ -286,20 +284,20 @@ class Roam(AsyncBehaviour):
             self._last_encoder_paft = current_paft
             self._last_encoder_saft = current_saft
             return
-        
+
         # Calculate deltas since last update
         delta_pfwd = current_pfwd - self._last_encoder_pfwd
         delta_sfwd = current_sfwd - self._last_encoder_sfwd
         delta_paft = current_paft - self._last_encoder_paft
         delta_saft = current_saft - self._last_encoder_saft
-        
+
         # Calculate rotation (Mecanum kinematics for in-place rotation)
         rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
         degrees_rotated = rotation_steps / self._steps_per_degree
-        
+
         # Update heading
         self._heading_degrees = (self._heading_degrees + degrees_rotated) % 360.0
-        
+
         # Store for next iteration
         self._last_encoder_pfwd = current_pfwd
         self._last_encoder_sfwd = current_sfwd
@@ -313,21 +311,21 @@ class Roam(AsyncBehaviour):
         '''
         # Update current heading based on actual motor encoder movement
         self._update_heading_from_encoders()
-        
+
         # Get desired relative offset from target
         desired_offset = self._target_relative_offset
-        
+
         # Calculate error (how much more do we need to rotate)
         # In RELATIVE mode, we rotate from 0° to the target offset
         current_offset = self._heading_degrees % 360.0
         error = (desired_offset - current_offset + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
-        
+
         # Get forward movement vector, then add rotation
         self._update_linear_vector()
         vx, vy, _ = self._intent_vector
         self._intent_vector = (vx, vy, omega)
-        
+
         if self._verbose:
             self._log.info("RELATIVE: target={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
                 desired_offset, current_offset, error, omega))
@@ -344,15 +342,15 @@ class Roam(AsyncBehaviour):
             desired_heading = self._compass_encoder.get_degrees() % 360.0
         else:
             desired_heading = self._heading_degrees % 360.0
-        
+
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
-        
+
         # let _update_linear_vector handle forward movement, then add rotation
         self._update_linear_vector()
         vx, vy, _ = self._intent_vector
         self._intent_vector = (vx, vy, omega)
-        
+
         if self._verbose:
             self._log.info("ABSOLUTE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
                 desired_heading, current_heading, error, omega))
@@ -366,7 +364,7 @@ class Roam(AsyncBehaviour):
         '''
         # get base heading (set by behavior via set_heading_degrees())
         base_heading = self._heading_degrees % 360.0
-        
+
         # get dynamic offset from encoder (or other source)
         if self._compass_encoder:
             self._compass_encoder.update()
@@ -374,18 +372,18 @@ class Roam(AsyncBehaviour):
             offset = (self._compass_encoder.get_degrees() - 180.0)
         else:
             offset = 0.0
-        
+
         # combine base + offset for final world heading
         desired_heading = (base_heading + offset) % 360.0
         current_heading = self._imu.poll() % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
-        
+
         # let _update_linear_vector handle forward movement, then add rotation
         self._update_linear_vector()
         vx, vy, _ = self._intent_vector
         self._intent_vector = (vx, vy, omega)
-        
+
         if self._verbose:
             self._log.info("BLENDED: base={:.2f}; offset={:.2f}; desired={:.2f}; current={:.2f}; omega={:.3f}".format(
                 base_heading, offset, desired_heading, current_heading, omega))
@@ -405,57 +403,62 @@ class Roam(AsyncBehaviour):
     def _update_linear_vector(self):
         '''
         Handles normal movement intent vector, including obstacle scaling and deadband.
-        
-        Always produces forward motion in robot frame (vx=0, vy=amplitude, omega=0).
+
+        Produces forward or reverse motion in robot frame (vx=0, vy=amplitude, omega=0).
+        Positive amplitude moves forward, negative moves reverse.
         The mode-specific methods (_update_intent_vector_*) add rotation as needed.
+
+        Note: Obstacle detection only applies to forward motion. Reverse has no obstacle avoidance.
         '''
         if self._motor_controller.braking_active:
             self._log.warning('braking active: intent vector suppressed')
             return
         amplitude = self._default_speed
-        if amplitude == 0.0:
+        if self._digital_pot:
+            amplitude = self._digital_pot.get_scaled_value(False)
+        if isclose(amplitude, 0.0, abs_tol=0.01):
             self.clear_intent_vector()
             if self._verbose:
                 self._display_info('update_linear_vector (stopped)')
             return
-        if self._digital_pot:
-            amplitude = self._digital_pot.get_scaled_value(False)
-        # obstacle scaling
-        self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
-        if self._front_distance < 0.0:
-            self._log.warning('braking: no long range distance available.')
-            self._motor_controller.brake()
-            return
-        elif self._front_distance is None:
-            self._log.info(Fore.BLUE + '📘 roam sensor returned: None; maintaining current vector')
-            return
-        elif self._front_distance >= self._max_distance:
-            obstacle_scale = 1.0
-        elif self._front_distance <= self._min_distance:
-            obstacle_scale = 0.0
+        # obstacle scaling only for forward motion
+        if amplitude > 0.0:
+            self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
+            if self._front_distance < 0.0:
+                self._log.warning('braking: no long range distance available.')
+                self._motor_controller.brake()
+                return
+            elif self._front_distance is None:
+                self._log.info(Fore.BLUE + 'roam sensor returned: None; maintaining current vector')
+                return
+            elif self._front_distance >= self._max_distance:
+                obstacle_scale = 1.0
+            elif self._front_distance <= self._min_distance:
+                obstacle_scale = 0.0
+            else:
+                obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
+                obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+            amplitude *= obstacle_scale
         else:
-            obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
-            obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-        amplitude *= obstacle_scale
-        # smooth amplitude changes to prevent PID instability in closed loop
+            # reverse motion - no obstacle detection
+            self._front_distance = 0.0
+        # smooth amplitude changes
         max_amplitude_change = 0.10
         delta = amplitude - self._last_amplitude
         if abs(delta) > max_amplitude_change:
             amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
         self._last_amplitude = amplitude
-        # log every 10 cycles to see what's happening
+        # log every 10 cycles
         if next(self._counter) % 10 == 0:
-            self._log.info('dist: {:.0f}mm, scale: {:.3f}, base_amp: {:.2f}, final_amp: {:.3f}'.format(
-                self._front_distance, obstacle_scale, self._default_speed, amplitude))
+            direction = "FWD" if amplitude >= 0.0 else "REV"
+            self._log.info('{}: amp: {:.3f}'.format(direction, amplitude))
         # deadband
-        if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
+        if abs(amplitude) < self._deadband_threshold:
             self.clear_intent_vector()
         else:
-            # always move forward in robot frame - rotation is handled by mode-specific methods
             vx = 0.0
             vy = amplitude
             omega = 0.0
-            print(Fore.CYAN + 'vector: ({:.3f}, {:.3f}, {:.3f}); distance: {:4.2f}mm'.format(vx, vy, omega, self._front_distance) + Style.RESET_ALL)
             self._intent_vector = (vx, vy, omega)
         if self._verbose:
             self._display_info('update_linear_vector (active)')
@@ -476,9 +479,7 @@ class Roam(AsyncBehaviour):
                     + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance))
         else:
             self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
-                    self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]
-                )
-            )
+                    self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
 
     def get_highlight_color(self, value):
         from colorama import Fore, Style
