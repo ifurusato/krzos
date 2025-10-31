@@ -7,8 +7,9 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-10-31
+# modified: 2025-11-01
 
+import sys
 import time
 import itertools
 from enum import Enum
@@ -30,8 +31,6 @@ from hardware.compass_encoder import CompassEncoder
 from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
 from core.orientation import Orientation
-
-from enum import Enum
 
 class HeadingMode(Enum):
     '''
@@ -117,17 +116,16 @@ class Roam(AsyncBehaviour):
         self._min_distance           = _rs_cfg.get('min_distance')
         self._max_distance           = _rs_cfg.get('max_distance')
         self._heading_degrees        = 0.0
-        self._target_heading_degrees = None
-        self._is_rotating            = False
+        self._target_relative_offset = 0.0
         self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
-        self._rotation_decel_window  = _cfg.get('rotation_decel_window', 12)
         self._rotation_tolerance     = _cfg.get('rotation_tolerance', 2.0)
-        self._rotation_direction     = 1
-        self._rotation_required_degrees = None
-        self._rotation_accumulated_degrees = 0.0
-        self._last_relative_offset   = 0.0
         self._front_distance         = 0.0
         self._last_amplitude         = 0.0
+        # encoder tracking for RELATIVE mode
+        self._last_encoder_pfwd      = None
+        self._last_encoder_sfwd      = None
+        self._last_encoder_paft      = None
+        self._last_encoder_saft      = None
         # component access
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
@@ -141,12 +139,17 @@ class Roam(AsyncBehaviour):
         self._compass_encoder = None
         if self._use_dynamic_heading:
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
-        # use IMU if world coordinates flag set, IMU is available, and heading mode is not NONE
+        # use IMU if world coordinates flag set and heading mode requires it
         self._imu = None
         if self._use_world_coordinates and self._use_dynamic_heading:
             self._imu = _component_registry.get(Usfs.NAME)
-            if self._imu is None:
-                raise MissingComponentError('heading mode requires IMU to be available.')
+        # validate required components for heading modes
+        if self._heading_mode == HeadingMode.ABSOLUTE and self._imu is None:
+            raise MissingComponentError('ABSOLUTE heading mode requires IMU (USFS) to be available.')
+        if self._heading_mode == HeadingMode.BLENDED and self._imu is None:
+            raise MissingComponentError('BLENDED heading mode requires IMU (USFS) to be available.')
+        if self._use_dynamic_heading and self._compass_encoder is None and self._digital_pot is None:
+            raise MissingComponentError('Dynamic heading requires compass encoder or digital pot to be available.')
         # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
         self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
@@ -165,30 +168,18 @@ class Roam(AsyncBehaviour):
         self._log.info('ready.')
 
     def set_heading_degrees(self, degrees):
+        '''
+        Set target heading. Interpretation depends on mode:
+        - RELATIVE: degrees is an offset from starting orientation (0-360°)
+        - ABSOLUTE/BLENDED: degrees is absolute compass heading (0-360°)
+        '''
         degrees = float(degrees) % 360.0
-        if self._is_rotating and self._target_heading_degrees is not None and \
-                abs((degrees - self._target_heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            self._log.debug('already rotating to {:.2f}°, ignoring duplicate heading request.'.format(degrees))
-            return
-        if abs((degrees - self._heading_degrees + 180.0) % 360.0 - 180.0) < self._rotation_tolerance:
-            self._log.debug('already at {:.2f}°, within tolerance. No rotation needed.'.format(degrees))
-            return
-        current = self._heading_degrees % 360.0
-        target = degrees
-        delta = (target - current + 180.0) % 360.0 - 180.0
-        self._rotation_direction = copysign(1, delta)
-        self._rotation_required_degrees = abs(delta)
-        self._target_heading_degrees = degrees
-        self._is_rotating = True
-        self._rotation_accumulated_degrees = 0.0
-        self._rotation_start_pfwd = self._motor_pfwd.decoder.steps
-        self._rotation_start_sfwd = self._motor_sfwd.decoder.steps
-        self._rotation_start_paft = self._motor_paft.decoder.steps
-        self._rotation_start_saft = self._motor_saft.decoder.steps
-        self._log.info('heading change requested: rotating {:.2f} degrees {} to {:.2f}.'.format(
-            self._rotation_required_degrees,
-            "cw" if self._rotation_direction > 0 else "ccw",
-            degrees))
+        if self._heading_mode == HeadingMode.RELATIVE:
+            self._target_relative_offset = degrees
+            self._log.info('RELATIVE: target offset set to {:.2f}°'.format(degrees))
+        else:
+            self._heading_degrees = degrees
+            self._log.info('heading set to {:.2f}°'.format(degrees))
 
     def set_heading_radians(self, radians):
         self.set_heading_degrees(np.degrees(radians))
@@ -206,56 +197,17 @@ class Roam(AsyncBehaviour):
 
     def callback(self):
         self._log.info('roam behaviour callback.')
-        raise Exception('UNSUPPORTED callback') # TEMP
+        raise Exception('UNSUPPORTED callback')
 
     def execute(self, message):
         print('execute message {}.'.format(message))
-        raise Exception('UNSUPPORTED execute') # TEMP
-        if self.suppressed:
-            self._log.info(Style.DIM + 'roam suppressed; message: {}'.format(message.event.label))
-        else:
-            self._log.info('roam execute; message: {}'.format(message.event.label))
-            _payload = message.payload
-            _event = _payload.event
-            _timestamp = self._message_bus.last_message_timestamp
-            if _timestamp is None:
-                self._log.info('roam loop execute; no previous messages.')
-            else:
-                _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
-                self._log.info('roam loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
-            if self.enabled:
-                self._log.info('roam enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
-            else:
-                self._log.info('roam disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
+        raise Exception('UNSUPPORTED execute')
 
     def start_loop_action(self):
         self._accelerate()
 
     def stop_loop_action(self):
         self._decelerate()
-
-#   async def _loop_main(self):
-#       self._log.info("roam loop started with {:.2f}s delay…".format(self._poll_delay_sec))
-#       try:
-#           if not self.suppressed:
-#               self._accelerate()
-#           while not self._stop_event.is_set():
-#               if not self.suppressed:
-#                   await self._poll()
-#               else:
-#                   self._log.info(Fore.WHITE + "suppressed…")
-#               await asyncio.sleep(self._poll_delay_sec)
-#               if not self.enabled:
-#                   break
-#       except asyncio.CancelledError:
-#           self._log.info("roam loop cancelled.")
-#       except Exception as e:
-#           self._log.error('{} encountered in roam loop: {}'.format(type(e), e))
-#           self.disable()
-#       finally:
-#           if not self.suppressed:
-#               self._decelerate()
-#           self._log.info("roam loop stopped.")
 
     def _dynamic_set_default_speed(self):
         if self._digital_pot:
@@ -266,7 +218,6 @@ class Roam(AsyncBehaviour):
             else:
                 self._digital_pot.set_rgb(self._digital_pot.value)
                 self._default_speed = _speed
-#               self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
 
     def _dynamic_set_heading(self):
         if self._compass_encoder:
@@ -307,7 +258,7 @@ class Roam(AsyncBehaviour):
         match self._heading_mode:
             case HeadingMode.NONE:
                 self._update_linear_vector()
-            case HeadingMode.RELATIVE: # TEMP
+            case HeadingMode.RELATIVE:
                 self._update_intent_vector_relative()
             case HeadingMode.ABSOLUTE:
                 self._update_intent_vector_absolute()
@@ -316,29 +267,70 @@ class Roam(AsyncBehaviour):
             case _:
                 raise NotImplementedError("Unhandled heading mode: {}".format(self._heading_mode))
 
+    def _update_heading_from_encoders(self):
+        '''
+        Update self._heading_degrees based on actual motor encoder deltas.
+        Tracks rotation by measuring differential encoder movement.
+        Used by RELATIVE mode to maintain awareness of actual robot orientation.
+        '''
+        # Get current encoder positions
+        current_pfwd = self._motor_pfwd.decoder.steps
+        current_sfwd = self._motor_sfwd.decoder.steps
+        current_paft = self._motor_paft.decoder.steps
+        current_saft = self._motor_saft.decoder.steps
+        
+        # Initialize baseline on first call
+        if self._last_encoder_pfwd is None:
+            self._last_encoder_pfwd = current_pfwd
+            self._last_encoder_sfwd = current_sfwd
+            self._last_encoder_paft = current_paft
+            self._last_encoder_saft = current_saft
+            return
+        
+        # Calculate deltas since last update
+        delta_pfwd = current_pfwd - self._last_encoder_pfwd
+        delta_sfwd = current_sfwd - self._last_encoder_sfwd
+        delta_paft = current_paft - self._last_encoder_paft
+        delta_saft = current_saft - self._last_encoder_saft
+        
+        # Calculate rotation (Mecanum kinematics for in-place rotation)
+        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
+        degrees_rotated = rotation_steps / self._steps_per_degree
+        
+        # Update heading
+        self._heading_degrees = (self._heading_degrees + degrees_rotated) % 360.0
+        
+        # Store for next iteration
+        self._last_encoder_pfwd = current_pfwd
+        self._last_encoder_sfwd = current_sfwd
+        self._last_encoder_paft = current_paft
+        self._last_encoder_saft = current_saft
+
     def _update_intent_vector_relative(self):
         '''
-        RELATIVE mode: Rotate relative to robot's current orientation
-        while performing obstacle-aware forward movement.
+        RELATIVE mode: Continuously servo to achieve a relative heading offset.
+        Tracks actual robot orientation via encoder odometry.
         '''
-        # get desired relative heading from encoder/knob
-        if self._compass_encoder:
-            self._compass_encoder.update()
-            desired_heading = self._compass_encoder.get_degrees() % 360.0
-        elif self._digital_pot:
-            desired_heading = self._digital_pot.get_scaled_value(True) * 180.0
-        else:
-            desired_heading = self._get_dynamic_relative_offset()
-        current_heading = self._heading_degrees % 360.0
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        # Update current heading based on actual motor encoder movement
+        self._update_heading_from_encoders()
+        
+        # Get desired relative offset from target
+        desired_offset = self._target_relative_offset
+        
+        # Calculate error (how much more do we need to rotate)
+        # In RELATIVE mode, we rotate from 0° to the target offset
+        current_offset = self._heading_degrees % 360.0
+        error = (desired_offset - current_offset + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
-        # let _update_linear_vector handle forward movement, then add rotation
+        
+        # Get forward movement vector, then add rotation
         self._update_linear_vector()
         vx, vy, _ = self._intent_vector
         self._intent_vector = (vx, vy, omega)
+        
         if self._verbose:
-            self._log.info("RELATIVE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
-                desired_heading, current_heading, error, omega))
+            self._log.info("RELATIVE: target={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
+                desired_offset, current_offset, error, omega))
             self._display_info('RELATIVE')
 
     def _update_intent_vector_absolute(self):
@@ -352,16 +344,52 @@ class Roam(AsyncBehaviour):
             desired_heading = self._compass_encoder.get_degrees() % 360.0
         else:
             desired_heading = self._heading_degrees % 360.0
+        
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
+        
         # let _update_linear_vector handle forward movement, then add rotation
         self._update_linear_vector()
         vx, vy, _ = self._intent_vector
         self._intent_vector = (vx, vy, omega)
+        
         if self._verbose:
             self._log.info("ABSOLUTE: desired={:.2f}; current={:.2f}; error={:.2f}; omega={:.3f}".format(
                 desired_heading, current_heading, error, omega))
             self._display_info('ABSOLUTE')
+
+    def _update_intent_vector_blended(self):
+        '''
+        BLENDED mode: Absolute compass heading with dynamic offset adjustments.
+        Base heading set via set_heading_degrees(), offset from compass encoder.
+        Combines absolute world heading with real-time adjustments for obstacles.
+        '''
+        # get base heading (set by behavior via set_heading_degrees())
+        base_heading = self._heading_degrees % 360.0
+        
+        # get dynamic offset from encoder (or other source)
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            # map encoder 0-360° to offset range ±180°
+            offset = (self._compass_encoder.get_degrees() - 180.0)
+        else:
+            offset = 0.0
+        
+        # combine base + offset for final world heading
+        desired_heading = (base_heading + offset) % 360.0
+        current_heading = self._imu.poll() % 360.0
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        omega = self._calculate_omega(error)
+        
+        # let _update_linear_vector handle forward movement, then add rotation
+        self._update_linear_vector()
+        vx, vy, _ = self._intent_vector
+        self._intent_vector = (vx, vy, omega)
+        
+        if self._verbose:
+            self._log.info("BLENDED: base={:.2f}; offset={:.2f}; desired={:.2f}; current={:.2f}; omega={:.3f}".format(
+                base_heading, offset, desired_heading, current_heading, omega))
+            self._display_info('BLENDED')
 
     def _calculate_omega(self, error):
         '''
@@ -374,106 +402,12 @@ class Roam(AsyncBehaviour):
             return rot_speed * (1 if error > 0 else -1)
         return 0.0
 
-    def _update_intent_vector_blended(self):
-        '''
-        BLENDED mode: Absolute compass heading with dynamic offset adjustments.
-        Base heading set via set_heading_degrees(), offset from compass encoder.
-        Combines absolute world heading with real-time adjustments for obstacles.
-        '''
-        # get base heading (set by behavior via set_heading_degrees())
-        base_heading = self._heading_degrees % 360.0
-        # get dynamic offset from encoder (or other source)
-        if self._compass_encoder:
-            self._compass_encoder.update()
-            # map encoder 0-360° to offset range ±180°
-            offset = (self._compass_encoder.get_degrees() - 180.0)
-        else:
-            offset = self._get_dynamic_relative_offset()
-        # combine base + offset for final world heading
-        desired_heading = (base_heading + offset) % 360.0
-        current_heading = self._imu.poll() % 360.0
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        omega = self._calculate_omega(error)
-        # let _update_linear_vector handle forward movement, then add rotation
-        self._update_linear_vector()
-        vx, vy, _ = self._intent_vector
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._log.info("BLENDED: base={:.2f}; offset={:.2f}; desired={:.2f}; current={:.2f}; omega={:.3f}".format(
-                base_heading, offset, desired_heading, current_heading, omega))
-            self._display_info('BLENDED')
-
-    def _get_dynamic_relative_offset(self):
-        '''
-        Placeholder for behaviour-provided relative offset.
-        Replace or extend as needed for your architecture.
-        '''
-        return 0.0
-
-    def _update_rotation_vector_imu(self):
-        '''
-        IMU-based rotation logic.
-        '''
-        current_heading = self._imu.poll() % 360.0
-        target = self._target_heading_degrees
-        delta = (target - current_heading + 180.0) % 360.0 - 180.0
-        abs_remaining = abs(delta)
-        self._log.info(
-            'IMU ROTATE: imu_heading={:.2f}, target={:.2f}, delta={:.2f}, tolerance={:.2f}'.format(
-                current_heading, target, delta, self._rotation_tolerance
-            )
-        )
-        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
-            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
-        else:
-            rot_speed = self._rotation_speed
-        rot_speed = max(rot_speed, 0.08)
-        omega = rot_speed * copysign(1, delta)
-        if isclose(current_heading, target, abs_tol=self._rotation_tolerance) or abs_remaining < self._rotation_tolerance:
-            self._heading_degrees = target
-            self._is_rotating = False
-            self._target_heading_degrees = None
-            omega = 0.0
-            self._log.info('IMU rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
-        self._intent_vector = (0.0, 0.0, omega)
-        if self._verbose:
-            self._display_info('IMU rotating')
-
-    def _update_rotation_vector_encoder(self):
-        '''
-        Encoder-based rotation logic.
-        '''
-        delta_pfwd = self._motor_pfwd.decoder.steps - self._rotation_start_pfwd
-        delta_sfwd = self._motor_sfwd.decoder.steps - self._rotation_start_sfwd
-        delta_paft = self._motor_paft.decoder.steps - self._rotation_start_paft
-        delta_saft = self._motor_saft.decoder.steps - self._rotation_start_saft
-        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
-        degrees_rotated = abs(rotation_steps / self._steps_per_degree)
-        self._rotation_accumulated_degrees = degrees_rotated
-        abs_remaining = self._rotation_required_degrees - degrees_rotated
-        if abs_remaining < self._rotation_decel_window and abs_remaining > 0.0:
-            rot_speed = self._rotation_speed * (abs_remaining / self._rotation_decel_window)
-        else:
-            rot_speed = self._rotation_speed
-        rot_speed = max(rot_speed, 0.08)
-        omega = rot_speed * self._rotation_direction
-        if isclose(degrees_rotated, self._rotation_required_degrees, abs_tol=self._rotation_tolerance) or \
-           degrees_rotated >= self._rotation_required_degrees:
-            self._heading_degrees = self._target_heading_degrees
-            self._is_rotating = False
-            self._target_heading_degrees = None
-            omega = 0.0
-            self._log.info('Encoder rotation complete; now facing {:.2f} degrees.'.format(self._heading_degrees))
-        self._intent_vector = (0.0, 0.0, omega)
-        if self._verbose:
-            self._display_info('rotating')
-
     def _update_linear_vector(self):
         '''
         Handles normal movement intent vector, including obstacle scaling and deadband.
-
-        Minimal implementation: use stored heading_degrees (0.0 in NONE mode),
-        compute radians once, then vx/vy. No IMU polling here.
+        
+        Always produces forward motion in robot frame (vx=0, vy=amplitude, omega=0).
+        The mode-specific methods (_update_intent_vector_*) add rotation as needed.
         '''
         if self._motor_controller.braking_active:
             self._log.warning('braking active: intent vector suppressed')
@@ -496,43 +430,30 @@ class Roam(AsyncBehaviour):
             self._log.info(Fore.BLUE + '📘 roam sensor returned: None; maintaining current vector')
             return
         elif self._front_distance >= self._max_distance:
-#           self._log.info('📘 > roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = 1.0
         elif self._front_distance <= self._min_distance:
-#           self._log.info('📘 < roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = 0.0
         else:
-#           self._log.info('📘   roam sensor returned: {:4.2f}mm'.format(self._front_distance))
             obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
             obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-
         amplitude *= obstacle_scale
-
-        RATE_LIMIT = True
-        if RATE_LIMIT:
-            # smooth amplitude changes to prevent PID instability in closed loop
-            max_amplitude_change = 0.10  # was 0.05; only allow 5% change per 200ms update
-            delta = amplitude - self._last_amplitude
-            if abs(delta) > max_amplitude_change:
-                amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
-            self._last_amplitude = amplitude
-
+        # smooth amplitude changes to prevent PID instability in closed loop
+        max_amplitude_change = 0.10
+        delta = amplitude - self._last_amplitude
+        if abs(delta) > max_amplitude_change:
+            amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
+        self._last_amplitude = amplitude
         # log every 10 cycles to see what's happening
         if next(self._counter) % 10 == 0:
             self._log.info('dist: {:.0f}mm, scale: {:.3f}, base_amp: {:.2f}, final_amp: {:.3f}'.format(
                 self._front_distance, obstacle_scale, self._default_speed, amplitude))
-
         # deadband
         if self._deadband_threshold > 0 and amplitude < self._deadband_threshold:
             self.clear_intent_vector()
         else:
-            if self._heading_degrees != 0.0: # TEMP
-                self._log.error('heading should not be non-zero when dynamic heading is disabled.')
-                sys.exit(1)
-                return
-            angle_rad = np.deg2rad(self._heading_degrees)
-            vx = np.sin(angle_rad) * amplitude
-            vy = np.cos(angle_rad) * amplitude
+            # always move forward in robot frame - rotation is handled by mode-specific methods
+            vx = 0.0
+            vy = amplitude
             omega = 0.0
             print(Fore.CYAN + 'vector: ({:.3f}, {:.3f}, {:.3f}); distance: {:4.2f}mm'.format(vx, vy, omega, self._front_distance) + Style.RESET_ALL)
             self._intent_vector = (vx, vy, omega)
@@ -576,12 +497,12 @@ class Roam(AsyncBehaviour):
 
     def _accelerate(self):
         self._log.info("accelerate…")
-        if self._motor_controller: #TEMP
+        if self._motor_controller:
             self._motor_controller.accelerate(self._default_speed, enabled=lambda: not self._stop_event.is_set())
 
     def _decelerate(self):
         self._log.info("decelerate…")
-        if self._motor_controller: # TEMP
+        if self._motor_controller:
             self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
     def enable(self):
