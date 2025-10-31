@@ -145,6 +145,8 @@ class Roam(AsyncBehaviour):
         self._imu = None
         if self._use_world_coordinates and self._use_dynamic_heading:
             self._imu = _component_registry.get(Usfs.NAME)
+            if self._imu is None:
+                raise MissingComponentError('heading mode requires IMU to be available.')
         # get motor objects
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
         self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
@@ -344,10 +346,6 @@ class Roam(AsyncBehaviour):
         ABSOLUTE mode: Rotate to match compass heading (from IMU)
         while performing obstacle-aware forward movement.
         '''
-        if self._imu is None:
-            self._log.warning("ABSOLUTE mode requires IMU, falling back to RELATIVE")
-            self._update_intent_vector_relative()
-            return
         current_heading = self._imu.poll() % 360.0
         if self._compass_encoder:
             self._compass_encoder.update()
@@ -378,48 +376,32 @@ class Roam(AsyncBehaviour):
 
     def _update_intent_vector_blended(self):
         '''
-        BLENDED mode: Track a world-relative heading.
-        The desired heading is always sourced from the compass encoder, representing the world direction.
-        The robot rotates to minimize the error between its IMU heading and this world direction.
-        The robot will not rotate or move if dynamic speed is 0.0.
-        No base heading, no state, no lock, always dynamic.
+        BLENDED mode: Absolute compass heading with dynamic offset adjustments.
+        Base heading set via set_heading_degrees(), offset from compass encoder.
+        Combines absolute world heading with real-time adjustments for obstacles.
         '''
-        if self._imu is None:
-            self._update_intent_vector_relative()
-            return
-        # check dynamic speed before rotating or moving
-        amplitude = self._default_speed
-        if self._digital_pot:
-            amplitude = self._digital_pot.get_scaled_value(False)
-        if isclose(amplitude, 0.0, abs_tol=0.08):
-            self._intent_vector = (0.0, 0.0, 0.0)
-            if self._verbose:
-                self._log.info("BLENDED: dynamic speed is 0.0, intent vector zeroed.")
-                self._display_info('BLENDED (speed zero)')
-            return
-        current_heading = self._imu.poll() % 360.0
-        # always poll the current encoder value for world-relative heading
+        # get base heading (set by behavior via set_heading_degrees())
+        base_heading = self._heading_degrees % 360.0
+        # get dynamic offset from encoder (or other source)
         if self._compass_encoder:
             self._compass_encoder.update()
-            desired_heading = self._compass_encoder.get_degrees() % 360.0
+            # map encoder 0-360° to offset range ±180°
+            offset = (self._compass_encoder.get_degrees() - 180.0)
         else:
-            desired_heading = self._get_dynamic_relative_offset()
+            offset = self._get_dynamic_relative_offset()
+        # combine base + offset for final world heading
+        desired_heading = (base_heading + offset) % 360.0
+        current_heading = self._imu.poll() % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        abs_error = abs(error)
-        gain = 0.03
-        if abs_error > self._rotation_tolerance:
-            rot_speed = max(min(self._rotation_speed, abs_error * gain), 0.08)
-            omega = rot_speed * (1 if error > 0 else -1)
-        else:
-            omega = 0.0
-        self._intent_vector = (0.0, 0.0, omega)
+        omega = self._calculate_omega(error)
+        # let _update_linear_vector handle forward movement, then add rotation
+        self._update_linear_vector()
+        vx, vy, _ = self._intent_vector
+        self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("BLENDED: encoder {}; desired {}; current {}; error {}; omega {}".format(
-                self._compass_encoder.get_degrees() if self._compass_encoder else None,
-                desired_heading, current_heading, error, omega))
-            self._display_info('BLENDED (tracking world direction)')
-        if omega == 0.0:
-            self._update_linear_vector()
+            self._log.info("BLENDED: base={:.2f}; offset={:.2f}; desired={:.2f}; current={:.2f}; omega={:.3f}".format(
+                base_heading, offset, desired_heading, current_heading, omega))
+            self._display_info('BLENDED')
 
     def _get_dynamic_relative_offset(self):
         '''
