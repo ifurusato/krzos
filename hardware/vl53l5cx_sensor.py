@@ -173,6 +173,38 @@ class Vl53l5cxSensor(Component):
 
     def get_distance_mm(self):
         '''
+        Returns sensor data with rows properly oriented (row 0 = top/far, row 7 = bottom/floor).
+        '''
+        if not self.enabled:
+            self._log.warning('get_distance_mm called while sensor is not enabled.')
+            return None
+        if self._use_multiprocessing:
+            try:
+                value = self._queue.get_nowait()
+                # reshape and flip once at source
+                if value is not None:
+                    arr = np.array(value).reshape((self._rows, self._cols))
+                    arr = np.flipud(arr)
+                    return arr.flatten().tolist() # return as flat list, properly oriented
+                return None
+            except Exception:
+                return None
+        else:
+            start = dt.now()
+            while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
+                time.sleep(0.01)
+            try:
+                data = self._vl53.get_data()
+                # reshape and flip once at source
+                arr = np.array(data.distance_mm).reshape((self._rows, self._cols))
+                arr = np.flipud(arr)
+                return arr.flatten().tolist() # return as flat list, properly oriented
+            except Exception as e:
+                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
+                return None
+
+    def x_get_distance_mm(self):
+        '''
         Returns the oldest sensor data from the process queue (non-blocking).
         '''
         if not self.enabled:
@@ -213,7 +245,7 @@ class Vl53l5cxSensor(Component):
             return
         samples = np.array(samples)  # shape: (samples, _rows, _cols)
         clear_distance = True
-        for row in range(self._rows):
+        for row in reversed(range(self._rows)):
             values = samples[:, row, :].flatten()
             mean = values.mean()
             stddev = values.std()
