@@ -244,17 +244,80 @@ class Vl53l5cxSensor(Component):
             self._log.warning('no calibration samples collected, check sensor connection.')
             return
         samples = np.array(samples)  # shape: (samples, _rows, _cols)
-        clear_distance = True
+        # check if we have minimum clear space (using upper rows which should see into distance)
+        upper_rows_data = samples[:, 0:4, :].flatten()  # rows 0-3 should see far
+        upper_mean = upper_rows_data.mean()
+        clear_distance = upper_mean >= self._minimum_free_distance
+        if not clear_distance:
+            self._log.warning('not enough clear space detected: upper rows mean = {:.1f}mm (minimum: {}mm)'.format(
+                upper_mean, self._minimum_free_distance))
+        # identify floor rows starting from bottom (row 7) and working up
+        for row in reversed(range(self._rows)):  # 7, 6, 5, 4, 3, 2, 1, 0
+            values = samples[:, row, :].flatten()
+            mean = values.mean()
+            stddev = values.std()
+            self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
+            # floor detection: low stddev = consistent reading = floor
+            if stddev < self._stddev_threshold:
+                self._floor_row_means[row] = mean
+                self._floor_row_stddevs[row] = stddev
+                self._log.info(Fore.WHITE + 'row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+            else:
+                # high stddev = variable distances = not floor
+                self._floor_row_means[row] = None
+                self._floor_row_stddevs[row] = None
+                self._log.info(Fore.WHITE + 'row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+                # all rows above this cannot be floor rows
+                for above_row in range(0, row):  # mark all rows above as not floor
+                    self._floor_row_means[above_row] = None
+                    self._floor_row_stddevs[above_row] = None
+                break  # exit the calibration loop
+        detected_floor_rows = [i for i, v in enumerate(self._floor_row_means) if v is not None]
+        if detected_floor_rows:
+            self._log.info(Fore.WHITE + 'floor rows detected (indices): {}'.format(detected_floor_rows))
+        if all(val is None for val in self._floor_row_means):
+            # force bottom row as floor
+            values = samples[:, 7, :].flatten()  # row 7 is bottom
+            self._floor_row_means[7] = values.mean()
+            self._floor_row_stddevs[7] = values.std()
+            if clear_distance:
+                self._log.warning('no floor detected during calibration, forcibly marking bottom row as floor.')
+            else:
+                self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row as floor.')
+        self._log.info(Fore.WHITE + 'floor rows calibrated.')
+
+    def x_calibrate_floor_rows(self):
+        self._log.info(Fore.WHITE + 'calibrating floor rows using {} samples…'.format(self._calibration_samples))
+        self._floor_row_means   = [None for _ in range(self._rows)]
+        self._floor_row_stddevs = [None for _ in range(self._rows)]
+        samples = []
+        for i in range(self._calibration_samples):
+            data = self.get_distance_mm() # returns an 8x8 array
+            if data is None:
+                self._log.info("calibration sample {} is None.".format(i))
+                continue
+            arr = np.array(data).reshape((self._rows, self._cols))
+            # Debug: print what row 0 and row 7 look like
+            self._log.info('DEBUG: arr[0] (row 0) = {}'.format(arr[0]))
+            self._log.info('DEBUG: arr[7] (row 7) = {}'.format(arr[7]))
+            samples.append(arr)
+            time.sleep(0.15)
+        if len(samples) == 0:
+            self._log.warning('no calibration samples collected, check sensor connection.')
+            return
+        samples = np.array(samples)  # shape: (samples, _rows, _cols)
         for row in reversed(range(self._rows)):
             values = samples[:, row, :].flatten()
             mean = values.mean()
             stddev = values.std()
-            if mean < self._minimum_free_distance:
-                # not enough free space in front of robot
-                clear_distance = False
-            else:
-                self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
-            if clear_distance and ( stddev < self._stddev_threshold ):
+
+#           if mean < self._minimum_free_distance:
+#               # not enough free space in front of robot
+#               clear_distance = False
+#           else:
+            self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
+
+            if stddev < self._stddev_threshold:
                 self._floor_row_means[row] = mean
                 self._floor_row_stddevs[row] = stddev
                 self._log.info(Fore.WHITE + 'row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
