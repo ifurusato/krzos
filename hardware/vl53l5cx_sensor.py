@@ -25,7 +25,7 @@ from core.component import Component
 from core.logger import Logger, Level
 
 class Vl53l5cxSensor(Component):
-    NAME = 'vl53l5cx'
+    NAME = 'vl53l5cx-sensor'
     '''
     Wrapper for VL53L5CX sensor.
     Handles sensor initialization, configuration, and data acquisition.
@@ -49,7 +49,7 @@ class Vl53l5cxSensor(Component):
         self._calibration_samples = _cfg.get('calibration_samples', 10)
         self._stddev_threshold = _cfg.get('stddev_threshold', 100)
         self._floor_margin = _cfg.get('floor_margin', 50)
-        self._use_multiprocessing = True
+        self._use_multiprocessing = False
         self._vl53_read_timeout_sec = 2.0 # seconds
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
@@ -160,6 +160,9 @@ class Vl53l5cxSensor(Component):
                         daemon=True
                     )
                     self._process.start()
+                    # give the process time to start polling and fill queue
+                    self._log.info('waiting for multiprocessing queue to populate…')
+                    time.sleep(1.0)  # 500ms should be enough for several readings
             else:
                 pass
 
@@ -204,7 +207,7 @@ class Vl53l5cxSensor(Component):
                 continue
             arr = np.array(data).reshape((self._rows, self._cols))
             samples.append(arr)
-            time.sleep(0.05)
+            time.sleep(0.15)
         if len(samples) == 0:
             self._log.warning('no calibration samples collected, check sensor connection.')
             return

@@ -66,6 +66,7 @@ class RoamSensor(Component):
         self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
         self._easing         = Easing.from_string(_easing_value)
         self._log.info('easing function: {}'.format(self._easing.name))
+        self._verbose        = False
         self._last_fused_distance = None
         self._max_distance_change_per_update = 400  # mm per 200ms
         self._counter = itertools.count()
@@ -218,8 +219,7 @@ class RoamSensor(Component):
             now = dt.now()
             elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
             if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
-                self._log.info('both sensors None, using last value: {:.1f}mm (age: {:.0f}ms)'.format(
-                    self._last_value, elapsed_ms))
+                self._log.info('both sensors None, using last value: {:.1f}mm (age: {:.0f}ms)'.format(self._last_value, elapsed_ms))
                 if apply_easing:
                     return self._normalise_and_ease(self._last_value)
                 else:
@@ -243,6 +243,8 @@ class RoamSensor(Component):
             value = self._smooth(value)
         # update last value and timestamp with fresh data
         if value is not None:
+            if self._verbose:
+                self._log.info('distance: {:.1f}mm (age: {:.0f}ms)'.format(value))
             self._last_value = value
             self._last_read_time = dt.now()
             if apply_easing:
