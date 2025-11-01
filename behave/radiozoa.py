@@ -100,8 +100,6 @@ class Radiozoa(AsyncBehaviour):
             self._radiozoa_sensor = RadiozoaSensor(config, level=Level.INFO)
         else:
             self._log.info(Fore.WHITE + 'using existing Radiozoa sensor.')
-        self._intent_vector_registered = False
-#       self._register_intent_vector()
         self._log.info('ready.')
 
     @property

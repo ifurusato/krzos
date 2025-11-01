@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-25
-# modified: 2025-10-25
+# modified: 2025-11-02
 #
 # Provides fused distance readings for sensing directly sideways.
 
@@ -22,7 +22,7 @@ from core.logger import Logger, Level
 from core.cardinal import Cardinal
 from core.component import Component
 from core.orientation import Orientation
-from hardware.radiozoa_sensor import RadiozoaSensor
+from hardware.distance_sensor import DistanceSensor
 from hardware.distance_sensors import DistanceSensors
 
 class SideSensor(Component):
@@ -35,12 +35,11 @@ class SideSensor(Component):
     prioritized for close range (0–max_range), VL53L0X for mid-to-far
     range. Smoothing is optionally applied to stabilize the output.
 
-    The RadiozoaSensor and DistanceSensor can already exist in the Component
-    Registry or be passed as arguments.
+    The RadiozoaSensor and DistanceSensor(s) can already exist in the
+    Component Registry or be passed as arguments.
 
     :param config:             the application configuration
     :param radiozoa_sensor:    optional radiozoa sensor instance
-    :param distance_sensors:   optional DistanceSensors instance
     :param level:              the log level
     '''
     def __init__(self, config, orientation=None, radiozoa_sensor=None, distance_sensors=None, level=Level.INFO):
@@ -70,35 +69,39 @@ class SideSensor(Component):
         self._sigmoid_d0     = _roam_cfg.get('sigmoid_d0', 150)  # inflection point (mm)
         self._sigmoid_k      = _roam_cfg.get('sigmoid_k', 40)    # steepness
         self._use_sigmoid    = _roam_cfg.get('use_sigmoid_fusion')
+        self._use_radiozoa   = _roam_cfg.get('use_radiozoa')
         # sensor instantiation
         _component_registry = Component.get_registry()
-        # Vl53l0x sensors, obtained from Radiozoa ┈┈┈┈┈┈┈┈┈┈
         self._proximity_sensor = None
-        if radiozoa_sensor is None:
-            radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
-        if radiozoa_sensor is not None:
-            if orientation is Orientation.PORT:
-                self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.WEST)
-            elif orientation is Orientation.STBD:
-                self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.EAST)
+        if self._use_radiozoa:
+            from hardware.radiozoa_sensor import RadiozoaSensor
+
+            # Vl53l0x sensors, obtained from Radiozoa ┈┈┈┈┈┈
+            if radiozoa_sensor is None:
+                radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
+            if radiozoa_sensor is not None:
+                if orientation is Orientation.PORT:
+                    self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.WEST)
+                elif orientation is Orientation.STBD:
+                    self._proximity_sensor = radiozoa_sensor.get_sensor(Cardinal.EAST)
+                else:
+                    raise ValueError('required EAST or WEST orientation, not {}'.format(orientation.name))
             else:
-                raise ValueError('required EAST or WEST orientation, not {}'.format(orientation.name))
-        else:
-            raise ValueError('radiozoa sensor not available.')
+                raise ValueError('radiozoa sensor not available.')
         # get distance sensor for orientation ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._distance_sensor = None
-        if distance_sensors is None:
-            distance_sensors = _component_registry.get(DistanceSensors.NAME)
         if distance_sensors is not None:
+            # pass in constructor argument
             self._distance_sensor = distance_sensors.get_sensor(orientation)
         else:
-            raise Exception('no distance sensors available.')
+            # see if it's in component registry
+            self._distance_sensor = _component_registry.get("distance-{}".format(orientation.label))
         if not self._distance_sensor:
-            raise Exception('no {} distance sensor available.'.format(orientation.name))
-        elif not self._distance_sensor.enabled:
+            # otherwise create it
+            self._distance_sensor = DistanceSensor(config, orientation, level=level)
+        if not self._distance_sensor.enabled:
             self._distance_sensor.enable()
             time.sleep(0.5)
-
         self._last_value     = None
         self._last_read_time = dt.now()
         self._log.info('roam sensor instantiated [sigmoid_d0={}, sigmoid_k={}, smoothing={}, window={}]'
@@ -165,10 +168,13 @@ class SideSensor(Component):
         unavailable, returns previous value up to timeout, returning None
         if the value is stale.
         '''
-        new_value = self._smooth(self._fuse(
-            self._distance_sensor.get_distance(),
-            self._proximity_sensor.get_distance()
-        ))
+        if  self._proximity_sensor:
+            new_value = self._smooth(self._fuse(
+                self._distance_sensor.get_distance(),
+                self._proximity_sensor.get_distance()
+            ))
+        else:
+            new_value = self._distance_sensor.get_distance()
         now = dt.now()
         if new_value is not None:
             self._last_value = new_value
@@ -193,10 +199,11 @@ class SideSensor(Component):
         '''
         if not self.enabled:
             self._distance_sensor.enable()
-            if not self._proximity_sensor.enabled:
-                self._proximity_sensor.enable()
-            if not self._proximity_sensor.is_ranging():
-                self._proximity_sensor.start_ranging()
+            if self._proximity_sensor:
+                if not self._proximity_sensor.enabled:
+                    self._proximity_sensor.enable()
+                if not self._proximity_sensor.is_ranging():
+                    self._proximity_sensor.start_ranging()
             Component.enable(self)
             self._log.info('roam sensor enabled.')
         else:
@@ -210,7 +217,8 @@ class SideSensor(Component):
             if self._distance_sensor:
                 self._distance_sensor.disable()
             if self._proximity_sensor:
-                self._proximity_sensor.disable()
+                if self._proximity_sensor:
+                    self._proximity_sensor.disable()
             Component.disable(self)
             self._log.info('roam sensor disabled.')
         else:
