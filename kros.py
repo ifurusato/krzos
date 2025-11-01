@@ -38,18 +38,25 @@ from core.message_bus import MessageBus
 from core.message_factory import MessageFactory
 from core.config_loader import ConfigLoader
 from core.config_error import ConfigurationError
+from hardware.system import System
+from hardware.button import Button
 from core.controller import Controller
+from core.queue_publisher import QueuePublisher
+from hardware.irq_clock import IrqClock
+
+from hardware.vl53l5cx_sensor import Vl53l5cxSensor
+from hardware.digital_pot import DigitalPotentiometer
+from hardware.compass_encoder import CompassEncoder
+from hardware.usfs import Usfs
+from hardware.motor_controller import MotorController
+from behave.behaviour_manager import BehaviourManager
 
 from core.publisher import Publisher
-from core.queue_publisher import QueuePublisher
 #from hardware.system_publisher import SystemPublisher
-
-from hardware.sound import Sound
-from hardware.irq_clock import IrqClock
+#from hardware.sound import Sound
 
 from core.subscriber import Subscriber, GarbageCollector
 #from hardware.system_subscriber import SystemSubscriber
-from hardware.system import System
 from hardware.i2c_scanner import I2CScanner
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -82,16 +89,27 @@ class KROS(Component, FiniteStateMachine):
         # configuration…
         self._config              = None
         self._component_registry  = None
-        self._controller          = None
+        self._system              = None
         self._message_bus         = None
+        self._message_factory     = None
+        self._controller          = None
+        self._queue_publisher     = None
+        self._irq_clock           = None
+        self._button              = None
+        self._digital_pot         = None
+        self._compass_encoder     = None
+        self._usfs                = None
+        self._vl53_sensor         = None
+        self._radiozoa_sensor     = None
+        self._tinyfx              = None
+        self._eyeballs            = None
+        self._motor_controller    = None
+
         self._system_publisher    = None
         self._system_subscriber   = None
-#       self._task_selector       = None
-        self._irq_clock           = None
-        self._tinyfx              = None
-        self._pushbutton          = None
-        self._eyeballs            = None
-        self._killswitch          = None
+
+
+
         self._started             = False
         self._closing             = False
         self._log.info('oid: {}'.format(id(self)))
@@ -116,10 +134,6 @@ class KROS(Component, FiniteStateMachine):
         self._config = _loader.configure(_filename)
         if not isinstance(self._config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
-        # create system monitor
-        self._system = System(config=self._config, kros=self, level=self._level)
-        self._system.set_nice() # set KROS as high priority process
-        self._is_raspberry_pi = self._system.is_raspberry_pi()
 
         _i2c_scanner = I2CScanner(self._config, level=Level.INFO)
 
@@ -168,6 +182,13 @@ class KROS(Component, FiniteStateMachine):
         if _cfg.get('enable_queue_publisher'): # or 'q' in _pubs:
             self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
 
+        # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        # create system monitor
+        self._system = System(config=self._config, kros=self, level=self._level)
+        self._system.set_nice() # set KROS as high priority process
+        self._is_raspberry_pi = self._system.is_raspberry_pi()
+
         self._use_external_clock = _cfg.get('enable_external_clock')
         if self._use_external_clock:
             self._log.info('creating external clock…')
@@ -175,23 +196,54 @@ class KROS(Component, FiniteStateMachine):
         else:
             self._irq_clock = None  
 
-        # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        _use_pushbutton = _cfg.get('enable_pushbutton')
+        if _use_pushbutton:
+            self._button = Button(config=self._config, level=self._level)
+            self._button.add_callback(self._await_start)
+
+        self._digital_pot = DigitalPotentiometer(self._config, level=self._level)
+        self._digital_pot.set_output_range(-1.0, 1.0) 
+
+        self._compass_encoder = CompassEncoder(self._config)
+
+        self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
+        # fixed trim determined via observation
+        self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
+        self._usfs.set_verbose(False)
+
+        _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
+        if _enable_vl53l5cx:
+            self._log.info('creating VL53L5CX sensor…')
+            self._vl53_sensor = Vl53l5cxSensor(self._config, level=self._level)
+#           self._vl53_sensor = Vl53l5cxSensor(self._config, skip=('skip' in sys.argv or True in sys.argv), level=self._level)
+            self._vl53_sensor.enable()
+
+        _enable_radiozoa = _cfg.get('enable_radiozoa')
+        if _enable_radiozoa:
+            from hardware.radiozoa_sensor import RadiozoaSensor
+            
+            self._radiozoa_sensor = RadiozoaSensor(self._config)
+            self._radiozoa_sensor.enable()
+            timeout_seconds = 5
+            start_time = time.monotonic()
+            while not self._radiozoa_sensor.enabled:
+                if time.monotonic() - start_time > timeout_seconds:
+                    raise TimeoutError("radiozoa failed to enable within timeout")
+                time.sleep(0.1)
+            self._radiozoa_sensor.set_visualisation(False)
+            self._radiozoa_sensor.start_ranging()
+
+        _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
+        if _enable_tinyfx_controller:
+            from hardware.tinyfx_controller import TinyFxController
+        
+            self._log.info('configure tinyfx controller…')
+            self._tinyfx = TinyFxController(self._config)
+            self._tinyfx.enable()
 
         # create subscribers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         # create publishers  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-        _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
-        if _enable_tinyfx_controller:
-            if not _i2c_scanner.has_hex_address(['0x44']):
-                raise Exception('tinyfx not available on I2C bus.')
-        
-            from hardware.tinyfx_controller import TinyFxController
-        
-            self._log.info('configure tinyfx controller…')
-            print('creating TinyFX...')
-            self._tinyfx = TinyFxController(self._config)
-            self._tinyfx.enable()
 
         # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -202,16 +254,22 @@ class KROS(Component, FiniteStateMachine):
             self._gamepad_publisher = GamepadPublisher(self._config, self._message_bus, self._message_factory, exit_on_complete=True, level=self._level)
 #           self._gamepad_controller = GamepadController(self._message_bus, self._level)
 
-        # GPIO 21 is reserved for krosd
+        # add garbage collector ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-        # add task selector ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-        # and finally, the garbage collector:
         self._garbage_collector = GarbageCollector(self._config, self._message_bus, level=self._level)
 
         # create motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+        self._log.info('starting motor controller…')
+        self._motor_controller = MotorController(self._config, external_clock=self._irq_clock, level=self._level)
+#       self._motor_controller.enable()
+
         # create behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        _enable_behaviours = _cfg.get('enable_behaviours')
+        if _enable_behaviours:
+            self._log.info('creating behaviour manager…')
+            self._behaviour_mgr = BehaviourManager(self._config, self._message_bus, self._message_factory, self._level)
 
         # finish up ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -222,13 +280,15 @@ class KROS(Component, FiniteStateMachine):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_await_pushbutton(self):
-        return self._pushbutton != None
+        return self._button != None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _await_start(self, arg=None):
         self._log.info('await start callback triggered…')
-        self._pushbutton.close()
-        self._pushbutton = None
+        self._button.clear_callbacks()
+        self._button.add_callback(self.shutdown)
+#       self._button.close()
+        self._button = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def start(self, dummy=None):
@@ -333,9 +393,9 @@ class KROS(Component, FiniteStateMachine):
         This halts any motor activity, demands a sudden halt of all tasks,
         then shuts down the OS.
         '''
-        if self._pushbutton:
-            self._pushbutton.cancel()
-            self._pushbutton = None
+        if self._button:
+            self._button.close()
+            self._button = None
         self._log.info(Fore.MAGENTA + 'shutting down…')
         self.close()
         # we never get here if we shut down properly
@@ -627,7 +687,7 @@ def main(argv):
                     while _kros.has_await_pushbutton():
                         if next(_counter) % 20 == 0:
 #                           _log.info(Fore.YELLOW + 'waiting for pushbutton…')
-                            _log.info(Fore.YELLOW + 'waiting for pushbutton on pin {}…'.format(_kros._pushbutton.pin))
+                            _log.info(Fore.YELLOW + 'waiting for pushbutton on pin {}…'.format(_kros._button.pin))
                         time.sleep(0.1)
                     match _kros.state:
                         case State.INITIAL: # expected state

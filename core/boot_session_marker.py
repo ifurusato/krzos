@@ -26,7 +26,7 @@ class BootSessionMarker:
     after a reboot regardless of elapsed time.
     '''
     
-    def __init__(self, marker_name, level=Level.INFO):
+    def __init__(self, marker_name='kros_session', level=Level.INFO):
         '''
         Parameters:
             marker_name: Unique identifier for this marker (e.g., 'vl53l5cx_firmware')
@@ -35,7 +35,7 @@ class BootSessionMarker:
         self._marker_name = marker_name
         marker_dir = Path(tempfile.gettempdir())
         self._marker_path = marker_dir / '.{}_boot_marker'.format(marker_name)
-        self._log.debug('Marker path: {}'.format(self._marker_path))
+        self._log.info('marker path: {}'.format(self._marker_path))
     
     def _get_system_boot_time(self):
         '''
@@ -48,7 +48,7 @@ class BootSessionMarker:
             boot_time = time.time() - uptime_seconds
             return boot_time
         except (IOError, ValueError) as e:
-            self._log.warning('Could not read system uptime: {}'.format(e))
+            self._log.warning('could not read system uptime: {}'.format(e))
             return None
     
     def is_marked(self):
@@ -58,27 +58,27 @@ class BootSessionMarker:
         Returns:
             True if operation was performed this boot, False otherwise
         '''
+        self._log.info('🌸 marker path: {}'.format(self._marker_path))
         if not self._marker_path.exists():
-            self._log.debug('No marker found for "{}"'.format(self._marker_name))
+            self._log.info('🌸 no marker found for "{}"'.format(self._marker_name))
             return False
         
         try:
-            # Read boot time from marker file
+            # read boot time from marker file
             with open(self._marker_path, 'r') as f:
                 marker_boot_time = float(f.read().strip())
-            
-            # Get current boot time
+            # get current boot time
             current_boot_time = self._get_system_boot_time()
             if current_boot_time is None:
+                self._log.info('🌸 current boot time is None.')
                 return False
-            
-            # Check if marker is from this boot session
-            # Allow small tolerance for clock precision
+            # check if marker is from this boot session
+            # allow small tolerance for clock precision
             if abs(marker_boot_time - current_boot_time) < 1.0:
-                self._log.debug('Marker valid for "{}" (this boot session)'.format(self._marker_name))
+                self._log.info('🌸 marker valid for "{}" (this boot session)'.format(self._marker_name))
                 return True
             else:
-                self._log.debug('Marker invalid for "{}" (previous boot session)'.format(self._marker_name))
+                self._log.info('🌸 marker invalid for "{}" (previous boot session)'.format(self._marker_name))
                 return False
             
         except (ValueError, IOError) as e:
@@ -94,11 +94,11 @@ class BootSessionMarker:
             if boot_time is not None:
                 with open(self._marker_path, 'w') as f:
                     f.write(str(boot_time))
-                self._log.debug('Marker created for "{}"'.format(self._marker_name))
+                self._log.info('🌸 marker created for "{}"'.format(self._marker_name))
             else:
-                self._log.warning('Could not determine boot time, marker not created for "{}"'.format(self._marker_name))
+                self._log.warning('🌸 could not determine boot time, marker not created for "{}"'.format(self._marker_name))
         except IOError as e:
-            self._log.warning('Could not create marker for "{}": {}'.format(self._marker_name, e))
+            self._log.warning('🌸 could not create marker for "{}": {}'.format(self._marker_name, e))
     
     def clear(self):
         '''
@@ -108,12 +108,13 @@ class BootSessionMarker:
         try:
             if self._marker_path.exists():
                 self._marker_path.unlink()
-                self._log.info('Marker cleared for "{}"'.format(self._marker_name))
+                self._log.info('🌸 marker cleared for "{}"'.format(self._marker_name))
             else:
-                self._log.info('No marker to clear for "{}"'.format(self._marker_name))
+                self._log.info('🌸 no marker to clear for "{}"'.format(self._marker_name))
         except IOError as e:
-            self._log.warning('Could not clear marker for "{}": {}'.format(self._marker_name, e))
+            self._log.warning('🌸 could not clear marker for "{}": {}'.format(self._marker_name, e))
 
+"""
 def main():
     '''
     Test the BootSessionMarker functionality.
@@ -167,5 +168,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+"""
 
 # EOF
