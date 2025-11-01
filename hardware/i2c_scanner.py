@@ -44,6 +44,7 @@ from core.config_loader import ConfigLoader
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class I2CScanner:
+    NAME = 'i2c-scanner'
     '''
     Scans the I²C bus, returning a list of devices.
 
@@ -60,7 +61,7 @@ class I2CScanner:
         super().__init__()
         if not isinstance(level, Level):
             raise ValueError('expected log level as a Level enum.')
-        self._log = Logger('i2cscan', level=level)
+        self._log = Logger(I2CScanner.NAME, level=level)
         self._config = config
         self._i2c_bus_number = i2c_bus_number
         if i2c_bus is None:

@@ -189,4 +189,55 @@ class Convert:
         '''
         return p >= ( q - error_range ) and p <= ( q + error_range )
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @staticmethod
+    def convert_to_distance(value):
+        '''
+        Converts the value returned by the IR sensor to a distance in centimeters.
+
+        Distance Calculation ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        This is reading the distance from a 3 volt Sharp GP2Y0A60SZLF infrared
+        sensor to a piece of white A4 printer paper in a low ambient light room.
+        The sensor output is not linear, but its accuracy is not critical. If
+        the target is too close to the sensor the values are not valid. According
+        to spec 10cm is the minimum distance, but we get relative variability up
+        until about 5cm. Values over 150 clearly indicate the robot is less than
+        10cm from the target. Here's a sampled output:
+
+            0cm = unreliable
+            5cm = 226.5
+          7.5cm = 197.0
+           10cm = 151.0
+           20cm =  92.0
+           30cm =  69.9
+           40cm =  59.2
+           50cm =  52.0
+           60cm =  46.0
+           70cm =  41.8
+           80cm =  38.2
+           90cm =  35.8
+          100cm =  34.0
+          110cm =  32.9
+          120cm =  31.7
+          130cm =  30.7 *
+          140cm =  30.7 *
+          150cm =  29.4 *
+
+        * Maximum range on IR is about 130cm, after which there is diminishing
+          stability/variability, i.e., it's hard to determine if we're dealing
+          with a level of system noise rather than data. Different runs produce
+          different results, with values between 28 - 31 on a range of any more
+          than 130cm.
+
+        See: http://ediy.com.my/blog/item/92-sharp-gp2y0a21-ir-distance-sensors
+        '''
+        if value == None or value == 0:
+            return None
+        _FUDGE_FACTOR = -2.00
+        _EXPONENT = 1.34
+        _NUMERATOR = 1000.0
+        _distance = pow( _NUMERATOR / value, _EXPONENT ) + _FUDGE_FACTOR
+        return _distance
+
 # EOF
