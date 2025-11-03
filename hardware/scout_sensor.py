@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-11-03
+# modified: 2025-11-04
 
 import sys
 import time
@@ -21,10 +21,10 @@ from core.logger import Logger, Level
 from core.rate import Rate
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 
-class OpenPathSensor(Component):
-    NAME = 'open-path'
+class ScoutSensor(Component):
+    NAME = 'scout-sensor'
     '''
-    OpenPathSensor analyzes VL53L5CX multizone data to determine the most
+    ScoutSensor analyzes VL53L5CX multizone data to determine the most
     open direction, returning a heading offset in degrees for navigation.
     
     The sensor processes the 8x8 grid column-by-column, ignoring floor rows
@@ -37,9 +37,9 @@ class OpenPathSensor(Component):
     If the Vl53l5cxSensor is not provided it will be created.
     '''
     def __init__(self, config, vl53l5cx=None, visualiser=None, level=Level.INFO):
-        self._log = Logger(OpenPathSensor.NAME, level=level)
+        self._log = Logger(ScoutSensor.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        self._log.info('initialising OpenPathSensor…')
+        self._log.info('initialising ScoutSensor…')
         if config is None or not isinstance(config, dict):
             raise ValueError('invalid configuration argument.')
         if vl53l5cx is None:
@@ -56,7 +56,7 @@ class OpenPathSensor(Component):
         self._cols = _vl53_cfg.get('cols', 8)
         self._rows = _vl53_cfg.get('rows', 8)
         self._fov  = _vl53_cfg.get('fov', 47.0)
-        _cfg = config['kros'].get('hardware').get('open_path_sensor')
+        _cfg = config['kros'].get('hardware').get('scout_sensor')
         self._distance_threshold = _cfg.get('distance_threshold', 1000)
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self._alpha   = _cfg.get('alpha', 0.08) #  low-pass filter coefficient
@@ -69,7 +69,7 @@ class OpenPathSensor(Component):
         self._heading_offset_degrees = 0.0  # current heading offset
         self._max_open_distance      = self._distance_threshold
         self._filtered_offset = 0.0         # low-pass filtered offset
-        self._log.info('open path sensor ready.')
+        self._log.info('scout sensor ready.')
 
     def set_visualiser(self, visualiser):
         '''
@@ -110,7 +110,7 @@ class OpenPathSensor(Component):
         Returns raw distance data from VL53L5CX sensor.
         '''
         if not self.enabled:
-            self._log.warning('get_distance_mm called while OpenPathSensor is not enabled.')
+            self._log.warning('get_distance_mm called while ScoutSensor is not enabled.')
             return None
         return self._vl53l5cx.get_distance_mm()
 

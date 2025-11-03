@@ -254,7 +254,7 @@ kros:
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
             stale_timeout_ms:               250            # value cannot be older than this
-        open_path_sensor:
+        scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)
             alpha:                          0.8            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
