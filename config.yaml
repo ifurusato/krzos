@@ -38,39 +38,52 @@ kros:
     behaviour:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
-        idle:
-            enable:                     False              # enable idle behaviour
-            release:                    False              # release idle behaviour on startup
-            idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
-#           loop_freq_hz:                   1              # main loop delay in hz
-        roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
-            verbose:                    False              # verbose messaging
-            default_speed:                  0.9            # cruising speed
-            use_dynamic_speed:           True              # if True use digital pot for default speed
-            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
-            use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
-            heading_mode:           'ABSOLUTE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
-#           loop_freq_hz:                   1              # main loop delay in hz
-        radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
-            default_priority:               0.4            # default behaviour priority
-            default_speed:                  0.8            # cruising speed
-            dynamic_speed:               True              # if True use digital pot for default speed
-            smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
-            min_sensor_diff_mm:           100              # 50; minimum difference to react
-            settling_threshold_mm:         60              # 30; all pairs within this is considered settled
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               500            # ignore aft obstacles further than this
             avoid_speed:                    0.99           # speed to avoid obstacles at
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
+        idle:
+            enable:                     False              # enable idle behaviour
+            release:                    False              # release idle behaviour on startup
+            idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
+        radiozoa:
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
+            default_priority:               0.4            # default behaviour priority
+            default_speed:                  0.8            # cruising speed
+            dynamic_speed:               True              # if True use digital pot for default speed
+            smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
+            min_sensor_diff_mm:           100              # 50; minimum difference to react
+            settling_threshold_mm:         60              # 30; all pairs within this is considered settled
+        roam:
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
+            verbose:                    False              # verbose messaging
+            default_speed:                  0.9            # cruising speed
+            use_dynamic_speed:           True              # if True use digital pot for default speed
+            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
+            use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
+            rotation_speed:                 0.7            # motor speed when rotating in place
+            rotation_tolerance:             2.0            # used to calculate omega
+            minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
+            heading_mode:           'RELATIVE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
+        scout:
+            enable:                      True              # enable scout behaviour
+            release:                     True              # release scout behaviour on startup
+            verbose:                    False              # verbose messaging
+            default_speed:                  0.9            # cruising speed
+            use_dynamic_speed:           True              # if True use digital pot for default speed
+            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
+            use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
+            rotation_speed:                 0.7            # motor speed when rotating in place
+            rotation_tolerance:             2.0            # used to calculate omega
+            minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
+            heading_mode:           'RELATIVE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -100,7 +113,6 @@ kros:
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
         brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
         max_speed:                            1.0          # maximum motor speed (0.0-1.0)
-        rotation_speed:                       0.25         # motor speed when rotating in place
 #       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
 #       use_speed_indicator:              False            # publish RGB events for motor speed indication
         accel_step:                           0.01         # step size for acceleration

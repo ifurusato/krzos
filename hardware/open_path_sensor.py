@@ -61,11 +61,13 @@ class OpenPathSensor(Component):
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self._alpha   = _cfg.get('alpha', 0.08) #  low-pass filter coefficient
         self._rate = Rate(_cfg.get('loop_freq_hz', 5)) # 5Hz, 200ms default
+        self._reverse_angles = False
         # variables
         self.set_visualiser(visualiser)
         self._thread  = None
         self._running = False
         self._heading_offset_degrees = 0.0  # current heading offset
+        self._max_open_distance      = self._distance_threshold
         self._filtered_offset = 0.0         # low-pass filtered offset
         self._log.info('open path sensor ready.')
 
@@ -74,16 +76,20 @@ class OpenPathSensor(Component):
         Set the optional visualiser used by the sensor.
         '''
         self._visualiser = visualiser
-
+    
     def get_heading_offset(self):
         '''
-        Returns the current heading offset in degrees.
-        Negative = turn left (port), Positive = turn right (starboard).
-        Range: approximately -23.5° to +23.5° (half of horizontal FOV).
+        Returns the current heading offset and the distance at that heading.
         
-        Returns 0.0 if no obstacles detected or path is clear ahead.
+        Returns:
+            tuple: (heading_offset_degrees, distance_mm)
+                - heading_offset_degrees: Negative = turn left (port), Positive = turn right (starboard)
+                  Range: approximately -23.5° to +23.5° (half of horizontal FOV)
+                  Returns 0.0 if no obstacles detected or path is clear ahead.
+                - distance_mm: The weighted average distance in the direction of the heading offset
+                  Returns large value (e.g., max distance) if path is clear
         '''
-        return self._heading_offset_degrees
+        return (self._heading_offset_degrees, self._max_open_distance)
 
     def _control_loop(self):
         '''
@@ -108,16 +114,6 @@ class OpenPathSensor(Component):
             return None
         return self._vl53l5cx.get_distance_mm()
 
-    def get_heading_offset(self):
-        '''
-        Returns the current heading offset in degrees.
-        Negative = turn left (port), Positive = turn right (starboard).
-        Range: approximately -22.5° to +22.5° (half of horizontal FOV).
-        
-        Returns 0.0 if no obstacles detected or path is clear ahead.
-        '''
-        return self._heading_offset_degrees
-
     def _process(self, distance_mm):
         '''
         Analyzes distance data to determine most open direction using weighted centroid.
@@ -128,12 +124,6 @@ class OpenPathSensor(Component):
         Returns dict with analysis results for visualization.
         '''
         distance = np.array(distance_mm).reshape((self._rows, self._cols))
-
-        # DIAGNOSTIC: check if bottom row looks like floor
-        self._log.info('Row 0 (bottom) sample values: {}'.format(distance[0, :4]))
-        self._log.info('Row 7 (top) sample values: {}'.format(distance[7, :4]))
-
-
         # compute angle for each column center (negative = left, positive = right)
         pixel_angles = [-(self._fov/2) + (i + 0.5) * (self._fov/self._cols) for i in range(self._cols)]
         # get obstacle rows (non-floor rows) from sensor calibration - same for all columns
@@ -143,6 +133,7 @@ class OpenPathSensor(Component):
             target_offset = 0.0
             self._filtered_offset = 0.0
             self._heading_offset_degrees = 0.0
+            self._max_open_distance = self._distance_threshold  # path is clear
             weighted_avgs = [0] * self._cols
             highlighted_idx = min(range(self._cols), key=lambda i: abs(pixel_angles[i]))
             return dict(
@@ -160,25 +151,25 @@ class OpenPathSensor(Component):
             # compute weighted average from obstacle rows
             values = distance[obstacle_rows, col]
             avg = np.average(values, weights=weights)
-            # critical: check floor rows for obstacles closer than expected floor distance
+            # critical: check floor rows for obstacles peeking through
             for floor_row in [r for r in range(self._rows) if self._vl53l5cx.floor_row_means[r] is not None]:
                 floor_mean = self._vl53l5cx.floor_row_means[floor_row]
                 floor_value = distance[floor_row, col]
                 # obstacle detected if value is significantly less than calibrated floor mean
                 if floor_value < (floor_mean - self._vl53l5cx.floor_margin):
-                    # treat as very close obstacle - severely reduce this column's openness
                     avg = min(avg, floor_value)
                     self._log.debug('obstacle in floor row {}, col {}: {}mm < {}mm'.format(
                         floor_row, col, floor_value, floor_mean - self._vl53l5cx.floor_margin))
             weighted_avgs.append(avg)
+        # store the maximum (most open) distance
+        self._max_open_distance = max(weighted_avgs)
         # compute analog heading using weighted centroid
-        # each column weighted by its openness (distance)
         pixel_angles_array = np.array(pixel_angles)
         weighted_avgs_array = np.array(weighted_avgs)
         total_openness = np.sum(weighted_avgs_array)
         if total_openness > 0:
             normalized_weights = weighted_avgs_array / total_openness
-            target_offset = float(np.sum(pixel_angles_array * normalized_weights))
+            target_offset = -float(np.sum(pixel_angles_array * normalized_weights))
         else:
             target_offset = 0.0
         # apply low-pass filter for smooth transitions

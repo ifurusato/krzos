@@ -6,8 +6,8 @@
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
-# created:  2023-05-01
-# modified: 2025-11-01
+# created:  2025-11-04
+# modified: 2025-11-04
 
 import sys
 import time
@@ -34,10 +34,8 @@ from core.orientation import Orientation
 
 class HeadingMode(Enum):
     '''
-    Roam is the primary locomotion behavior that moves the robot forward while
-    avoiding obstacles. The heading mode determines how directional control is
-    applied. Other behaviors or sensors set the target heading via the
-    set_heading_degrees() API, and Roam executes the movement.
+    Scout is a behavior that seeks to locate the most open heading for further
+    exploration. The heading mode determines how directional control is applied.
 
     NONE (HeadingMode.NONE):
         Pure obstacle avoidance with no directional control. Robot moves straight
@@ -80,27 +78,27 @@ class HeadingMode(Enum):
                 return mode
         raise NotImplementedError("HeadingMode not implemented for value: {}".format(value))
 
-class Roam(AsyncBehaviour):
-    NAME = 'roam'
+class Scout(AsyncBehaviour):
+    NAME = 'scout'
     '''
     Implements a roaming behaviour. The end result of this Behaviour is to
     provide a forward speed limit based on a fused distance value provided
     by RoamSensor (PWM + VL53L5CX). If no obstacle is perceived, the velocity
     limit is removed.
 
-    Roam uses a vector-based motor control, allowing for heading-based driving.
+    Scout uses a vector-based motor control, allowing for heading-based driving.
     Rotational alignment is performed when the heading changes, using Mecanum
     wheel kinematics and encoder counts.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
-        self._log = Logger(Roam.NAME, level)
+        self._log = Logger(Scout.NAME, level)
         _component_registry = Component.get_registry()
         _motor_controller = _component_registry.get(MotorController.NAME)
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.AVOID)
-        _cfg = config['kros'].get('behaviour').get('roam')
+        _cfg = config['kros'].get('behaviour').get('scout')
         self._counter = itertools.count()
         self._verbose                = _cfg.get('verbose', False)
         self._use_color              = True
@@ -201,14 +199,14 @@ class Roam(AsyncBehaviour):
 
     @property
     def name(self):
-        return Roam.NAME
+        return Scout.NAME
 
     @property
     def is_ballistic(self):
         return False
 
     def callback(self):
-        self._log.info('roam behaviour callback.')
+        self._log.info('scout behaviour callback.')
         raise Exception('UNSUPPORTED callback')
 
     def execute(self, message):
@@ -433,7 +431,7 @@ class Roam(AsyncBehaviour):
         Positive amplitude moves forward, negative moves reverse.
         The mode-specific methods (_update_intent_vector_*) add rotation as needed.
 
-        Note that Roam does not handle obstacle avoidance except at the front of the
+        Note that Scout does not handle obstacle avoidance except at the front of the
         robot.
         '''
         if self._motor_controller.braking_active:
@@ -455,7 +453,7 @@ class Roam(AsyncBehaviour):
                 self._motor_controller.brake()
                 return
             elif self._front_distance is None:
-                self._log.info(Fore.BLUE + 'roam sensor returned: None; maintaining current vector')
+                self._log.info(Fore.BLUE + 'scout sensor returned: None; maintaining current vector')
                 return
             elif self._front_distance >= self._max_distance:
                 obstacle_scale = 1.0
@@ -556,7 +554,7 @@ class Roam(AsyncBehaviour):
         if self.enabled:
             self._log.warning("already enabled.")
             return
-        self._log.info("enabling roam…")
+        self._log.info("enabling scout…")
         if not self._roam_sensor.enabled:
             self._roam_sensor.enable()
         if self._open_path_sensor and not self._open_path_sensor.enabled:
@@ -568,13 +566,13 @@ class Roam(AsyncBehaviour):
             current_heading = self._imu.poll() % 360.0
             self._heading_degrees = current_heading
             self._log.info("RELATIVE mode initialized at IMU heading: {:.2f}°".format(current_heading))
-        self._log.info("roam enabled.")
+        self._log.info("scout enabled.")
 
     def disable(self):
         if not self.enabled:
             self._log.debug("already disabled.")
             return
-        self._log.info("disabling roam…")
+        self._log.info("disabling scout…")
         if self._open_path_sensor and self._open_path_sensor.enabled:
             self._open_path_sensor.disable()
         AsyncBehaviour.disable(self)
