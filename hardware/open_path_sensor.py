@@ -52,7 +52,7 @@ class OpenPathSensor(Component):
         else:
             self._vl53l5cx = vl53l5cx
         # configuration
-        _vl53_cfg = config['kros'].get('hardware').get('vl53l5cx')
+        _vl53_cfg = config['kros'].get('hardware').get('vl53l5cx_sensor')
         self._cols = _vl53_cfg.get('cols', 8)
         self._rows = _vl53_cfg.get('rows', 8)
         self._fov  = _vl53_cfg.get('fov', 47.0)
