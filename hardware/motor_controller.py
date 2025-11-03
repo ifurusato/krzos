@@ -145,6 +145,7 @@ class MotorController(Component):
         self._base_sfwd_speed = 0.0
         self._base_paft_speed = 0.0
         self._base_saft_speed = 0.0
+        self._base_priority   = 0.3
         # controller-level speed modifiers applied after blending (name -> fn)
         # modifier fn signature: fn(speeds:list[4]) -> list[4] | str (name to remove) | None
         self._speed_modifiers = {}
@@ -152,11 +153,15 @@ class MotorController(Component):
         if self._include_base_intent_vector:
             # register the base intent vector so it is always included in blending;
             # returns (vx, vy, omega) derived from the four base motor targets
-            self.add_intent_vector("base", lambda: (
-                float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
-                float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
-                float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
-            ))
+            self.add_intent_vector(
+                "base", 
+                lambda: (
+                    float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
+                    float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
+                    float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
+                ),
+                lambda: self._base_priority 
+            )
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-1.0)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
@@ -167,7 +172,27 @@ class MotorController(Component):
         # finish up…
         self._log.info('ready with {} motors.'.format(len(self._all_motors)))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def base_priority(self):
+        '''
+        Returns the current base intent vector priority.
+        '''
+        return self._base_priority
+
+    @base_priority.setter
+    def base_priority(self, value):
+        '''
+        Set the base intent vector priority (0.0-1.0).
+        Used by test scripts or direct motor control to adjust priority relative to behaviors.
+        '''
+        if not isinstance(value, float):
+            raise ValueError('expected float, not {}'.format(type(value)))
+        if value < 0.0 or value > 1.0:
+            self._log.warning('base priority {} outside typical range [0.0-1.0]'.format(value))
+        self._base_priority = value
+        self._log.info('base intent vector priority set to {:.2f}'.format(value))
 
     @property
     def braking_active(self):
@@ -176,7 +201,30 @@ class MotorController(Component):
         '''
         return self._braking_active
 
-    def add_intent_vector(self, name, vector_lambda, exclusive=False):
+    def add_intent_vector(self, name, vector_lambda, priority_lambda=None, exclusive=False):
+        '''
+        Register a behaviour's intent vector lambda with optional priority lambda.
+        The vector lambda should return (vx, vy, omega).
+        The priority lambda should return a float (0.0-1.0, default 0.3).
+        '''
+        if exclusive:
+            self._intent_vectors.clear()
+        else:
+            if name in self._intent_vectors:
+                raise Exception("intent vector '{}' already registered; ignoring duplicate.".format(name))
+        if vector_lambda.__name__ != "<lambda>":
+            raise TypeError('expected lambda function for vector, not {}'.format(type(vector_lambda)))
+        if priority_lambda is not None and priority_lambda.__name__ != "<lambda>":
+            raise TypeError('expected lambda function for priority, not {}'.format(type(priority_lambda)))
+        
+        self._log.info('adding intent vector: {}'.format(name))
+        self._intent_vectors[name] = {
+            'vector': vector_lambda,
+            'priority': priority_lambda if priority_lambda else lambda: 0.3
+        }
+        self._log.info('added intent vector: {}'.format(name))
+
+    def x_add_intent_vector(self, name, vector_lambda, exclusive=False):
         '''
         Register a behaviour's intent vector lambda.
         The lambda should return (vx, vy, omega).
@@ -203,6 +251,28 @@ class MotorController(Component):
 
     def _blend_intent_vectors(self):
         '''
+        Priority-weighted blending of all intent vectors.
+        Each behavior's vector is weighted by its dynamic priority value.
+        Higher priority behaviors have proportionally more influence.
+        '''
+        if not self._intent_vectors:
+            return (0.0, 0.0, 0.0)
+        weighted_sum = [0.0, 0.0, 0.0]
+        total_weight = 0.0
+        for name, entry in self._intent_vectors.items():
+            vector = entry['vector']()
+            priority = entry['priority']()
+            if len(vector) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
+            total_weight += priority
+            for i in range(3):
+                weighted_sum[i] += vector[i] * priority
+        if total_weight == 0.0:
+            return (0.0, 0.0, 0.0)
+        return tuple(s / total_weight for s in weighted_sum)
+
+    def x_blend_intent_vectors(self):
+        '''
         Simple unweighted averaging of all intent vectors.
         '''
         vectors = [fn() for fn in self._intent_vectors.values()]
@@ -214,7 +284,6 @@ class MotorController(Component):
                 raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
             for i in range(3):
                 sum_vector[i] += v[i]
-        
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
         return avg_vector
 

@@ -52,6 +52,7 @@ class Avoid(AsyncBehaviour):
         self._aft_sensor  = AftSensor(config, level=Level.INFO)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
+        self._priority    = _cfg.get('default_priority', 0.3)
         self._squeezed    = False
         self._verbose     = True
         self._log.info('ready.')
@@ -98,6 +99,67 @@ class Avoid(AsyncBehaviour):
         Starboard sensor pushes robot to port (negative vx).
         Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
         
+        Priority scales continuously with obstacle proximity. When squeezed (both 
+        port and starboard active), priority is boosted proportionally to ensure
+        lateral balancing isn't overwhelmed by other behaviors' forward motion.
+        
+        Uses easing functions to scale avoidance force with distance.
+        '''
+        vx = 0.0
+        vy = 0.0
+        omega = 0.0
+        # track normalized sensor urgencies for priority calculation
+        port_urgency = 0.0
+        stbd_urgency = 0.0
+        aft_urgency  = 0.0
+        port_active  = False
+        stbd_active  = False
+        # port sensor: obstacle closer → push to starboard (positive vx)
+        if port_distance is not None and port_distance < self._side_threshold_mm:
+            normalised = 1.0 - (port_distance / self._side_threshold_mm)
+            port_scale = self._side_easing.apply(normalised)
+            vx += port_scale * self._avoid_speed
+            port_urgency = port_scale
+            port_active = True
+        # starboard sensor: obstacle closer → push to port (negative vx)
+        if stbd_distance is not None and stbd_distance < self._side_threshold_mm:
+            normalised = 1.0 - (stbd_distance / self._side_threshold_mm)
+            stbd_scale = self._side_easing.apply(normalised)
+            vx -= stbd_scale * self._avoid_speed
+            stbd_urgency = stbd_scale
+            stbd_active = True
+        # squeeze detection
+        self._squeezed = port_active and stbd_active
+        # aft sensor: obstacle closer → push forward (positive vy)
+        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
+            normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
+            aft_scale = self._aft_easing.apply(normalised)
+            vy += aft_scale * self._avoid_speed
+            aft_urgency = aft_scale
+        # calculate priority from maximum sensor urgency
+        # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
+        max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
+        self._priority = 0.3 + (max_urgency * 0.7)
+        # squeeze boost: ensure lateral balancing dominates when threading narrow gaps
+        if self._squeezed:
+            # squeeze severity based on tightest constraint (minimum of side urgencies)
+            squeeze_severity = min(port_urgency, stbd_urgency)
+            # boost priority by up to 0.15 based on squeeze tightness
+            squeeze_boost = squeeze_severity * 0.15
+            self._priority = min(1.0, self._priority + squeeze_boost)
+        self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
+
+    def x_update_intent_vector(self, port_distance, stbd_distance, aft_distance):
+        '''
+        Compute the robot's movement intent as a single (vx, vy, omega) vector
+        based on the three distance sensors.
+        
+        Port sensor pushes robot to starboard (positive vx).
+        Starboard sensor pushes robot to port (negative vx).
+        Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
+        
         Uses easing functions to scale avoidance force with distance.
         '''
         vx = 0.0
@@ -129,6 +191,41 @@ class Avoid(AsyncBehaviour):
             self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
 
     def _print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
+        '''
+        Display current sensor readings, intent vector, and priority with color coding.
+        '''
+        if port_distance and port_distance < self._side_threshold_mm:
+            _port_color = Fore.RED + Style.NORMAL
+        else:
+            _port_color = Fore.RED + Style.DIM
+        if stbd_distance and stbd_distance < self._side_threshold_mm:
+            _stbd_color = Fore.GREEN + Style.NORMAL
+        else:
+            _stbd_color = Fore.GREEN + Style.DIM
+        if aft_distance and aft_distance < self._aft_threshold_mm:
+            _aft_color = Fore.YELLOW + Style.NORMAL
+        else:
+            _aft_color = Fore.YELLOW + Style.DIM
+        _squeeze_indicator = Fore.MAGENTA + ' [SQUEEZED]' + Style.RESET_ALL if self._squeezed else ''
+        # priority color coding
+        if self._priority >= 0.9:
+            _priority_color = Fore.RED + Style.BRIGHT
+        elif self._priority >= 0.7:
+            _priority_color = Fore.YELLOW + Style.BRIGHT
+        else:
+            _priority_color = Fore.CYAN + Style.DIM
+        self._log.info("intent: ({:5.2f}, {:5.2f}, {:5.2f}); {}priority: {:.2f};{} port: {};{} stbd: {};{} aft: {}{}".format(
+                vx, vy, omega,
+                _priority_color, self._priority, Style.RESET_ALL,
+                _port_color,
+                '{}mm'.format(port_distance) if port_distance else 'NA',
+                _stbd_color,
+                '{}mm'.format(stbd_distance) if stbd_distance else 'NA',
+                _aft_color,
+                '{}mm'.format(aft_distance) if aft_distance else 'NA',
+                _squeeze_indicator))
+
+    def x_print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
         '''
         Display current sensor readings and intent vector with color coding.
         '''

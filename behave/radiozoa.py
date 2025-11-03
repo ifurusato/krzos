@@ -44,6 +44,7 @@ class Radiozoa(AsyncBehaviour):
         self._counter    = itertools.count()
         _default_speed   = _cfg.get('default_speed', 1.0)
         _dynamic_speed   = _cfg.get('dynamic_speed')
+        self._priority   = _cfg.get('default_priority', 0.4)
         self._verbose    = False
         self._use_color  = True
 #       self._loop_instance  = None
@@ -171,8 +172,76 @@ class Radiozoa(AsyncBehaviour):
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
 
-
     def _update_intent_vector(self, distances):
+        '''
+        Compute the robot's movement intent as a single (vx, vy, omega) vector.
+        Each pair contributes force only if its imbalance exceeds min_sensor_diff_mm.
+        Robot settles naturally when all pairs are balanced within threshold.
+        
+        Priority scales continuously with imbalance severity and obstacle proximity
+        using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
+        '''
+        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
+        force_vec = np.zeros(2)
+        pair_active = False
+        max_imbalance = 0.0  # track worst imbalance for priority
+        min_distance = float('inf')  # track closest obstacle
+        for c1, c2 in self._pairs:
+            d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
+            d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
+            d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
+            d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
+            # track closest obstacle across all sensors
+            min_distance = min(min_distance, d1, d2)
+            # both sensors out of range - ignore this pair
+            if d1 >= far_threshold and d2 >= far_threshold:
+                continue
+            diff = abs(d1 - d2)
+            # track maximum imbalance for priority calculation
+            if diff > max_imbalance:
+                max_imbalance = diff
+            # only contribute force if difference exceeds threshold
+            if diff >= self._min_sensor_diff:
+                signed_diff = d1 - d2
+                vec = self._directions[(c1, c2)] * signed_diff
+                force_vec += vec
+                pair_active = True
+        # if no pairs are contributing force, we're settled
+        if not pair_active:
+            self._intent_vector = (0.0, 0.0, 0.0)
+            self._smoothed_vector = np.array([0.0, 0.0])
+            self._priority = 0.3  # low priority when settled
+            return
+        # normalize the raw force vector
+        max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
+        normalized_vec = force_vec / max_abs
+        # apply exponential moving average for smoothing
+        self._smoothed_vector = (self._smoothing_factor * self._smoothed_vector +
+                                 (1.0 - self._smoothing_factor) * normalized_vec)
+        vx, vy = self._smoothed_vector
+        amplitude = self._default_speed
+        self._intent_vector = (vx * amplitude, vy * amplitude, 0.0)
+        # calculate priority using analog sensor values
+        # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
+        if max_imbalance > self._min_sensor_diff:
+            # scale from 0.0 at min_sensor_diff to 1.0 at FAR_THRESHOLD
+            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / 
+                                         (RadiozoaSensor.FAR_THRESHOLD - self._min_sensor_diff))
+        else:
+            imbalance_urgency = 0.0
+        # proximity urgency: normalized from FAR_THRESHOLD (0.0) to 0mm (1.0)
+        if min_distance < RadiozoaSensor.FAR_THRESHOLD:
+            proximity_urgency = 1.0 - (min_distance / RadiozoaSensor.FAR_THRESHOLD)
+        else:
+            proximity_urgency = 0.0
+        # priority formula: scales from 0.4 (gentle guidance) to 1.0 (critical avoidance)
+        # imbalance contributes 0.0-0.2: centering force
+        # proximity contributes 0.0-0.4: obstacle urgency
+        self._priority = 0.4 + (imbalance_urgency * 0.2) + (proximity_urgency * 0.4)
+        if self._verbose:
+            self._display_info()
+
+    def x_update_intent_vector(self, distances):
         '''
         Compute the robot's movement intent as a single (vx, vy, omega) vector.
         Each pair contributes force only if its imbalance exceeds min_sensor_diff_mm.
