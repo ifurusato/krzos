@@ -40,7 +40,6 @@ class AsyncBehaviour(Behaviour):
     def _register_intent_vector(self):
         if self._intent_vector_registered:
             self._log.warning('intent vector already registered with motor controller.')
-#           raise Exception('intent vector already registered with motor controller.')
             return
         self._motor_controller.add_intent_vector(self.name, lambda: self._intent_vector)
         self._intent_vector_registered = True

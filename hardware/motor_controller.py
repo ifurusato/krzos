@@ -218,7 +218,7 @@ class MotorController(Component):
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
         return avg_vector
 
-    def weighted_blend_intent_vectors(self):
+    def _weighted_blend_intent_vectors(self):
         '''
         Blends all registered intent vectors using magnitude-weighted averaging.
         
@@ -251,53 +251,6 @@ class MotorController(Component):
             result = tuple(s / total_weight for s in weighted_sum)
             return result
         return (0.0, 0.0, 0.0)
-
-    def z_blend_intent_vectors(self):
-        '''
-        Blends all registered intent vectors using magnitude-weighted averaging.
-        
-        Each behavior returns (vx, vy, omega). The magnitude of the vector
-        (sqrt(vx² + vy² + omega²)) serves as its weight in the blend.
-        
-        Behaviors with stronger sensor confidence naturally output larger
-        magnitudes and thus have more influence. Zero or near-zero magnitude
-        vectors don't participate in the blend.
-        '''
-        vectors = [fn() for fn in self._intent_vectors.values()]
-        if not vectors:
-            return (0.0, 0.0, 0.0)
-        weighted_sum = [0.0, 0.0, 0.0]
-        total_weight = 0.0
-        for v in vectors:
-            if len(v) != 3:
-                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
-            vx, vy, omega = v
-            # magnitude is this behavior's "confidence" or "strength"
-            magnitude = (vx**2 + vy**2 + omega**2) ** 0.5
-            if not isclose(magnitude, 0.0, abs_tol=1e-6):
-                total_weight += magnitude
-                weighted_sum[0] += vx * magnitude
-                weighted_sum[1] += vy * magnitude
-                weighted_sum[2] += omega * magnitude
-        if total_weight > 0.0:
-            return tuple(s / total_weight for s in weighted_sum)
-        return (0.0, 0.0, 0.0)
-
-    def x_blend_intent_vectors(self):
-        '''
-        Blends all registered intent vectors, returning a single (vx, vy[, omega]) tuple.
-        '''
-        vectors = [fn() for fn in self._intent_vectors.values()]
-        if not vectors:
-            return (0.0, 0.0, 0.0)
-        sum_vector = [0.0, 0.0, 0.0]
-        for v in vectors:
-            if len(v) != 3:
-                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
-            for i in range(3):
-                sum_vector[i] += v[i]
-        avg_vector = tuple(s / len(vectors) for s in sum_vector)
-        return avg_vector
 
     def is_closed_loop(self):
         return self._closed_loop
@@ -484,7 +437,7 @@ class MotorController(Component):
           - write final speeds into Motor.target_speed and call update_target_speed()
         '''
         intent = self._blend_intent_vectors()
-#       intent = self.weighted_blend_intent_vectors()
+#       intent = self._weighted_blend_intent_vectors()
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         vx, vy, omega = intent
@@ -532,77 +485,6 @@ class MotorController(Component):
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
         self._state_change_check()
-        if self._motor_loop_callback is not None:
-            self._motor_loop_callback()
-
-    def x_motor_tick(self):
-        '''
-        The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and _external_callback_method(). Incorporates intent vector 
-        blending and full Mecanum wheel kinematic mapping and normalization.
-        '''
-        intent = self._blend_intent_vectors()
-        if len(intent) != 3:
-            raise ValueError('expected 3 values, not {}.'.format(len(intent)))
-        vx, vy, omega = intent
-        # Mecanum equations -> per-wheel speeds
-        pfwd = vy + vx + omega
-        sfwd = vy - vx - omega
-        paft = vy - vx + omega
-        saft = vy + vx - omega
-        speeds = [pfwd, sfwd, paft, saft]
-        # normalise if required
-        max_abs = max(abs(s) for s in speeds)
-        if max_abs > 1.0:
-            speeds = [s / max_abs for s in speeds]
-        # apply controller-level speed modifiers (in registration order)
-        if len(self._speed_modifiers) > 0:
-            # iterate over a copy to allow safe removal from inside modifiers
-            for name, fn in list(self._speed_modifiers.items()):
-                try:
-                    result = fn(list(speeds))
-                except Exception as e:
-                    self._log.error('speed modifier {} raised: {}'.format(name, e))
-                    # on error remove the offending modifier
-                    try:
-                        del self._speed_modifiers[name]
-                    except Exception:
-                        pass
-                    continue
-                if isinstance(result, str):
-                    # modifier requested removal by returning its name
-                    if result in self._speed_modifiers:
-                        del self._speed_modifiers[result]
-                        self._log.info('speed modifier {} removed itself.'.format(result))
-                elif result is None:
-                    # no change
-                    continue
-                else:
-                    # expect an iterable of 4 numeric speeds
-                    if not hasattr(result, '__iter__') or len(result) != 4:
-                        raise Exception('speed modifier {} returned invalid value: {}'.format(name, result))
-                    speeds = [float(x) for x in result]
-            # re-normalise after modifiers
-            max_abs = max(abs(s) for s in speeds)
-            if max_abs > 1.0:
-                speeds = [s / max_abs for s in speeds]
-        speeds = [float(s) for s in speeds]
-        # apply computed wheel speeds directly to Motor.target_speed properties
-        if self._pfwd_motor and self._pfwd_motor.enabled:
-            self._pfwd_motor.target_speed = speeds[0]
-        if self._sfwd_motor and self._sfwd_motor.enabled:
-            self._sfwd_motor.target_speed = speeds[1]
-        if self._paft_motor and self._paft_motor.enabled:
-            self._paft_motor.target_speed = speeds[2]
-        if self._saft_motor and self._saft_motor.enabled:
-            self._saft_motor.target_speed = speeds[3]
-        # update motors (apply slew/pid/etc.)
-        for _motor in self._all_motors:
-            _motor.update_target_speed()
-        _count = next(self._event_counter)
-        self.print_info(_count, vx, vy, omega)
-        self._state_change_check()
-        # execute any callback here…
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()
 

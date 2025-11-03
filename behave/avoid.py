@@ -23,6 +23,7 @@ from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.event import Event
 from behave.async_behaviour import AsyncBehaviour
+from hardware.easing import Easing
 from hardware.motor_controller import MotorController
 from hardware.aft_sensor import AftSensor
 from hardware.side_sensor import SideSensor
@@ -43,14 +44,16 @@ class Avoid(AsyncBehaviour):
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('avoid')
-        self._default_speed  = _cfg.get('avoid_speed', 1.0)
         self._side_threshold_mm = _cfg.get('side_threshold_mm', 280)
         self._aft_threshold_mm  = _cfg.get('aft_threshold_mm', 500)
+        self._avoid_speed = _cfg.get('avoid_speed', 1.0)
+        self._side_easing = Easing.from_string(_cfg.get('easing', 'SQUARE_ROOT'))
+        self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
         self._aft_sensor  = AftSensor(config, level=Level.INFO)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
-
-
+        self._squeezed    = False
+        self._verbose     = True
         self._log.info('ready.')
 
     @property
@@ -90,9 +93,45 @@ class Avoid(AsyncBehaviour):
         '''
         Compute the robot's movement intent as a single (vx, vy, omega) vector
         based on the three distance sensors.
+        
+        Port sensor pushes robot to starboard (positive vx).
+        Starboard sensor pushes robot to port (negative vx).
+        Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
+        
+        Uses easing functions to scale avoidance force with distance.
         '''
-        # TODO update intent vector
+        vx = 0.0
+        vy = 0.0
+        omega = 0.0
+        port_active = False
+        stbd_active = False
+        # port sensor: obstacle closer → push to starboard (positive vx)
+        if port_distance is not None and port_distance < self._side_threshold_mm:
+            normalised = 1.0 - (port_distance / self._side_threshold_mm)
+            port_scale = self._side_easing.apply(normalised)
+            vx += port_scale * self._avoid_speed
+            port_active = True
+        # starboard sensor: obstacle closer → push to port (negative vx)
+        if stbd_distance is not None and stbd_distance < self._side_threshold_mm:
+            normalised = 1.0 - (stbd_distance / self._side_threshold_mm)
+            stbd_scale = self._side_easing.apply(normalised)
+            vx -= stbd_scale * self._avoid_speed
+            stbd_active = True
+        # squeeze detection
+        self._squeezed = port_active and stbd_active
+        # aft sensor: obstacle closer → push forward (positive vy)
+        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
+            normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
+            aft_scale = self._aft_easing.apply(normalised)
+            vy += aft_scale * self._avoid_speed
+        self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
 
+    def _print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
+        '''
+        Display current sensor readings and intent vector with color coding.
+        '''
         if port_distance and port_distance < self._side_threshold_mm:
             _port_color = Fore.RED + Style.NORMAL
         else:
@@ -105,14 +144,16 @@ class Avoid(AsyncBehaviour):
             _aft_color = Fore.YELLOW + Style.NORMAL
         else:
             _aft_color = Fore.YELLOW + Style.DIM
-        self._log.info("update intent vector;{} port: {};{} stbd: {};{} aft: {}".format(
+        _squeeze_indicator = Fore.MAGENTA + ' [SQUEEZED]' + Style.RESET_ALL if self._squeezed else ''
+        self._log.info("intent vector: ({:5.2f}, {:5.2f}, {:5.2f});{} port: {};{} stbd: {};{} aft: {}{}".format(
+                vx, vy, omega,
                 _port_color,
                 '{}mm'.format(port_distance) if port_distance else 'NA',
                 _stbd_color,
                 '{}mm'.format(stbd_distance) if stbd_distance else 'NA',
                 _aft_color,
-                '{}mm'.format(aft_distance)  if aft_distance else 'NA'))
-
+                '{}mm'.format(aft_distance) if aft_distance else 'NA',
+                _squeeze_indicator))
 
     def enable(self):
         if not self.enabled:

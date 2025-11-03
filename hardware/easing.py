@@ -20,6 +20,7 @@ class Easing(Enum):
     CUBIC       = 'cubic'        # decreases very fast initially, then barely changes close to obstacles
     SQUARE_ROOT = 'square_root'  # maintains higher values longer, drops more gradually near obstacles
     LOGARITHMIC = 'logarithmic'  # keeps values high over a wide range, drops off sharply only near minimum
+    REVERSE_LOGARITHMIC = 'reverse_logarithmic' # stays low over most of its range, rising sharply near minimum
     SIGMOID     = 'sigmoid'      # smooth, balanced transition; avoids abrupt changes
 
     @property
@@ -52,6 +53,19 @@ class Easing(Enum):
                 '''
                 log_scaling_factor = 7
                 return math.log1p(normalised * log_scaling_factor) / math.log1p(log_scaling_factor)
+            case Easing.REVERSE_LOGARITHMIC:
+                '''
+                Reverse logarithmic: stays very low over most of the range, then rises sharply only when
+                very close to maximum (obstacle very close). Ideal for aft sensor where you want minimal
+                interference until obstacle is dangerously close, then strong avoidance force.
+                
+                At normalised=0.0 (far):   returns ~0.0
+                At normalised=0.5 (mid):   returns ~0.15
+                At normalised=0.8 (close): returns ~0.55
+                At normalised=1.0 (collision): returns 1.0
+                '''
+                log_scaling_factor = 7
+                return 1.0 - (math.log1p((1.0 - normalised) * log_scaling_factor) / math.log1p(log_scaling_factor))
             case Easing.SIGMOID:
                 sigmoid_sharpness = 6   # reduce sharpness to make the deceleration more gradual (was 4)
                 midpoint          = 0.4 # shift the midpoint of the sigmoid to start decelerating earlier (was 0.22)
