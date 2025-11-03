@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-10-13
+# modified: 2025-11-03
 
 import traceback
 import time
@@ -30,6 +30,8 @@ class Vl53l5cxSensor(Component):
     '''
     Wrapper for VL53L5CX sensor, handling sensor initialization, configuration,
     and data acquisition.
+
+    Data orientation: Row 0 = bottom/floor, Row 7 = top/far
 
     Args:
         config:    application configuration
@@ -67,7 +69,6 @@ class Vl53l5cxSensor(Component):
         self._fov  = _cfg.get('fov', 47.0)
         self._floor_row_means   = [None for _ in range(self._rows)]
         self._floor_row_stddevs = [None for _ in range(self._rows)]
-        self._non_floor_rows    = None
         self._calibration_samples = _cfg.get('calibration_samples', 10)
         self._stddev_threshold = _cfg.get('stddev_threshold', 100)
         self._floor_margin = _cfg.get('floor_margin', 50)
@@ -120,20 +121,22 @@ class Vl53l5cxSensor(Component):
 
     @property
     def non_floor_rows(self):
-        if self._non_floor_rows is None:
-            # find first two non-floor rows (immediately above the last floor row)
-            floor_rows = [i for i, v in enumerate(self.floor_row_means) if v is not None]
-            if not floor_rows:
-                # if no floor rows, use rows 0 and 1
-                non_floor_rows = [0, 1]
-            else:
-                last_floor_row = max(floor_rows)
-                non_floor_rows = [r for r in range(last_floor_row + 1, self._rows)][:2]
-                if len(non_floor_rows) < 2:
-                    # not enough non-floor rows, pad with next available rows
-                    non_floor_rows += [self._rows-1] * (2 - len(non_floor_rows))
-            self._non_floor_rows = non_floor_rows
-        return self._non_floor_rows
+        '''
+        Returns list of non-floor row indices (dynamically computed from calibration).
+        Row 0 = bottom/floor, Row 7 = top/far.
+        If rows 0,1 are floor, returns [2, 3, 4, 5, 6, 7].
+        '''
+        floor_rows = [i for i, v in enumerate(self.floor_row_means) if v is not None]
+        if not floor_rows:
+            # if no floor rows detected, all rows are obstacle rows
+            return list(range(self._rows))
+        else:
+            last_floor_row = max(floor_rows)  # highest index floor row
+            non_floor_rows = list(range(last_floor_row + 1, self._rows))  # all rows above floor
+            if len(non_floor_rows) == 0:
+                # all rows marked as floor (shouldn't happen, but fallback to top row)
+                return [self._rows - 1]
+            return non_floor_rows
 
     def _polling_loop(self, queue, stop_event, poll_interval):
         '''
@@ -196,7 +199,7 @@ class Vl53l5cxSensor(Component):
 
     def get_distance_mm(self):
         '''
-        Returns sensor data with rows properly oriented (row 0 = top/far, row 7 = bottom/floor).
+        Returns sensor data with rows properly oriented (row 0 = bottom/floor, row 7 = top/far).
         When using multiprocessing, returns the last known value if the queue is empty,
         but only if the data is not too stale (within stale_data_timeout_sec).
         '''
@@ -211,7 +214,7 @@ class Vl53l5cxSensor(Component):
                     arr = np.array(value).reshape((self._rows, self._cols))
                     arr = np.flipud(arr)
                     self._last_distance = arr.flatten().tolist()
-                    self._last_distance_time = dt.now()  # ← Timestamp the reading
+                    self._last_distance_time = dt.now()
                     return self._last_distance
             except Exception:
                 pass  # Queue empty, fall through to return cached value
@@ -239,12 +242,19 @@ class Vl53l5cxSensor(Component):
                 return None
 
     def _calibrate_floor_rows(self):
+        '''
+        Calibrates floor row detection by analyzing multiple samples.
+        Floor rows have low standard deviation (consistent readings).
+        Starts from row 0 (bottom) and works upward until a non-floor row is found.
+        
+        Row 0 = bottom/floor, Row 7 = top/far
+        '''
         self._log.info(Fore.WHITE + 'calibrating floor rows using {} samples…'.format(self._calibration_samples))
         self._floor_row_means   = [None for _ in range(self._rows)]
         self._floor_row_stddevs = [None for _ in range(self._rows)]
         samples = []
         for i in range(self._calibration_samples):
-            data = self.get_distance_mm() # returns an 8x8 array
+            data = self.get_distance_mm()
             if data is None:
                 self._log.info("calibration sample {} is None.".format(i))
                 continue
@@ -255,19 +265,24 @@ class Vl53l5cxSensor(Component):
             self._log.warning('no calibration samples collected, check sensor connection.')
             return
         samples = np.array(samples)  # shape: (samples, _rows, _cols)
+        
         # check if we have minimum clear space (using upper rows which should see into distance)
-        upper_rows_data = samples[:, 0:4, :].flatten()  # rows 0-3 should see far
+        # Row 7 = top/far, rows 4-7 are upper half
+        upper_rows_data = samples[:, 4:8, :].flatten()  # rows 4-7 should see far
         upper_mean = upper_rows_data.mean()
         clear_distance = upper_mean >= self._minimum_free_distance
         if not clear_distance:
             self._log.warning('not enough clear space detected: upper rows mean = {:.1f}mm (minimum: {}mm)'.format(
                 upper_mean, self._minimum_free_distance))
-        # identify floor rows starting from bottom (row 7) and working up
-        for row in reversed(range(self._rows)):  # 7, 6, 5, 4, 3, 2, 1, 0
+        
+        # identify floor rows starting from bottom (row 0) and working up
+        # Row 0 = bottom/floor, Row 7 = top/far
+        for row in range(self._rows):  # 0, 1, 2, 3, 4, 5, 6, 7
             values = samples[:, row, :].flatten()
             mean = values.mean()
             stddev = values.std()
             self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
+            
             # floor detection: low stddev = consistent reading = floor
             if stddev < self._stddev_threshold:
                 self._floor_row_means[row] = mean
@@ -279,22 +294,25 @@ class Vl53l5cxSensor(Component):
                 self._floor_row_stddevs[row] = None
                 self._log.info(Fore.WHITE + 'row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
                 # all rows above this cannot be floor rows
-                for above_row in range(0, row):  # mark all rows above as not floor
+                for above_row in range(row + 1, self._rows):  # mark rows (row+1) through 7 as not floor
                     self._floor_row_means[above_row] = None
                     self._floor_row_stddevs[above_row] = None
                 break  # exit the calibration loop
+        
         detected_floor_rows = [i for i, v in enumerate(self._floor_row_means) if v is not None]
         if detected_floor_rows:
             self._log.info(Fore.WHITE + 'floor rows detected (indices): {}'.format(detected_floor_rows))
+        
         if all(val is None for val in self._floor_row_means):
             # force bottom row as floor
-            values = samples[:, 7, :].flatten()  # row 7 is bottom
-            self._floor_row_means[7] = values.mean()
-            self._floor_row_stddevs[7] = values.std()
+            values = samples[:, 0, :].flatten()  # row 0 is bottom
+            self._floor_row_means[0] = values.mean()
+            self._floor_row_stddevs[0] = values.std()
             if clear_distance:
-                self._log.warning('no floor detected during calibration, forcibly marking bottom row as floor.')
+                self._log.warning('no floor detected during calibration, forcibly marking bottom row (0) as floor.')
             else:
-                self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row as floor.')
+                self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row (0) as floor.')
+        
         self._log.info(Fore.WHITE + 'floor rows calibrated.')
 
     def _terminate_subprocess(self):

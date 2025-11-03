@@ -132,22 +132,24 @@ class RoamSensor(Component):
     def _get_vl53l5cx_front_distance(self):
         '''
         Returns the median distance from the central 4 pixels of the VL53L5CX grid.
-        Now reads the latest value from the queue (via Vl53l5cxSensor.get_distance_mm()).
+        Uses the middle 2 columns (3, 4) and the first 2 non-floor rows (dynamically
+        determined from sensor calibration).
+        
+        Row 0 = bottom/floor, Row 7 = top/far.
         '''
         if not self._vl53l5cx.enabled:
             self._log.warning('VL53L5CX not enabled.')
             return None
-        data = self._vl53l5cx.get_distance_mm()  # now non-blocking
+        data = self._vl53l5cx.get_distance_mm()
         if data is None:
-#           self._log.warning('VL53L5CX returned no data.')
             return None
-        # assume 8x8 grid, take rows 3,4 and cols 3,4 (0-indexed, for central 4 pixels)
         try:
             grid = np.array(data).reshape((8, 8))
-            center_rows = [3, 4]  # middle two rows
-            center_cols = [3, 4]  # middle two cols
-            values = [grid[row, col] for row in center_rows for col in center_cols]
-            # filter out invalid readings (e.g., 0 or None)
+            # get first two non-floor rows from calibration
+            non_floor_rows = self._vl53l5cx.non_floor_rows[:2]
+            center_cols = [3, 4]  # middle two columns
+            values = [grid[row, col] for row in non_floor_rows for col in center_cols]
+            # filter out invalid readings
             values = [v for v in values if v is not None and v > 0]
             if not values:
                 self._log.warning('No valid VL53L5CX center values.')
