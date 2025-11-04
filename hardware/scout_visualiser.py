@@ -51,7 +51,7 @@ class ScoutVisualiser(Component):
             distance_mm: Flattened 64-element distance array
             floor_row_means: List of floor row mean values (None for non-floor rows)
             margin: Floor detection margin in mm
-            result: Dict containing analysis results from OpenPathSensor._process()
+            result: Dict containing analysis results from ScoutSensor._process()
         '''
         distance = np.array(distance_mm).reshape((len(floor_row_means), self.cols))
         self.print_colored_grid(distance, self.cols, floor_row_means, margin)
@@ -60,8 +60,7 @@ class ScoutVisualiser(Component):
             result['highlighted_idx'],
             result['pixel_angles'],
             result['target_offset'],
-            result['filtered_offset'],
-            result.get('heading_offset', 0.0)  # NEW: heading offset in degrees
+            result.get('heading_offset', 0.0)
         )
 
     def print_colored_grid(self, distance, COLS, floor_row_means, margin):
@@ -91,7 +90,7 @@ class ScoutVisualiser(Component):
             print(line)
         print(Style.RESET_ALL)
 
-    def print_target_row(self, weighted_avgs, highlighted_idx, pixel_angles, target_offset, filtered_offset, heading_offset):
+    def print_target_row(self, weighted_avgs, highlighted_idx, pixel_angles, target_offset, heading_offset):
         '''
         Prints the weighted average row showing which column is most open,
         and displays the calculated heading offset.
@@ -100,8 +99,7 @@ class ScoutVisualiser(Component):
             weighted_avgs: List of weighted average distances per column
             highlighted_idx: Index of the most open column
             pixel_angles: List of angles corresponding to each column
-            target_offset: Raw calculated offset (before filtering)
-            filtered_offset: Low-pass filtered offset
+            target_offset: Instantaneous calculated offset
             heading_offset: Final heading offset in degrees (negative=left, positive=right)
         '''
         line = ""
@@ -124,7 +122,7 @@ class ScoutVisualiser(Component):
             direction_color = Fore.CYAN  # Near center
             direction = "CENTER"
         
-        self._log.info("target: {:+.2f}°; filtered: {:+.2f}°; {}heading: {:+.2f}° {}".format(
-            target_offset, filtered_offset, direction_color, heading_offset, direction + Style.RESET_ALL))
+        self._log.info("target: {:+.2f}°; {}heading: {:+.2f}° {}".format(
+            target_offset, direction_color, heading_offset, direction + Style.RESET_ALL))
 
 #EOF

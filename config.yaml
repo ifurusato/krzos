@@ -257,6 +257,11 @@ kros:
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)
+            history_depth:                    9            # require N consecutive readings to confirm obstacle
+            weights:
+                - 0.6
+                - 0.3
+                - 0.1
             alpha:                          0.3            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
         usfs:
             declination:                     23.04         # declination at operating location
