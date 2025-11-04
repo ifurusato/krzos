@@ -27,6 +27,9 @@ class ScoutSensor(Component):
     ScoutSensor analyzes VL53L5CX multizone data to determine the most
     open direction, returning a heading offset in degrees for navigation.
     
+    This is a stateless sensor - each reading is independent and based solely
+    on current sensor data. Smoothing is handled by the consuming behavior (Scout).
+    
     The sensor processes the 8x8 grid column-by-column, ignoring floor rows
     (detected during Vl53l5cxSensor calibration), and identifies the column
     with the greatest average distance as the most open path.
@@ -59,16 +62,13 @@ class ScoutSensor(Component):
         _cfg = config['kros'].get('hardware').get('scout_sensor')
         self._distance_threshold = _cfg.get('distance_threshold', 1000)
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
-        self._alpha   = _cfg.get('alpha', 0.08) #  low-pass filter coefficient
         self._rate = Rate(_cfg.get('loop_freq_hz', 5)) # 5Hz, 200ms default
-        self._reverse_angles = False
         # variables
         self.set_visualiser(visualiser)
         self._thread  = None
         self._running = False
-        self._heading_offset_degrees = 0.0  # current heading offset
-        self._max_open_distance      = self._distance_threshold
-        self._filtered_offset = 0.0         # low-pass filtered offset
+        self._heading_offset_degrees = 0.0
+        self._max_open_distance = self._distance_threshold
         self._log.info('scout sensor ready.')
 
     def set_visualiser(self, visualiser):
@@ -103,7 +103,6 @@ class ScoutSensor(Component):
                     self._visualiser.update(distance_mm, self._vl53l5cx.floor_row_means, self._vl53l5cx.floor_margin, result)
                 else:
                     self._log.debug('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
-                    print('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
             self._rate.wait()
 
     def get_distance_mm(self):
@@ -119,7 +118,7 @@ class ScoutSensor(Component):
         '''
         Analyzes distance data to determine most open direction.
         Points toward the column with greatest average distance.
-        Uses hysteresis to prevent oscillation.
+        This is stateless - returns instantaneous reading based solely on current data.
         
         Row 0 = bottom/floor, Row 7 = top/far
         
@@ -132,17 +131,14 @@ class ScoutSensor(Component):
         obstacle_rows = [r for r in range(self._rows) if self._vl53l5cx.floor_row_means[r] is None]
         # if no obstacle rows or no obstacles detected within threshold, path is clear
         if not obstacle_rows or not np.any(distance[obstacle_rows, :] < self._distance_threshold):
-            target_offset = 0.0
-            self._filtered_offset = 0.0
             self._heading_offset_degrees = 0.0
-            self._max_open_distance = self._distance_threshold  # path is clear
+            self._max_open_distance = self._distance_threshold
             weighted_avgs = [0] * self._cols
             highlighted_idx = min(range(self._cols), key=lambda i: abs(pixel_angles[i]))
             return dict(
                 weighted_avgs=weighted_avgs,
-                target_offset=target_offset,
-                filtered_offset=self._filtered_offset,
-                heading_offset=self._heading_offset_degrees,
+                target_offset=0.0,
+                heading_offset=0.0,
                 highlighted_idx=highlighted_idx,
                 pixel_angles=pixel_angles
             )
@@ -172,24 +168,27 @@ class ScoutSensor(Component):
         # among open columns, choose the one closest to straight ahead (0°)
         # this provides stability - robot prefers to go straight when multiple options exist
         if open_columns:
-            max_idx = min(open_columns, key=lambda i: abs(pixel_angles[i]))
+#           max_idx = min(open_columns, key=lambda i: abs(pixel_angles[i]))
+            if len(open_columns) >= self._cols - 1:  # all or nearly all columns are open
+                target_offset = 0.0  # path is clear, go straight
+                max_idx = min(range(self._cols), key=lambda i: abs(pixel_angles[i]))  # highlight column closest to center
+            else:
+                max_idx = min(open_columns, key=lambda i: abs(pixel_angles[i]))
+                target_offset = pixel_angles[max_idx]
         else:
             # fallback: just use the absolute max
             max_idx = int(np.argmax(weighted_avgs))
-        # target offset is the angle of the chosen column
+        # target offset is the angle of the chosen column - no filtering, return instantaneous value
         target_offset = pixel_angles[max_idx]
-        # apply low-pass filter for smooth transitions
-        self._filtered_offset = self._alpha * target_offset + (1 - self._alpha) * self._filtered_offset
-        self._heading_offset_degrees = self._filtered_offset
+        self._heading_offset_degrees = target_offset
         # for visualization: highlight the chosen column
         highlighted_idx = max_idx
         return dict(
-            weighted_avgs   = weighted_avgs,
-            target_offset   = target_offset,
-            filtered_offset = self._filtered_offset,
-            heading_offset  = self._heading_offset_degrees,
-            highlighted_idx = highlighted_idx,
-            pixel_angles    = pixel_angles
+            weighted_avgs=weighted_avgs,
+            target_offset=target_offset,
+            heading_offset=self._heading_offset_degrees,
+            highlighted_idx=highlighted_idx,
+            pixel_angles=pixel_angles
         )
 
     def enable(self):

@@ -35,10 +35,10 @@ class HeadingMode(Enum):
     by rotating the robot. The heading mode determines how directional control is applied.
 
     RELATIVE (HeadingMode.RELATIVE):
-        Encoder-based rotation to a relative heading offset from the robot's current
-        orientation. When set_heading_degrees(45) is called, the robot rotates 45°
-        clockwise from its current facing using motor encoder odometry. ScoutSensor
-        can dynamically adjust this offset for obstacle avoidance.
+        Sensor-reactive rotation that continuously adjusts to face the most open direction
+        detected by ScoutSensor. The robot rotates to minimize the heading offset reported
+        by the sensor, making it purely reactive to current environmental conditions without
+        maintaining any fixed heading reference.
 
     ABSOLUTE (HeadingMode.ABSOLUTE):
         IMU compass-based servo to an absolute world heading. When set_heading_degrees(270)
@@ -75,7 +75,7 @@ class Scout(AsyncBehaviour):
     Other behaviors (e.g., Roam) handle forward motion (vy) independently.
     
     Scout can operate in three modes:
-    - RELATIVE: Rotate relative to current orientation using encoders + ScoutSensor
+    - RELATIVE: Rotate to face direction indicated by ScoutSensor (stateless, reactive)
     - ABSOLUTE: Rotate to absolute compass heading using IMU
     - BLENDED: Absolute heading with ScoutSensor offset adjustments
     
@@ -93,22 +93,17 @@ class Scout(AsyncBehaviour):
         # configuration
         _cfg = config['kros'].get('behaviour').get('scout')
         self._counter = itertools.count()
-        self._verbose = True #_cfg.get('verbose', False)
+        self._verbose = _cfg.get('verbose', False)
         self._use_color = True
         self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'RELATIVE'))
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         # heading control
         self._heading_degrees = 0.0
-        self._target_relative_offset = 0.0
         self._rotation_speed = _cfg.get('rotation_speed', 0.5)
         self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
-        # encoder tracking
-        self._last_encoder_pfwd  = None
-        self._last_encoder_sfwd  = None
-        self._last_encoder_paft  = None
-        self._last_encoder_saft  = None
-        self._last_encoder_value = None  # track last encoder reading
+        # compass encoder tracking for dynamic heading updates
+        self._last_encoder_value = None
         self._last_omega = 0.0
         self._max_omega_change = 0.05  # rate limiting for smooth rotation
         # ScoutSensor for dynamic obstacle avoidance heading
@@ -128,56 +123,23 @@ class Scout(AsyncBehaviour):
         self._imu = _component_registry.get(Usfs.NAME)
         if self._imu is None:
             raise MissingComponentError('IMU not available.')
-        # get motor objects for encoder tracking
-        self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
-        self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
-        self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
-        self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
-        # geometry configuration for encoder-based rotation
-        velocity = self._motor_pfwd.get_velocity()
-        self._steps_per_rotation = velocity.steps_per_rotation
-        self._wheel_diameter_mm = velocity._wheel_diameter
-        self._wheel_track_mm = config['kros']['geometry']['wheel_track']
-        wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
-        rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
-        steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
-        self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
-        self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._log.info('ready with heading mode: {}'.format(self._heading_mode.name))
 
     def set_heading_degrees(self, degrees, internal=False):
         '''
-        Set target heading. Interpretation depends on mode:
-        - RELATIVE: degrees is an offset from starting orientation (0-360°)
+        set target heading. interpretation depends on mode:
+        - RELATIVE: ignored (purely sensor-reactive, no fixed heading)
         - ABSOLUTE/BLENDED: degrees is absolute compass heading (0-360°)
         '''
+        if self._heading_mode == HeadingMode.RELATIVE:
+            self._log.info('RELATIVE mode: ignoring heading set (sensor-reactive only)')
+            return
         if not internal and self._heading_mode == HeadingMode.ABSOLUTE:
             self._log.info('ABSOLUTE mode: ignoring programmatic heading change (encoder only)')
             return
         degrees = float(degrees) % 360.0
-        if self._heading_mode == HeadingMode.RELATIVE:
-            self._target_relative_offset = 0.0  # RELATIVE mode: ignore absolute heading, start from 0°
-            self._log.info('RELATIVE: ignoring absolute heading, using 0° relative offset')
-        else:
-            self._heading_degrees = degrees
-            self._log.info('heading set to {:.2f}°'.format(degrees))
-
-    def x_set_heading_degrees(self, degrees, internal=False):
-        '''
-        Set target heading. Interpretation depends on mode:
-        - RELATIVE: degrees is an offset from starting orientation (0-360°)
-        - ABSOLUTE/BLENDED: degrees is absolute compass heading (0-360°)
-        '''
-        if not internal and self._heading_mode == HeadingMode.ABSOLUTE:
-            self._log.info('ABSOLUTE mode: ignoring programmatic heading change (encoder only)')
-            return
-        degrees = float(degrees) % 360.0
-        if self._heading_mode == HeadingMode.RELATIVE:
-            self._target_relative_offset = degrees
-            self._log.info('RELATIVE: target offset set to {:.2f}°'.format(degrees))
-        else:
-            self._heading_degrees = degrees
-            self._log.info('heading set to {:.2f}°'.format(degrees))
+        self._heading_degrees = degrees
+        self._log.info('heading set to {:.2f}°'.format(degrees))
 
     def set_heading_radians(self, radians, internal=False):
         self.set_heading_degrees(np.degrees(radians), internal)
@@ -202,10 +164,10 @@ class Scout(AsyncBehaviour):
         raise Exception('UNSUPPORTED execute')
 
     def start_loop_action(self):
-        pass  # Scout doesn't accelerate forward
+        pass  # scout doesn't accelerate forward
 
     def stop_loop_action(self):
-        pass  # Scout doesn't decelerate forward
+        pass  # scout doesn't decelerate forward
 
     def _dynamic_set_heading(self):
         '''
@@ -225,24 +187,11 @@ class Scout(AsyncBehaviour):
                 self.set_heading_degrees(_degrees, internal=True)
                 self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
             else:
-                self._log.info("encoder unchanged: {:.2f}°".format(_degrees))
-
-    def x_dynamic_set_heading(self):
-        '''
-        updates heading from compass encoder only when it changes.
-        '''
-        if self._compass_encoder:
-            self._compass_encoder.update()
-            _degrees = self._compass_encoder.get_degrees()
-            # only update if encoder value has changed
-            if self._last_encoder_value is None or abs(_degrees - self._last_encoder_value) > 1.0:
-                self._last_encoder_value = _degrees
-                self.set_heading_degrees(_degrees, internal=True)
-                self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
+                self._log.debug("encoder unchanged: {:.2f}°".format(_degrees))
 
     async def _poll(self):
         '''
-        The asynchronous poll, updates the intent vector on each call.
+        the asynchronous poll, updates the intent vector on each call.
         '''
         try:
             if next(self._counter) % 5 == 0:
@@ -255,11 +204,11 @@ class Scout(AsyncBehaviour):
 
     def _update_intent_vector(self):
         '''
-        Update the intent vector based on heading mode.
+        update the intent vector based on heading mode.
         
-        Scout only controls rotation. Delegates to mode-specific methods.
+        scout only controls rotation. delegates to mode-specific methods.
         
-        Robot-relative components of the vector:
+        robot-relative components of the vector:
             vx:    lateral velocity (always 0.0 for Scout)
             vy:    longitudinal velocity (always 0.0 for Scout)
             omega: angular velocity (rotation) - this is what Scout controls
@@ -272,107 +221,35 @@ class Scout(AsyncBehaviour):
             case HeadingMode.BLENDED:
                 self._update_intent_vector_blended()
             case _:
-                raise NotImplementedError("Unhandled heading mode: {}".format(self._heading_mode))
-
-    def _update_heading_from_encoders(self):
-        '''
-        Update self._heading_degrees based on actual motor encoder deltas.
-        Tracks rotation by measuring differential encoder movement.
-        Used by RELATIVE mode to maintain awareness of actual robot orientation.
-        '''
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxx')
-        # get current encoder positions
-        current_pfwd = self._motor_pfwd.decoder.steps
-        current_sfwd = self._motor_sfwd.decoder.steps
-        current_paft = self._motor_paft.decoder.steps
-        current_saft = self._motor_saft.decoder.steps
-        # initialize baseline on first call
-        if self._last_encoder_pfwd is None:
-            self._last_encoder_pfwd = current_pfwd
-            self._last_encoder_sfwd = current_sfwd
-            self._last_encoder_paft = current_paft
-            self._last_encoder_saft = current_saft
-            return
-        # calculate deltas since last update
-        delta_pfwd = current_pfwd - self._last_encoder_pfwd
-        delta_sfwd = current_sfwd - self._last_encoder_sfwd
-        delta_paft = current_paft - self._last_encoder_paft
-        delta_saft = current_saft - self._last_encoder_saft
-        # calculate rotation (Mecanum kinematics for in-place rotation)
-        rotation_steps = (delta_pfwd + delta_paft - delta_sfwd - delta_saft) / 4.0
-        degrees_rotated = rotation_steps / self._steps_per_degree
-        # update heading
-        self._heading_degrees = (self._heading_degrees + degrees_rotated) % 360.0
-        # store for next iteration
-        self._last_encoder_pfwd = current_pfwd
-        self._last_encoder_sfwd = current_sfwd
-        self._last_encoder_paft = current_paft
-        self._last_encoder_saft = current_saft
+                raise NotImplementedError("unhandled heading mode: {}".format(self._heading_mode))
 
     def _update_intent_vector_relative(self):
         '''
-        RELATIVE mode: Rotate to face the direction ScoutSensor indicates.
-        No fixed base heading - purely reactive to sensor input.
+        RELATIVE mode: rotate to face the direction ScoutSensor indicates.
+        purely reactive to sensor input - no state tracking needed.
         '''
-        self._update_heading_from_encoders()
-        # ScoutSensor provides the target direction
+        # ScoutSensor provides the target direction as an offset
         if self._scout_sensor:
             scout_offset, open_distance = self._scout_sensor.get_heading_offset()
-            desired_offset = scout_offset  # ← No base! Just use scout's recommendation
+            print("RAW SENSOR: offset={:+.2f}°, distance={:.1f}mm".format(scout_offset, open_distance))
         else:
-            desired_offset = 0.0
+            scout_offset = 0.0
             open_distance = None
-        # calculate error from current heading
-        current_offset = self._heading_degrees % 360.0
-#       error = (desired_offset - current_offset + 180.0) % 360.0 - 180.0
+        
+        # error is simply the scout offset - rotate to make it zero
         error = scout_offset
         omega = self._calculate_omega(error)
-        # Scout only rotates - no forward or lateral motion
+        
+        # scout only rotates - no forward or lateral motion
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
+        
         if self._verbose:
-            self._log.info("RELATIVE: scout_offset={:+.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
-                scout_offset if self._scout_sensor else 0.0,
-                current_offset,
+#           self._log.info("RELATIVE: scout_offset={:+.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+            print("RELATIVE: scout_offset={:+.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+                scout_offset,
                 error,
-                omega,
-                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
-            self._display_info('RELATIVE')
-
-    def x_update_intent_vector_relative(self):
-        '''
-        RELATIVE mode: Continuously servo to achieve a relative heading offset.
-        Compass encoder (or other behavior) sets base target offset.
-        ScoutSensor provides additional offset for obstacle avoidance.
-        '''
-        self._update_heading_from_encoders()
-        # base target from compass encoder or set_heading_degrees()
-        base_offset = self._target_relative_offset
-        # ScoutSensor provides obstacle avoidance adjustment
-        if self._scout_sensor:
-            scout_adjustment, open_distance = self._scout_sensor.get_heading_offset()
-            # Combine: base direction + obstacle avoidance offset
-            desired_offset = (base_offset + scout_adjustment) % 360.0
-        else:
-            desired_offset = base_offset
-            open_distance = None
-        # calculate error
-        current_offset = self._heading_degrees % 360.0
-        error = (desired_offset - current_offset + 180.0) % 360.0 - 180.0
-        omega = self._calculate_omega(error)
-        # Scout only rotates - no forward or lateral motion
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-#           self._log.info("RELATIVE: base={:.2f}°; scout_adj={:+.2f}°; target={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
-            print("RELATIVE: base={:.2f}°; scout_adj={:+.2f}°; target={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
-                base_offset, 
-                scout_adjustment if self._scout_sensor else 0.0, 
-                desired_offset, 
-                current_offset, 
-                error, 
                 omega,
                 "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
             self._display_info('RELATIVE')
@@ -383,31 +260,10 @@ class Scout(AsyncBehaviour):
         uses self._heading_degrees as target (set via setter methods or encoder).
         '''
         current_heading = self._imu.poll() % 360.0
-        desired_heading = self._heading_degrees % 360.0  # ← Always use this, whether set by callback or encoder
+        desired_heading = self._heading_degrees % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
         # scout only rotates
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._log.info("ABSOLUTE: desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}".format(
-                desired_heading, current_heading, error, omega))
-            self._display_info('ABSOLUTE')
-
-    def x_update_intent_vector_absolute(self):
-        '''
-        ABSOLUTE mode: Rotate to match compass heading (from IMU).
-        '''
-        current_heading = self._imu.poll() % 360.0
-        if self._compass_encoder:
-            self._compass_encoder.update()
-            desired_heading = self._compass_encoder.get_degrees() % 360.0
-        else:
-            desired_heading = self._heading_degrees % 360.0
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        omega = self._calculate_omega(error)
-        # Scout only rotates
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
@@ -440,25 +296,22 @@ class Scout(AsyncBehaviour):
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            print("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
-                base_heading, offset, desired_heading, current_heading, error, omega,
-                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
-            self._log.debug("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+            self._log.info("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
                 base_heading, offset, desired_heading, current_heading, error, omega,
                 "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
             self._display_info('BLENDED')
 
     def _calculate_omega(self, error):
         '''
-        Calculate rotation speed with rate limiting to prevent oscillation.
-        Allows faster response when crossing through target (error sign change).
+        calculate rotation speed with rate limiting to prevent oscillation.
+        allows faster response when crossing through target (error sign change).
         '''
         abs_error = abs(error)
         # deadzone
         if abs_error <= self._rotation_tolerance:
             self._last_omega = 0.0
             return 0.0
-        gain = 0.05  # Conservative gain
+        gain = 0.05  # conservative gain
         target_omega = abs_error * gain
         # clamp to limits
         target_omega = max(min(target_omega, self._rotation_speed), 0.08)
@@ -475,52 +328,17 @@ class Scout(AsyncBehaviour):
         self._last_omega = omega
         return omega
 
-    def x_calculate_omega(self, error):
-        '''
-        Calculate rotation speed with rate limiting to prevent oscillation.
-        '''
-        abs_error = abs(error)
-        
-        # Deadzone
-        if abs_error <= self._rotation_tolerance:
-            self._last_omega = 0.0
-            return 0.0
-        
-        gain = 0.05  # Conservative gain to start - tune as needed
-        target_omega = abs_error * gain
-        
-        # Clamp to limits
-        target_omega = max(min(target_omega, self._rotation_speed), 0.08)
-        target_omega = target_omega * (1 if error > 0 else -1)
-        
-        # Rate limit: smooth the change
-        omega_change = target_omega - self._last_omega
-        if abs(omega_change) > self._max_omega_change:
-            omega = self._last_omega + self._max_omega_change * (1 if omega_change > 0 else -1)
-        else:
-            omega = target_omega
-        
-        self._last_omega = omega
-        return omega
-
     def _display_info(self, message=''):
         if self._use_color:
             if self._intent_vector[2] == 0.0:
-#               self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
-#                   message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
-                print(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
+                self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
                     message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
             else:
-#               self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
-#                       message, self._intent_vector[0], self._intent_vector[1])
-#                   + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")")
-                print("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
+                self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
                         message, self._intent_vector[0], self._intent_vector[1])
-                    + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")" + Style.RESET_ALL)
+                    + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")")
         else:
-#           self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
-#               self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
-            print("intent vector: ({:.2f},{:.2f},{:.2f})".format(
+            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
                 self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
 
     def enable(self):
@@ -538,7 +356,7 @@ class Scout(AsyncBehaviour):
         # initialize heading based on mode
         if self._heading_mode == HeadingMode.RELATIVE:
             self._heading_degrees = 0.0
-            self._log.info("RELATIVE mode initialized at 0° relative offset")
+            self._log.info("RELATIVE mode initialized (sensor-reactive, no fixed heading)")
         elif self._heading_mode == HeadingMode.ABSOLUTE:
             self._heading_degrees = self._imu.poll() % 360.0
             self._log.info("ABSOLUTE mode initialized to current IMU heading: {:.2f}°".format(self._heading_degrees))
