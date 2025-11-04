@@ -17,8 +17,8 @@ init()
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
-from hardware.open_path_sensor import OpenPathSensor
-from hardware.open_path_visualiser import OpenPathVisualiser
+from hardware.scout_sensor import ScoutSensor
+from hardware.scout_visualiser import ScoutVisualiser
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -27,10 +27,10 @@ def main():
     _config = ConfigLoader(Level.INFO).configure()
 
     _vl53_sensor = Vl53l5cxSensor(_config, skip=('skip' in sys.argv or True in sys.argv), level=Level.INFO)
-    _visualiser = OpenPathVisualiser(cols=8, rows=8)
+    _visualiser = ScoutVisualiser(cols=8, rows=8)
 #   _visualiser = None
-    _open_path_sensor = OpenPathSensor(_config, vl53l5cx=_vl53_sensor, visualiser=_visualiser, level=Level.INFO)
-    _open_path_sensor.enable()
+    _scout_sensor = ScoutSensor(_config, vl53l5cx=_vl53_sensor, visualiser=_visualiser, level=Level.INFO)
+    _scout_sensor.enable()
 
     try:
         while True:
@@ -38,7 +38,7 @@ def main():
     except KeyboardInterrupt:
         _log.info('caught Ctrl-C; exiting…')
     finally:
-        _open_path_sensor.close()
+        _scout_sensor.close()
         _log.info('complete.')
 
 if __name__== "__main__":

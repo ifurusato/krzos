@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2019-12-23
-# modified: 2025-11-03
+# modified: 2025-11-04
 
 import numpy as np
 from colorama import init, Fore, Style
@@ -16,9 +16,9 @@ init()
 from core.component import Component
 from core.logger import Logger, Level
 
-class OpenPathVisualiser(Component):
+class ScoutVisualiser(Component):
     '''
-    Handles console display of open path sensor data.
+    Handles console display of scout sensor data.
     '''
     DIST_COLORS = [
         (0,     150,  Fore.RED),
