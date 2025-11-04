@@ -115,7 +115,54 @@ class ScoutSensor(Component):
             return None
         return self._vl53l5cx.get_distance_mm()
 
+
+
     def _process(self, distance_mm):
+        distance = np.array(distance_mm).reshape((self._rows, self._cols))
+        
+        # compute angle for each column
+        pixel_angles = [-(self._fov/2) + (i + 0.5) * (self._fov/self._cols) for i in range(self._cols)]
+        
+        # get obstacle rows (non-floor rows)
+        obstacle_rows = [r for r in range(self._rows) if self._vl53l5cx.floor_row_means[r] is None]
+        
+        if not obstacle_rows:
+            self._heading_offset_degrees = 0.0
+            self._max_open_distance = self._distance_threshold
+            return dict(weighted_avgs=[0]*self._cols, target_offset=0.0, heading_offset=0.0,
+                        highlighted_idx=self._cols//2, pixel_angles=pixel_angles)
+        
+        # compute weighted average distance for each column
+        weights = self._weights[:len(obstacle_rows)]
+        weighted_avgs = []
+        for col in range(self._cols):
+            values = distance[obstacle_rows, col]
+            if len(weights) == len(values):
+                weighted_avgs.append(np.average(values, weights=weights))
+            else:
+                weighted_avgs.append(np.mean(values))
+        
+        self._max_open_distance = max(weighted_avgs)
+        
+        # Check if the path directly ahead (center columns) is clear
+        center_cols = [self._cols//2 - 1, self._cols//2]  # columns 3 and 4 (center)
+        center_distance = min([weighted_avgs[c] for c in center_cols])
+        
+        # If center path is clear, go straight
+        if center_distance >= self._distance_threshold:
+            self._heading_offset_degrees = 0.0
+            return dict(weighted_avgs=weighted_avgs, target_offset=0.0, heading_offset=0.0,
+                        highlighted_idx=self._cols//2, pixel_angles=pixel_angles)
+        
+        # Center blocked - steer toward most open column
+        max_idx = int(np.argmax(weighted_avgs))
+        target_offset = pixel_angles[max_idx]
+        self._heading_offset_degrees = target_offset
+        
+        return dict(weighted_avgs=weighted_avgs, target_offset=target_offset,
+                    heading_offset=target_offset, highlighted_idx=max_idx, pixel_angles=pixel_angles)
+
+    def x_process(self, distance_mm):
         distance = np.array(distance_mm).reshape((self._rows, self._cols))
         # compute angle for each column
         pixel_angles = [-(self._fov/2) + (i + 0.5) * (self._fov/self._cols) for i in range(self._cols)]
@@ -131,10 +178,13 @@ class ScoutSensor(Component):
         weighted_avgs = []
         for col in range(self._cols):
             values = distance[obstacle_rows, col]
-            weighted_avgs.append(np.average(values, weights=weights))
+            if len(weights) == len(values):
+                weighted_avgs.append(np.average(values, weights=weights))
+            else:
+                weighted_avgs.append(np.mean(values))
         self._max_open_distance = max(weighted_avgs)
         # if furthest direction is beyond threshold, path is clear
-        if self._max_open_distance > self._distance_threshold:
+        if self._max_open_distance >= self._distance_threshold:
             self._heading_offset_degrees = 0.0
             return dict(weighted_avgs=weighted_avgs, target_offset=0.0, heading_offset=0.0,
                         highlighted_idx=self._cols//2, pixel_angles=pixel_angles)
@@ -142,8 +192,13 @@ class ScoutSensor(Component):
         max_idx = int(np.argmax(weighted_avgs))
         target_offset = pixel_angles[max_idx]
         self._heading_offset_degrees = target_offset
-        return dict(weighted_avgs=weighted_avgs, target_offset=target_offset,
-                    heading_offset=target_offset, highlighted_idx=max_idx, pixel_angles=pixel_angles)
+        return dict(
+                weighted_avgs=weighted_avgs,
+                target_offset=target_offset,
+                heading_offset=target_offset,
+                highlighted_idx=max_idx,
+                pixel_angles=pixel_angles
+        )
 
     def enable(self):
         '''

@@ -47,7 +47,6 @@ class Roam(AsyncBehaviour):
             raise MissingComponentError('motor controller not available.')
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.AVOID)
-        
         # configuration
         _cfg = config['kros'].get('behaviour').get('roam')
         self._counter = itertools.count()
@@ -56,16 +55,13 @@ class Roam(AsyncBehaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
-        
         # roam sensor configuration
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance = _rs_cfg.get('min_distance')
         self._max_distance = _rs_cfg.get('max_distance')
-        
         # state variables
         self._front_distance = 0.0
         self._last_amplitude = 0.0
-        
         # component access
         self._roam_sensor = _component_registry.get(RoamSensor.NAME)
         if self._roam_sensor is None:
@@ -73,7 +69,6 @@ class Roam(AsyncBehaviour):
             self._roam_sensor = RoamSensor(config, level=Level.INFO)
         else:
             self._log.info(Fore.WHITE + 'using existing Roam sensor.')
-        
         # digital pot for dynamic speed control
         self._digital_pot = None
         if self._use_dynamic_speed:

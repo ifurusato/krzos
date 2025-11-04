@@ -66,12 +66,6 @@ kros:
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
-            use_dynamic_heading:         True              # if True use RGB encoder for setting heading
-            use_world_coordinates:       True              # use robot- or world-relative coordinates for vector (requires IMU)
-            rotation_speed:                 0.7            # motor speed when rotating in place
-            rotation_tolerance:             2.0            # used to calculate omega
-            minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
-            heading_mode:           'RELATIVE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
         scout:
             enable:                      True              # enable scout behaviour
             release:                     True              # release scout behaviour on startup
@@ -83,7 +77,7 @@ kros:
             rotation_speed:                 0.7            # motor speed when rotating in place
             rotation_tolerance:             0.5            # used to calculate omega
             minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
-            heading_mode:             'RELATIVE'           # NONE, RELATIVE, ABSOLUTE or BLENDED
+            heading_mode:             'RELATIVE'           # RELATIVE or ABSOLUTE
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
