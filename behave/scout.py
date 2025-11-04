@@ -201,26 +201,6 @@ class Scout(AsyncBehaviour):
                     self._log.info("compass encoder delta: {:+.2f}°, target offset now: {:.2f}°".format(
                         delta, self._target_relative_offset))
 
-    def x_dynamic_set_heading(self):
-        '''
-        updates heading from compass encoder only when it changes.
-        '''
-        if self._compass_encoder:
-            self._compass_encoder.update()
-            _degrees = self._compass_encoder.get_degrees()
-            # only update if encoder value has changed
-            if self._last_encoder_value is None:
-                self._log.info("encoder first read: {:.2f}° (storing but not applying)".format(_degrees))
-                self._last_encoder_value = _degrees
-            elif abs(_degrees - self._last_encoder_value) > 1.0:
-                self._log.info("encoder changed: {:.2f}° → {:.2f}° (delta: {:.2f}°)".format(
-                    self._last_encoder_value, _degrees, abs(_degrees - self._last_encoder_value)))
-                self._last_encoder_value = _degrees
-                self.set_heading_degrees(_degrees)
-                self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
-            else:
-                self._log.debug("encoder unchanged: {:.2f}°".format(_degrees))
-
     async def _poll(self):
         '''
         the asynchronous poll, updates the intent vector on each call.
@@ -273,42 +253,14 @@ class Scout(AsyncBehaviour):
         # calculate error
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error, open_distance)
-        # get forward movement vector, then add rotation
-        self._update_linear_vector()
-        vx, vy, _ = self._intent_vector
+        # Scout only rotates
+        vx = 0.0
+        vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
             print("RELATIVE: target={:.2f}°, current={:.2f}°, scout={:+.2f}°, error={:.2f}°; omega={:.3f}{}".format(
                 self._target_relative_offset, current_heading, scout_offset, error, omega,
                 "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
-            self._display_info('RELATIVE')
-
-    def b_update_intent_vector_relative(self):
-        '''
-        RELATIVE mode: Servo to encoder-specified heading using motor encoder feedback.
-        OpenPathSensor provides obstacle avoidance steering if available.
-        '''
-        # update actual heading from motor encoders
-        self._update_heading_from_encoders()
-        current_heading = self._heading_degrees  # this comes from motor encoders
-        # get obstacle avoidance steering from OpenPathSensor
-        if self._open_path_sensor and self._front_distance < self._max_distance:
-            steering_offset, open_distance = self._open_path_sensor.get_heading_offset()
-        else:
-            steering_offset = 0.0
-            open_distance = self._max_distance
-        # combine target offset (from compass encoder) with steering offset
-        desired_heading = (self._target_relative_offset + steering_offset) % 360.0
-        # calculate error
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        omega = self._calculate_omega(error)
-        # get forward movement vector, then add rotation
-        self._update_linear_vector()
-        vx, vy, _ = self._intent_vector
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._log.info("RELATIVE: target={:.2f}°; current={:.2f}°; steering={:+.2f}°; error={:.2f}°; omega={:.3f}; dist={:.1f}mm".format(
-                self._target_relative_offset, current_heading, steering_offset, error, omega, open_distance))
             self._display_info('RELATIVE')
 
     def _update_heading_from_encoders(self):
@@ -344,64 +296,6 @@ class Scout(AsyncBehaviour):
         self._last_encoder_sfwd = current_sfwd
         self._last_encoder_paft = current_paft
         self._last_encoder_saft = current_saft
-
-    def x_update_intent_vector_relative(self):
-        '''
-        relative mode: rotate to face the direction scoutsensor indicates,
-        plus encoder offset.
-        '''
-        # scoutsensor provides obstacle avoidance offset
-        if self._scout_sensor:
-            scout_offset, open_distance = self._scout_sensor.get_heading_offset()
-            print("RAW SENSOR: offset={:+.2f}°, distance={:.1f}mm".format(scout_offset, open_distance))
-        else:
-            scout_offset = 0.0
-            open_distance = None
-        
-        # use encoder offset (updated every 5 cycles by _dynamic_set_heading)
-        # convert to -180 to +180 range
-        encoder_offset = ((self._heading_degrees + 180.0) % 360.0 - 180.0)
-        
-        # combine sensor avoidance with encoder offset
-        error = scout_offset + encoder_offset
-        omega = self._calculate_omega(error, open_distance)
-        
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        
-        if self._verbose:
-            print("RELATIVE: scout={:+.2f}°, encoder={:+.2f}°, error={:+.2f}°; omega={:.3f}{}".format(
-                scout_offset, encoder_offset, error, omega,
-                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
-            self._display_info('RELATIVE')
-
-    def z_update_intent_vector_relative(self):
-        '''
-        relative mode: rotate to face the direction scout sensor indicates.
-        heading_degrees provides additional bias from encoder.
-        '''
-        # scout sensor provides the target direction as an offset
-        if self._scout_sensor:
-            scout_offset, open_distance = self._scout_sensor.get_heading_offset()
-            print("RAW SENSOR: offset={:+.2f}°, distance={:.1f}mm".format(scout_offset, open_distance))
-        else:
-            scout_offset = 0.0
-            open_distance = None
-        # convert heading_degrees to relative offset (-180 to +180)
-        heading_offset = ((self._heading_degrees + 180.0) % 360.0 - 180.0)
-        # combine sensor offset with heading offset
-        error = scout_offset + heading_offset
-        omega = self._calculate_omega(error, open_distance)
-        # scout only rotates - no forward or lateral motion
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            print("RELATIVE: scout={:+.2f}°, heading={:+.2f}°, error={:+.2f}°; omega={:.3f}{}".format(
-                scout_offset, heading_offset, error, omega,
-                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
-            self._display_info('RELATIVE')
 
     def _update_intent_vector_absolute(self):
         '''
@@ -453,33 +347,6 @@ class Scout(AsyncBehaviour):
                 gain *= 2.0
             elif obstacle_distance < 700:    # moderate
                 gain *= 1.5
-        target_omega = abs_error * gain
-        # clamp to limits
-        target_omega = max(min(target_omega, self._rotation_speed), 0.08)
-        target_omega = target_omega * (1 if error > 0 else -1)
-        # check for sign change (overshoot detection)
-        sign_changed = (self._last_omega * target_omega < 0)
-        # rate limit: allow faster change on sign flip
-        omega_change = target_omega - self._last_omega
-        max_change = self._max_omega_change * 3.0 if sign_changed else self._max_omega_change
-        if abs(omega_change) > max_change:
-            omega = self._last_omega + max_change * (1 if omega_change > 0 else -1)
-        else:
-            omega = target_omega
-        self._last_omega = omega
-        return omega
-
-    def x_calculate_omega(self, error):
-        '''
-        calculate rotation speed with rate limiting to prevent oscillation.
-        allows faster response when crossing through target (error sign change).
-        '''
-        abs_error = abs(error)
-        # deadzone
-        if abs_error <= self._rotation_tolerance:
-            self._last_omega = 0.0
-            return 0.0
-        gain = 0.05  # conservative gain
         target_omega = abs_error * gain
         # clamp to limits
         target_omega = max(min(target_omega, self._rotation_speed), 0.08)
