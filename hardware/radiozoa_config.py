@@ -111,9 +111,14 @@ class RadiozoaConfig(object):
             label = sensor_config.get('label')
             self._log.info(Style.DIM + "configuring sensor {} at XSHUT pin {}…".format(label, xshut_pin))
             self._set_xshut(xshut_pin, True)
-            time.sleep(1.0) # delay for sensor startup
-            found = self._i2c_scanner.has_hex_address(['0x29'], force_scan=needs_scan)
-            needs_scan = False
+            found = False
+            for i in range(5):
+                time.sleep(1.0) # delay for sensor startup
+                found = self._i2c_scanner.has_hex_address(['0x29'], force_scan=needs_scan)
+                if found:
+                    self._log.info(Style.DIM + "[{}] waiting for sensor…".format(i))
+                    break
+#           needs_scan = False
             if not found:
                 self._log.warning("sensor {} did not appear at 0x29.".format(label))
                 continue

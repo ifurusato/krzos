@@ -83,7 +83,7 @@ kros:
             rotation_speed:                 0.7            # motor speed when rotating in place
             rotation_tolerance:             2.0            # used to calculate omega
             minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
-            heading_mode:           'RELATIVE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
+            heading_mode:           'ABSOLUTE'             # NONE, RELATIVE, ABSOLUTE or BLENDED
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
