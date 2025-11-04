@@ -234,38 +234,31 @@ class Scout(AsyncBehaviour):
                 raise NotImplementedError("unhandled heading mode: {}".format(self._heading_mode))
 
     def _update_intent_vector_relative(self):
-        '''
-        RELATIVE mode: Servo to encoder-specified heading using motor encoder odometry.
-        ScoutSensor provides obstacle avoidance steering.
-        '''
         # update actual heading from motor encoders (odometry)
         self._update_heading_from_encoders()
         # get obstacle avoidance steering from ScoutSensor
         if self._scout_sensor:
             scout_offset, open_distance, closest_obstacle = self._scout_sensor.get_heading_offset()
-            print("RAW SENSOR: offset={:+.2f}°, open_path={:.1f}mm, closest={:.1f}mm".format(
-                scout_offset, open_distance, closest_obstacle))
         else:
             scout_offset = 0.0
             open_distance = None
             closest_obstacle = None
-        # combine target offset (from compass encoder) with scout steering
-        desired_heading = (self._target_relative_offset + scout_offset) % 360.0
-        # calculate error between desired and actual (from odometry)
-        error = (desired_heading - self._heading_degrees + 180.0) % 360.0 - 180.0
-        # use closest obstacle for urgency calculation
+        # check if encoder has been used
+        encoder_active = abs(self._target_relative_offset) > 1.0
+        if encoder_active:
+            # ENCODER MODE: servo to encoder target with sensor offset
+            desired_heading = (self._target_relative_offset + scout_offset) % 360.0
+            error = (desired_heading - self._heading_degrees + 180.0) % 360.0 - 180.0
+        else:
+            # REACTIVE MODE: sensor offset IS the error, no reference heading
+            error = scout_offset
+            # Reset odometry reference so we don't accumulate drift
+            if abs(scout_offset) < 1.0:  # no obstacle
+                self._heading_degrees = 0.0
         omega = self._calculate_omega(error, closest_obstacle)
-        # scout only rotates - no forward or lateral motion
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
-        
-        # DEBUG OUTPUT
-        print("DEBUG: target={:.2f}°, heading={:.2f}°, scout={:+.2f}°, desired={:.2f}°, error={:+.2f}°, omega={:.3f}".format(
-            self._target_relative_offset, self._heading_degrees, scout_offset, desired_heading, error, omega))
-        
-        if self._verbose:
-            self._display_info('RELATIVE')
 
     def _update_heading_from_encoders(self):
         '''
