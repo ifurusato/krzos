@@ -93,7 +93,7 @@ class Scout(AsyncBehaviour):
         # configuration
         _cfg = config['kros'].get('behaviour').get('scout')
         self._counter = itertools.count()
-        self._verbose = _cfg.get('verbose', False)
+        self._verbose = True #_cfg.get('verbose', False)
         self._use_color = True
         self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'RELATIVE'))
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
@@ -103,11 +103,12 @@ class Scout(AsyncBehaviour):
         self._target_relative_offset = 0.0
         self._rotation_speed = _cfg.get('rotation_speed', 0.5)
         self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
-        # encoder tracking for RELATIVE mode
-        self._last_encoder_pfwd = None
-        self._last_encoder_sfwd = None
-        self._last_encoder_paft = None
-        self._last_encoder_saft = None
+        # encoder tracking
+        self._last_encoder_pfwd  = None
+        self._last_encoder_sfwd  = None
+        self._last_encoder_paft  = None
+        self._last_encoder_saft  = None
+        self._last_encoder_value = None  # track last encoder reading
         self._last_omega = 0.0
         self._max_omega_change = 0.05  # rate limiting for smooth rotation
         # ScoutSensor for dynamic obstacle avoidance heading
@@ -151,7 +152,7 @@ class Scout(AsyncBehaviour):
         - ABSOLUTE/BLENDED: degrees is absolute compass heading (0-360°)
         '''
         if not internal and self._heading_mode == HeadingMode.ABSOLUTE:
-            self._log.debug('ABSOLUTE mode: ignoring programmatic heading change (encoder only)')
+            self._log.info('ABSOLUTE mode: ignoring programmatic heading change (encoder only)')
             return
         degrees = float(degrees) % 360.0
         if self._heading_mode == HeadingMode.RELATIVE:
@@ -161,11 +162,11 @@ class Scout(AsyncBehaviour):
             self._heading_degrees = degrees
             self._log.info('heading set to {:.2f}°'.format(degrees))
 
-    def set_heading_radians(self, radians):
-        self.set_heading_degrees(np.degrees(radians))
+    def set_heading_radians(self, radians, internal=False):
+        self.set_heading_degrees(np.degrees(radians), internal)
 
-    def set_heading_cardinal(self, cardinal):
-        self.set_heading_degrees(cardinal.degrees)
+    def set_heading_cardinal(self, cardinal, internal=False):
+        self.set_heading_degrees(cardinal.degrees, internal)
 
     @property
     def name(self):
@@ -191,13 +192,36 @@ class Scout(AsyncBehaviour):
 
     def _dynamic_set_heading(self):
         '''
-        Updates heading from compass encoder if available and dynamic heading enabled.
+        updates heading from compass encoder only when it changes.
         '''
         if self._compass_encoder:
             self._compass_encoder.update()
             _degrees = self._compass_encoder.get_degrees()
-            self.set_heading_degrees(_degrees, internal=True)
-            self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
+            # only update if encoder value has changed
+            if self._last_encoder_value is None:
+                self._log.info("encoder first read: {:.2f}° (storing but not applying)".format(_degrees))
+                self._last_encoder_value = _degrees
+            elif abs(_degrees - self._last_encoder_value) > 1.0:
+                self._log.info("encoder changed: {:.2f}° → {:.2f}° (delta: {:.2f}°)".format(
+                    self._last_encoder_value, _degrees, abs(_degrees - self._last_encoder_value)))
+                self._last_encoder_value = _degrees
+                self.set_heading_degrees(_degrees, internal=True)
+                self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
+            else:
+                self._log.info("encoder unchanged: {:.2f}°".format(_degrees))
+
+    def x_dynamic_set_heading(self):
+        '''
+        updates heading from compass encoder only when it changes.
+        '''
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            _degrees = self._compass_encoder.get_degrees()
+            # only update if encoder value has changed
+            if self._last_encoder_value is None or abs(_degrees - self._last_encoder_value) > 1.0:
+                self._last_encoder_value = _degrees
+                self.set_heading_degrees(_degrees, internal=True)
+                self._log.info("dynamic heading: {:4.2f} degrees".format(_degrees))
 
     async def _poll(self):
         '''
@@ -305,6 +329,24 @@ class Scout(AsyncBehaviour):
 
     def _update_intent_vector_absolute(self):
         '''
+        ABSOLUTE mode: rotate to match compass heading (from IMU).
+        uses self._heading_degrees as target (set via setter methods or encoder).
+        '''
+        current_heading = self._imu.poll() % 360.0
+        desired_heading = self._heading_degrees % 360.0  # ← Always use this, whether set by callback or encoder
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        omega = self._calculate_omega(error)
+        # scout only rotates
+        vx = 0.0
+        vy = 0.0
+        self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._log.info("ABSOLUTE: desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}".format(
+                desired_heading, current_heading, error, omega))
+            self._display_info('ABSOLUTE')
+
+    def x_update_intent_vector_absolute(self):
+        '''
         ABSOLUTE mode: Rotate to match compass heading (from IMU).
         '''
         current_heading = self._imu.poll() % 360.0
@@ -326,20 +368,15 @@ class Scout(AsyncBehaviour):
 
     def _update_intent_vector_blended(self):
         '''
-        BLENDED mode: Absolute compass heading with dynamic offset adjustments.
-        Base heading set via set_heading_degrees(), offset from ScoutSensor or compass encoder.
-        Combines absolute world heading with real-time adjustments for obstacles.
+        BLENDED mode: absolute compass heading with dynamic offset adjustments.
+        base heading from self._heading_degrees (set by methods or encoder).
+        offset from ScoutSensor for obstacle avoidance.
         '''
-        # get base heading (set by behavior via set_heading_degrees())
+        # base heading from self._heading_degrees
         base_heading = self._heading_degrees % 360.0
-        # get dynamic offset from ScoutSensor (priority) or compass encoder (fallback)
+        # get dynamic offset from ScoutSensor
         if self._scout_sensor:
             offset, open_distance = self._scout_sensor.get_heading_offset()
-        elif self._compass_encoder:
-            self._compass_encoder.update()
-            # Map encoder 0-360° to offset range ±180°
-            offset = (self._compass_encoder.get_degrees() - 180.0)
-            open_distance = None
         else:
             offset = 0.0
             open_distance = None
@@ -348,13 +385,13 @@ class Scout(AsyncBehaviour):
         current_heading = self._imu.poll() % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
         omega = self._calculate_omega(error)
-        # Scout only rotates
+        # scout only rotates
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("BLENDED: base={:.2f}°; offset={:.2f}°; desired={:.2f}°; current={:.2f}°; omega={:.3f}{}".format(
-                base_heading, offset, desired_heading, current_heading, omega,
+            self._log.info("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+                base_heading, offset, desired_heading, current_heading, error, omega,
                 "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
             self._display_info('BLENDED')
 
@@ -407,6 +444,10 @@ class Scout(AsyncBehaviour):
         if self._scout_sensor and not self._scout_sensor.enabled:
             self._scout_sensor.enable()
         AsyncBehaviour.enable(self)
+        # initialize encoder value to prevent immediate override
+        if self._compass_encoder:
+            self._compass_encoder.update()
+            self._last_encoder_value = self._compass_encoder.get_degrees()
         # initialize heading based on mode
         if self._heading_mode == HeadingMode.RELATIVE:
             self._heading_degrees = 0.0
@@ -421,7 +462,7 @@ class Scout(AsyncBehaviour):
 
     def disable(self):
         if not self.enabled:
-            self._log.debug("already disabled.")
+            self._log.warning("already disabled.")
             return
         self._log.info("disabling scout…")
         if self._scout_sensor and self._scout_sensor.enabled:

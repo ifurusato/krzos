@@ -116,8 +116,9 @@ class ScoutSensor(Component):
 
     def _process(self, distance_mm):
         '''
-        Analyzes distance data to determine most open direction using weighted centroid.
-        Detects obstacles that appear in floor rows (closer than expected floor distance).
+        Analyzes distance data to determine most open direction.
+        Points toward the column with greatest average distance.
+        Uses hysteresis to prevent oscillation.
         
         Row 0 = bottom/floor, Row 7 = top/far
         
@@ -163,21 +164,24 @@ class ScoutSensor(Component):
             weighted_avgs.append(avg)
         # store the maximum (most open) distance
         self._max_open_distance = max(weighted_avgs)
-        # compute analog heading using weighted centroid
-        pixel_angles_array = np.array(pixel_angles)
         weighted_avgs_array = np.array(weighted_avgs)
-        total_openness = np.sum(weighted_avgs_array)
-        if total_openness > 0:
-            normalized_weights = weighted_avgs_array / total_openness
-            target_offset = -float(np.sum(pixel_angles_array * normalized_weights))
+        # find columns that are "open enough" (within 20% of max)
+        threshold = self._max_open_distance * 0.8
+        open_columns = [i for i, dist in enumerate(weighted_avgs) if dist >= threshold]
+        # among open columns, choose the one closest to straight ahead (0°)
+        # this provides stability - robot prefers to go straight when multiple options exist
+        if open_columns:
+            max_idx = min(open_columns, key=lambda i: abs(pixel_angles[i]))
         else:
-            target_offset = 0.0
+            # fallback: just use the absolute max
+            max_idx = int(np.argmax(weighted_avgs))
+        # target offset is the angle of the chosen column
+        target_offset = pixel_angles[max_idx]
         # apply low-pass filter for smooth transitions
         self._filtered_offset = self._alpha * target_offset + (1 - self._alpha) * self._filtered_offset
         self._heading_offset_degrees = self._filtered_offset
-        # for visualization: highlight column closest to filtered offset
-        max_idx = int(np.argmax(weighted_avgs))
-        highlighted_idx = min(range(self._cols), key=lambda i: abs(pixel_angles[i] - self._filtered_offset))
+        # for visualization: highlight the chosen column
+        highlighted_idx = max_idx
         return dict(
             weighted_avgs   = weighted_avgs,
             target_offset   = target_offset,
