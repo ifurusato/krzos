@@ -156,6 +156,23 @@ class Scout(AsyncBehaviour):
             return
         degrees = float(degrees) % 360.0
         if self._heading_mode == HeadingMode.RELATIVE:
+            self._target_relative_offset = 0.0  # RELATIVE mode: ignore absolute heading, start from 0°
+            self._log.info('RELATIVE: ignoring absolute heading, using 0° relative offset')
+        else:
+            self._heading_degrees = degrees
+            self._log.info('heading set to {:.2f}°'.format(degrees))
+
+    def x_set_heading_degrees(self, degrees, internal=False):
+        '''
+        Set target heading. Interpretation depends on mode:
+        - RELATIVE: degrees is an offset from starting orientation (0-360°)
+        - ABSOLUTE/BLENDED: degrees is absolute compass heading (0-360°)
+        '''
+        if not internal and self._heading_mode == HeadingMode.ABSOLUTE:
+            self._log.info('ABSOLUTE mode: ignoring programmatic heading change (encoder only)')
+            return
+        degrees = float(degrees) % 360.0
+        if self._heading_mode == HeadingMode.RELATIVE:
             self._target_relative_offset = degrees
             self._log.info('RELATIVE: target offset set to {:.2f}°'.format(degrees))
         else:
@@ -263,6 +280,7 @@ class Scout(AsyncBehaviour):
         Tracks rotation by measuring differential encoder movement.
         Used by RELATIVE mode to maintain awareness of actual robot orientation.
         '''
+        print('xxxxxxxxxxxxxxxxxxxxxxxxxx')
         # get current encoder positions
         current_pfwd = self._motor_pfwd.decoder.steps
         current_sfwd = self._motor_sfwd.decoder.steps
@@ -293,6 +311,37 @@ class Scout(AsyncBehaviour):
 
     def _update_intent_vector_relative(self):
         '''
+        RELATIVE mode: Rotate to face the direction ScoutSensor indicates.
+        No fixed base heading - purely reactive to sensor input.
+        '''
+        self._update_heading_from_encoders()
+        # ScoutSensor provides the target direction
+        if self._scout_sensor:
+            scout_offset, open_distance = self._scout_sensor.get_heading_offset()
+            desired_offset = scout_offset  # ← No base! Just use scout's recommendation
+        else:
+            desired_offset = 0.0
+            open_distance = None
+        # calculate error from current heading
+        current_offset = self._heading_degrees % 360.0
+#       error = (desired_offset - current_offset + 180.0) % 360.0 - 180.0
+        error = scout_offset
+        omega = self._calculate_omega(error)
+        # Scout only rotates - no forward or lateral motion
+        vx = 0.0
+        vy = 0.0
+        self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._log.info("RELATIVE: scout_offset={:+.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+                scout_offset if self._scout_sensor else 0.0,
+                current_offset,
+                error,
+                omega,
+                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
+            self._display_info('RELATIVE')
+
+    def x_update_intent_vector_relative(self):
+        '''
         RELATIVE mode: Continuously servo to achieve a relative heading offset.
         Compass encoder (or other behavior) sets base target offset.
         ScoutSensor provides additional offset for obstacle avoidance.
@@ -317,7 +366,8 @@ class Scout(AsyncBehaviour):
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("RELATIVE: base={:.2f}°; scout_adj={:+.2f}°; target={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+#           self._log.info("RELATIVE: base={:.2f}°; scout_adj={:+.2f}°; target={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+            print("RELATIVE: base={:.2f}°; scout_adj={:+.2f}°; target={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
                 base_offset, 
                 scout_adjustment if self._scout_sensor else 0.0, 
                 desired_offset, 
@@ -390,12 +440,42 @@ class Scout(AsyncBehaviour):
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
-            self._log.info("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+            print("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
+                base_heading, offset, desired_heading, current_heading, error, omega,
+                "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
+            self._log.debug("BLENDED: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
                 base_heading, offset, desired_heading, current_heading, error, omega,
                 "; open_dist={:.1f}mm".format(open_distance) if open_distance else ""))
             self._display_info('BLENDED')
 
     def _calculate_omega(self, error):
+        '''
+        Calculate rotation speed with rate limiting to prevent oscillation.
+        Allows faster response when crossing through target (error sign change).
+        '''
+        abs_error = abs(error)
+        # deadzone
+        if abs_error <= self._rotation_tolerance:
+            self._last_omega = 0.0
+            return 0.0
+        gain = 0.05  # Conservative gain
+        target_omega = abs_error * gain
+        # clamp to limits
+        target_omega = max(min(target_omega, self._rotation_speed), 0.08)
+        target_omega = target_omega * (1 if error > 0 else -1)
+        # check for sign change (overshoot detection)
+        sign_changed = (self._last_omega * target_omega < 0)
+        # rate limit: allow faster change on sign flip
+        omega_change = target_omega - self._last_omega
+        max_change = self._max_omega_change * 3.0 if sign_changed else self._max_omega_change
+        if abs(omega_change) > max_change:
+            omega = self._last_omega + max_change * (1 if omega_change > 0 else -1)
+        else:
+            omega = target_omega
+        self._last_omega = omega
+        return omega
+
+    def x_calculate_omega(self, error):
         '''
         Calculate rotation speed with rate limiting to prevent oscillation.
         '''
@@ -426,14 +506,21 @@ class Scout(AsyncBehaviour):
     def _display_info(self, message=''):
         if self._use_color:
             if self._intent_vector[2] == 0.0:
-                self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
+#               self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
+#                   message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
+                print(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
                     message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
             else:
-                self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
+#               self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
+#                       message, self._intent_vector[0], self._intent_vector[1])
+#                   + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")")
+                print("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
                         message, self._intent_vector[0], self._intent_vector[1])
-                    + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")")
+                    + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")" + Style.RESET_ALL)
         else:
-            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
+#           self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
+#               self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
+            print("intent vector: ({:.2f},{:.2f},{:.2f})".format(
                 self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
 
     def enable(self):

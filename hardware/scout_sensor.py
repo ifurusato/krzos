@@ -102,7 +102,8 @@ class ScoutSensor(Component):
                 if self._visualiser is not None:
                     self._visualiser.update(distance_mm, self._vl53l5cx.floor_row_means, self._vl53l5cx.floor_margin, result)
                 else:
-                    self._log.info('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
+                    self._log.debug('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
+                    print('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
             self._rate.wait()
 
     def get_distance_mm(self):

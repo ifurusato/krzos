@@ -83,7 +83,7 @@ kros:
             rotation_speed:                 0.7            # motor speed when rotating in place
             rotation_tolerance:             0.5            # used to calculate omega
             minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
-            heading_mode:              'BLENDED'           # NONE, RELATIVE, ABSOLUTE or BLENDED
+            heading_mode:             'RELATIVE'           # NONE, RELATIVE, ABSOLUTE or BLENDED
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -257,7 +257,7 @@ kros:
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)
-            alpha:                          0.8            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
+            alpha:                          0.3            # low-pass filter coefficient, near 1.0 responds quickly, near 0.0 very slowly
         usfs:
             declination:                     23.04         # declination at operating location
         icm20948:

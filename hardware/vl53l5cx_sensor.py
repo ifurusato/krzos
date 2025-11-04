@@ -212,7 +212,8 @@ class Vl53l5cxSensor(Component):
                 # reshape and flip once at source
                 if value is not None:
                     arr = np.array(value).reshape((self._rows, self._cols))
-#                   arr = np.flipud(arr)
+                    arr = np.fliplr(arr)  # flip left-right: sensor's left becomes robot's right
+#                   arr = np.flipud(arr)  # flip upside down
                     self._last_distance = arr.flatten().tolist()
                     self._last_distance_time = dt.now()
                     return self._last_distance
@@ -235,7 +236,8 @@ class Vl53l5cxSensor(Component):
                 data = self._vl53.get_data()
                 # reshape and flip once at source
                 arr = np.array(data.distance_mm).reshape((self._rows, self._cols))
-#               arr = np.flipud(arr)
+                arr = np.fliplr(arr)  # flip left-right: sensor's left becomes robot's right
+#               arr = np.flipud(arr)  # flip upside down
                 return arr.flatten().tolist() # return as flat list, properly oriented
             except Exception as e:
                 self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
