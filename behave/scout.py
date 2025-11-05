@@ -90,10 +90,11 @@ class Scout(AsyncBehaviour):
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
         self._use_world_coordinates = _cfg.get('use_world_coordinates')
         # heading control
-        self._heading_degrees = 0.0
+        self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
-        self._rotation_speed = _cfg.get('rotation_speed', 0.5)
-        self._rotation_tolerance = _cfg.get('rotation_tolerance', 2.0)
+        self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
+        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 2.0)
+        self._omega_gain             = _cfg.get('omega_gain', 0.10) # base proportional gain
         # compass encoder tracking for dynamic heading updates
         # encoder tracking for RELATIVE mode
         self._last_encoder_pfwd      = None
@@ -246,6 +247,109 @@ class Scout(AsyncBehaviour):
         RELATIVE mode: sensor-reactive rotation toward most open direction.
         Uses odometry to track actual heading, steers based on ScoutSensor offset.
         '''
+        # track heading before update
+        previous_heading = self._heading_degrees
+        # update actual heading from motor encoders (odometry)
+        self._update_heading_from_encoders()
+        # calculate how much we actually rotated
+        actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
+        # get exploration guidance from ScoutSensor (get this early so it's available)
+        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
+        # consume rotation from target offset ONLY if encoder has been meaningfully active
+        if abs(self._target_relative_offset) > 2.0:  # threshold above noise
+            self._target_relative_offset -= actual_rotation
+            # normalize
+            if self._target_relative_offset > 180:
+                self._target_relative_offset -= 360
+            elif self._target_relative_offset < -180:
+                self._target_relative_offset += 360
+        else:
+            # near zero - clamp to exactly zero to prevent drift from chase affecting it
+            self._target_relative_offset = 0.0
+            # reset odometry reference so chase doesn't accumulate drift
+            # only reset when no obstacles present to avoid snap-back
+            if abs(scout_offset) < 1.0:
+                self._heading_degrees = 0.0
+        # error is simply the sum of both inputs
+        error = self._target_relative_offset + scout_offset
+        # normalize
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+        # calculate priority and omega
+        priority = self._calculate_priority(max_open_distance)
+        omega = self._calculate_omega(error, max_open_distance)
+        vx = 0.0
+        vy = 0.0
+        self._intent_vector = (vx, vy, omega)
+        if self._verbose:
+            self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
+                self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, priority, omega))
+            self._display_info('RELATIVE')
+
+    def z_update_intent_vector_relative(self):
+        '''
+        RELATIVE mode: sensor-reactive rotation toward most open direction.
+        Uses odometry to track actual heading, steers based on ScoutSensor offset.
+        '''
+        # track heading before update
+        previous_heading = self._heading_degrees
+        
+        # update actual heading from motor encoders (odometry)
+        self._update_heading_from_encoders()
+        
+        # calculate how much we actually rotated
+        actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
+        
+        # consume rotation from target offset ONLY if encoder has been meaningfully active
+        if abs(self._target_relative_offset) > 2.0:  # threshold above noise
+            self._target_relative_offset -= actual_rotation
+            # normalize
+            if self._target_relative_offset > 180:
+                self._target_relative_offset -= 360
+            elif self._target_relative_offset < -180:
+                self._target_relative_offset += 360
+        else:
+            # near zero - clamp to exactly zero to prevent drift from chase affecting it
+            self._target_relative_offset = 0.0
+            # reset odometry reference so chase doesn't accumulate
+#           if abs(previous_heading) > 0:
+            # only reset when no obstacles present to avoid snap-back
+            if abs(scout_offset) < 1.0:
+                self._heading_degrees = 0.0
+        
+        # get exploration guidance from ScoutSensor
+        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
+        
+        # error is simply the sum of both inputs
+        error = self._target_relative_offset + scout_offset
+        # normalize
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+        
+        # calculate priority and omega
+        priority = self._calculate_priority(max_open_distance)
+        omega = self._calculate_omega(error, max_open_distance)
+        
+        vx = 0.0
+        vy = 0.0
+        self._intent_vector = (vx, vy, omega)
+        
+        if self._verbose:
+            self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
+                self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, priority, omega))
+            self._display_info('RELATIVE')
+
+    def x_update_intent_vector_relative(self):
+        '''
+        FALLBACK functionality.
+
+        RELATIVE mode: sensor-reactive rotation toward most open direction.
+        Uses odometry to track actual heading, steers based on ScoutSensor offset.
+        '''
         # update actual heading from motor encoders (odometry)
         self._update_heading_from_encoders()
         # get exploration guidance from ScoutSensor
@@ -331,11 +435,9 @@ class Scout(AsyncBehaviour):
         if abs_error <= self._rotation_tolerance:
             self._last_omega = 0.0
             return 0.0
-        # base proportional gain
-        base_gain = 0.05
         # urgency multiplier based on environmental constraint
         urgency_mult = self._calculate_urgency(max_open_distance)
-        gain = base_gain * urgency_mult
+        gain = self._omega_gain * urgency_mult
         target_omega = abs_error * gain
         # clamp to limits
         target_omega = max(min(target_omega, self._rotation_speed), 0.08)
