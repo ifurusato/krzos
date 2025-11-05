@@ -84,16 +84,16 @@ class Scout(AsyncBehaviour):
         # configuration
         _cfg = config['kros'].get('behaviour').get('scout')
         self._counter = itertools.count()
-        self._verbose = True #_cfg.get('verbose', False)
+        self._verbose = _cfg.get('verbose', False)
         self._use_color = True
         self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'RELATIVE'))
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
-        self._use_world_coordinates = _cfg.get('use_world_coordinates')
         # heading control
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
         self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
         self._rotation_tolerance     = _cfg.get('rotation_tolerance', 2.0)
+        self._min_distance           = _cfg.get('min_distance', 200.0)
         self._omega_gain             = _cfg.get('omega_gain', 0.10) # base proportional gain
         # compass encoder tracking for dynamic heading updates
         # encoder tracking for RELATIVE mode
@@ -112,6 +112,7 @@ class Scout(AsyncBehaviour):
             self._scout_sensor = ScoutSensor(config, level=Level.INFO)
         else:
             self._log.info(Fore.WHITE + 'using existing Scout sensor.')
+        self._max_distance = self._scout_sensor.distance_threshold
         # IMU - only needed for ABSOLUTE mode
         self._imu = None
         if self._heading_mode == HeadingMode.ABSOLUTE:
@@ -288,95 +289,6 @@ class Scout(AsyncBehaviour):
                 self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, priority, omega))
             self._display_info('RELATIVE')
 
-    def z_update_intent_vector_relative(self):
-        '''
-        RELATIVE mode: sensor-reactive rotation toward most open direction.
-        Uses odometry to track actual heading, steers based on ScoutSensor offset.
-        '''
-        # track heading before update
-        previous_heading = self._heading_degrees
-        
-        # update actual heading from motor encoders (odometry)
-        self._update_heading_from_encoders()
-        
-        # calculate how much we actually rotated
-        actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
-        
-        # consume rotation from target offset ONLY if encoder has been meaningfully active
-        if abs(self._target_relative_offset) > 2.0:  # threshold above noise
-            self._target_relative_offset -= actual_rotation
-            # normalize
-            if self._target_relative_offset > 180:
-                self._target_relative_offset -= 360
-            elif self._target_relative_offset < -180:
-                self._target_relative_offset += 360
-        else:
-            # near zero - clamp to exactly zero to prevent drift from chase affecting it
-            self._target_relative_offset = 0.0
-            # reset odometry reference so chase doesn't accumulate
-#           if abs(previous_heading) > 0:
-            # only reset when no obstacles present to avoid snap-back
-            if abs(scout_offset) < 1.0:
-                self._heading_degrees = 0.0
-        
-        # get exploration guidance from ScoutSensor
-        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
-        
-        # error is simply the sum of both inputs
-        error = self._target_relative_offset + scout_offset
-        # normalize
-        if error > 180:
-            error -= 360
-        elif error < -180:
-            error += 360
-        
-        # calculate priority and omega
-        priority = self._calculate_priority(max_open_distance)
-        omega = self._calculate_omega(error, max_open_distance)
-        
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        
-        if self._verbose:
-            self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
-                self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, priority, omega))
-            self._display_info('RELATIVE')
-
-    def x_update_intent_vector_relative(self):
-        '''
-        FALLBACK functionality.
-
-        RELATIVE mode: sensor-reactive rotation toward most open direction.
-        Uses odometry to track actual heading, steers based on ScoutSensor offset.
-        '''
-        # update actual heading from motor encoders (odometry)
-        self._update_heading_from_encoders()
-        # get exploration guidance from ScoutSensor
-        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
-        # check if encoder has been used
-        encoder_active = abs(self._target_relative_offset) > 1.0
-        if encoder_active:
-            # ENCODER MODE: servo to encoder target with sensor offset
-            desired_heading = (self._target_relative_offset + scout_offset) % 360.0
-            error = (desired_heading - self._heading_degrees + 180.0) % 360.0 - 180.0
-        else:
-            # REACTIVE MODE: sensor offset IS the error, no reference heading
-            error = scout_offset
-            # reset odometry reference so we don't accumulate drift
-            if abs(scout_offset) < 1.0:  # no obstacle
-                self._heading_degrees = 0.0
-        # calculate priority and omega based on environmental constraint
-        priority = self._calculate_priority(max_open_distance)
-        omega = self._calculate_omega(error, max_open_distance)
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._log.info("RELATIVE: offset={:+.2f}°; error={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
-                scout_offset, error, max_open_distance, priority, omega))
-            self._display_info('RELATIVE')
-
     def _update_intent_vector_absolute(self):
         '''
         ABSOLUTE mode: absolute compass heading with dynamic offset adjustments.
@@ -415,12 +327,10 @@ class Scout(AsyncBehaviour):
         
         Returns priority value 0.0 to 1.0
         '''
-        min_distance = 200.0 # TODO set from config
-        max_distance = self._scout_sensor.distance_threshold
         min_priority = 0.2
         max_priority = 0.9
-        clamped_distance = max(min_distance, min(max_open_distance, max_distance))
-        normalized = (clamped_distance - min_distance) / (max_distance - min_distance)
+        clamped_distance = max(self._min_distance, min(max_open_distance, self._max_distance))
+        normalized = (clamped_distance - self._min_distance) / (self._max_distance - self._min_distance)
         priority = max_priority - (normalized * (max_priority - min_priority))
         return priority
 
@@ -452,9 +362,6 @@ class Scout(AsyncBehaviour):
         else:
             omega = target_omega
         self._last_omega = omega
-        if self._verbose and next(self._counter) % 5 == 0:
-            print("OMEGA: error={:+.2f}°, max_open={:.0f}mm, urgency={:.2f}x, target={:+.3f}, final={:+.3f}".format(
-                error, max_open_distance if max_open_distance else 0.0, urgency_mult, target_omega, omega))
         return omega
 
     def _calculate_urgency(self, max_open_distance):
@@ -464,14 +371,16 @@ class Scout(AsyncBehaviour):
         
         Returns multiplier 1.0 to max_multiplier
         '''
-        min_distance   = 200.0 # TODO config
-        max_distance   = self._scout_sensor.distance_threshold
+        # maximum urgency multiplier applied when obstacles are at min_distance
+        # at max_distance (clear), multiplier is 1.0; at min_distance, multiplier is max_multiplier
         max_multiplier = 3.0
+        # power curve exponent - controls how quickly urgency ramps up as obstacles approach
+        # higher values (>2.0) = aggressive ramp near obstacles; lower values (~1.0) = more linear response
         urgency_power  = 2.0
         # clamp distance to meaningful range
-        clamped_distance = max(min_distance, min(max_open_distance, max_distance))
+        clamped_distance = max(self._min_distance, min(max_open_distance, self._max_distance))
         # normalize to 0.0 (at min_distance) to 1.0 (at max_distance)
-        normalized_distance = (clamped_distance - min_distance) / (max_distance - min_distance)
+        normalized_distance = (clamped_distance - self._min_distance) / (self._max_distance - self._min_distance)
         # calculate urgency: inverse of normalized distance with power curve
         urgency_mult = 1.0 + (max_multiplier - 1.0) * ((1.0 - normalized_distance) ** urgency_power)
         return urgency_mult
@@ -503,12 +412,6 @@ class Scout(AsyncBehaviour):
         # sum all wheel contributions (don't divide by 4)
         rotation_steps = delta_pfwd + delta_paft - delta_sfwd - delta_saft
         degrees_rotated = rotation_steps / self._steps_per_degree
-
-        # DEBUG OUTPUT
-        if abs(rotation_steps) > 0:
-            print("ENCODER DEBUG: rotation_steps={:+.1f}, degrees={:+.3f}, heading: {:.2f}° → {:.2f}°".format(
-                rotation_steps, degrees_rotated, self._heading_degrees, 
-                (self._heading_degrees + degrees_rotated) % 360.0))
         # update heading
         self._heading_degrees = (self._heading_degrees + degrees_rotated) % 360.0
         # store for next iteration
