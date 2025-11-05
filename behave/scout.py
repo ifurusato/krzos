@@ -248,13 +248,10 @@ class Scout(AsyncBehaviour):
         '''
         # update actual heading from motor encoders (odometry)
         self._update_heading_from_encoders()
-        
         # get exploration guidance from ScoutSensor
         scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
-        
         # check if encoder has been used
         encoder_active = abs(self._target_relative_offset) > 1.0
-        
         if encoder_active:
             # ENCODER MODE: servo to encoder target with sensor offset
             desired_heading = (self._target_relative_offset + scout_offset) % 360.0
@@ -265,15 +262,12 @@ class Scout(AsyncBehaviour):
             # reset odometry reference so we don't accumulate drift
             if abs(scout_offset) < 1.0:  # no obstacle
                 self._heading_degrees = 0.0
-        
         # calculate priority and omega based on environmental constraint
         priority = self._calculate_priority(max_open_distance)
         omega = self._calculate_omega(error, max_open_distance)
-        
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
-        
         if self._verbose:
             self._log.info("RELATIVE: offset={:+.2f}°; error={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 scout_offset, error, max_open_distance, priority, omega))

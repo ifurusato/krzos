@@ -99,27 +99,15 @@ class AsyncBehaviour(Behaviour):
         self._log.info("radiozoa released.")
 
     def disable(self):
-        self._log.info("disabling…")
-        self._stop_event.set()
-        time.sleep(0.1)
-        if self._loop_instance:
-            self._loop_instance.stop()
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-        Behaviour.disable(self)
-        self._log.info(Fore.YELLOW + 'disabled.')
-
-    def disable(self):
         if not self.enabled:
             self._log.info("already disabled.")
             return
-        self._log.info(Fore.YELLOW + "disabling…")
+        self._log.info("disabling…")
         self.clear_intent_vector()
-        Behaviour.disable(self)
         self._stop_event.set()
         self._stop_loop()
-        self._log.info(Fore.YELLOW + 'disabled.')
+        Behaviour.disable(self)
+        self._log.info('disabled.')
     
     def start_loop_action(self):
         '''
