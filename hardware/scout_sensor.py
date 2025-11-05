@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-11-04
+# modified: 2025-11-05
 
 import sys
 import time
@@ -63,6 +63,7 @@ class ScoutSensor(Component):
         self._distance_threshold = _cfg.get('distance_threshold', 1000)
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self._rate = Rate(_cfg.get('loop_freq_hz', 5)) # 5Hz, 200ms default
+        self._verbose = _cfg.get('verbose', False)
         # variables
         self.set_visualiser(visualiser)
         self._thread  = None
@@ -113,19 +114,22 @@ class ScoutSensor(Component):
         while self._running:
             distance_mm = self.get_distance_mm()
             if distance_mm is not None:
-                result = self._process(distance_mm)
+                result = self._process()
                 if self._visualiser is not None:
                     self._visualiser.update(distance_mm, self._vl53l5cx.floor_row_means, self._vl53l5cx.floor_margin, result)
                 else:
                     self._log.debug('heading offset: ' + Fore.CYAN + '{:+.1f}°'.format(self._heading_offset_degrees))
             self._rate.wait()
 
-    def _calculate_weighted_column_averages(self, distance_mm):
+    def _calculate_weighted_column_averages(self):
         '''
         Calculate weighted average distance for each column using non-floor rows.
         Ignores zero values and uses weights for row priority.
         Returns list of 8 averaged distances (mm).
         '''
+        distance_mm = self.get_distance_mm()
+        if distance_mm is None:
+            return [self._distance_threshold] * self._cols
         distance = np.array(distance_mm).reshape((self._rows, self._cols))
         # get non-floor rows, fallback to upper half if calibration failed
         obstacle_rows = self._vl53l5cx.non_floor_rows
@@ -156,12 +160,12 @@ class ScoutSensor(Component):
                 weighted_avgs.append(self._distance_threshold)
         return weighted_avgs
 
-    def _process(self, distance_mm):
+    def _process(self):
         '''
         Process VL53L5CX data and calculate recommended heading offset.
         Returns weighted average heading based on all open columns for smooth navigation.
         '''
-        weighted_avgs = self._calculate_weighted_column_averages(distance_mm)
+        weighted_avgs = self._calculate_weighted_column_averages()
         # calculate pixel angles for each column center
         pixel_angles = [-(self._fov/2) + (i + 0.5) * (self._fov/self._cols) for i in range(self._cols)]
         # find minimum distance (for diagnostics)
@@ -172,7 +176,8 @@ class ScoutSensor(Component):
             self._max_open_distance = self._distance_threshold
             target_offset = 0.0
             highlighted_idx = self._cols // 2  # center columns
-            print("SCOUT SENSOR: No obstacles, offset=0.0°, min_dist={:.0f}mm".format(self._min_obstacle_distance))
+            if self._verbose:
+                print("SCOUT SENSOR: No obstacles, offset=0.0°, min_dist={:.0f}mm".format(self._min_obstacle_distance))
             return dict(
                 weighted_avgs=weighted_avgs,
                 target_offset=target_offset,
@@ -206,8 +211,9 @@ class ScoutSensor(Component):
             target_offset = pixel_angles[highlighted_idx]
             self._heading_offset_degrees = target_offset
             self._max_open_distance = weighted_avgs[highlighted_idx]
-        print("SCOUT SENSOR: offset={:+.2f}°, min_dist={:.0f}mm, max_dist={:.0f}mm".format(
-            self._heading_offset_degrees, self._min_obstacle_distance, self._max_open_distance))
+        if self._verbose:
+            print("SCOUT SENSOR: offset={:+.2f}°, min_dist={:.0f}mm, max_dist={:.0f}mm".format(
+                self._heading_offset_degrees, self._min_obstacle_distance, self._max_open_distance))
         return dict(
             weighted_avgs=weighted_avgs,
             target_offset=target_offset,
