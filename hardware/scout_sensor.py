@@ -118,66 +118,51 @@ class ScoutSensor(Component):
             return None
         return self._vl53l5cx.get_distance_mm()
 
-    def _process(self):
+    def _process(self, distance_mm):
         '''
         Process the VL53L5CX data and calculate the recommended heading offset.
-        Returns a weighted average heading based on all column distances for smooth navigation.
         '''
-        weighted_avgs = self._calculate_weighted_column_averages()
-        # calculate pixel angles for each column
+        distance = np.array(distance_mm).reshape((self._rows, self._cols))
+        # compute angle for each column
         pixel_angles = [-(self._fov/2) + (i + 0.5) * (self._fov/self._cols) for i in range(self._cols)]
-        # find minimum distance (closest obstacle)
+        # get obstacle rows (non-floor rows)
+        obstacle_rows = [r for r in range(self._rows) if self._vl53l5cx.floor_row_means[r] is None]
+        if not obstacle_rows:
+            self._heading_offset_degrees = 0.0
+            self._max_open_distance = self._distance_threshold
+            self._min_obstacle_distance = self._distance_threshold
+            return dict(weighted_avgs=[0]*self._cols, target_offset=0.0, heading_offset=0.0,
+                        highlighted_idx=self._cols//2, pixel_angles=pixel_angles)
+        # compute weighted average distance for each column
+        weights = self._weights[:len(obstacle_rows)]
+        weighted_avgs = []
+        for col in range(self._cols):
+            values = distance[obstacle_rows, col]
+            if len(weights) == len(values):
+                weighted_avgs.append(np.average(values, weights=weights))
+            else:
+                weighted_avgs.append(np.mean(values))
+        # find min distance across all columns (for urgency)
         self._min_obstacle_distance = min(weighted_avgs)
-        # if no obstacles detected, no heading change needed
+        # if all columns are at threshold (no obstacles detected), go straight
         if self._min_obstacle_distance >= self._distance_threshold:
             self._heading_offset_degrees = 0.0
-            self._max_open_distance = self._min_obstacle_distance
-            target_offset = 0.0
-            highlighted_idx = self._cols // 2  # center column
-            print("SCOUT SENSOR: No obstacles, offset=0.0°, min_dist={:.0f}mm".format(self._min_obstacle_distance))
-            return dict(
-                weighted_avgs=weighted_avgs,
-                target_offset=target_offset,
-                heading_offset=target_offset,
-                highlighted_idx=highlighted_idx,
-                pixel_angles=pixel_angles)
-        # obstacles present - calculate weighted average heading
-        # only use columns above threshold for steering
-        weights = []
-        angles = []
-        open_indices = []
-        for i, dist in enumerate(weighted_avgs):
-            if dist >= self._distance_threshold:
-                # open column - weight by how much more open than threshold
-                weight = dist - self._distance_threshold + 1.0
-                weights.append(weight)
-                angles.append(pixel_angles[i])
-                open_indices.append(i)
-        if weights:
-            # calculate weighted average angle
-            total_weight = sum(weights)
-            weighted_angle = sum(a * w for a, w in zip(angles, weights)) / total_weight
-            target_offset = weighted_angle
-            self._heading_offset_degrees = weighted_angle
-            self._max_open_distance = max(weighted_avgs)
-            # highlight the most open column for visualization
-            highlighted_idx = open_indices[weights.index(max(weights))]
-        else:
-            # no open columns - steer toward least obstructed
-            highlighted_idx = int(np.argmax(weighted_avgs))
-            target_offset = pixel_angles[highlighted_idx]
-            self._heading_offset_degrees = target_offset
-            self._max_open_distance = weighted_avgs[highlighted_idx]
-        
-        print("SCOUT SENSOR: offset={:+.2f}°, min_dist={:.0f}mm, max_dist={:.0f}mm, distances={}".format(
-            self._heading_offset_degrees, self._min_obstacle_distance, self._max_open_distance,
+            self._max_open_distance = self._distance_threshold
+            return dict(weighted_avgs=weighted_avgs, target_offset=0.0, heading_offset=0.0,
+                        highlighted_idx=self._cols//2, pixel_angles=pixel_angles)
+        # obstacles detected - steer toward most open column (using actual distances, no clamping)
+        max_idx = int(np.argmax(weighted_avgs))
+        target_offset = pixel_angles[max_idx]
+        self._max_open_distance = weighted_avgs[max_idx]
+        self._heading_offset_degrees = target_offset
+        print("SCOUT SENSOR: max_idx={}, angle={:.2f}°, distances={}".format(
+            max_idx, pixel_angles[max_idx], 
             ["{:.0f}".format(d) for d in weighted_avgs]))
-        
         return dict(
             weighted_avgs=weighted_avgs,
             target_offset=target_offset,
-            heading_offset=target_offset,
-            highlighted_idx=highlighted_idx,
+            heading_offset=target_offset, 
+            highlighted_idx=max_idx,
             pixel_angles=pixel_angles)
 
     def x_process(self, distance_mm):
