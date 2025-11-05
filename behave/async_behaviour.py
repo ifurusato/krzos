@@ -27,21 +27,34 @@ class AsyncBehaviour(Behaviour):
         Behaviour.__init__(self, log_or_name, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self._motor_controller = motor_controller
         _cfg = config['kros'].get('behaviour').get(AsyncBehaviour.NAME)
-        self._poll_delay_ms = _cfg.get('poll_delay_ms')
-        self._poll_delay_sec = self._poll_delay_ms / 1000.0
-        self._log.info("🌸 poll delay: {}ms".format(self._poll_delay_ms))
+        self._poll_delay_ms   = _cfg.get('poll_delay_ms')
+        self._poll_delay_sec  = self._poll_delay_ms / 1000.0
+        self._log.info("poll delay: {}ms".format(self._poll_delay_ms))
         self._intent_vector   = (0.0, 0.0, 0.0)
+        self._priority        = 0.3  # default priority
         self._intent_vector_registered = False
-        self._loop_instance  = None
-        self._thread     = None
-        self._stop_event = ThreadEvent()
+        self._loop_instance   = None
+        self._thread          = None
+        self._stop_event      = ThreadEvent()
         self._log.info('ready.')
+
+    @property
+    def priority(self):
+        '''
+        Returns the current priority for this behaviour.
+        Subclasses can override to provide dynamic priority.
+        '''
+        return self._priority
 
     def _register_intent_vector(self):
         if self._intent_vector_registered:
             self._log.warning('intent vector already registered with motor controller.')
             return
-        self._motor_controller.add_intent_vector(self.name, lambda: self._intent_vector)
+        self._motor_controller.add_intent_vector(
+            self.name, 
+            lambda: self._intent_vector,
+            lambda: self.priority
+        )
         self._intent_vector_registered = True
         self._log.info('intent vector lambda registered with motor controller.')
         

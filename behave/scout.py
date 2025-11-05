@@ -161,6 +161,14 @@ class Scout(AsyncBehaviour):
     def is_ballistic(self):
         return False
 
+    @property
+    def priority(self):
+        '''
+        Returns dynamic priority based on environmental constraint.
+        '''
+        _, max_open_distance = self._scout_sensor.get_heading_offset()
+        return self._calculate_priority(max_open_distance)
+
     def callback(self):
         self._log.info('scout behaviour callback.')
         raise Exception('UNSUPPORTED callback')
@@ -234,17 +242,19 @@ class Scout(AsyncBehaviour):
                 raise NotImplementedError("unhandled heading mode: {}".format(self._heading_mode))
 
     def _update_intent_vector_relative(self):
+        '''
+        RELATIVE mode: sensor-reactive rotation toward most open direction.
+        Uses odometry to track actual heading, steers based on ScoutSensor offset.
+        '''
         # update actual heading from motor encoders (odometry)
         self._update_heading_from_encoders()
-        # get obstacle avoidance steering from ScoutSensor
-        if self._scout_sensor:
-            scout_offset, open_distance, closest_obstacle = self._scout_sensor.get_heading_offset()
-        else:
-            scout_offset = 0.0
-            open_distance = None
-            closest_obstacle = None
+        
+        # get exploration guidance from ScoutSensor
+        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
+        
         # check if encoder has been used
         encoder_active = abs(self._target_relative_offset) > 1.0
+        
         if encoder_active:
             # ENCODER MODE: servo to encoder target with sensor offset
             desired_heading = (self._target_relative_offset + scout_offset) % 360.0
@@ -252,13 +262,123 @@ class Scout(AsyncBehaviour):
         else:
             # REACTIVE MODE: sensor offset IS the error, no reference heading
             error = scout_offset
-            # Reset odometry reference so we don't accumulate drift
+            # reset odometry reference so we don't accumulate drift
             if abs(scout_offset) < 1.0:  # no obstacle
                 self._heading_degrees = 0.0
-        omega = self._calculate_omega(error, closest_obstacle)
+        
+        # calculate priority and omega based on environmental constraint
+        priority = self._calculate_priority(max_open_distance)
+        omega = self._calculate_omega(error, max_open_distance)
+        
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
+        
+        if self._verbose:
+            self._log.info("RELATIVE: offset={:+.2f}°; error={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
+                scout_offset, error, max_open_distance, priority, omega))
+            self._display_info('RELATIVE')
+
+    def _update_intent_vector_absolute(self):
+        '''
+        ABSOLUTE mode: absolute compass heading with dynamic offset adjustments.
+        Base heading from self._heading_degrees (set by methods or encoder).
+        Offset from ScoutSensor for obstacle avoidance.
+        '''
+        # base heading from self._heading_degrees
+        base_heading = self._heading_degrees % 360.0
+        
+        # get dynamic offset from ScoutSensor
+        offset, max_open_distance = self._scout_sensor.get_heading_offset()
+        
+        # combine base + offset for final world heading
+        desired_heading = (base_heading + offset) % 360.0
+        current_heading = self._imu.poll() % 360.0
+        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
+        
+        # calculate priority and omega based on environmental constraint
+        priority = self._calculate_priority(max_open_distance)
+        omega = self._calculate_omega(error, max_open_distance)
+        
+        # scout only rotates
+        vx = 0.0
+        vy = 0.0
+        self._intent_vector = (vx, vy, omega)
+        
+        if self._verbose:
+            self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
+                base_heading, offset, desired_heading, current_heading, error, max_open_distance, priority, omega))
+            self._display_info('ABSOLUTE')
+
+    def _calculate_priority(self, max_open_distance):
+        '''
+        Calculate dynamic priority based on environmental constraint.
+        More constrained environment (closer obstacles) = higher priority.
+        
+        Returns priority value 0.0 to 1.0
+        '''
+        min_distance = 200.0 # TODO set from config
+        max_distance = self._scout_sensor.distance_threshold
+        min_priority = 0.2
+        max_priority = 0.9
+        clamped_distance = max(min_distance, min(max_open_distance, max_distance))
+        normalized = (clamped_distance - min_distance) / (max_distance - min_distance)
+        priority = max_priority - (normalized * (max_priority - min_priority))
+        return priority
+
+    def _calculate_omega(self, error, max_open_distance):
+        '''
+        Calculate rotation speed with urgency scaling and rate limiting.
+        Closer obstacles = faster rotation toward opening.
+        Rate limiting prevents oscillation while allowing quick response to sign changes.
+        '''
+        abs_error = abs(error)
+        # deadzone
+        if abs_error <= self._rotation_tolerance:
+            self._last_omega = 0.0
+            return 0.0
+        # base proportional gain
+        base_gain = 0.05
+        # urgency multiplier based on environmental constraint
+        urgency_mult = self._calculate_urgency(max_open_distance)
+        gain = base_gain * urgency_mult
+        target_omega = abs_error * gain
+        # clamp to limits
+        target_omega = max(min(target_omega, self._rotation_speed), 0.08)
+        target_omega = target_omega * (1 if error > 0 else -1)
+        # check for sign change (overshoot detection)
+        sign_changed = (self._last_omega * target_omega < 0)
+        # rate limit: allow faster change on sign flip
+        omega_change = target_omega - self._last_omega
+        max_change = self._max_omega_change * 3.0 if sign_changed else self._max_omega_change
+        if abs(omega_change) > max_change:
+            omega = self._last_omega + max_change * (1 if omega_change > 0 else -1)
+        else:
+            omega = target_omega
+        self._last_omega = omega
+        if self._verbose and next(self._counter) % 5 == 0:
+            print("OMEGA: error={:+.2f}°, max_open={:.0f}mm, urgency={:.2f}x, target={:+.3f}, final={:+.3f}".format(
+                error, max_open_distance if max_open_distance else 0.0, urgency_mult, target_omega, omega))
+        return omega
+
+    def _calculate_urgency(self, max_open_distance):
+        '''
+        Calculate urgency multiplier based on how constrained the environment is.
+        More constrained (closer obstacles) = higher urgency = faster rotation.
+        
+        Returns multiplier 1.0 to max_multiplier
+        '''
+        min_distance   = 200.0 # TODO config
+        max_distance   = self._scout_sensor.distance_threshold
+        max_multiplier = 3.0
+        urgency_power  = 2.0
+        # clamp distance to meaningful range
+        clamped_distance = max(min_distance, min(max_open_distance, max_distance))
+        # normalize to 0.0 (at min_distance) to 1.0 (at max_distance)
+        normalized_distance = (clamped_distance - min_distance) / (max_distance - min_distance)
+        # calculate urgency: inverse of normalized distance with power curve
+        urgency_mult = 1.0 + (max_multiplier - 1.0) * ((1.0 - normalized_distance) ** urgency_power)
+        return urgency_mult
 
     def _update_heading_from_encoders(self):
         '''
@@ -293,7 +413,6 @@ class Scout(AsyncBehaviour):
             print("ENCODER DEBUG: rotation_steps={:+.1f}, degrees={:+.3f}, heading: {:.2f}° → {:.2f}°".format(
                 rotation_steps, degrees_rotated, self._heading_degrees, 
                 (self._heading_degrees + degrees_rotated) % 360.0))
-
         # update heading
         self._heading_degrees = (self._heading_degrees + degrees_rotated) % 360.0
         # store for next iteration
@@ -301,84 +420,6 @@ class Scout(AsyncBehaviour):
         self._last_encoder_sfwd = current_sfwd
         self._last_encoder_paft = current_paft
         self._last_encoder_saft = current_saft
-
-    def _update_intent_vector_absolute(self):
-        '''
-        ABSOLUTE mode: absolute compass heading with dynamic offset adjustments.
-        base heading from self._heading_degrees (set by methods or encoder).
-        offset from ScoutSensor for obstacle avoidance.
-        '''
-        # base heading from self._heading_degrees
-        base_heading = self._heading_degrees % 360.0
-        # get dynamic offset from ScoutSensor
-        if self._scout_sensor:
-            offset, open_distance, closest_obstacle = self._scout_sensor.get_heading_offset()
-        else:
-            offset = 0.0
-            open_distance = None
-            closest_obstacle = None
-        # combine base + offset for final world heading
-        desired_heading = (base_heading + offset) % 360.0
-        current_heading = self._imu.poll() % 360.0
-        error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        omega = self._calculate_omega(error, closest_obstacle)
-        # scout only rotates
-        vx = 0.0
-        vy = 0.0
-        self._intent_vector = (vx, vy, omega)
-        if self._verbose:
-            self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; omega={:.3f}{}".format(
-                base_heading, offset, desired_heading, current_heading, error, omega,
-                "; closest={:.1f}mm".format(closest_obstacle) if closest_obstacle else ""))
-            self._display_info('ABSOLUTE')
-
-
-    def _calculate_omega(self, error, obstacle_distance=None):
-        '''
-        calculate rotation speed with rate limiting to prevent oscillation.
-        allows faster response when crossing through target (error sign change).
-        applies continuous urgency scaling based on obstacle proximity.
-        '''
-        abs_error = abs(error)
-        # deadzone
-        if abs_error <= self._rotation_tolerance:
-            self._last_omega = 0.0
-            return 0.0
-        # base gain
-        base_gain = 0.05
-        # continuous urgency multiplier based on obstacle distance
-        urgency_mult = 1.0
-        if obstacle_distance is not None:
-            # define urgency parameters
-            min_distance = 100.0      # distance where urgency is maximum
-            max_distance = 1000.0     # distance where urgency drops to 1.0
-            max_multiplier = 3.0      # maximum urgency multiplier
-            urgency_power = 2.0       # exponent for urgency curve (higher = more aggressive near obstacles)
-            # clamp obstacle_distance to meaningful range
-            clamped_distance = max(min_distance, min(obstacle_distance, max_distance))
-            # normalize to 0.0 (at min_distance) to 1.0 (at max_distance)
-            normalized_distance = (clamped_distance - min_distance) / (max_distance - min_distance)
-            # calculate urgency: inverse of normalized distance, with power curve
-            urgency_mult = 1.0 + (max_multiplier - 1.0) * ((1.0 - normalized_distance) ** urgency_power)
-        gain = base_gain * urgency_mult
-        target_omega = abs_error * gain
-        # clamp to limits
-        target_omega = max(min(target_omega, self._rotation_speed), 0.08)
-        target_omega = target_omega * (1 if error > 0 else -1)
-        # check for sign change (overshoot detection)
-        sign_changed = (self._last_omega * target_omega < 0)
-        # rate limit: allow faster change on sign flip
-        omega_change = target_omega - self._last_omega
-        max_change = self._max_omega_change * 3.0 if sign_changed else self._max_omega_change
-        if abs(omega_change) > max_change:
-            omega = self._last_omega + max_change * (1 if omega_change > 0 else -1)
-        else:
-            omega = target_omega
-        self._last_omega = omega
-        if self._verbose:
-            print("OMEGA: error={:+.2f}°, dist={:.0f}mm, urgency={:.2f}x, target={:+.3f}, final={:+.3f}".format(
-                error, obstacle_distance if obstacle_distance else 0.0, urgency_mult, target_omega, omega))
-        return omega
 
     def _display_info(self, message=''):
         if self._use_color:
