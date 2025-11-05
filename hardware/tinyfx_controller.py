@@ -170,7 +170,12 @@ class TinyFxController(Component):
             elif isinstance(_response, Response):
                 if _response == RESPONSE_OKAY:
 #                   print('🍏 b. RESPONSE_OKAY: {}'.format(_response))
-                    self._log.info("response: "
+                    self._log.info("okay response: "
+                            + Fore.GREEN + "'{}'".format(_response.description)
+                            + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
+                elif _response == RESPONSE_VALIDATED:
+#                   print('🍏 b. RESPONSE_VALIDATED: {}'.format(_response))
+                    self._log.info("validated response: "
                             + Fore.GREEN + "'{}'".format(_response.description)
                             + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
                 else:

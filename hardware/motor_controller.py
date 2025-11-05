@@ -105,18 +105,18 @@ class MotorController(Component):
         _create_ext_clock    = _cfg.get('create_external_clock')
         if external_clock:
             self._external_clock = external_clock
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'using existing external clock.')
+            self._log.info('using existing external clock.')
         elif _create_ext_clock:
             self._log.info('creating IRQ clock…')
             self._external_clock = IrqClock(config, level=Level.INFO)
             self._external_clock.enable()
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'using created external clock.')
+            self._log.info('using created external clock.')
         if self._external_clock is None:
             self._rate = Rate(self._loop_freq_hz, Level.ERROR)
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'using thread loop.')
+            self._log.info('using thread loop.')
         else:
             self._rate = None
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'using external clock.')
+            self._log.info('using external clock.')
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._all_motors     = []

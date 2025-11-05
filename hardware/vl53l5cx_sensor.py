@@ -45,19 +45,19 @@ class Vl53l5cxSensor(Component):
         self._firmware_marker = BootSessionMarker('vl53l5cx_firmware', level=level)
         # check if we should skip firmware loading
         if skip is False:  # explicitly force load
-            self._log.info('🍊 force loading firmware (skip=False)')
+            self._log.info('force loading firmware (skip=False)')
             _skip_init = False
             self._firmware_marker.mark()
         elif skip is True:  # Explicitly skip
-            self._log.info('🍊 skipping firmware load (skip=True)')
+            self._log.info('skipping firmware load (skip=True)')
             _skip_init = True
         else:  # skip is None - use marker auto-detection
-            self._log.info('🍊 firmware load based on marker (skip=None)')
+            self._log.info('firmware load based on marker (skip=None)')
             if self._firmware_marker.is_marked():
                 _skip_init = True
-                self._log.info('🍊 skipping firmware load (already loaded)')
+                self._log.info('skipping firmware load (already loaded)')
             else:
-                self._log.info('🍊 scheduled firmware loading to VL53L5CX.')
+                self._log.info('scheduled firmware loading to VL53L5CX.')
                 _skip_init = False
                 self._firmware_marker.mark()
         # configuration
@@ -85,8 +85,7 @@ class Vl53l5cxSensor(Component):
         self._queue = Queue(maxsize=_queue_maxsize)
         self._stop_event = Event()
         self._process = None
-        self._log.info(Fore.WHITE + "🍊 _skip_init: '{}' on bus: {}".format(_skip_init, _i2c_bus_number))
-        self._log.info('🍊 initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if _skip_init else '', _i2c_bus_number))
+        self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if _skip_init else '', _i2c_bus_number))
         _start_time = dt.now()
         self._vl53 = None
         if _i2c_bus_number == 0:
@@ -251,7 +250,7 @@ class Vl53l5cxSensor(Component):
         
         Row 0 = bottom/floor, Row 7 = top/far
         '''
-        self._log.info(Fore.WHITE + 'calibrating floor rows using {} samples…'.format(self._calibration_samples))
+        self._log.info('calibrating floor rows using {} samples…'.format(self._calibration_samples))
         self._floor_row_means   = [None for _ in range(self._rows)]
         self._floor_row_stddevs = [None for _ in range(self._rows)]
         samples = []
@@ -283,18 +282,18 @@ class Vl53l5cxSensor(Component):
             values = samples[:, row, :].flatten()
             mean = values.mean()
             stddev = values.std()
-            self._log.info(Fore.WHITE + 'row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
+            self._log.info('row {}: mean={:.1f}, stddev={:.1f}'.format(row, mean, stddev))
             
             # floor detection: low stddev = consistent reading = floor
             if stddev < self._stddev_threshold:
                 self._floor_row_means[row] = mean
                 self._floor_row_stddevs[row] = stddev
-                self._log.info(Fore.WHITE + 'row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+                self._log.info('row {} marked as floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
             else:
                 # high stddev = variable distances = not floor
                 self._floor_row_means[row] = None
                 self._floor_row_stddevs[row] = None
-                self._log.info(Fore.WHITE + 'row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
+                self._log.info('row {} NOT floor (mean={:.1f}, stddev={:.1f})'.format(row, mean, stddev))
                 # all rows above this cannot be floor rows
                 for above_row in range(row + 1, self._rows):  # mark rows (row+1) through 7 as not floor
                     self._floor_row_means[above_row] = None
@@ -303,7 +302,7 @@ class Vl53l5cxSensor(Component):
         
         detected_floor_rows = [i for i, v in enumerate(self._floor_row_means) if v is not None]
         if detected_floor_rows:
-            self._log.info(Fore.WHITE + 'floor rows detected (indices): {}'.format(detected_floor_rows))
+            self._log.info('floor rows detected (indices): {}'.format(detected_floor_rows))
         
         if all(val is None for val in self._floor_row_means):
             # force bottom row as floor
@@ -315,7 +314,7 @@ class Vl53l5cxSensor(Component):
             else:
                 self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row (0) as floor.')
         
-        self._log.info(Fore.WHITE + 'floor rows calibrated.')
+        self._log.info('floor rows calibrated.')
 
     def _terminate_subprocess(self):
         '''

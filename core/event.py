@@ -229,7 +229,8 @@ class Event(Enum):
     EVENT_L2               = ( 506, "L2",                     163,   Group.BEHAVIOUR ) # L2 Button
     EVENT_R1               = ( 507, "cruise",                 164,   Group.BEHAVIOUR ) # R1 Button
     LIGHTS                 = ( 508, "lights",                 165,   Group.BEHAVIOUR ) # R2 Button
-    VIDEO                  = ( 509, "video",                  175,   Group.BEHAVIOUR ) # L1 Button
+    VIDEO                  = ( 509, "video",                  166,   Group.BEHAVIOUR ) # L1 Button
+    STUCK                  = ( 510, "stuck",                  167,   Group.BEHAVIOUR )
 
     # idle ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     IDLE                   = ( 600, "idle",                   100,   Group.IDLE )

@@ -60,7 +60,7 @@ class Controller:
             if self._last_payload.command == command:
                 self._log.info(Style.DIM + 'ignoring redundant payload: {}'.format(self._last_payload))
                 return RESPONSE_SKIPPED
-        self._log.debug("send payload: " + Fore.GREEN + "'{}'".format(command))
+        self._log.info("send payload: " + Fore.GREEN + "'{}'".format(command))
         return self._write_payload(Payload(command))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -82,14 +82,15 @@ class Controller:
                 return RESPONSE_SKIPPED
         try:
             # write Payload to I2C bus
-#           self._log.debug("writing payload: " + Fore.GREEN + "'{}'".format(payload.to_string()))
+            self._log.info("writing payload: " + Fore.GREEN + "'{}'".format(payload.to_string()))
             _data = list(payload.to_bytes())
-#           self._log.debug("data type: {}; data: '{}'".format(type(_data), _data))
+            self._log.info("data type: {}; data: '{}'".format(type(_data), _data))
             self._i2cbus.write_block_data(self._i2c_address, self._config_register, _data)
 
             # read response Payload from I2C bus
             _response = None
             if self.RESPONSE_32:
+                self._log.info("RESPONSE_32")
                 # read 32-byte response
                 _read_data = self._i2cbus.read_i2c_block_data(self._i2c_address, self._config_register, 32)
                 # convert list of ints to bytes and create Payload instance
@@ -106,6 +107,7 @@ class Controller:
                     _response_payload = None
                     _response = None
             else:
+                self._log.info("RESPONSE_1")
                 # read 1-byte response
                 _read_data = self._i2cbus.read_byte_data(self._i2c_address, self._config_register)
                 # convert response byte to Response
@@ -116,7 +118,9 @@ class Controller:
             elif not isinstance(_response, Response):
                 raise ValueError('expected Response, not {}.'.format(type(_response)))
             elif _response == RESPONSE_OKAY:
-                self._log.debug("response: " + Fore.GREEN + "'{}' to command: {}".format(_response.description, payload.command))
+                self._log.info("okay response: " + Fore.GREEN + "'{}' to command: {}".format(_response.description, payload.command))
+            elif _response == RESPONSE_VALIDATED:
+                self._log.info("validated response: " + Fore.GREEN + "'{}' to command: {}".format(_response.description, payload.command))
             else:
                 self._log.warning("response: " + Fore.RED + "'{}'".format(_response.description))
             self._last_send_time = now # update only on success
@@ -130,7 +134,7 @@ class Controller:
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
-        self._log.debug("closing…")
+        self._log.info("closing…")
         if self._i2cbus:
             self._i2cbus.close()
         self._log.info('closed.')

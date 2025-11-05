@@ -66,9 +66,16 @@ kros:
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
+        scan:
+            enable:                      True              # enable scan behaviour
+            release:                     True              # release scan behaviour on startup
+            verbose:                    False              # verbose messaging
+            rotation_speed:                15.0            # degrees/sec
+            accel_time:                     2.0            # seconds to ramp up rotational speed
+            angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed

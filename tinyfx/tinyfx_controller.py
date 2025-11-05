@@ -46,6 +46,7 @@ class TinyFxController(Controller):
         self._blink_fx     = I2CSettableBlinkFX(1, speed=0.5, phase=0.0, duty=0.015)  # ch4
         self._stbd_trio_fx = TrioFX(2, brightness=0.8)                                # ch5
         self._port_trio_fx = TrioFX(3, brightness=0.8)                                # ch6
+        self._fwd_trio_fx  = TrioFX(4, brightness=0.8)                                # ch2
 
         self._pir_sensor   = PassiveInfrared()
         self._pir_timer    = Timer()
@@ -55,7 +56,7 @@ class TinyFxController(Controller):
         # set up the effects to play
         self.player.effects = [
             None, #TrioFX(2, brightness=0.5),  # UNUSED
-            None, #TrioFX(3, brightness=1.0),  # UNUSED
+            self._fwd_trio_fx, # None, #TrioFX(3, brightness=1.0),  # UNUSED
             self._settable_fx,
             self._blink_fx,
             self._stbd_trio_fx,
@@ -113,8 +114,8 @@ class TinyFxController(Controller):
             # LED channels ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'ch1':
                 pass
-            elif command == 'ch2':
-                pass
+            elif command == 'ch2' or command == 'fwd':
+                self._fwd_trio_fx.on()
             elif command == 'ch3':
                 pass
             elif command == 'ch4' or command == 'mast':
@@ -131,6 +132,7 @@ class TinyFxController(Controller):
                 self._blink_fx.off()
                 self._port_trio_fx.off()
                 self._stbd_trio_fx.off()
+                self._fwd_trio_fx.off()
 
             # system info ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif command == 'flash':
