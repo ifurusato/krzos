@@ -48,7 +48,8 @@ class Scan(AsyncBehaviour):
     Performs a 360° rotational scan using VL53L5CX to build a complete
     environmental map, then orients robot toward most open direction.
     
-    Uses gyroscope integration for rotation tracking (surface-independent).
+    Uses encoder-based rotation tracking due to IMU gyroscope interference
+    from motor operation.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Scan.NAME, level)
@@ -56,13 +57,12 @@ class Scan(AsyncBehaviour):
         _motor_controller = _component_registry.get(MotorController.NAME)
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-        # IMU for heading tracking
+        # IMU for absolute heading (used after scan completes)
         self._imu = _component_registry.get(Usfs.NAME)
         if self._imu is None:
             raise MissingComponentError('IMU not available for Scan.')
         if not self._imu.enabled:
             self._imu.enable()
-#       self._imu.set_verbose(True)
         # configuration
         _cfg = config['kros'].get('behaviour').get('scan')
         self._counter = itertools.count()
@@ -80,11 +80,17 @@ class Scan(AsyncBehaviour):
             self._eyeballs = _component_registry.get(Eyeballs.NAME)
         # scan state
         self._scan_phase = ScanPhase.INACTIVE
-        self._accumulated_rotation = 0.0  # degrees rotated from scan start
-        self._last_poll_time = None
+        # encoder baselines for rotation tracking
+        self._baseline_pfwd = 0
+        self._baseline_sfwd = 0
+        self._baseline_paft = 0
+        self._baseline_saft = 0
         self._start_time = None
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.STUCK)
+        # AsyncBehaviour provides: self._steps_per_degree (from config or theoretical)
+        self._steps_per_degree = 6.256
+        self._log.info('using steps_per_degree: {:.3f}'.format(self._steps_per_degree))
         self._log.info('ready.')
 
     @property
@@ -120,31 +126,57 @@ class Scan(AsyncBehaviour):
 
     def _initiate_scan(self):
         '''
-        Begin scan sequence.
+        Begin scan sequence using encoder-based rotation tracking.
         '''
         self._log.info(Fore.GREEN + 'initiating scan…')
         self._scan_phase = ScanPhase.ACCEL
         self._start_time = time.time()
-        self._last_poll_time = self._start_time
-        self._accumulated_rotation = 0.0
-        self._log.info(Fore.GREEN + 'scan initiated, using gyroscope for rotation tracking')
+        
+        # Initialize encoder baselines
+        self._baseline_pfwd = self._motor_pfwd.steps
+        self._baseline_sfwd = self._motor_sfwd.steps
+        self._baseline_paft = self._motor_paft.steps
+        self._baseline_saft = self._motor_saft.steps
+        
+        self._log.info(Fore.GREEN + 'scan initiated, using encoder-based rotation tracking')
+        self._log.info('encoder baselines: PFWD={}, SFWD={}, PAFT={}, SAFT={}'.format(
+            self._baseline_pfwd, self._baseline_sfwd, self._baseline_paft, self._baseline_saft))
+
+    def _get_accumulated_rotation(self):
+        '''
+        Calculate accumulated rotation in degrees from encoder deltas.
+        Averages all four mecanum wheels for robust tracking.
+        '''
+        current_pfwd = self._motor_pfwd.steps
+        current_sfwd = self._motor_sfwd.steps
+        current_paft = self._motor_paft.steps
+        current_saft = self._motor_saft.steps
+        
+        # For CW rotation: port wheels go forward (+), starboard wheels go backward (-)
+        # Average all four to handle slip and variance
+        rotation_steps = ((current_pfwd - self._baseline_pfwd) + 
+                          (current_paft - self._baseline_paft) - 
+                          (current_sfwd - self._baseline_sfwd) - 
+                          (current_saft - self._baseline_saft)) / 4.0
+        
+        degrees = rotation_steps / self._steps_per_degree
+        return degrees
 
     def start_loop_action(self):
         '''
-        Warm up the IMU at the beginning of the polling process.
+        Called when async loop starts.
         '''
-        self._log.info('warming up IMU…')
-        for i in range(5):
-            self._imu.poll()
-            time.sleep(0.1)
-        self._log.info('IMU warmed up.')
+        self._log.info('scan loop started')
 
     def stop_loop_action(self):
-        pass
+        '''
+        Called when async loop stops.
+        '''
+        self._log.info('scan loop stopped')
 
     async def _poll(self):
         '''
-        Main scan control loop - uses gyroscope for rotation tracking.
+        Main scan control loop - uses encoders for rotation tracking.
         '''
         if self._scan_phase == ScanPhase.INACTIVE or self._scan_phase == ScanPhase.IDLE:
             return
@@ -153,16 +185,8 @@ class Scan(AsyncBehaviour):
             current_time = time.time()
             elapsed = current_time - self._start_time
             
-            # Poll IMU for gyro data
-            self._imu.poll()
-            gx, gy, gz = self._imu.gyroscope  # gz is yaw rate in degrees/sec
-            print('RAW GYRO: gx={:.2f}, gy={:.2f}, gz={:.2f}'.format(gx, gy, gz))
-            
-            # Integrate gyro Z-axis to track total rotation
-            if self._last_poll_time is not None:
-                dt = current_time - self._last_poll_time
-                self._accumulated_rotation += gz * dt  # gz already in deg/s
-            self._last_poll_time = current_time
+            # Get accumulated rotation from encoders
+            accumulated_rotation = self._get_accumulated_rotation()
             
             match self._scan_phase:
                 case ScanPhase.ACCEL:
@@ -175,9 +199,17 @@ class Scan(AsyncBehaviour):
                     
                     if progress >= 1.0:
                         self._scan_phase = ScanPhase.SCAN
-#                       self._accumulated_rotation = 0.0  # Reset after acceleration
                         self._start_time = current_time
-                        self._log.info('acceleration complete, beginning 360° rotation')
+                        
+                        # Reset encoder baselines - SCAN starts here
+                        self._baseline_pfwd = self._motor_pfwd.steps
+                        self._baseline_sfwd = self._motor_sfwd.steps
+                        self._baseline_paft = self._motor_paft.steps
+                        self._baseline_saft = self._motor_saft.steps
+                        
+                        accel_rotation = self._get_accumulated_rotation()  # for logging only
+                        self._log.info('acceleration complete at {:.1f}°, resetting baseline for 360° scan'.format(
+                            accel_rotation))
 
                 case ScanPhase.SCAN:
                     if self._eyeballs:
@@ -186,12 +218,12 @@ class Scan(AsyncBehaviour):
                     omega = self._rotation_speed_rad
                     self._intent_vector = (0.0, 0.0, omega)
                     
-                    # check if we've completed 360° via gyro integration
-                    if self._accumulated_rotation >= 360.0:
+                    # check if we've completed 360° via encoder integration
+                    if accumulated_rotation >= 360.0:
                         self._scan_phase = ScanPhase.DECEL
                         self._start_time = current_time
-                        self._log.info('360° rotation complete ({:.1f}° by gyro), decelerating…'.format(
-                            self._accumulated_rotation))
+                        self._log.info('360° rotation complete ({:.1f}° by encoders), decelerating…'.format(
+                            accumulated_rotation))
 
                 case ScanPhase.DECEL:
                     if self._eyeballs:
@@ -208,7 +240,7 @@ class Scan(AsyncBehaviour):
                             self._eyeballs.normal()
                         self._scan_phase = ScanPhase.IDLE
                         self._log.info('scan complete, total rotation: {:.1f}°'.format(
-                            self._accumulated_rotation))
+                            accumulated_rotation))
 
                 case _:
                     self._log.warning('unexpected phase: {}'.format(self._scan_phase.name))
@@ -216,9 +248,8 @@ class Scan(AsyncBehaviour):
                         self._eyeballs.confused()
             
             if self._verbose and next(self._counter) % 5 == 0:
-#               self._log.info('phase: {}; gyro_z: {:.2f}°/s; accumulated: {:.1f}°; omega: {:.3f}'.format(
-                print('phase: {}; gyro_z: {:.2f}°/s; accumulated: {:.1f}°; omega: {:.3f}'.format(
-                    self._scan_phase.name, gz, self._accumulated_rotation, self._intent_vector[2]))
+                self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(
+                    self._scan_phase.name, accumulated_rotation, self._intent_vector[2]))
         
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
