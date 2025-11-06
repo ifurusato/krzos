@@ -127,6 +127,10 @@ kros:
         stop_step:                            0.09         # determines stop deceleration
         emergency_stop_step:                  0.25         # determines emergency stop deceleration
         stopping_steps:                      10            # determines stopping deceleration (unused)
+    rotation_controller:
+        steps_per_degree:                     6.256        # empirical from 10x 360° rotations on carpet
+        default_rotation_speed_deg_per_sec:  15.0
+        accel_time:                           2.0          # seconds to ramp up/down
     geometry:                                              # robot geometry (e.g., KR01)
         wheel_diameter:                     104            # wheel diameter (mm)
         wheel_base:                         148            # wheel base (mm), distance between front and rear axles
