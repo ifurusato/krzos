@@ -24,7 +24,7 @@ from behave.async_behaviour import AsyncBehaviour
 from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
 from core.orientation import Orientation
-from hardware.scout_sensor import ScoutSensor
+from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈[...]
 class ScanPhase(Enum):
@@ -86,6 +86,14 @@ class Scan(AsyncBehaviour):
         self._baseline_paft = 0
         self._baseline_saft = 0
         self._start_time = None
+        # data collection
+        self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
+        if self._vl53l5cx is None:
+            raise MissingComponentError('VL53L5CX sensor not available for Scan.')
+        # data structure: list of readings with actual rotation angle
+        self._scan_readings = []  # [{angle: deg, distance_mm: [64 values], timestamp: sec}]
+        self._scan_start_rotation = 0.0  # rotation when SCAN phase starts
+        # superclass
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.STUCK)
         # AsyncBehaviour provides: self._steps_per_degree (from config or theoretical)
@@ -131,8 +139,11 @@ class Scan(AsyncBehaviour):
         self._log.info(Fore.GREEN + 'initiating scan…')
         self._scan_phase = ScanPhase.ACCEL
         self._start_time = time.time()
+
+        self._scan_readings = []
+        self._scan_start_rotation = 0.0
         
-        # Initialize encoder baselines
+        # initialize encoder baselines
         self._baseline_pfwd = self._motor_pfwd.steps
         self._baseline_sfwd = self._motor_sfwd.steps
         self._baseline_paft = self._motor_paft.steps
@@ -217,13 +228,23 @@ class Scan(AsyncBehaviour):
                     # maintain constant rotation speed
                     omega = self._rotation_speed_rad
                     self._intent_vector = (0.0, 0.0, omega)
-                    
-                    # check if we've completed 360° via encoder integration
+                    # capture VL53L5CX reading
+                    distance_mm = self._vl53l5cx.get_distance_mm()
+                    if distance_mm is not None:
+                        scan_rotation = accumulated_rotation - self._scan_start_rotation
+                        self._scan_readings.append({
+                            'angle': scan_rotation,
+                            'distance_mm': distance_mm,
+                            'timestamp': current_time
+                        })
+                    else:
+                        self._log.warning('VL53L5CX returned None at {:.1f}°'.format(accumulated_rotation))
+                    # check if we've completed 360°
                     if accumulated_rotation >= 360.0:
                         self._scan_phase = ScanPhase.DECEL
                         self._start_time = current_time
-                        self._log.info('360° rotation complete ({:.1f}° by encoders), decelerating…'.format(
-                            accumulated_rotation))
+                        self._log.info('360° complete, captured {} readings, decelerating…'.format(
+                            len(self._scan_readings)))
 
                 case ScanPhase.DECEL:
                     if self._eyeballs:
@@ -234,11 +255,15 @@ class Scan(AsyncBehaviour):
                         omega = self._rotation_speed_rad * (1.0 - progress)
                         self._intent_vector = (0.0, 0.0, omega)
                     else:
-                        # Stop
+                        # stop
                         self.clear_intent_vector()
                         if self._eyeballs:
                             self._eyeballs.normal()
                         self._scan_phase = ScanPhase.IDLE
+                        # process captured data
+                        self._scan_slices = self._process_scan_data()
+                        self._analyze_scan_and_choose_heading()
+                        
                         self._log.info('scan complete, total rotation: {:.1f}°'.format(
                             accumulated_rotation))
 
@@ -257,6 +282,57 @@ class Scan(AsyncBehaviour):
             self._scan_phase = ScanPhase.IDLE
             self.disable()
 
+    def _process_scan_data(self):
+        '''
+        Bins raw readings into 5° slices and averages multiple samples per slice.
+        Returns dict: {slice_index: {angle: deg, avg_distance: [64], sample_count: n}}
+        '''
+        if len(self._scan_readings) == 0:
+            self._log.warning('no scan readings captured')
+            return {}
+        # initialize slices (72 slices for 360°)
+        num_slices = int(360.0 / self._angular_resolution)
+        slices = {i: {'samples': [], 'angles': []} for i in range(num_slices)}
+        # bin readings into slices
+        for reading in self._scan_readings:
+            angle = reading['angle']
+            slice_idx = int(angle / self._angular_resolution) % num_slices
+            slices[slice_idx]['samples'].append(np.array(reading['distance_mm']).reshape(8, 8))
+            slices[slice_idx]['angles'].append(angle)
+        # average samples within each slice
+        processed = {}
+        for idx, data in slices.items():
+            if len(data['samples']) > 0:
+                avg_distance = np.mean(data['samples'], axis=0)  # average across samples
+                processed[idx] = {
+                    'angle': np.mean(data['angles']),
+                    'avg_distance': avg_distance,  # 8x8 array
+                    'sample_count': len(data['samples'])
+                }
+            else:
+                # No readings in this slice (shouldn't happen with continuous rotation)
+                self._log.warning('slice {} has no samples'.format(idx))
+        self._log.info('processed {} slices from {} readings'.format(
+            len(processed), len(self._scan_readings)))
+        return processed
+
+    def _analyze_scan_and_choose_heading(self):
+        '''
+        Analyzes 360° scan data to find best heading.
+        Uses non_floor_rows from VL53L5CX calibration to focus on obstacles.
+        '''
+        non_floor_rows = self._vl53l5cx.non_floor_rows
+        self._log.info('analyzing scan using non-floor rows: {}'.format(non_floor_rows))
+        
+        # TODO: next phase - implement corridor detection
+        # for now, just log summary
+        for idx, slice_data in self._scan_slices.items():
+            angle = slice_data['angle']
+            distances = slice_data['avg_distance'][non_floor_rows, :]  # only obstacle rows
+            avg_distance = distances.mean()
+            self._log.info('slice {}: angle={:.1f}°, avg_distance={:.0f}mm, samples={}'.format(
+                idx, angle, avg_distance, slice_data['sample_count']))
+
     def ping(self):
         self._log.warning('ping.')
 
@@ -264,6 +340,7 @@ class Scan(AsyncBehaviour):
         if self.enabled:
             self._log.warning('already enabled.')
             return
+        self._vl53l5cx.enable()
         self._log.info('enabling scan...')
         AsyncBehaviour.enable(self)
         if self._eyeballs:
@@ -275,6 +352,7 @@ class Scan(AsyncBehaviour):
             self._log.warning('already disabled.')
             return
         self._log.info('disabling scan…')
+        self._vl53l5cx.disable()
         self._scan_phase = ScanPhase.INACTIVE
         self.clear_intent_vector()
         AsyncBehaviour.disable(self)

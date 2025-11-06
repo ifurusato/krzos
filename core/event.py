@@ -222,15 +222,16 @@ class Event(Enum):
     # high level behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     AVOID                  = ( 500, "avoid",                  150,   Group.BEHAVIOUR )
     MOTION_DETECT          = ( 501, "motion detect",          151,   Group.BEHAVIOUR )
-    ROAM                   = ( 502, "roam",                   160,   Group.BEHAVIOUR )
-    MOTH                   = ( 503, "moth",                   161,   Group.BEHAVIOUR )
-    SWERVE                 = ( 504, "swerve",                 162,   Group.BEHAVIOUR )
-    SNIFF                  = ( 505, "sniff",                  162,   Group.BEHAVIOUR ) # A Button
-    EVENT_L2               = ( 506, "L2",                     163,   Group.BEHAVIOUR ) # L2 Button
-    EVENT_R1               = ( 507, "cruise",                 164,   Group.BEHAVIOUR ) # R1 Button
-    LIGHTS                 = ( 508, "lights",                 165,   Group.BEHAVIOUR ) # R2 Button
-    VIDEO                  = ( 509, "video",                  166,   Group.BEHAVIOUR ) # L1 Button
-    STUCK                  = ( 510, "stuck",                  167,   Group.BEHAVIOUR )
+    ROAM                   = ( 502, "roam",                   152,   Group.BEHAVIOUR )
+    MOTH                   = ( 503, "moth",                   153,   Group.BEHAVIOUR )
+    SCAN                   = ( 504, "scan",                   154,   Group.BEHAVIOUR )
+    SWERVE                 = ( 505, "swerve",                 155,   Group.BEHAVIOUR )
+    SNIFF                  = ( 506, "sniff",                  156,   Group.BEHAVIOUR ) # A Button
+    EVENT_L2               = ( 507, "L2",                     157,   Group.BEHAVIOUR ) # L2 Button
+    EVENT_R1               = ( 508, "cruise",                 158,   Group.BEHAVIOUR ) # R1 Button
+    LIGHTS                 = ( 509, "lights",                 159,   Group.BEHAVIOUR ) # R2 Button
+    VIDEO                  = ( 510, "video",                  160,   Group.BEHAVIOUR ) # L1 Button
+    STUCK                  = ( 511, "stuck",                  161,   Group.BEHAVIOUR )
 
     # idle ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     IDLE                   = ( 600, "idle",                   100,   Group.IDLE )
