@@ -202,12 +202,12 @@ class Usfs(Component):
         '''
         if self.closed:
             self._log.warning('usfs is closed.')
-            return
+            return None
         self._usfs.checkEventStatus()
         if self._usfs.gotError():
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
             self.close()
-            return
+            return None
 
         # Define output variables from updated quaternion---these are Tait-Bryan
         # angles, commonly used in aircraft orientation.  In this coordinate
@@ -250,28 +250,28 @@ class Usfs(Component):
             if self._corrected_yaw < 0: self._corrected_yaw += 360.0
             elif self._corrected_yaw > 360: self._corrected_yaw -= 360.0
             if self._verbose:
-                self._log.info('Quaternion roll: {:+2.2f}; '.format(self._roll)
-                        + Fore.RED   + 'pitch: {:+2.2f}; '.format(self._pitch)
-                        + Fore.GREEN + 'yaw: {:+2.2f}; '.format(self._yaw)
-                        + Fore.BLUE  + 'corrected yaw: {:+2.2f}; '.format(self._corrected_yaw)
-                        + Fore.WHITE + 'with trim: {:+2.2f}'.format(self._yaw_trim))
-
+                self._log.info(
+                        Fore.RED      + 'roll: {:+2.2f}; '.format(self._roll)
+                        + Fore.GREEN  + 'pitch: {:+2.2f}; '.format(self._pitch)
+                        + Fore.BLUE   + 'yaw: {:+2.2f}; '.format(self._yaw)
+                        + Fore.YELLOW + 'corrected yaw: {:+2.2f}; '.format(self._corrected_yaw)
+                        + Fore.BLACK  + 'with trim: {:+2.2f}'.format(self._yaw_trim))
             if self._use_matrix:
                 self._matrix11x7.clear()
                 self._matrix11x7.write_string('{:>3}'.format(int(self._corrected_yaw)), y=1, font=font3x5)
                 self._matrix11x7.show()
         else:
-                self._log.warning('NO Quaternion')
+                self._log.warning('no quaternion')
 
         if self._usfs.gotAccelerometer():
             self._ax, self._ay, self._az = self._usfs.readAccelerometer()
-            if self._verbose:
-                self._log.info('Accel: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._ax, self._ay, self._az))
+#           if self._verbose:
+#               self._log.info('Accel: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._ax, self._ay, self._az))
 
         if self._usfs.gotGyrometer():
             self._gx, self._gy, self._gz = self._usfs.readGyrometer()
-            if self._verbose:
-                self._log.info('Gyro: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._gx,self._gy,self._gz))
+#           if self._verbose:
+#               self._log.info('Gyro: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._gx,self._gy,self._gz))
 
          #  Or define output variable according to the Android system, where
          #  heading (0 to 360) is defined by the angle between the y-axis and True
@@ -283,11 +283,11 @@ class Usfs(Component):
         if self._usfs.gotBarometer():
             self._pressure, self._temperature = self._usfs.readBarometer()
             self._altitude = (1.0 - math.pow(self._pressure / 1013.25, 0.190295)) * 44330
-            if self._verbose:
-                self._log.info('Baro:')
-                self._log.info('  Altimeter temperature = {:+2.2f} C'.format(self._temperature))
-                self._log.info('  Altimeter pressure = {:+2.2f} mbar'.format(self._pressure))
-                self._log.info('  Altitude = {:+2.2f} m\n'.format(self._altitude))
+#           if self._verbose:
+#               self._log.info('Baro:')
+#               self._log.info('  Altimeter temperature = {:+2.2f} C'.format(self._temperature))
+#               self._log.info('  Altimeter pressure = {:+2.2f} mbar'.format(self._pressure))
+#               self._log.info('  Altitude = {:+2.2f} m\n'.format(self._altitude))
 
         return self._corrected_yaw
 

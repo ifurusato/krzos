@@ -7,15 +7,17 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-29
-# modified: 2025-10-29
+# modified: 2025-11-06
 
 import time
 import asyncio
+import numpy as np
 from threading import Thread, Event as ThreadEvent
 from colorama import init, Fore, Style
 init()
 
 from core.logger import Level
+from core.orientation import Orientation
 from behave.behaviour import Behaviour
 
 class AsyncBehaviour(Behaviour):
@@ -36,6 +38,22 @@ class AsyncBehaviour(Behaviour):
         self._loop_instance   = None
         self._thread          = None
         self._stop_event      = ThreadEvent()
+        if self._motor_controller:
+            # get motor objects
+            self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
+            self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
+            self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
+            self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
+            # geometry configuration
+            velocity = self._motor_pfwd.get_velocity()
+            self._steps_per_rotation = velocity.steps_per_rotation
+            self._wheel_diameter_mm = velocity._wheel_diameter
+            self._wheel_track_mm = config['kros']['geometry']['wheel_track']
+            wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
+            rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
+            steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
+            self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
+            self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
         self._log.info('ready.')
 
     @property

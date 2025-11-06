@@ -68,13 +68,14 @@ class PalpebralMovement(Enum):
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Eyeballs(Component):
+    NAME = 'eyeballs'
     '''
     A display of eyes on a pair of 5x5 RGB LED matrix displays.
 
     :param level:   the logging Level
     '''
     def __init__(self, level=Level.INFO):
-        self._log = Logger('eyeballs', level)
+        self._log = Logger(Eyeballs.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._rgbmatrix = RgbMatrix(True, True, Level.INFO)
         self._port_rgbmatrix = self._rgbmatrix.get_rgbmatrix(Orientation.PORT)
