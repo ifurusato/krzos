@@ -49,13 +49,22 @@ class ScanPhase(Enum):
 class Scan(AsyncBehaviour):
     NAME = 'scan'
     '''
-    performs a 360° rotational scan using VL53L5CX to build a complete
+    If either Roam or Scout get stuck they are both suppresesd and the
+    stuck one sends a STUCK message onto the message bus. Scan subscribes 
+    to that message and is activated. It rotates the robot in place, using 
+    the VL53L5CX a bit like a LiDAR, oversampling into a cylindrical data 
+    structure, which at the end generates a single value, the recommended 
+    heading for the robot to go next. This is published in a SCAN message 
+    that is subscribed to by Scout, which rotates to that heading and then 
+    releases Roam.
+
+    This performs a 360° rotational scan using VL53L5CX to build a complete
     environmental map, then publishes the recommended heading.
     
-    uses encoder-based rotation tracking due to IMU gyroscope interference
-    from motor operation.
+    It uses encoder-based rotation tracking rather than an IMU.
     
-    triggered by STUCK event, publishes SCAN event with chosen heading.
+    It is triggered by a STUCK event, publishes a SCAN event with chosen 
+    heading as its payload.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Scan.NAME, level)
@@ -273,18 +282,23 @@ class Scan(AsyncBehaviour):
         '''
         if self._eyeballs:
             self._eyeballs.look_stbd()
-        
         # maintain constant rotation speed
         omega = self._rotation_speed_rad
         self._intent_vector = (0.0, 0.0, omega)
-
         # capture VL53L5CX reading
         distance_mm = self._vl53l5cx.get_distance_mm()
         if distance_mm is not None:
             # log current scan angle
             if next(self._counter) % 10 == 0:
                 self._log.info('🐹 scan at {:.1f}°'.format(accumulated_rotation))
-            self._display_distance(accumulated_rotation) # TODO not displaying distance (placeholder)
+            # compute representative distance for display
+            non_floor_rows = self._vl53l5cx.non_floor_rows
+            distances_array = np.array(distance_mm).reshape(8, 8)
+            obstacle_distances = distances_array[non_floor_rows, :]  # focus on non-floor rows
+            avg_distance_mm = obstacle_distances.mean()
+            avg_distance_cm = int(avg_distance_mm / 10.0)  # convert mm to cm
+            # display distance in cm (0-400 range fits in 3 digits)
+            self._display_distance(avg_distance_cm)
             scan_rotation = accumulated_rotation - self._scan_start_rotation
             self._scan_readings.append({
                 'angle': scan_rotation,
@@ -293,7 +307,6 @@ class Scan(AsyncBehaviour):
             })
         else:
             self._log.warning('VL53L5CX returned None at {:.1f}°'.format(accumulated_rotation))
-        
         # check if we've completed 360°
         if accumulated_rotation >= 360.0:
             self._scan_phase = ScanPhase.DECEL
@@ -375,6 +388,40 @@ class Scan(AsyncBehaviour):
         '''
         non_floor_rows = self._vl53l5cx.non_floor_rows
         self._log.info('analyzing scan using non-floor rows: {}'.format(non_floor_rows))
+        # find slice with maximum average distance (simple version)
+        best_slice_idx = None
+        max_avg_distance = 0.0
+        for idx, slice_data in self._scan_slices.items():
+            angle = slice_data['angle']
+            distances = slice_data['avg_distance'][non_floor_rows, :]  # only obstacle rows
+            avg_distance = distances.mean()
+            if avg_distance > max_avg_distance:
+                max_avg_distance = avg_distance
+                best_slice_idx = idx
+            if self._verbose:
+                self._log.info('slice {}: angle={:.1f}°, avg_distance={:.0f}mm, samples={}'.format(
+                    idx, angle, avg_distance, slice_data['sample_count']))
+        if best_slice_idx is not None:
+            chosen_heading = self._scan_slices[best_slice_idx]['angle']
+            self._log.info('chosen heading: {:.1f}° (slice {}, avg_distance={:.0f}mm)'.format(
+                chosen_heading, best_slice_idx, max_avg_distance))
+        else:
+            # no valid slices - default to straight ahead
+            chosen_heading = 0.0
+            self._log.warning('no valid scan data, defaulting to 0° heading')
+        # display final chosen heading on matrix
+        self._display_distance(int(chosen_heading))
+        # publish SCAN message with chosen heading
+        self._publish_message(chosen_heading)
+
+    def x_analyze_scan_and_choose_heading(self):
+        '''
+        analyzes 360° scan data to find best heading.
+        uses non_floor_rows from VL53L5CX calibration to focus on obstacles.
+        publishes SCAN message with chosen heading to message bus.
+        '''
+        non_floor_rows = self._vl53l5cx.non_floor_rows
+        self._log.info('analyzing scan using non-floor rows: {}'.format(non_floor_rows))
         
         # find slice with maximum average distance (simple version)
         best_slice_idx = None
@@ -423,7 +470,7 @@ class Scan(AsyncBehaviour):
     def _display_distance(self, value):
         if self._use_matrix:
             self._matrix11x7.clear()
-            self._matrix11x7.write_string('{:>3}'.format(round(value)), y=1, font=font3x5)
+            self._matrix11x7.write_string('{:>3}'.format(value), y=1, font=font3x5)
             self._matrix11x7.show()
 
     def enable(self):
