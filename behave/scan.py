@@ -20,6 +20,7 @@ init()
 from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.event import Event
+from core.queue_publisher import QueuePublisher
 from behave.async_behaviour import AsyncBehaviour
 from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
@@ -86,6 +87,11 @@ class Scan(AsyncBehaviour):
         self._baseline_paft = 0
         self._baseline_saft = 0
         self._start_time = None
+        # queue publisher
+        self._enable_publishing = False
+        self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
+        if self._queue_publisher is None:
+            raise MissingComponentError('queue publisher not available for Scan.')
         # data collection
         self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
         if self._vl53l5cx is None:
@@ -332,6 +338,21 @@ class Scan(AsyncBehaviour):
             avg_distance = distances.mean()
             self._log.info('slice {}: angle={:.1f}°, avg_distance={:.0f}mm, samples={}'.format(
                 idx, angle, avg_distance, slice_data['sample_count']))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _publish_message(self, heading):
+        '''
+        Publishes a SCAN message containing the heading value.
+        '''
+        self._log.info("publishing scan message with value '{:.1f}'…".format(heading))
+        if self._enable_publishing:
+            try:
+                _message = self._message_factory.create_message(Event.SCAN, heading)
+                self._queue_publisher.put(_message)
+            except Exception as e:
+                self._log.error('{} encountered when publishing message: {}\n{}'.format(type(e), e, traceback.format_exc()))
+        else:
+            self._log.info('publishing disabled.')
 
     def ping(self):
         self._log.warning('ping.')
