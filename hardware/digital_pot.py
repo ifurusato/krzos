@@ -70,10 +70,16 @@ class DigitalPotentiometer(Component):
         # min/max scaled output values
         self._out_min    = 0.0
         self._out_max    = 0.0
+        self._change_i2c_addr = False
         # now configure IO Expander
         self._log.info('configuring digital potentiometer at 0x{:02X}…'.format(self._i2c_addr))
         try:
             self._ioe = io.IOE(i2c_addr=self._i2c_addr)
+            if self._change_i2c_addr:
+                self._i2c_addr = 0x0a # new I2C address
+                self._ioe.set_i2c_addr(self._i2c_addr)
+                self._log.info('changed I2C address of digital potentiometer to 0x{:02X}…'.format(self._i2c_addr))
+                sys.exit(0)
             self._ioe.set_mode(self._pot_enc_a, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_b, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_c, io.ADC)
@@ -84,6 +90,8 @@ class DigitalPotentiometer(Component):
             self._ioe.set_mode(self._pin_red,   io.PWM, invert=True)
             self._ioe.set_mode(self._pin_green, io.PWM, invert=True)
             self._ioe.set_mode(self._pin_blue,  io.PWM, invert=True)
+
+
 #           _result = self._ioe.get_bit(REG_ADCCON0, 7)
 #           print('REG_ADCCON0: {}'.format(_result))
 #           _result = self._ioe.get_bit(REG_PWMCON0, 6)

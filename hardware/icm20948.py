@@ -34,8 +34,8 @@ from core.rate import Rate
 from core.ranger import Ranger
 from hardware.i2c_scanner import I2CScanner
 from hardware.rgbmatrix import RgbMatrix, DisplayType
-from hardware.sound import Sound
-from hardware.player import Player
+#from hardware.sound import Sound
+#from hardware.player import Player
 
 IN_MIN  = 0.0       # minimum analog value from IO Expander
 IN_MAX  = 3.3       # maximum analog value from IO Expander
@@ -75,11 +75,11 @@ class Icm20948(Component):
         # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _cfg = config['kros'].get('hardware').get('icm20948')
         self._verbose            = _cfg.get('verbose')
-        self._adjust_trim        = _cfg.get('adjust_trim')
+        self._adjust_trim        = True #_cfg.get('adjust_trim')
         self._show_console       = _cfg.get('show_console')
         self._show_rgbmatrix5x5  = _cfg.get('show_rgbmatrix5x5')
         self._show_rgbmatrix11x7 = _cfg.get('show_rgbmatrix11x7')
-        self._play_sound         = _cfg.get('play_sound') # if True, play sound to indicate calibration
+        self._play_sound         = False #_cfg.get('play_sound') # if True, play sound to indicate calibration
         # set up trim control ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._pitch_trim = _cfg.get('pitch_trim') # 0.0
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
@@ -92,16 +92,9 @@ class Icm20948(Component):
         if self._adjust_trim:
             _component_registry = Component.get_registry()
             # configure potentiometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            self._digital_pot_0x0E = _component_registry.get('digital-pot-0x0E')
-            if self._digital_pot_0x0E:
-                self._digital_pot = self._digital_pot_0x0E
-                self._log.info('using digital pot at: ' + Fore.GREEN + '0x0E')
-            else:
-                self._digital_pot_0x0C = _component_registry.get('digital-pot-0x0C')
-                if self._digital_pot_0x0C:
-                    self._digital_pot = self._digital_pot_0x0C
-                    self._log.info('using digital pot at: ' + Fore.GREEN + '0x0C')
+            self._digital_pot = _component_registry.get('digital-pot')
             if self._digital_pot:
+                self._log.info('🎀 using digital pot at: ' + Fore.GREEN + '0x0A')
                 self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
         # add numeric display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._low_brightness    = 0.15
@@ -374,7 +367,8 @@ class Icm20948(Component):
         self._amax = list(self.__icm20948.read_magnetometer_data())
         self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
         if self._play_sound:
-            Player.instance().play(Sound.BOINK)
+#           Player.instance().play(Sound.BOINK)
+            pass
         self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n    calibrate by rotating sensor through a horizontal 360° motion…\n')
 #       if self._show_rgbmatrix5x5 and self._port_rgbmatrix5x5:
 #           self._rgbmatrix.set_display_type(DisplayType.RANDOM)
@@ -410,11 +404,13 @@ class Icm20948(Component):
             if self.is_calibrated:
                 self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {:d}ms'.format(_elapsed_ms))
                 if self._play_sound:
-                    Player.instance().play(Sound.BOINK)
+#                   Player.instance().play(Sound.BOINK)
+                    pass
             elif self.enabled: # only scream if we're still enabled
                 self._log.error('unable to calibrate IMU after elapsed: {:d}ms'.format(_elapsed_ms))
                 if self._play_sound:
-                    Player.instance().play(Sound.BUZZ)
+#                   Player.instance().play(Sound.BUZZ)
+                    pass
         return self.is_calibrated
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -521,7 +517,11 @@ class Icm20948(Component):
             # now get pitch and roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             z, x, y = self.accelerometer # note Z,X,Y based on orientation of installed IMU
             self._pitch = ( -180.0 * math.atan(x/math.sqrt(y*y + z*z)) / math.pi ) + self._pitch_trim
-            self._roll  = ( -180.0 * math.atan(y/math.sqrt(x*x + z*z)) / math.pi ) + self._roll_trim
+            _xz = x*x + z*z
+            if _xz == 0:
+                _xz = 0.001
+            self._roll  = ( -180.0 * math.atan(y/math.sqrt(_xz)) / math.pi ) + self._roll_trim
+#           self._roll  = ( -180.0 * math.atan(y/math.sqrt(x*x + z*z)) / math.pi ) + self._roll_trim
             self._last_heading = self._heading
             return self._heading, self._pitch, self._roll
         except Exception as e:
@@ -606,7 +606,7 @@ class Icm20948(Component):
                 self._digital_pot.set_rgb(self._digital_pot.value)
             # add potentiometer trim (in radians, ±1𝛑)
             self._radians += self._heading_trim
-            self._log.info(Fore.WHITE + 'trim: {:5.2f}'.format(self._heading_trim))
+#           self._log.info(Fore.WHITE + 'trim: {:5.2f}'.format(self._heading_trim))
         else:
             self._radians += self._fixed_heading_trim
 #           self._log.info(Style.DIM + 'trim: {:5.2f}'.format(self._heading_trim))

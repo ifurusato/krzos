@@ -69,7 +69,7 @@ kros:
         scan:
             enable:                      True              # enable scan behaviour
             release:                     True              # release scan behaviour on startup
-            verbose:                    False              # verbose messaging
+            verbose:                     True              # verbose messaging
             rotation_speed:                15.0            # degrees/sec
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
@@ -201,7 +201,7 @@ kros:
         button:                                            # GPIO or IO Expander-based simple button or switch
             pin:                             24            # GPIO pin used
         digital_potentiometer:                             # IO Expander-based Digital Potentiometer breakout
-            i2c_address:                   0x0C            # I²C address for the device
+            i2c_address:                   0x0A            # I²C address for the device
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
         compass_encoder:                                   # IO Expander-based RGB Encoder breakout
             i2c_address:                   0x0F            # I²C address for the device
@@ -362,7 +362,7 @@ kros:
                     i2c_address: 0x37
                     xshut:       12                        # white:white (GPIO 5) 14
         devices:                                           # set of availale i2c devices
-          - address:                       0x0C
+          - address:                       0x0A
             name:        "Digital Potentiometer"
             required:                      True
           - address:                       0x0F

@@ -91,6 +91,7 @@ class Eyeballs(Component):
     def close(self):
         self._rgbmatrix.clear_all()
         self._rgbmatrix.close()
+        self._log.info('closed.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def show(self, movement: PalpebralMovement):
@@ -126,7 +127,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def normal(self):
-        self._log.info('normal…')
+        self._log.debug('normal…')
         _eyeball = Eyeball.NORMAL
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -134,7 +135,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def happy(self):
-        self._log.info('happy…')
+        self._log.debug('happy…')
         _eyeball = Eyeball.HAPPY
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -142,14 +143,14 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def wink(self):
-        self._log.info('wink…')
+        self._log.debug('wink…')
         self.set_matrix(Eyeball.WINK_PORT.array, self._port_rgbmatrix, Eyeball.WINK_PORT.color)
         self.set_matrix(Eyeball.WINK_STBD.array, self._stbd_rgbmatrix, Eyeball.WINK_PORT.color)
         self._show()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def blush(self):
-        self._log.info('blush…')
+        self._log.debug('blush…')
         _eyeball = Eyeball.BLUSH
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -157,7 +158,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def look_port(self):
-        self._log.info('look port…')
+        self._log.debug('look port…')
         _eyeball = Eyeball.LOOK_PORT
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -165,7 +166,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def look_stbd(self):
-        self._log.info('look starboard…')
+        self._log.debug('look starboard…')
         _eyeball = Eyeball.LOOK_STBD
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -173,7 +174,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def look_up(self):
-        self._log.info('look up…')
+        self._log.debug('look up…')
         _eyeball = Eyeball.LOOK_UP
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -181,7 +182,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def look_down(self):
-        self._log.info('look down…')
+        self._log.debug('look down…')
         _eyeball = Eyeball.LOOK_DOWN
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -189,14 +190,14 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def confused(self):
-        self._log.info('confused…')
+        self._log.debug('confused…')
         self.set_matrix(Eyeball.CONFUSED_STBD.array, self._port_rgbmatrix, Eyeball.CONFUSED_STBD.color)
         self.set_matrix(Eyeball.CONFUSED_PORT.array, self._stbd_rgbmatrix, Eyeball.CONFUSED_PORT.color)
         self._show()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def sleepy(self):
-        self._log.info('sleepy…')
+        self._log.debug('sleepy…')
         _eyeball = Eyeball.SLEEPY
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -204,7 +205,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def drugged(self):
-        self._log.info('drugged…')
+        self._log.debug('drugged…')
 #       self.set_matrix(Eyeball.CONFUSED_STBD.array, self._port_rgbmatrix, Eyeball.CONFUSED_STBD.color)
 #       self.set_matrix(Eyeball.CONFUSED_PORT.array, self._stbd_rgbmatrix, Eyeball.CONFUSED_PORT.color)
 #       self._show()
@@ -229,7 +230,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def sad(self):
-        self._log.info('sad…')
+        self._log.debug('sad…')
         _eyeball = Eyeball.SAD
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -237,7 +238,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def blank(self):
-        self._log.info('blank…')
+        self._log.debug('blank…')
         _eyeball = Eyeball.BLANK
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
@@ -245,7 +246,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def wow(self, count=5):
-        self._log.info('wow…')
+        self._log.debug('wow…')
         self._thread = Thread(name='wow', target=self._wow, args=[count], daemon=True)
         self._thread.start()
 
@@ -286,7 +287,7 @@ class Eyeballs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def dead(self, include_fade=False):
-        self._log.info('dead…')
+        self._log.debug('dead…')
         _eyeball = Eyeball.DEAD
         self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
