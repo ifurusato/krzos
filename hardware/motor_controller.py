@@ -970,6 +970,13 @@ class MotorController(Component):
         Disable the motors.
         '''
         if self.enabled:
+            # safely clear all external intent vectors before braking
+            # during shutdown, no external behaviors should be influencing motor control
+            self._log.info('clearing all external intent vectors before brake…')
+            for name in list(self._intent_vectors.keys()):
+                if name != "base":  # preserve only the base intent vector
+                    del self._intent_vectors[name]
+                    self._log.info('removed intent vector: {}'.format(name))
             if not self.is_stopped:
                 if self._use_graceful_stop:
                     self._brake(step=self._coast_step, closing=True)
