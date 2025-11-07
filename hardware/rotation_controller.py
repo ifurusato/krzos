@@ -18,6 +18,7 @@ init()
 from core.component import Component
 from core.logger import Logger, Level
 from core.orientation import Orientation
+from core.rotation import Rotation
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class RotationPhase(Enum):
@@ -27,7 +28,7 @@ class RotationPhase(Enum):
     INACTIVE  = ( 0, 'inactive'  )
     IDLE      = ( 1, 'idle'  )
     ACCEL     = ( 2, 'accel' )
-    SCAN      = ( 3, 'scan'  )
+    ROTATE    = ( 3, 'rotate' )
     DECEL     = ( 4, 'decel' )
 
     def __init__(self, num, name):
@@ -43,9 +44,15 @@ class RotationController(Component):
     '''
     Provides encoder-based rotation control for the robot.
     
-    This is an EXACT extraction of the rotation logic from Scan, moved into
-    a reusable component. All rotation parameters, calculations, and phase
-    transitions are identical to the working Scan implementation.
+    Handles angle-based acceleration, constant-speed rotation, and deceleration
+    to achieve precise total angular rotation. The rotate() method specifies the
+    TOTAL rotation including accel and decel phases.
+    
+    Acceleration and deceleration use time-based ramping with configured maximum
+    acceleration rate to protect motor gearboxes. Phase transitions use angle-based
+    detection for precise positioning.
+    
+    Behaviors can register for phase change callbacks to coordinate with rotation phases.
     
     CRITICAL SAFETY: Intent vector is registered only during active rotation
     and removed immediately upon completion to prevent dangerous motor surges.
@@ -58,40 +65,61 @@ class RotationController(Component):
             raise ValueError('motor_controller cannot be None')
         self._motor_controller = motor_controller
         
-        # get motor references (EXACT COPY from Scan)
+        # get motor references
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
         self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
         self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
         self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
         
-        # configuration (EXACT COPY from Scan)
+        # configuration
         _cfg = config['kros'].get('rotation_controller')
-        self._rotation_speed = _cfg.get('default_rotation_speed_deg_per_sec', 15.0)  # degrees/sec
+        self._rotation_speed = _cfg.get('default_rotation_speed_deg_per_sec', 20.0)  # degrees/sec
         self._rotation_speed_rad = np.deg2rad(self._rotation_speed)
-        self._accel_time = _cfg.get('accel_time', 2.0)  # seconds to reach full speed
+        
+        # maximum acceleration rate (protects motor gearboxes)
+        self._max_acceleration = _cfg.get('max_acceleration_deg_per_sec_sq', 15.0)  # deg/s²
+        self._max_acceleration_rad = np.deg2rad(self._max_acceleration)
+        
+        # angle-based accel/decel distances
+        self._accel_degrees = _cfg.get('accel_degrees', 20.0)  # degrees
+        self._decel_degrees = _cfg.get('decel_degrees', 20.0)  # degrees
+        
+        # calculate time required to reach v_max with constant acceleration
+        # v_max = a * t  →  t = v_max / a
+        self._accel_time = self._rotation_speed / self._max_acceleration
+        self._decel_time = self._rotation_speed / self._max_acceleration
+        
         # empirical value from 10x 360° rotations on carpet with 11-roller mecanum wheels
         self._steps_per_degree = _cfg.get('steps_per_degree', 6.256)
         
         self._log.info('rotation speed: {:.1f}°/sec'.format(self._rotation_speed))
-        self._log.info('acceleration time: {:.1f}s'.format(self._accel_time))
-        self._log.info('steps_per_degree: {:.3f} (empirical from 10x 360° rotations)'.format(
-            self._steps_per_degree))
+        self._log.info('max acceleration: {:.1f}°/s²'.format(self._max_acceleration))
+        self._log.info('accel: {:.1f}° in {:.2f}s'.format(self._accel_degrees, self._accel_time))
+        self._log.info('decel: {:.1f}° in {:.2f}s'.format(self._decel_degrees, self._decel_time))
+        self._log.info('steps_per_degree: {:.3f}'.format(self._steps_per_degree))
         
-        # rotation state (EXACT COPY from Scan)
+        # rotation state
         self._rotation_phase = RotationPhase.INACTIVE
+        self._rotation_direction = Rotation.CLOCKWISE
         self._intent_vector = (0.0, 0.0, 0.0)
         self._priority = 0.0
         self._intent_vector_registered = False
         
-        # encoder baselines for rotation tracking (EXACT COPY from Scan)
+        # phase change callbacks
+        self._phase_change_callbacks = []
+        
+        # encoder baselines for rotation tracking
         self._baseline_pfwd = 0
         self._baseline_sfwd = 0
         self._baseline_paft = 0
         self._baseline_saft = 0
         self._start_time = None
         
-        # rotation tracking for SCAN phase (EXACT COPY from Scan)
-        self._scan_start_rotation = 0.0
+        # rotation tracking across phases
+        self._total_target_rotation = 0.0  # total rotation requested (including accel/decel)
+        self._rotate_target = 0.0          # target for constant-speed ROTATE phase
+        self._accel_rotation = 0.0         # actual degrees rotated during accel
+        self._rotate_rotation = 0.0        # actual degrees rotated during rotate
         
         # cumulative heading state
         self._current_heading_offset = 0.0
@@ -115,11 +143,60 @@ class RotationController(Component):
         return self._rotation_phase
 
     @property
+    def rotation_direction(self):
+        '''
+        Returns the current rotation direction.
+        '''
+        return self._rotation_direction
+
+    @property
     def intent_vector(self):
         '''
         Returns the current intent vector (for debugging/monitoring).
         '''
         return self._intent_vector
+
+    @property
+    def accel_degrees(self):
+        '''
+        Returns the configured acceleration distance in degrees.
+        '''
+        return self._accel_degrees
+
+    @property
+    def decel_degrees(self):
+        '''
+        Returns the configured deceleration distance in degrees.
+        '''
+        return self._decel_degrees
+
+    def add_phase_change_callback(self, callback):
+        '''
+        Register a callback to be notified of phase transitions.
+        Callback signature: callback(old_phase, new_phase)
+        '''
+        if not callable(callback):
+            raise TypeError('callback must be callable')
+        self._phase_change_callbacks.append(callback)
+        self._log.info('added phase change callback')
+
+    def remove_phase_change_callback(self, callback):
+        '''
+        Remove a previously registered phase change callback.
+        '''
+        if callback in self._phase_change_callbacks:
+            self._phase_change_callbacks.remove(callback)
+            self._log.info('removed phase change callback')
+
+    def _notify_phase_change(self, old_phase, new_phase):
+        '''
+        Notify all registered callbacks of a phase transition.
+        '''
+        for callback in self._phase_change_callbacks:
+            try:
+                callback(old_phase, new_phase)
+            except Exception as e:
+                self._log.error('error in phase change callback: {}'.format(e))
 
     def get_current_heading(self):
         '''
@@ -164,16 +241,36 @@ class RotationController(Component):
         self._log.info('heading reset to 0.0°')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def initiate_rotation(self):
+    def rotate(self, degrees, direction=Rotation.CLOCKWISE):
         '''
-        Begin rotation sequence (EXACT COPY of Scan._initiate_scan rotation setup).
+        Rotate exactly the specified total degrees in the given direction.
+        Total rotation (including accel/decel) = degrees.
+        
+        Args:
+            degrees: Total rotation angle (including accel and decel phases)
+            direction: Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
         '''
-        self._log.info(Fore.GREEN + 'initiating rotation…')
+        if degrees <= (self._accel_degrees + self._decel_degrees):
+            raise ValueError('rotation {} too small for accel ({}) + decel ({})'.format(
+                degrees, self._accel_degrees, self._decel_degrees))
+        
+        self._total_target_rotation = degrees
+        self._rotate_target = degrees - self._accel_degrees - self._decel_degrees
+        self._rotation_direction = direction
+        
+        self._log.info(Fore.GREEN + 'initiating {:.1f}° rotation {} (accel={:.1f}°, rotate={:.1f}°, decel={:.1f}°)'.format(
+            degrees, direction.name, self._accel_degrees, self._rotate_target, self._decel_degrees))
+        
+        old_phase = self._rotation_phase
         self._rotation_phase = RotationPhase.ACCEL
         self._start_time = time.time()
-        self._scan_start_rotation = 0.0
+        self._accel_rotation = 0.0
+        self._rotate_rotation = 0.0
         
-        # initialize encoder baselines (EXACT COPY from Scan)
+        # notify phase change
+        self._notify_phase_change(old_phase, self._rotation_phase)
+        
+        # initialize encoder baselines
         self._baseline_pfwd = self._motor_pfwd.steps
         self._baseline_sfwd = self._motor_sfwd.steps
         self._baseline_paft = self._motor_paft.steps
@@ -190,7 +287,6 @@ class RotationController(Component):
             self._intent_vector_registered = True
             self._log.info('intent vector registered with motor controller')
         
-        self._log.info(Fore.GREEN + 'rotation initiated, using encoder-based rotation tracking')
         self._log.info('encoder baselines: PFWD={}, SFWD={}, PAFT={}, SAFT={}'.format(
             self._baseline_pfwd, self._baseline_sfwd, self._baseline_paft, self._baseline_saft))
 
@@ -198,7 +294,7 @@ class RotationController(Component):
         '''
         Calculate accumulated rotation in degrees from encoder deltas.
         Averages all four mecanum wheels for robust tracking.
-        (EXACT COPY from Scan)
+        Accounts for rotation direction.
         '''
         current_pfwd = self._motor_pfwd.steps
         current_sfwd = self._motor_sfwd.steps
@@ -206,11 +302,17 @@ class RotationController(Component):
         current_saft = self._motor_saft.steps
         
         # for CW rotation: port wheels go forward (+), starboard wheels go backward (-)
-        # average all four to handle slip and variance
-        rotation_steps = ((current_pfwd - self._baseline_pfwd) + 
-                          (current_paft - self._baseline_paft) - 
-                          (current_sfwd - self._baseline_sfwd) - 
-                          (current_saft - self._baseline_saft)) / 4.0
+        # for CCW rotation: port wheels go backward (-), starboard wheels go forward (+)
+        if self._rotation_direction == Rotation.CLOCKWISE:
+            rotation_steps = ((current_pfwd - self._baseline_pfwd) + 
+                              (current_paft - self._baseline_paft) - 
+                              (current_sfwd - self._baseline_sfwd) - 
+                              (current_saft - self._baseline_saft)) / 4.0
+        else:  # COUNTER_CLOCKWISE
+            rotation_steps = ((current_sfwd - self._baseline_sfwd) + 
+                              (current_saft - self._baseline_saft) - 
+                              (current_pfwd - self._baseline_pfwd) - 
+                              (current_paft - self._baseline_paft)) / 4.0
         
         degrees = rotation_steps / self._steps_per_degree
         return degrees
@@ -219,7 +321,6 @@ class RotationController(Component):
         '''
         Execute one rotation control step. Call repeatedly from async loop.
         Returns: (current_time, elapsed, accumulated_rotation)
-        (EXACT COPY of Scan._poll rotation logic)
         '''
         if self._rotation_phase == RotationPhase.INACTIVE or self._rotation_phase == RotationPhase.IDLE:
             return (time.time(), 0.0, 0.0)
@@ -233,43 +334,76 @@ class RotationController(Component):
     def handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
         '''
         Handle acceleration phase: ramp up to full rotation speed.
-        (EXACT COPY from Scan._handle_accel_phase)
+        Uses time-based ramping with configured max acceleration rate.
+        Transitions based on angle for precision.
         '''
-        # linear acceleration to full speed
-        progress = min(elapsed / self._accel_time, 1.0)
-        omega = self._rotation_speed_rad * progress
+        # time-based acceleration with max rate limit
+        # omega = a * t, capped at v_max
+        omega = min(self._max_acceleration_rad * elapsed, self._rotation_speed_rad)
+        
+        # apply direction
+        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE:
+            omega = -omega
+        
         self._intent_vector = (0.0, 0.0, omega)
         
-        if progress >= 1.0:
-            self._rotation_phase = RotationPhase.SCAN
+        # angle-based transition detection
+        if accumulated_rotation >= self._accel_degrees:
+            # transition to ROTATE
+            old_phase = self._rotation_phase
+            self._rotation_phase = RotationPhase.ROTATE
             self._start_time = current_time
             
-            # reset encoder baselines - SCAN starts here
+            # capture actual accel rotation
+            self._accel_rotation = accumulated_rotation
+            
+            # reset encoder baselines - ROTATE starts here
             self._baseline_pfwd = self._motor_pfwd.steps
             self._baseline_sfwd = self._motor_sfwd.steps
             self._baseline_paft = self._motor_paft.steps
             self._baseline_saft = self._motor_saft.steps
             
-            accel_rotation = accumulated_rotation
-            self._log.info('acceleration complete at {:.1f}°, resetting baseline for 360° scan'.format(
-                accel_rotation))
+            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(
+                self._accel_rotation))
+            
+            # notify phase change
+            self._notify_phase_change(old_phase, self._rotation_phase)
 
-    def handle_scan_phase(self, accumulated_rotation, current_time):
+    def handle_rotate_phase(self, accumulated_rotation, current_time):
         '''
-        Handle scan phase: maintain constant rotation speed.
-        (EXACT COPY from Scan._handle_scan_phase, minus sensor capture)
-        
-        Returns: True if 360° complete, False otherwise
+        Handle rotate phase: maintain constant rotation speed for rotate_target degrees.
+        Returns: True if rotation target reached, False otherwise
         '''
         # maintain constant rotation speed
         omega = self._rotation_speed_rad
+        
+        # apply direction
+        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE:
+            omega = -omega
+        
         self._intent_vector = (0.0, 0.0, omega)
         
-        # check if we've completed 360°
-        if accumulated_rotation >= 360.0:
+        # check if we've completed the target rotation
+        if accumulated_rotation >= self._rotate_target:
+            old_phase = self._rotation_phase
             self._rotation_phase = RotationPhase.DECEL
             self._start_time = time.time()
-            self._log.info('360° complete, decelerating…')
+            
+            # capture actual rotate rotation
+            self._rotate_rotation = accumulated_rotation
+            
+            # reset baseline for decel phase
+            self._baseline_pfwd = self._motor_pfwd.steps
+            self._baseline_sfwd = self._motor_sfwd.steps
+            self._baseline_paft = self._motor_paft.steps
+            self._baseline_saft = self._motor_saft.steps
+            
+            total_so_far = self._accel_rotation + self._rotate_rotation
+            self._log.info('starting deceleration at {:.1f}° (rotate target: {:.1f}°, total target: {:.1f}°)'.format(
+                total_so_far, self._rotate_target, self._total_target_rotation))
+            
+            # notify phase change
+            self._notify_phase_change(old_phase, self._rotation_phase)
             return True
         
         return False
@@ -277,40 +411,53 @@ class RotationController(Component):
     def handle_decel_phase(self, elapsed, accumulated_rotation):
         '''
         Handle deceleration phase: ramp down to stop.
-        (EXACT COPY from Scan._handle_decel_phase, minus data processing)
-        
+        Uses time-based ramping with configured max acceleration rate.
+        Completes based on angle or when omega reaches zero.
         Returns: True if deceleration complete, False otherwise
-        
-        CRITICAL FIX: Removes intent vector from MotorController immediately
-        upon completion to prevent dangerous motor surges during shutdown.
         '''
-        # linear deceleration to stop
-        progress = elapsed / self._accel_time
-        if progress < 1.0:
-            omega = self._rotation_speed_rad * (1.0 - progress)
-            self._intent_vector = (0.0, 0.0, omega)
-            return False
-        else:
+        # time-based deceleration with max rate limit
+        # omega = v_max - a * t, floored at 0
+        omega = max(self._rotation_speed_rad - self._max_acceleration_rad * elapsed, 0.0)
+        
+        # apply direction
+        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE:
+            omega = -omega
+        
+        self._intent_vector = (0.0, 0.0, omega)
+        
+        # complete when omega reaches zero OR angle target reached
+        if omega == 0.0 or accumulated_rotation >= self._decel_degrees:
             # stop - zero intent vector
             self._intent_vector = (0.0, 0.0, 0.0)
             
-            # CRITICAL SAFETY FIX: Remove from MotorController immediately
-            # This prevents the intent vector lambda from being called with
-            # stale non-zero omega values during shutdown or cancellation
+            # CRITICAL SAFETY: Remove from MotorController immediately
             if self._intent_vector_registered:
                 self._motor_controller.remove_intent_vector(RotationController.NAME)
                 self._intent_vector_registered = False
-                self._log.info('intent vector removed from motor controller (rotation complete)')
+                self._log.info('intent vector removed (rotation complete)')
             
-            self._log.info('rotation complete, total rotation: {:.1f}°'.format(
-                accumulated_rotation))
+            # calculate total rotation: accel + rotate + decel
+            total_rotation = self._accel_rotation + self._rotate_rotation + accumulated_rotation
             
-            # update cumulative heading
-            self._current_heading_offset = (self._current_heading_offset + accumulated_rotation) % 360.0
+            self._log.info('rotation complete: accel={:.1f}°, rotate={:.1f}°, decel={:.1f}°, total={:.1f}° (target={:.1f}°, error={:.1f}°)'.format(
+                self._accel_rotation, self._rotate_rotation, accumulated_rotation,
+                total_rotation, self._total_target_rotation, total_rotation - self._total_target_rotation))
             
-            # return to idle
+            # update cumulative heading (account for direction)
+            if self._rotation_direction == Rotation.CLOCKWISE:
+                self._current_heading_offset = (self._current_heading_offset + total_rotation) % 360.0
+            else:
+                self._current_heading_offset = (self._current_heading_offset - total_rotation) % 360.0
+            
+            # transition to idle
+            old_phase = self._rotation_phase
             self._rotation_phase = RotationPhase.IDLE
+            
+            # notify phase change
+            self._notify_phase_change(old_phase, self._rotation_phase)
             return True
+        
+        return False
 
     def clear_intent_vector(self):
         '''
@@ -334,9 +481,13 @@ class RotationController(Component):
             if self._intent_vector_registered:
                 self._motor_controller.remove_intent_vector(RotationController.NAME)
                 self._intent_vector_registered = False
-                self._log.info('intent vector removed from motor controller (cancelled)')
+                self._log.info('intent vector removed (cancelled)')
             
+            old_phase = self._rotation_phase
             self._rotation_phase = RotationPhase.IDLE
+            
+            # notify phase change
+            self._notify_phase_change(old_phase, self._rotation_phase)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
@@ -370,7 +521,7 @@ class RotationController(Component):
         if self._intent_vector_registered:
             try:
                 self._motor_controller.remove_intent_vector(RotationController.NAME)
-                self._log.info('intent vector removed from motor controller (disable)')
+                self._log.info('intent vector removed (disable)')
             except Exception as e:
                 self._log.warning('could not remove intent vector: {} (may have been removed by MotorController)'.format(e))
             self._intent_vector_registered = False

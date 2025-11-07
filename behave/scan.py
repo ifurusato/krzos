@@ -6,14 +6,13 @@
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
-# created:  2025-11-07
+# created:  2025-11-04
 # modified: 2025-11-07
 
 import sys
 import time
 import itertools
 import traceback
-from enum import Enum
 import numpy as np
 from colorama import init, Fore, Style
 init()
@@ -21,6 +20,7 @@ init()
 from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.event import Event
+from core.rotation import Rotation
 from core.queue_publisher import QueuePublisher
 from behave.async_behaviour import AsyncBehaviour
 from hardware.motor_controller import MotorController
@@ -32,21 +32,6 @@ from matrix11x7 import Matrix11x7
 from matrix11x7.fonts import font3x5
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-class ScanPhase(Enum):
-    INACTIVE  = ( 0, 'inactive'  )
-    IDLE      = ( 1, 'idle'  )
-    ACCEL     = ( 2, 'accel' )
-    SCAN      = ( 3, 'scan'  )
-    DECEL     = ( 4, 'decel' )
-
-    def __init__(self, num, name):
-        self._name  = name
-
-    @property
-    def name(self):
-        return self._name
-
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class Scan(AsyncBehaviour):
     NAME = 'scan'
     '''
@@ -54,6 +39,8 @@ class Scan(AsyncBehaviour):
     environmental map, then publishes the recommended heading.
     
     Uses RotationController for encoder-based rotation tracking (no IMU required).
+    Coordinates with RotationController via phase change callbacks to collect
+    data only during constant-speed ROTATE phase.
     
     Triggered by STUCK event, publishes SCAN event with chosen heading.
     '''
@@ -81,7 +68,7 @@ class Scan(AsyncBehaviour):
         self._counter = itertools.count()
         self._verbose = _cfg.get('verbose', False)
         
-        # rotation parameters (kept for reference, actual values in RotationController)
+        # rotation parameters
         self._angular_resolution = _cfg.get('angular_resolution', 5.0)  # degrees
         
         # matrix11x7 display
@@ -100,8 +87,9 @@ class Scan(AsyncBehaviour):
             from hardware.eyeballs import Eyeballs
             self._eyeballs = _component_registry.get(Eyeballs.NAME)
         
-        # scan state
-        self._scan_phase = ScanPhase.INACTIVE
+        # scan state (uses RotationController's phase tracking)
+        self._scan_active = False
+        self._data_collection_active = False
         
         # heading markers for coordinate calculation
         self._stuck_heading_marker = None
@@ -135,8 +123,8 @@ class Scan(AsyncBehaviour):
 
     @property
     def is_ballistic(self):
-        '''ballistic when actively scanning (not INACTIVE or IDLE)'''
-        return self._scan_phase not in (ScanPhase.INACTIVE, ScanPhase.IDLE)
+        '''ballistic when actively scanning'''
+        return self._scan_active
 
     @property
     def priority(self):
@@ -152,17 +140,46 @@ class Scan(AsyncBehaviour):
         '''
         if message.event is Event.STUCK:
             self._log.info('STUCK event received, initiating scan…')
-            if self._scan_phase == ScanPhase.INACTIVE or self._scan_phase == ScanPhase.IDLE:
+            if not self._scan_active:
                 self._initiate_scan()
             else:
-                self._log.warning('scan already in progress ({}), ignoring STUCK event'.format(
-                    self._scan_phase.name))
+                self._log.warning('scan already in progress, ignoring STUCK event')
         else:
             self._log.warning('unexpected message event: {}'.format(message.event))
+
+    def _on_rotation_phase_change(self, old_phase, new_phase):
+        '''
+        Callback for RotationController phase transitions.
+        Controls when data collection is active.
+        '''
+        self._log.info('rotation phase change: {} → {}'.format(old_phase.name, new_phase.name))
+        
+        if new_phase == RotationPhase.ROTATE:
+            # entering constant-speed rotation - start data collection
+            self._log.info(Fore.GREEN + 'entering ROTATE phase, starting data collection')
+            self._data_collection_active = True
+            if self._eyeballs:
+                self._eyeballs.look_stbd()
+        
+        elif old_phase == RotationPhase.ROTATE and new_phase == RotationPhase.DECEL:
+            # exiting constant-speed rotation - stop data collection
+            self._log.info(Fore.YELLOW + 'exiting ROTATE phase, stopping data collection')
+            self._data_collection_active = False
+            if self._eyeballs:
+                self._eyeballs.look_down()
+        
+        elif new_phase == RotationPhase.IDLE:
+            # rotation complete
+            self._log.info(Fore.GREEN + 'rotation complete, processing scan data')
+            if self._eyeballs:
+                self._eyeballs.normal()
+            self._process_and_publish_results()
+            self._scan_active = False
 
     def _initiate_scan(self):
         '''
         Begin scan sequence using RotationController.
+        Calculates total rotation needed for 360° of constant-speed data collection.
         '''
         self._log.info(Fore.GREEN + 'initiating scan…')
         
@@ -170,11 +187,26 @@ class Scan(AsyncBehaviour):
         self._stuck_heading_marker = self._rotation_controller.push_heading_marker('stuck')
         
         self._scan_readings = []
+        self._scan_active = True
+        self._data_collection_active = False
         
-        # delegate rotation to RotationController
-        self._rotation_controller.initiate_rotation()
+        # calculate total rotation needed: accel + 360° scan + decel
+        accel = self._rotation_controller.accel_degrees
+        decel = self._rotation_controller.decel_degrees
+        total_rotation = accel + 360.0 + decel
         
-        self._scan_phase = ScanPhase.ACCEL
+        self._log.info('requesting {:.1f}° total rotation (accel={:.1f}°, scan=360.0°, decel={:.1f}°)'.format(
+            total_rotation, accel, decel))
+        
+        # register for phase change notifications
+        self._rotation_controller.add_phase_change_callback(self._on_rotation_phase_change)
+        
+        # request rotation
+        self._rotation_controller.rotate(total_rotation, Rotation.CLOCKWISE)
+        
+        if self._eyeballs:
+            self._eyeballs.look_up()
+        
         self._log.info(Fore.GREEN + 'scan initiated')
 
     def start_loop_action(self):
@@ -191,65 +223,48 @@ class Scan(AsyncBehaviour):
 
     async def _poll(self):
         '''
-        Main scan control loop orchestrator - delegates rotation to RotationController.
+        Main scan control loop - delegates rotation to RotationController,
+        captures VL53L5CX data when data_collection_active is True.
         '''
-        if self._scan_phase == ScanPhase.INACTIVE or self._scan_phase == ScanPhase.IDLE:
+        if not self._scan_active:
+            self._log.warning('poll: scan not active')
             return
         
         try:
             # poll rotation controller
             current_time, elapsed, accumulated_rotation = self._rotation_controller.poll()
             
-            match self._scan_phase:
-                case ScanPhase.ACCEL:
-                    self._handle_accel_phase(elapsed, accumulated_rotation, current_time)
-                case ScanPhase.SCAN:
-                    self._handle_scan_phase(accumulated_rotation, current_time)
-                case ScanPhase.DECEL:
-                    self._handle_decel_phase(elapsed, accumulated_rotation)
-                case _:
-                    self._log.warning('unexpected phase: {}'.format(self._scan_phase.name))
-                    if self._eyeballs:
-                        self._eyeballs.confused()
+            # delegate phase handling to RotationController
+            phase = self._rotation_controller.rotation_phase
+            
+            if phase == RotationPhase.ACCEL:
+                self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
+            
+            elif phase == RotationPhase.ROTATE:
+                self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
+                
+                # capture VL53L5CX data during constant-speed rotation
+                if self._data_collection_active:
+                    self._capture_sensor_data(accumulated_rotation, current_time)
+            
+            elif phase == RotationPhase.DECEL:
+                self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
             
             if self._verbose and next(self._counter) % 5 == 0:
                 self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(
-                    self._scan_phase.name, accumulated_rotation, 
+                    phase.name, accumulated_rotation, 
                     self._rotation_controller.intent_vector[2]))
         
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self._rotation_controller.cancel_rotation()
-            self._scan_phase = ScanPhase.IDLE
+            self._scan_active = False
             self.disable()
 
-    def _handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
+    def _capture_sensor_data(self, accumulated_rotation, current_time):
         '''
-        Handle acceleration phase: delegate to RotationController.
+        Capture VL53L5CX sensor reading during constant-speed rotation.
         '''
-        if self._eyeballs:
-            self._eyeballs.look_up()
-        
-        # delegate to RotationController
-        self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
-        
-        # check if transitioned to SCAN phase
-        if self._rotation_controller.rotation_phase == RotationPhase.SCAN:
-            self._scan_phase = ScanPhase.SCAN
-            # mark where SCAN phase starts
-            self._scan_start_marker = self._rotation_controller.push_heading_marker('scan_start')
-
-    def _handle_scan_phase(self, accumulated_rotation, current_time):
-        '''
-        Handle scan phase: delegate rotation to RotationController, capture VL53L5CX data.
-        '''
-        if self._eyeballs:
-            self._eyeballs.look_stbd()
-        
-        # delegate rotation control to RotationController
-        scan_complete = self._rotation_controller.handle_scan_phase(accumulated_rotation, current_time)
-        
-        # capture VL53L5CX reading
         distance_mm = self._vl53l5cx.get_distance_mm()
         if distance_mm is not None:
             # log current scan angle
@@ -267,41 +282,21 @@ class Scan(AsyncBehaviour):
             self._display_distance(avg_distance_cm)
             
             # store reading with angle relative to scan start (0-360)
-            scan_rotation = accumulated_rotation
             self._scan_readings.append({
-                'angle': scan_rotation,
+                'angle': accumulated_rotation,
                 'distance_mm': distance_mm,
                 'timestamp': current_time
             })
         else:
             self._log.warning('VL53L5CX returned None at {:.1f}°'.format(accumulated_rotation))
-        
-        # check if scan phase complete
-        if scan_complete or self._rotation_controller.rotation_phase == RotationPhase.DECEL:
-            self._scan_phase = ScanPhase.DECEL
 
-    def _handle_decel_phase(self, elapsed, accumulated_rotation):
+    def _process_and_publish_results(self):
         '''
-        Handle deceleration phase: delegate to RotationController, then process data.
+        Process captured scan data and publish results.
         '''
-        if self._eyeballs:
-            self._eyeballs.look_down()
-        
-        # delegate deceleration to RotationController
-        decel_complete = self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
-        
-        if decel_complete:
-            if self._eyeballs:
-                self._eyeballs.normal()
-            
-            # process captured data
-            self._scan_slices = self._process_scan_data()
-            self._analyze_scan_and_choose_heading()
-            
-            self._log.info('scan complete, total rotation: {:.1f}°'.format(accumulated_rotation))
-            
-            # return to idle
-            self._scan_phase = ScanPhase.IDLE
+        # process captured data
+        self._scan_slices = self._process_scan_data()
+        self._analyze_scan_and_choose_heading()
 
     def _process_scan_data(self):
         '''
@@ -382,6 +377,9 @@ class Scan(AsyncBehaviour):
         
         # publish SCAN message with chosen heading
         self._publish_message(chosen_heading)
+        
+        # cleanup: remove phase change callback
+        self._rotation_controller.remove_phase_change_callback(self._on_rotation_phase_change)
 
     def _publish_message(self, heading):
         '''
@@ -425,7 +423,8 @@ class Scan(AsyncBehaviour):
             return
         self._log.info('disabling scan…')
         self._vl53l5cx.disable()
-        self._scan_phase = ScanPhase.INACTIVE
+        self._scan_active = False
+        self._data_collection_active = False
         AsyncBehaviour.disable(self)
         if self._eyeballs:
             self._eyeballs.disable()

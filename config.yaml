@@ -70,7 +70,6 @@ kros:
             enable:                      True              # enable scan behaviour
             release:                     True              # release scan behaviour on startup
             verbose:                     True              # verbose messaging
-            rotation_speed:                15.0            # degrees/sec
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
@@ -128,9 +127,12 @@ kros:
         emergency_stop_step:                  0.25         # determines emergency stop deceleration
         stopping_steps:                      10            # determines stopping deceleration (unused)
     rotation_controller:
+        verbose:                            False
+        max_acceleration_deg_per_sec_sq:     15.0          # safe acceleration limit
+        default_rotation_speed_deg_per_sec:  30.0          # constant rotation speed
+        accel_degrees:                       20.0          # degrees to rotate during acceleration
+        decel_degrees:                       20.0          # degrees to rotate during deceleration
         steps_per_degree:                     6.256        # empirical from 10x 360° rotations on carpet
-        default_rotation_speed_deg_per_sec:  20.0          # rotation speed, 15.0 is quite slow
-        accel_time:                           2.0          # seconds to ramp up/down
     geometry:                                              # robot geometry (e.g., KR01)
         wheel_diameter:                     104            # wheel diameter (mm)
         wheel_base:                         148            # wheel base (mm), distance between front and rear axles
