@@ -201,6 +201,12 @@ class MotorController(Component):
         '''
         return self._braking_active
 
+    def clear_intent_vectors(self):
+        '''
+        Clear the existing intent vectors.
+        '''
+        self._intent_vectors.clear()
+
     def add_intent_vector(self, name, vector_lambda, priority_lambda=None, exclusive=False):
         '''
         Register a behaviour's intent vector lambda with optional priority lambda.
@@ -208,7 +214,7 @@ class MotorController(Component):
         The priority lambda should return a float (0.0-1.0, default 0.3).
         '''
         if exclusive:
-            self._intent_vectors.clear()
+            self.clear_intent_vectors()
         else:
             if name in self._intent_vectors:
                 raise Exception("intent vector '{}' already registered; ignoring duplicate.".format(name))
@@ -230,7 +236,7 @@ class MotorController(Component):
         The lambda should return (vx, vy, omega).
         '''
         if exclusive:
-            self._intent_vectors.clear()
+            self.clear_intent_vectors()
         else:
             if name in self._intent_vectors:
                 raise Exception("intent vector '{}' already registered; ignoring duplicate.".format(name))
@@ -878,7 +884,7 @@ class MotorController(Component):
         self._log.warning('emergency stop…')
         self._brake(step=self._emergency_stop_step)
         self._speed_modifiers.clear()
-        self._intent_vectors.clear()
+        self.clear_intent_vectors()
         for _motor in self._all_motors:
             _motor.stop()
         self._log.info('emergency stopped.')
@@ -931,7 +937,7 @@ class MotorController(Component):
                     _m.stop()
                 if closing:
                     self._speed_modifiers.clear()
-                    self._intent_vectors.clear()
+                    self.clear_intent_vectors()
                 # clear braking state
                 self._braking_active = False
                 self._current_brake_step = None
