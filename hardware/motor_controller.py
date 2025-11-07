@@ -135,8 +135,8 @@ class MotorController(Component):
         self._braking_active     = False
         self._current_brake_step = None
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        # intent vector registry
-        self._intent_vectors = {}  # {name: lambda}
+        self._intent_vectors = {}  # {name: lambda}, intent vector registry
+        self._blended_intent_vector = (0.0, 0.0, 0.0) # cached blended intent vector from last motor tick
         self.__callback      = None
         self._is_stopped     = True # used to capture state transitions
         self.__state_change_callbacks = [] # anyone who wants to be informed if the robot is moving or stopped
@@ -154,13 +154,13 @@ class MotorController(Component):
             # register the base intent vector so it is always included in blending;
             # returns (vx, vy, omega) derived from the four base motor targets
             self.add_intent_vector(
-                "base", 
+                "base",
                 lambda: (
                     float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
                     float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
                     float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
                 ),
-                lambda: self._base_priority 
+                lambda: self._base_priority
             )
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-1.0)
         _min_speed           = -1 * _max_speed
@@ -206,6 +206,15 @@ class MotorController(Component):
         Clear the existing intent vectors.
         '''
         self._intent_vectors.clear()
+        self._blended_intent_vector = (0.0, 0.0, 0.0)
+
+    @property
+    def forward_velocity(self):
+        '''
+        Returns the current normalized forward velocity (vy component) from the
+        last blended intent vector.
+        '''
+        return self._blended_intent_vector[1]
 
     def add_intent_vector(self, name, vector_lambda, priority_lambda=None, exclusive=False):
         '''
@@ -222,7 +231,7 @@ class MotorController(Component):
             raise TypeError('expected lambda function for vector, not {}'.format(type(vector_lambda)))
         if priority_lambda is not None and priority_lambda.__name__ != "<lambda>":
             raise TypeError('expected lambda function for priority, not {}'.format(type(priority_lambda)))
-        
+
         self._log.info('adding intent vector: {}'.format(name))
         self._intent_vectors[name] = {
             'vector': vector_lambda,
@@ -296,11 +305,11 @@ class MotorController(Component):
     def _weighted_blend_intent_vectors(self):
         '''
         Blends all registered intent vectors using magnitude-weighted averaging.
-        
+
         Each behavior returns (vx, vy, omega). The magnitude of the (vx, vy) vector
         serves as its weight in the blend. Omega is blended using the same weights
         but doesn't contribute to the weight calculation itself.
-        
+
         Behaviors with stronger sensor confidence naturally output larger
         magnitudes and thus have more influence. Zero or near-zero magnitude
         vectors don't participate in the blend.
@@ -502,9 +511,9 @@ class MotorController(Component):
     def _motor_tick(self):
         '''
         The shared logic for a single motor control loop iteration, used by
-        both _motor_loop() and _external_callback_method(). Incorporates intent vector 
+        both _motor_loop() and _external_callback_method(). Incorporates intent vector
         blending and full Mecanum wheel kinematic mapping and normalization.
-       
+
           - blend intent vectors -> (vx, vy, omega)
           - mecanum kinematics -> per-wheel speeds
           - normalize if needed
@@ -516,6 +525,7 @@ class MotorController(Component):
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         vx, vy, omega = intent
+        self._blended_intent_vector = intent # for access as property
         # mecanum -> wheel speeds
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
@@ -857,7 +867,7 @@ class MotorController(Component):
 
     def brake(self):
         '''
-        Stops the robot smoothly within a short distance. 
+        Stops the robot smoothly within a short distance.
         '''
         self._log.info(Fore.YELLOW + 'brake.')
         self._brake(step=self._brake_step)
@@ -1002,7 +1012,7 @@ class MotorController(Component):
             if self._loop_enabled:
                 self._log.info('disabling by stopping loop…')
                 time.sleep(1)
-                self._stop_loop() 
+                self._stop_loop()
         else:
             self._log.warning('already disabled.')
 
@@ -1028,7 +1038,7 @@ class MotorController(Component):
                 if vx > 0.0 or omega > 0.0:
                     _color = Fore.WHITE + Style.BRIGHT
                 else:
-                    _color = Fore.WHITE 
+                    _color = Fore.WHITE
                 self._log.info(('[{:04d}] '.format(count) if count else '')
                         + 'sp: '
                         + Fore.RED   + 'pfwd: {:<4.2f}'.format(self._pfwd_motor.target_speed)

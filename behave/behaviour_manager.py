@@ -190,7 +190,7 @@ class BehaviourManager(Subscriber):
 
         Note that suppressing the BehaviourManager (or alternately calling
         this method) will suppress all existing Behaviours and store their
-        respective suppression states. If there is a set of stored states 
+        respective suppression states. If there is a set of stored states
         upon releasing the BehaviourManager, those states will be restored.
         '''
         self._log.info('suppress all behaviours…')

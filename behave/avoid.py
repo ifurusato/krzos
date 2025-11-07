@@ -94,15 +94,15 @@ class Avoid(AsyncBehaviour):
         '''
         Compute the robot's movement intent as a single (vx, vy, omega) vector
         based on the three distance sensors.
-        
+
         Port sensor pushes robot to starboard (positive vx).
         Starboard sensor pushes robot to port (negative vx).
         Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
-        
-        Priority scales continuously with obstacle proximity. When squeezed (both 
+
+        Priority scales continuously with obstacle proximity. When squeezed (both
         port and starboard active), priority is boosted proportionally to ensure
         lateral balancing isn't overwhelmed by other behaviors' forward motion.
-        
+
         Uses easing functions to scale avoidance force with distance.
         '''
         vx = 0.0
@@ -155,11 +155,11 @@ class Avoid(AsyncBehaviour):
         '''
         Compute the robot's movement intent as a single (vx, vy, omega) vector
         based on the three distance sensors.
-        
+
         Port sensor pushes robot to starboard (positive vx).
         Starboard sensor pushes robot to port (negative vx).
         Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
-        
+
         Uses easing functions to scale avoidance force with distance.
         '''
         vx = 0.0

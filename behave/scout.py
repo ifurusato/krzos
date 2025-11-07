@@ -42,7 +42,7 @@ class HeadingMode(Enum):
 
     HeadingMode.ABSOLUTE:
         IMU compass-based servo to an absolute world heading with obstacle avoidance.
-        A base heading is set via set_heading_degrees() (or compass encoder), and 
+        A base heading is set via set_heading_degrees() (or compass encoder), and
         ScoutSensor provides real-time offset adjustments for obstacle avoidance.
         The robot servos to (base + offset) in world coordinates, allowing navigation
         toward a cardinal direction while finding the clearest path. For example,
@@ -63,14 +63,14 @@ class Scout(AsyncBehaviour):
     NAME = 'scout'
     '''
     Scout is a rotation-only behavior that finds the most open direction for exploration.
-    
+
     Scout controls ONLY rotation (omega). It does NOT move the robot forward.
     Other behaviors (e.g., Roam) handle forward motion (vy) independently.
-    
+
     Scout can operate in two modes:
     - RELATIVE: Rotate to face direction indicated by ScoutSensor (stateless, reactive)
     - ABSOLUTE: Rotate to absolute compass heading using IMU with ScoutSensor offset adjustments
-    
+
     The intent vector is always (0, 0, omega) - pure rotation.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
@@ -227,9 +227,9 @@ class Scout(AsyncBehaviour):
     def _update_intent_vector(self):
         '''
         update the intent vector based on heading mode.
-        
+
         scout only controls rotation. delegates to mode-specific methods.
-        
+
         robot-relative components of the vector:
             vx:    lateral velocity (always 0.0 for Scout)
             vy:    longitudinal velocity (always 0.0 for Scout)
@@ -297,24 +297,24 @@ class Scout(AsyncBehaviour):
         '''
         # base heading from self._heading_degrees
         base_heading = self._heading_degrees % 360.0
-        
+
         # get dynamic offset from ScoutSensor
         offset, max_open_distance = self._scout_sensor.get_heading_offset()
-        
+
         # combine base + offset for final world heading
         desired_heading = (base_heading + offset) % 360.0
         current_heading = self._imu.poll() % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-        
+
         # calculate priority and omega based on environmental constraint
         priority = self._calculate_priority(max_open_distance)
         omega = self._calculate_omega(error, max_open_distance)
-        
+
         # scout only rotates
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
-        
+
         if self._verbose:
             self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 base_heading, offset, desired_heading, current_heading, error, max_open_distance, priority, omega))
@@ -324,7 +324,7 @@ class Scout(AsyncBehaviour):
         '''
         Calculate dynamic priority based on environmental constraint.
         More constrained environment (closer obstacles) = higher priority.
-        
+
         Returns priority value 0.0 to 1.0
         '''
         min_priority = 0.2
@@ -368,7 +368,7 @@ class Scout(AsyncBehaviour):
         '''
         Calculate urgency multiplier based on how constrained the environment is.
         More constrained (closer obstacles) = higher urgency = faster rotation.
-        
+
         Returns multiplier 1.0 to max_multiplier
         '''
         # maximum urgency multiplier applied when obstacles are at min_distance

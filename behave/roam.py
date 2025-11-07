@@ -29,13 +29,13 @@ class Roam(AsyncBehaviour):
     NAME = 'roam'
     '''
     Implements a forward roaming behaviour with obstacle-based speed scaling.
-    
+
     Roam moves the robot forward while monitoring front obstacles via RoamSensor.
     Speed is scaled based on obstacle distance:
     - Far obstacles (> max_distance): full speed
     - Near obstacles (< min_distance): stop
     - Between: proportional scaling
-    
+
     Roam does NOT handle steering or rotation. It only controls forward motion (vy).
     Other behaviors (e.g., Scout) handle rotation (omega) independently.
     '''
@@ -73,7 +73,7 @@ class Roam(AsyncBehaviour):
         self._digital_pot = None
         if self._use_dynamic_speed:
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-        
+
         self._log.info('ready.')
 
     @property
@@ -126,9 +126,9 @@ class Roam(AsyncBehaviour):
     def _update_intent_vector(self):
         '''
         Update the intent vector based on forward motion and obstacle detection.
-        
+
         Roam only controls forward motion (vy). No lateral (vx) or rotational (omega).
-        
+
         Robot-relative components of the vector:
             vx:    lateral velocity (always 0.0 for Roam)
             vy:    longitudinal velocity (forward/backward), scaled by obstacles
@@ -137,17 +137,17 @@ class Roam(AsyncBehaviour):
         if self._motor_controller.braking_active:
             self._log.warning('braking active: intent vector suppressed')
             return
-        
+
         amplitude = self._default_speed
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
-        
+
         if isclose(amplitude, 0.0, abs_tol=0.01):
             self.clear_intent_vector()
             if self._verbose:
                 self._display_info('stopped')
             return
-        
+
         # obstacle scaling only for forward motion
         if amplitude > 0.0:
             self._front_distance = self._roam_sensor.get_distance(apply_easing=True)

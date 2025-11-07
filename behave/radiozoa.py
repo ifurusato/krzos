@@ -177,7 +177,7 @@ class Radiozoa(AsyncBehaviour):
         Compute the robot's movement intent as a single (vx, vy, omega) vector.
         Each pair contributes force only if its imbalance exceeds min_sensor_diff_mm.
         Robot settles naturally when all pairs are balanced within threshold.
-        
+
         Priority scales continuously with imbalance severity and obstacle proximity
         using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
         '''
@@ -225,7 +225,7 @@ class Radiozoa(AsyncBehaviour):
         # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
         if max_imbalance > self._min_sensor_diff:
             # scale from 0.0 at min_sensor_diff to 1.0 at FAR_THRESHOLD
-            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / 
+            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) /
                                          (RadiozoaSensor.FAR_THRESHOLD - self._min_sensor_diff))
         else:
             imbalance_urgency = 0.0

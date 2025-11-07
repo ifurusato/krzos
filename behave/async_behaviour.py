@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#           
+#
 # Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
@@ -69,13 +69,13 @@ class AsyncBehaviour(Behaviour):
             self._log.warning('intent vector already registered with motor controller.')
             return
         self._motor_controller.add_intent_vector(
-            self.name, 
+            self.name,
             lambda: self._intent_vector,
             lambda: self.priority
         )
         self._intent_vector_registered = True
         self._log.info('intent vector lambda registered with motor controller.')
-        
+
     def _remove_intent_vector(self):
         self._log.warning('removing Roam intent vector from motor controller.')
         self._motor_controller.remove_intent_vector(self.name)
@@ -126,13 +126,13 @@ class AsyncBehaviour(Behaviour):
         self._stop_loop()
         Behaviour.disable(self)
         self._log.info('disabled.')
-    
+
     def start_loop_action(self):
         '''
         Called at the beginning of the main loop. To be overridden by subclasses.
         '''
         pass
-    
+
     def stop_loop_action(self):
         '''
         Called at the end of the main loop. To be overridden by subclasses.

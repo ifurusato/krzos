@@ -91,7 +91,7 @@ class RoamSensor(Component):
                 self._distance_sensor = _distance_sensors.get_sensor(Orientation.FWD)
             else: # next see if we can just get or create the FWD sensor
                 _fwd_sensor_name = 'distance-fwd'
-                self._distance_sensor = _component_registry.get(_fwd_sensor_name) 
+                self._distance_sensor = _component_registry.get(_fwd_sensor_name)
                 if not self._distance_sensor:
                     self._distance_sensor = DistanceSensor(config, orientation=Orientation.FWD, level=Level.INFO)
         if not self._distance_sensor:
@@ -134,7 +134,7 @@ class RoamSensor(Component):
         Returns the median distance from the central 4 pixels of the VL53L5CX grid.
         Uses the middle 2 columns (3, 4) and the first 2 non-floor rows (dynamically
         determined from sensor calibration).
-        
+
         Row 0 = bottom/floor, Row 7 = top/far.
         '''
         if not self._vl53l5cx.enabled:
