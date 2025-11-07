@@ -893,7 +893,7 @@ class MotorController(Component):
             coast < brake < halt < stop < emergency_stop
         A more urgent brake request interrupts a less urgent one.
         '''
-        self._log.info('brake with step {}'.format(step))
+        self._log.info(Fore.WHITE + 'brake with step {}'.format(step))
         if self.is_stopped:
             self._log.warning('already stopped.')
             self._braking_active = False
@@ -916,15 +916,12 @@ class MotorController(Component):
         speed_signs = None  # capture initial direction on first call
         def _brake_modifier(speeds):
             nonlocal factor, _step, speed_signs
-            # capture the sign of each speed at start of braking
             if speed_signs is None:
                 speed_signs = [1.0 if s >= 0.0 else -1.0 for s in speeds]
             factor = max(0.0, factor - _step)
-            # scale and clamp to original direction
             modified = []
             for i, s in enumerate(speeds):
                 scaled = s * factor
-                # if sign would flip, clamp to zero instead
                 if speed_signs[i] >= 0.0:
                     modified.append(max(0.0, scaled))
                 else:
@@ -932,35 +929,39 @@ class MotorController(Component):
             if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
                 for _m in self._all_motors:
                     _m.stop()
-                _start = time.time()
-                while not self.is_stopped_target and time.time() - _start < 3: 
-                    time.sleep(0.01)
-                time.sleep(2)
                 if closing:
                     self._speed_modifiers.clear()
                     self._intent_vectors.clear()
                 # clear braking state
                 self._braking_active = False
                 self._current_brake_step = None
-                return MotorController.BRAKE_LAMBDA_NAME
+                return MotorController.BRAKE_LAMBDA_NAME  # Remove immediately
             return modified
         self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
         # register a lambda (so add_speed_modifier's guard accepts it)
         self.add_speed_modifier(MotorController.BRAKE_LAMBDA_NAME, (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
         self._log.info('registered controller-level braking modifier.')
         try:
-            timeout = 10.0
+            timeout = 5.0
             start = time.monotonic()
-            while not self.is_stopped_target:
+            last_log = start
+            # wait until braking is no longer active (modifier sets this to False when done)
+            while self._braking_active and not self.is_stopped:
                 elapsed = time.monotonic() - start
+                self._log.warning('timeout reached on brake: {:4.2f}s'.format(elapsed))
                 if elapsed >= timeout:
                     self._log.warning('timeout reached on brake: {:4.2f}s'.format(elapsed))
                     break
-                else:
-                    self._log.warning('waiting for timeout; {:4.2f}s elapsed.'.format(elapsed))
-                time.sleep(0.05)  # small delay to avoid busy waiting
+                # only log every 0.5 seconds
+                self._log.info('braking in progress; {:4.2f}s elapsed.'.format(elapsed))
+#               if time.monotonic() - last_log >= 0.5:
+#                   self._log.debug('braking in progress; {:4.2f}s elapsed.'.format(elapsed))
+#                   last_log = time.monotonic()
+                time.sleep(0.05)
         finally:
-            self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
+            # cleanup - only needed if we timed out
+            if MotorController.BRAKE_LAMBDA_NAME in self._speed_modifiers:
+                self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
             self._braking_active = False
             self._current_brake_step = None
         self._log.info('brake complete.')

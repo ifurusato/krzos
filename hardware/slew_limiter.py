@@ -159,6 +159,6 @@ class SlewLimiter(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         Component.disable(self)
-        self._log.info('disabled slew limiter.')
+        self._log.debug('disabled.')
 
 #EOF

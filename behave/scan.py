@@ -141,6 +141,21 @@ class Scan(AsyncBehaviour):
         if message.event is Event.STUCK:
             self._log.info('STUCK event received, initiating scan…')
             if not self._scan_active:
+                if self.suppressed:
+                    self.release()  # resume polling
+                self._initiate_scan()
+            else:
+                self._log.warning('scan already in progress, ignoring STUCK event')
+        else:
+            self._log.warning('unexpected message event: {}'.format(message.event))
+
+    def x_execute(self, message):
+        '''
+        Called when STUCK message received via message bus.
+        '''
+        if message.event is Event.STUCK:
+            self._log.info('STUCK event received, initiating scan…')
+            if not self._scan_active:
                 self._initiate_scan()
             else:
                 self._log.warning('scan already in progress, ignoring STUCK event')
@@ -175,6 +190,7 @@ class Scan(AsyncBehaviour):
                 self._eyeballs.normal()
             self._process_and_publish_results()
             self._scan_active = False
+            self.suppress() # we're done so suppress until we receive another STUCK message
 
     def _initiate_scan(self):
         '''

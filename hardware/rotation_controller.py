@@ -40,7 +40,7 @@ class RotationPhase(Enum):
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class RotationController(Component):
-    NAME = 'rotation-controller'
+    NAME = 'rotation-ctrl'
     '''
     Provides encoder-based rotation control for the robot.
     
