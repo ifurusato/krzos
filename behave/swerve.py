@@ -179,10 +179,6 @@ class Swerve(AsyncBehaviour):
         # apply easing function for non-linear scaling
         eased = self._lateral_easing.apply(normalised)
 
-        # apply square for more aggressive response at close range
-        # this makes close obstacles generate much stronger force
-        eased = eased ** 2.5  # or try 2.0 for even more aggressive
-
         # apply to max force
         force = self._max_lateral_force * eased
         return force
@@ -262,10 +258,11 @@ class Swerve(AsyncBehaviour):
         # logging
         if self._verbose or (next(self._counter) % 20 == 0):
             if _within_deadband:
-                self._log.info(Style.DIM + 'port: {}mm, stbd: {}mm, react: {:.0f}mm, vx: {:.3f}, priority: {:.2f} (deadband)'.format(
-                    '{:.0f}'.format(self._port_distance) if self._port_distance else 'None',
-                    '{:.0f}'.format(self._stbd_distance) if self._stbd_distance else 'None',
-                    self._current_reaction_distance, vx, self._current_priority))
+#               self._log.debug(Style.DIM + 'port: {}mm, stbd: {}mm, react: {:.0f}mm, vx: {:.3f}, priority: {:.2f} (deadband)'.format(
+#                   '{:.0f}'.format(self._port_distance) if self._port_distance else 'None',
+#                   '{:.0f}'.format(self._stbd_distance) if self._stbd_distance else 'None',
+#                   self._current_reaction_distance, vx, self._current_priority))
+                pass
             else:
                 self._log.info('port: {}mm, stbd: {}mm, react: {:.0f}mm, vx: {:.3f}, priority: {:.2f}'.format(
                     '{:.0f}'.format(self._port_distance) if self._port_distance else 'None',

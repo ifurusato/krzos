@@ -119,6 +119,16 @@ class Vl53l5cxSensor(Component):
         return self._floor_row_stddevs
 
     @property
+    def floor_rows(self):
+        '''
+        Returns list of floor row indices (dynamically computed from calibration).
+        Row 0 = bottom/floor, Row 7 = top/far.
+        If rows 0,1 are floor, returns [0, 1].
+        '''
+        floor_rows = [i for i, v in enumerate(self.floor_row_means) if v is not None]
+        return floor_rows
+
+    @property
     def non_floor_rows(self):
         '''
         Returns list of non-floor row indices (dynamically computed from calibration).
@@ -313,7 +323,7 @@ class Vl53l5cxSensor(Component):
                 self._log.warning('no floor detected during calibration, forcibly marking bottom row (0) as floor.')
             else:
                 self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row (0) as floor.')
-        
+        print('VL53L5CX SENSOR CALIBRATED ........................................... ')
         self._log.info('floor rows calibrated.')
 
     def _terminate_subprocess(self):

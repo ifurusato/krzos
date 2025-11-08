@@ -50,6 +50,7 @@ class SwerveSensor(Component):
         # distance thresholds
         self._min_distance = _cfg.get('min_distance', 100)  # mm
         self._max_distance = _cfg.get('max_distance', 500)  # mm
+        self._additional_floor_rows = _cfg.get('additional_floor_rows', 1)  # extra margin beyond calibration
         # smoothing
         self._smoothing = _cfg.get('smoothing', True)
         _smoothing_window = _cfg.get('smoothing_window', 3)
@@ -57,6 +58,8 @@ class SwerveSensor(Component):
         self._stbd_window = deque(maxlen=_smoothing_window) if self._smoothing else None
         self._verbose = False
         self._counter = itertools.count()
+        # computed during enable() after VL53L5CX calibration
+        self._non_floor_rows = None
         # get or create VL53L5CX sensor
         _component_registry = Component.get_registry()
         if vl53l5cx_sensor is not None:
@@ -85,6 +88,8 @@ class SwerveSensor(Component):
     def _get_side_distance(self, columns):
         '''
         Returns the minimum distance from the specified columns using non-floor rows.
+        Uses pre-computed non-floor rows that exclude VL53L5CX's calibrated floor rows
+        plus an additional safety margin to reduce false positives from textured surfaces.
 
         Args:
             columns: List of column indices to sample
@@ -95,30 +100,23 @@ class SwerveSensor(Component):
         if not self._vl53l5cx.enabled:
             self._log.warning('VL53L5CX not enabled.')
             return None
-
+        if self._non_floor_rows is None:
+            self._log.warning('non-floor rows not yet computed; call enable() first.')
+            return None
         data = self._vl53l5cx.get_distance_mm()
         if data is None:
             return None
-
         try:
             grid = np.array(data).reshape((8, 8))
-
-            # get non-floor rows from calibration
-            non_floor_rows = self._vl53l5cx.non_floor_rows
-
-            # sample specified columns across non-floor rows
-            values = [grid[row, col] for row in non_floor_rows for col in columns]
-
-            # filter out invalid readings
-            values = [v for v in values if v is not None and v > 0]
-
+            # sample specified columns across pre-computed non-floor rows
+            values = [grid[row, col] for row in self._non_floor_rows for col in columns]
+            # filter out invalid readings and enforce min_distance threshold
+            values = [v for v in values if v is not None and v > self._min_distance]
             if not values:
                 return None
-
             # return minimum distance (closest obstacle)
             min_distance = float(np.min(values))
             return min_distance
-
         except Exception as e:
             self._log.error('error extracting side distance: {}'.format(e))
             return None
@@ -169,6 +167,19 @@ class SwerveSensor(Component):
             if not self._vl53l5cx.enabled:
                 self._log.warning('VL53L5CX not enabled, enabling now…')
                 self._vl53l5cx.enable()
+            # compute non-floor rows once after VL53L5CX calibration
+            calibrated_floor_rows = self._vl53l5cx.floor_rows
+            max_floor_row = max(calibrated_floor_rows) if calibrated_floor_rows else -1
+            # extend floor rows by adding additional margin rows
+            extended_floor_rows = list(range(max_floor_row + 1 + self._additional_floor_rows))
+            # compute non-floor rows (everything above extended floor)
+            self._non_floor_rows = [r for r in range(8) if r not in extended_floor_rows]
+            if not self._non_floor_rows:
+                self._log.error('no non-floor rows available after adding {} margin row(s)'.format(
+                    self._additional_floor_rows))
+            else:
+                self._log.info(Fore.GREEN + 'computed non-floor rows: {} (calibrated floor: {}, extended floor: {})'.format(
+                    self._non_floor_rows, calibrated_floor_rows, extended_floor_rows))
             Component.enable(self)
             self._log.info('swerve sensor enabled.')
         else:
