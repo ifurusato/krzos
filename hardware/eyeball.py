@@ -163,7 +163,7 @@ class Eyeball(Enum):
                 [ 1, 0, 0, 0, 1 ],
                 [ 0, 1, 1, 1, 0 ]
             ])
-    BLANK     = ( 15, 'blank', Color.LIGHT_GREY,
+    BLANK     = ( 15, 'blank', Color.ORANGE, # was LIGHT_GREY
             [
                 [ 0, 0, 0, 0, 0 ],
                 [ 0, 0, 0, 0, 0 ],

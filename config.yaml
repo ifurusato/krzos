@@ -281,13 +281,13 @@ kros:
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
             stale_timeout_ms:               250            # value cannot be older than this
         swerve_sensor:
-            port_columns:             [0, 1, 2]            # VL53L5CX columns for port side detection
-            stbd_columns:             [5, 6, 7]            # VL53L5CX columns for starboard side detection
-            min_distance:                   100            # mm - closest detection distance
+            port_columns:                [0, 1]            # VL53L5CX columns for port side detection
+            stbd_columns:                [6, 7]            # VL53L5CX columns for starboard side detection
+            min_distance:                   150            # mm - closest detection distance
             max_distance:                   600            # mm - maximum detection distance
             smoothing:                     True            # apply smoothing to side distance readings
             smoothing_window:                 3            # number of samples for smoothing
-            additional_floor_rows:            0            # adds additional row(s) to designated floor rows
+            additional_floor_rows:            1            # adds additional row(s) to designated floor rows
             exclude_rows:                   [7]            # exclude if empirical data suggests row(s) unreliable
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm

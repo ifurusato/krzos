@@ -254,16 +254,19 @@ class Swerve(AsyncBehaviour):
             self._last_vx = 0.0
             if self._eyeballs:
 #               self._eyeballs.clear()
-                self._eyeballs.look_down()
+                self._eyeballs.blank()
         else:
             vy = 0.0     # no forward control
             omega = 0.0  # no rotation control
             self._intent_vector = (vx, vy, omega)
-            if self._eyeballs:
-                if vx < 0:
-                    self._eyeballs.look_port()
-                else:
-                    self._eyeballs.look_stbd()
+            # only show direction if vx is strong enough to actually move robot
+            EYEBALL_THRESHOLD = 0.3  # only react to significant lateral intent
+            if abs(vx) < EYEBALL_THRESHOLD:
+                self._eyeballs.look_down()  # weak intent = look down
+            elif vx < 0:
+                self._eyeballs.look_port()
+            else:
+                self._eyeballs.look_stbd()
         # logging
         if self._verbose or (next(self._counter) % 20 == 0):
             if _within_deadband:
