@@ -53,8 +53,8 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.8            # cruising speed
@@ -75,8 +75,8 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -95,7 +95,7 @@ kros:
             min_reaction_distance:        350              # mm - start reacting at zero speed
             max_reaction_distance:        500              # mm - absolute maximum reaction distance
             distance_per_speed:           200              # mm to add per 1.0 normalized speed
-            max_lateral_force:            0.8              # maximum vx magnitude
+            max_lateral_force:            0.6              # maximum vx magnitude
             lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.9              # priority when obstacles very close (bumper)

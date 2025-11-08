@@ -126,28 +126,27 @@ class EyeballsMonitor(Component):
         # determine lateral direction (only if significant)
         is_stbd    = vx > self._lateral_threshold
         is_port    = vx < -self._lateral_threshold
-        # match direction combination
-        match (is_forward, is_aft, is_port, is_stbd):
-            case (True, False, True, False):
-                return Eyeball.LOOK_PORT_FWD
-            case (True, False, False, True):
-                return Eyeball.LOOK_STBD_FWD
-            case (False, True, True, False):
-                return Eyeball.LOOK_PORT_AFT
-            case (False, True, False, True):
-                return Eyeball.LOOK_STBD_AFT
-            case (True, False, False, False):
-                return Eyeball.LOOK_DOWN
-            case (False, True, False, False):
-                return Eyeball.LOOK_UP
-            case (False, False, True, False):
-                return Eyeball.LOOK_PORT
-            case (False, False, False, True):
-                return Eyeball.LOOK_STBD
-            case _:
-                # fallback for edge cases
-                return Eyeball.SAD
-    
+        # check direction combinations
+        if is_forward and is_port:
+            return Eyeball.LOOK_PORT_FWD
+        elif is_forward and is_stbd:
+            return Eyeball.LOOK_STBD_FWD
+        elif is_aft and is_port:
+            return Eyeball.LOOK_PORT_AFT
+        elif is_aft and is_stbd:
+            return Eyeball.LOOK_STBD_AFT
+        elif is_forward:
+            return Eyeball.LOOK_DOWN
+        elif is_aft:
+            return Eyeball.LOOK_UP
+        elif is_port:
+            return Eyeball.LOOK_PORT
+        elif is_stbd:
+            return Eyeball.LOOK_STBD
+        else:
+            # fallback for edge cases
+            return Eyeball.SAD
+
     def _display_eyeball(self, eyeball):
         '''
         Update eyeballs display with the specified expression.
