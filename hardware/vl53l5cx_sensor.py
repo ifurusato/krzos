@@ -86,12 +86,8 @@ class Vl53l5cxSensor(Component):
         self._stuck_pixel_filter = None
         if self._enable_stuck_pixel_filter:
             from hardware.stuck_pixel_filter import StuckPixelFilter
-            from hardware.motor_controller import MotorController
-
-            _component_registry = Component.get_registry()
-            _motor_controller = _component_registry.get(MotorController.NAME)
-            self._stuck_pixel_filter = StuckPixelFilter(config, motor_controller=_motor_controller, level=level)
-            self._log.info('stuck pixel filter enabled')   
+            self._stuck_pixel_filter = StuckPixelFilter(config, level=level)
+            self._log.info('stuck pixel filter enabled.')   
         # multiprocessing attributes
         self._use_multiprocessing = _cfg.get('use_multiprocessing', True)
         self._last_distance = None       # cache for last known reading

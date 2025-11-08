@@ -21,24 +21,23 @@ class StuckPixelFilter(Component):
     '''
     Detects and filters VL53L5CX pixels that remain constant despite robot motion.
     
-    Tracks pixel values over time and marks pixels as "stuck" if their variance
-    remains below a threshold while the robot is moving. Automatically clears
-    history when the robot stops to avoid false positives.
+    Tracks pixel values over time and marks pixels as "stuck" if they don't
+    change at all across multiple sensor polls, this only occurring when the
+    robot is moving. Automatically clears history when the robot stops to avoid
+    false positives.
     
     Args:
         config: Application configuration dict
-        motor_controller: Optional motor controller reference for motion detection
         level: Logging level
     '''
     NAME = 'stuck-pixel-filter'
     
-    def __init__(self, config, motor_controller=None, level=Level.INFO):
+    def __init__(self, config, level=Level.INFO):
         self._log = Logger(StuckPixelFilter.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         _cfg = config['kros'].get('hardware').get('stuck_pixel_filter')
         if _cfg is None:
             _cfg = {}  # use defaults if not configured
-        self._motor_controller = motor_controller
         self._threshold = _cfg.get('threshold', 5)  # readings before considered stuck
         # state
         self._pixel_history = {}  # {(row, col): [val1, val2, ...]}
@@ -82,41 +81,34 @@ class StuckPixelFilter(Component):
             rows_to_check = range(rows)
         if cols_to_check is None:
             cols_to_check = range(cols)
-        # only analyze when robot is moving
-        if not self._motor_controller.is_stopped:
-            for row in rows_to_check:
-                for col in cols_to_check:
-                    val = grid[row, col]
-                    if val is None or val == 0:
-                        continue
-                    key = (row, col)
-                    # initialize history for this pixel
-                    if key not in self._pixel_history:
-                        self._pixel_history[key] = []
-                    # add current reading
-                    self._pixel_history[key].append(val)
-                    # keep only recent history
-                    if len(self._pixel_history[key]) > self._threshold:
-                        self._pixel_history[key].pop(0)
-                    # check if pixel is stuck (all values within tolerance)
-                    if len(self._pixel_history[key]) >= self._threshold:
-                        values = self._pixel_history[key]
-                        variance = max(values) - min(values)
-                        if variance <= self._tolerance_mm:
-                            if key not in self._stuck_pixels:
-                                self._stuck_pixels.add(key)
-                                self._log.warning('stuck pixel detected: row={}, col={}, value={}mm (variance={}mm)'.format(
-                                    row, col, val, variance))
-                        else:
-                            # pixel is varying, remove from stuck set
-                            if key in self._stuck_pixels:
-                                self._stuck_pixels.remove(key)
-                                self._log.info('pixel recovered: row={}, col={}'.format(row, col))
-        else:
-            # robot stopped, clear history to avoid false positives on next movement
-            if len(self._pixel_history) > 0:
-                self._log.debug('robot stopped, clearing history')
-                self.clear()
+        for row in rows_to_check:
+            for col in cols_to_check:
+                val = grid[row, col]
+                if val is None or val == 0:
+                    continue
+                key = (row, col)
+                # initialize history for this pixel
+                if key not in self._pixel_history:
+                    self._pixel_history[key] = []
+                # add current reading
+                self._pixel_history[key].append(val)
+                # keep only recent history
+                if len(self._pixel_history[key]) > self._threshold:
+                    self._pixel_history[key].pop(0)
+                # check if pixel is stuck (all values exactly the same)
+                if len(self._pixel_history[key]) >= self._threshold:
+                    values = self._pixel_history[key]
+                    # pixel is stuck if all values are identical
+                    if len(set(values)) == 1:
+                        if key not in self._stuck_pixels:
+                            self._stuck_pixels.add(key)
+                            self._log.debug('stuck pixel detected: row={}, col={}, value={}mm (unchanging)'.format(
+                                row, col, val))
+                    else:
+                        # pixel is varying, remove from stuck set
+                        if key in self._stuck_pixels:
+                            self._stuck_pixels.remove(key)
+                            self._log.debug('pixel recovered: row={}, col={}'.format(row, col))
     
     def filter_values(self, values_with_coords):
         '''
