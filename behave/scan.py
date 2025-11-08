@@ -50,27 +50,22 @@ class Scan(AsyncBehaviour):
         _motor_controller = _component_registry.get(MotorController.NAME)
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-
         # rotation controller
         self._rotation_controller = _component_registry.get(RotationController.NAME)
         if self._rotation_controller is None:
             raise MissingComponentError('rotation controller not available for Scan.')
-
         # IMU (available but currently unused)
         self._imu = _component_registry.get(Usfs.NAME)
         if self._imu is None:
             self._log.warning('IMU not available for Scan (not required).')
         elif not self._imu.enabled:
             self._imu.enable()
-
         # configuration
         _cfg = config['kros'].get('behaviour').get('scan')
         self._counter = itertools.count()
         self._verbose = _cfg.get('verbose', False)
-
         # rotation parameters
         self._angular_resolution = _cfg.get('angular_resolution', 5.0)  # degrees
-
         # matrix11x7 display
         self._use_matrix = True
         if self._use_matrix:
@@ -79,42 +74,33 @@ class Scan(AsyncBehaviour):
             _high_brightness   = 0.45
             self._matrix11x7 = Matrix11x7()
             self._matrix11x7.set_brightness(_medium_brightness)
-
         # eyeballs
-        self._eyeballs = None
         self._use_eyeballs = True
+        self._eyeballs = None
         if self._use_eyeballs:
             from hardware.eyeballs import Eyeballs
             self._eyeballs = _component_registry.get(Eyeballs.NAME)
-
         # scan state (uses RotationController's phase tracking)
         self._scan_active = False
         self._data_collection_active = False
-
         # heading markers for coordinate calculation
         self._stuck_heading_marker = None
         self._scan_start_marker = None
-
         # queue publisher
         self._enable_publishing = False
         self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
         if self._queue_publisher is None:
             raise MissingComponentError('queue publisher not available for Scan.')
-
         # data collection
         self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
         if self._vl53l5cx is None:
             raise MissingComponentError('VL53L5CX sensor not available for Scan.')
-
         # data structures
         self._scan_readings = []  # [{angle: deg, distance_mm: [64 values], timestamp: sec}]
         self._scan_slices = {}  # processed slice data
-
         # superclass
-        AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory,
-                              _motor_controller, level=level)
+        AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.STUCK)
-
         self._log.info('ready.')
 
     @property

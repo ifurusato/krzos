@@ -86,18 +86,18 @@ kros:
             minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
             heading_mode:             'RELATIVE'           # RELATIVE or ABSOLUTE
         swerve:
-            enable:                      True
-            release:                     True
-            verbose:                    False
-            poll_delay_ms:                 50
-            min_reaction_distance:        250              # mm - start reacting at zero speed
-            max_reaction_distance:        500              # mm - absolute maximum reaction distance
+            enable:                      True              # enable swerve behaviour
+            release:                     True              # release swerve behaviour on startup
+            verbose:                    False              # verbose messaging
+            poll_delay_ms:                 50              # asyncio poll delay in milliseconds
+            min_reaction_distance:        350              # mm - start reacting at zero speed
+            max_reaction_distance:        700              # mm - absolute maximum reaction distance
             distance_per_speed:           200              # mm to add per 1.0 normalized speed
             max_lateral_force:            1.0              # maximum vx magnitude
-            lateral_easing:       'SQUARE_ROOT'            # easing function for distance->force mapping
+            lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.9              # priority when obstacles very close (bumper)
-            deadband_threshold:           0.05             # ignore vx below this value
+            deadband_threshold:           0.02             # ignore vx below this value
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
