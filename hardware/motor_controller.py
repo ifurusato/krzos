@@ -170,7 +170,7 @@ class MotorController(Component):
         _closed_loop         = _cfg.get('closed_loop')
         self.set_closed_loop(_closed_loop)
         # finish up…
-        self._log.info('ready with {} motors.'.format(len(self._all_motors)))
+        self._log.info(Fore.GREEN + 'ready with {} motors.'.format(len(self._all_motors)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

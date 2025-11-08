@@ -258,8 +258,6 @@ kros:
             ranging_frequency_hz:            10            # ranging frequency
         stuck_pixel_filter:
             threshold:                        5            # readings before pixel considered stuck
-            tolerance_mm:                     5            # mm variance to consider stuck
-            min_motion_speed:                 0.05         # minimum velocity to consider "moving"
         side_sensor:
             use_radiozoa:                 False            # if True use Radiozoa, otherwise just PWM
             smoothing:                     True            # enable smoothing of fused distance

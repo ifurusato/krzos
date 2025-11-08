@@ -40,13 +40,10 @@ class StuckPixelFilter(Component):
             _cfg = {}  # use defaults if not configured
         self._motor_controller = motor_controller
         self._threshold = _cfg.get('threshold', 5)  # readings before considered stuck
-        self._tolerance_mm = _cfg.get('tolerance_mm', 5)  # mm variance allowed
-        self._min_motion_speed = _cfg.get('min_motion_speed', 0.05)  # minimum speed to consider "moving"
         # state
         self._pixel_history = {}  # {(row, col): [val1, val2, ...]}
         self._stuck_pixels = set()  # {(row, col), ...}
-        self._log.info('😥 ready [threshold={}, tolerance={}mm, min_speed={}]'.format(
-            self._threshold, self._tolerance_mm, self._min_motion_speed))
+        self._log.info('ready [threshold={}]'.format(self._threshold))
     
     @property
     def stuck_pixels(self):
