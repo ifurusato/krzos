@@ -30,7 +30,14 @@ class ScoutVisualiser(Component):
     ]
     FLOOR_COLOR = "\033[35;1m"  # Bright magenta
 
-    def __init__(self, cols, rows, flip_horizontal=False, flip_vertical=False):
+    def __init__(self, cols, rows):
+        self._log = Logger('display', level=Level.INFO)
+        Component.__init__(self, self._log, suppressed=False, enabled=True)
+        self.cols = cols
+        self.rows = rows
+        self._log.info('ready.')
+
+    def x__init__(self, cols, rows, flip_horizontal=False, flip_vertical=False):
         self._log = Logger('display', level=Level.INFO)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self.cols = cols
@@ -66,7 +73,7 @@ class ScoutVisualiser(Component):
             result.get('heading_offset', 0.0)
         )
 
-    def print_colored_grid(self, distance, COLS, floor_row_means, margin):
+    def x_print_colored_grid(self, distance, COLS, floor_row_means, margin):
         '''
         Prints the 8x8 distance grid with color coding:
         - Magenta: Floor rows (detected during calibration)
@@ -105,7 +112,7 @@ class ScoutVisualiser(Component):
             print(line)
         print(Style.RESET_ALL)
 
-    def x_print_colored_grid(self, distance, COLS, floor_row_means, margin):
+    def print_colored_grid(self, distance, COLS, floor_row_means, margin):
         '''
         Prints the 8x8 distance grid with color coding:
         - Magenta: Floor rows (detected during calibration)

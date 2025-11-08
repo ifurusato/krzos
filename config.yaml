@@ -244,7 +244,7 @@ kros:
         vl53l5cx_sensor:
             use_multiprocessing:           True            # handle sensor inside external multiprocessing process
             flip_horizontal:              False            # flip sensor data horizontally
-            flip_vertical:                False            # flip sensor data vertically
+            flip_vertical:                 True            # flip sensor data vertically
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8

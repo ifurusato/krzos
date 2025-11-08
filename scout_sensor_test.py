@@ -27,11 +27,12 @@ def main():
     _config = ConfigLoader(Level.INFO).configure()
 
     _vl53_config     = _config['kros']['hardware']['vl53l5cx_sensor']
-    _flip_horizontal = _vl53_config.get('flip_horizontal', False)
-    _flip_vertical   = _vl53_config.get('flip_vertical', False)
+#   _flip_horizontal = _vl53_config.get('flip_horizontal', False)
+#   _flip_vertical   = _vl53_config.get('flip_vertical', False)
 
     _vl53_sensor = Vl53l5cxSensor(_config, skip=('skip' in sys.argv or True in sys.argv), level=Level.INFO)
-    _visualiser = ScoutVisualiser(cols=8, rows=8, flip_horizontal=_flip_horizontal, flip_vertical=_flip_vertical)
+    _visualiser = ScoutVisualiser(cols=8, rows=8)
+#   _visualiser = ScoutVisualiser(cols=8, rows=8, flip_horizontal=_flip_horizontal, flip_vertical=_flip_vertical)
 #   _visualiser = None
     _scout_sensor = ScoutSensor(_config, vl53l5cx=_vl53_sensor, visualiser=_visualiser, level=Level.INFO)
     _scout_sensor.enable()
