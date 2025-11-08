@@ -81,6 +81,17 @@ class Vl53l5cxSensor(Component):
         self._flip_vertical = _cfg.get('flip_vertical', False)
         self._log.info('sensor orientation: flip_horizontal={}, flip_vertical={}'.format(
             self._flip_horizontal, self._flip_vertical))
+        # stuck pixel filter
+        self._enable_stuck_pixel_filter = _cfg.get('enable_stuck_pixel_filter', False)
+        self._stuck_pixel_filter = None
+        if self._enable_stuck_pixel_filter:
+            from hardware.stuck_pixel_filter import StuckPixelFilter
+            from hardware.motor_controller import MotorController
+
+            _component_registry = Component.get_registry()
+            _motor_controller = _component_registry.get(MotorController.NAME)
+            self._stuck_pixel_filter = StuckPixelFilter(config, motor_controller=_motor_controller, level=level)
+            self._log.info('stuck pixel filter enabled')   
         # multiprocessing attributes
         self._use_multiprocessing = _cfg.get('use_multiprocessing', True)
         self._last_distance = None       # cache for last known reading
@@ -227,6 +238,37 @@ class Vl53l5cxSensor(Component):
             self._calibrate_floor_rows()
             self._log.info('VL53L5CX hardware enabled and ranging.')
 
+    def _apply_stuck_pixel_filter(self, arr):
+        '''
+        Replace stuck pixel values with interpolated values from neighboring pixels.
+        
+        Args:
+            arr: numpy array of shape (rows, cols)
+            
+        Returns:
+            numpy array with stuck pixels replaced
+        '''
+        # update filter with current grid
+        self._stuck_pixel_filter.update(arr)
+        # replace stuck pixels with interpolated values
+        for row, col in self._stuck_pixel_filter.stuck_pixels:
+            # collect neighboring valid pixels
+            neighbors = []
+            for dr in [-1, 0, 1]:
+                for dc in [-1, 0, 1]:
+                    if dr == 0 and dc == 0:
+                        continue
+                    nr, nc = row + dr, col + dc
+                    if 0 <= nr < self._rows and 0 <= nc < self._cols:
+                        if not self._stuck_pixel_filter.is_stuck(nr, nc):
+                            neighbors.append(arr[nr, nc])
+            # replace with mean of neighbors, or mark as invalid
+            if neighbors:
+                arr[row, col] = int(np.mean(neighbors))
+            else:
+                arr[row, col] = 0  # no valid neighbors, mark as invalid
+        return arr
+
     def get_distance_mm(self):
         '''
         Returns sensor data with rows properly oriented (row 0 = bottom/floor, row 7 = top/far).
@@ -243,6 +285,8 @@ class Vl53l5cxSensor(Component):
                     # reshape and flip as necessary
                     arr = np.array(value).reshape((self._rows, self._cols))
                     arr = self._apply_orientation(arr)
+                    if self._stuck_pixel_filter:
+                        arr = self._apply_stuck_pixel_filter(arr)
                     self._last_distance = arr.flatten().tolist()
                     self._last_distance_time = dt.now()
                     return self._last_distance
@@ -266,6 +310,8 @@ class Vl53l5cxSensor(Component):
                 # reshape and flip as necessary
                 arr = np.array(data.distance_mm).reshape((self._rows, self._cols))
                 arr = self._apply_orientation(arr)
+                if self._stuck_pixel_filter:
+                    arr = self._apply_stuck_pixel_filter(arr)
                 return arr.flatten().tolist() # return as flat list, properly oriented
             except Exception as e:
                 self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))

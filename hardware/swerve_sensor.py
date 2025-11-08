@@ -47,6 +47,13 @@ class SwerveSensor(Component):
         # column configuration
         self._port_columns = _cfg.get('port_columns', [0, 1, 2])
         self._stbd_columns = _cfg.get('stbd_columns', [5, 6, 7])
+        # get VL53L5CX flip_horizontal setting
+        _vl53_cfg = config['kros'].get('hardware').get('vl53l5cx_sensor')
+        _flip_horizontal = _vl53_cfg.get('flip_horizontal', False)
+        # swap columns if sensor is horizontally flipped
+        if _flip_horizontal:
+            self._port_columns, self._stbd_columns = self._stbd_columns, self._port_columns
+            self._log.info('🍏 sensor flip horizontal: swapped port/stbd columns')
         # distance thresholds
         self._min_distance = _cfg.get('min_distance', 100)  # mm
         self._max_distance = _cfg.get('max_distance', 500)  # mm
@@ -109,14 +116,6 @@ class SwerveSensor(Component):
             return None
         try:
             grid = np.array(data).reshape((8, 8))
-
-            # DIAGNOSTIC: Show ALL sampled values with their row/col
-            for row in self._non_floor_rows:
-                for col in columns:
-                    val = grid[row, col]
-                    if val is not None and val <= 350:  # only log relevant values
-                        print('  row={}, col={}, val={}mm'.format(row, col, val))
-
             # sample specified columns across pre-computed non-floor rows
             values = [grid[row, col] for row in self._non_floor_rows for col in columns]
             # filter out invalid readings and enforce min_distance threshold

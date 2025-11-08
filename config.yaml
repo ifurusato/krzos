@@ -243,8 +243,9 @@ kros:
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
         vl53l5cx_sensor:
             use_multiprocessing:           True            # handle sensor inside external multiprocessing process
-            flip_horizontal:              False            # flip sensor data horizontally
+            flip_horizontal:               True            # flip sensor data horizontally
             flip_vertical:                 True            # flip sensor data vertically
+            enable_stuck_pixel_filter:     True            # filter on pixels that won't change
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8
@@ -255,6 +256,10 @@ kros:
             minimum_free_distance:          500            # minimum required free space, in millimeters
             poll_interval:                    0.125        # how often to poll VL53L5CX
             ranging_frequency_hz:            10            # ranging frequency
+        stuck_pixel_filter:
+            threshold:                        5            # readings before pixel considered stuck
+            tolerance_mm:                     5            # mm variance to consider stuck
+            min_motion_speed:                 0.05         # minimum velocity to consider "moving"
         side_sensor:
             use_radiozoa:                 False            # if True use Radiozoa, otherwise just PWM
             smoothing:                     True            # enable smoothing of fused distance
