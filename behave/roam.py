@@ -85,18 +85,16 @@ class Roam(AsyncBehaviour):
         return False
 
     def callback(self):
-        self._log.info('roam behaviour callback.')
-        raise Exception('UNSUPPORTED callback')
+        raise NotImplementedError('callback unsupported in Roam.')
 
     def execute(self, message):
-        print('execute message {}.'.format(message))
-        raise Exception('UNSUPPORTED execute')
+        raise NotImplementedError('execute unsupported in Roam.')
 
     def start_loop_action(self):
-        self._accelerate()
+        pass
 
     def stop_loop_action(self):
-        self._decelerate()
+        pass
 
     def _dynamic_set_default_speed(self):
         '''
@@ -204,16 +202,6 @@ class Roam(AsyncBehaviour):
         else:
             self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
                     self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
-
-    def _accelerate(self):
-        self._log.info("accelerate…")
-        if self._motor_controller:
-            self._motor_controller.accelerate(self._default_speed, enabled=lambda: not self._stop_event.is_set())
-
-    def _decelerate(self):
-        self._log.info("decelerate…")
-        if self._motor_controller:
-            self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
 
     def enable(self):
         if self.enabled:

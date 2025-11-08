@@ -107,40 +107,13 @@ class Radiozoa(AsyncBehaviour):
         return False
 
     def execute(self, message):
-        print('execute message {}.'.format(message))
-        raise Exception('UNSUPPORTED execute') # TEMP
-#       if self.suppressed:
-#           self._log.info(Style.DIM + 'radiozoa suppressed; message: {}'.format(message.event.label))
-#       else:
-#           self._log.info('radiozoa execute; message: {}'.format(message.event.label))
-#           _payload = message.payload
-#           _event = _payload.event
-#           _timestamp = self._message_bus.last_message_timestamp
-#           if _timestamp is None:
-#               self._log.info('radiozoa loop execute; no previous messages.')
-#           else:
-#               _elapsed_ms = (time.time() - _timestamp.timestamp()) * 1000.0
-#               self._log.info('radiozoa loop execute; message age: {:7.2f} ms'.format(_elapsed_ms))
-#           if self.enabled:
-#               self._log.info('radiozoa enabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
-#           else:
-#               self._log.info('radiozoa disabled, execution on message {}; '.format(message.name) + Fore.YELLOW + ' event: {};'.format(_event.label))
-
-    def _accelerate(self):
-        self._log.info("accelerate…")
-        if self._motor_controller:
-            self._motor_controller.accelerate(self._default_speed, enabled=lambda: not self._stop_event.is_set())
-
-    def _decelerate(self):
-        self._log.info("decelerate…")
-        if self._motor_controller:
-            self._motor_controller.decelerate(0.0, enabled=lambda: not self._stop_event.is_set())
+        raise NotImplementedError('execute unsupported in Radiozoa.')
 
     def start_loop_action(self):
-        self._accelerate()
+        pass
 
     def stop_loop_action(self):
-        self._decelerate()
+        pass
 
     def _dynamic_set_default_speed(self):
         _speed = self._digital_pot.get_scaled_value(False) # values 0.0-1.0

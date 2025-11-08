@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-04
-# modified: 2025-11-07
+# modified: 2025-11-09
 
 import sys
 import time
@@ -74,12 +74,6 @@ class Scan(AsyncBehaviour):
             _high_brightness   = 0.45
             self._matrix11x7 = Matrix11x7()
             self._matrix11x7.set_brightness(_medium_brightness)
-        # eyeballs
-        self._use_eyeballs = True
-        self._eyeballs = None
-        if self._use_eyeballs:
-            from hardware.eyeballs import Eyeballs
-            self._eyeballs = _component_registry.get(Eyeballs.NAME)
         # scan state (uses RotationController's phase tracking)
         self._scan_active = False
         self._data_collection_active = False
@@ -154,26 +148,17 @@ class Scan(AsyncBehaviour):
         Controls when data collection is active.
         '''
         self._log.info('rotation phase change: {} → {}'.format(old_phase.name, new_phase.name))
-
         if new_phase == RotationPhase.ROTATE:
             # entering constant-speed rotation - start data collection
             self._log.info(Fore.GREEN + 'entering ROTATE phase, starting data collection')
             self._data_collection_active = True
-            if self._eyeballs:
-                self._eyeballs.look_stbd()
-
         elif old_phase == RotationPhase.ROTATE and new_phase == RotationPhase.DECEL:
             # exiting constant-speed rotation - stop data collection
             self._log.info(Fore.YELLOW + 'exiting ROTATE phase, stopping data collection')
             self._data_collection_active = False
-            if self._eyeballs:
-                self._eyeballs.look_down()
-
         elif new_phase == RotationPhase.IDLE:
             # rotation complete
             self._log.info(Fore.GREEN + 'rotation complete, processing scan data')
-            if self._eyeballs:
-                self._eyeballs.normal()
             self._process_and_publish_results()
             self._scan_active = False
             self.suppress() # we're done so suppress until we receive another STUCK message
@@ -184,31 +169,21 @@ class Scan(AsyncBehaviour):
         Calculates total rotation needed for 360° of constant-speed data collection.
         '''
         self._log.info(Fore.GREEN + 'initiating scan…')
-
         # mark where we started
         self._stuck_heading_marker = self._rotation_controller.push_heading_marker('stuck')
-
         self._scan_readings = []
         self._scan_active = True
         self._data_collection_active = False
-
         # calculate total rotation needed: accel + 360° scan + decel
         accel = self._rotation_controller.accel_degrees
         decel = self._rotation_controller.decel_degrees
         total_rotation = accel + 360.0 + decel
-
         self._log.info('requesting {:.1f}° total rotation (accel={:.1f}°, scan=360.0°, decel={:.1f}°)'.format(
             total_rotation, accel, decel))
-
         # register for phase change notifications
         self._rotation_controller.add_phase_change_callback(self._on_rotation_phase_change)
-
         # request rotation
         self._rotation_controller.rotate(total_rotation, Rotation.CLOCKWISE)
-
-        if self._eyeballs:
-            self._eyeballs.look_up()
-
         self._log.info(Fore.GREEN + 'scan initiated')
 
     def start_loop_action(self):
@@ -231,32 +206,24 @@ class Scan(AsyncBehaviour):
         if not self._scan_active:
             self._log.warning('poll: scan not active')
             return
-
         try:
             # poll rotation controller
             current_time, elapsed, accumulated_rotation = self._rotation_controller.poll()
-
             # delegate phase handling to RotationController
             phase = self._rotation_controller.rotation_phase
-
             if phase == RotationPhase.ACCEL:
                 self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
-
             elif phase == RotationPhase.ROTATE:
                 self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
-
                 # capture VL53L5CX data during constant-speed rotation
                 if self._data_collection_active:
                     self._capture_sensor_data(accumulated_rotation, current_time)
-
             elif phase == RotationPhase.DECEL:
                 self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
-
             if self._verbose and next(self._counter) % 5 == 0:
                 self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(
                     phase.name, accumulated_rotation,
                     self._rotation_controller.intent_vector[2]))
-
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self._rotation_controller.cancel_rotation()
@@ -271,18 +238,15 @@ class Scan(AsyncBehaviour):
         if distance_mm is not None:
             # log current scan angle
             if next(self._counter) % 10 == 0:
-                self._log.info('🐹 scan at {:.1f}°'.format(accumulated_rotation))
-
+                self._log.info('scan at {:.1f}°'.format(accumulated_rotation))
             # compute representative distance for display
             non_floor_rows = self._vl53l5cx.non_floor_rows
             distances_array = np.array(distance_mm).reshape(8, 8)
             obstacle_distances = distances_array[non_floor_rows, :]
             avg_distance_mm = obstacle_distances.mean()
             avg_distance_cm = int(avg_distance_mm / 10.0)
-
             # display distance in cm
             self._display_distance(avg_distance_cm)
-
             # store reading with angle relative to scan start (0-360)
             self._scan_readings.append({
                 'angle': accumulated_rotation,
@@ -308,18 +272,15 @@ class Scan(AsyncBehaviour):
         if len(self._scan_readings) == 0:
             self._log.warning('no scan readings captured')
             return {}
-
         # initialize slices
         num_slices = int(360.0 / self._angular_resolution)
         slices = {i: {'samples': [], 'angles': []} for i in range(num_slices)}
-
         # bin readings into slices
         for reading in self._scan_readings:
             angle = reading['angle']
             slice_idx = int(angle / self._angular_resolution) % num_slices
             slices[slice_idx]['samples'].append(np.array(reading['distance_mm']).reshape(8, 8))
             slices[slice_idx]['angles'].append(angle)
-
         # average samples within each slice
         processed = {}
         for idx, data in slices.items():
@@ -332,7 +293,6 @@ class Scan(AsyncBehaviour):
                 }
             else:
                 self._log.warning('slice {} has no samples'.format(idx))
-
         self._log.info('processed {} slices from {} readings'.format(
             len(processed), len(self._scan_readings)))
         return processed
@@ -345,41 +305,32 @@ class Scan(AsyncBehaviour):
         '''
         non_floor_rows = self._vl53l5cx.non_floor_rows
         self._log.info('analyzing scan using non-floor rows: {}'.format(non_floor_rows))
-
         # find slice with maximum average distance
         best_slice_idx = None
         max_avg_distance = 0.0
-
         for idx, slice_data in self._scan_slices.items():
             angle = slice_data['angle']
             distances = slice_data['avg_distance'][non_floor_rows, :]
             avg_distance = distances.mean()
-
             if avg_distance > max_avg_distance:
                 max_avg_distance = avg_distance
                 best_slice_idx = idx
-
             if self._verbose:
                 self._log.info('slice {}: angle={:.1f}°, avg_distance={:.0f}mm, samples={}'.format(
                     idx, angle, avg_distance, slice_data['sample_count']))
-
         if best_slice_idx is not None:
             # best angle relative to scan start (0-360)
             chosen_heading = self._scan_slices[best_slice_idx]['angle']
-
             self._log.info('chosen heading: {:.1f}° (slice {}, avg_distance={:.0f}mm)'.format(
                 chosen_heading, best_slice_idx, max_avg_distance))
         else:
             # no valid slices - default to straight ahead
             chosen_heading = 0.0
             self._log.warning('no valid scan data, defaulting to 0° heading')
-
         # display final chosen heading on matrix
         self._display_distance(int(chosen_heading))
-
         # publish SCAN message with chosen heading
         self._publish_message(chosen_heading)
-
         # cleanup: remove phase change callback
         self._rotation_controller.remove_phase_change_callback(self._on_rotation_phase_change)
 

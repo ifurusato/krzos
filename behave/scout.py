@@ -172,12 +172,10 @@ class Scout(AsyncBehaviour):
         return self._calculate_priority(max_open_distance)
 
     def callback(self):
-        self._log.info('scout behaviour callback.')
-        raise Exception('UNSUPPORTED callback')
+        raise NotImplementedError('callback unsupported in Scout.')
 
     def execute(self, message):
-        print('execute message {}.'.format(message))
-        raise Exception('UNSUPPORTED execute')
+        raise NotImplementedError('execute unsupported in Scout.')
 
     def start_loop_action(self):
         pass  # scout doesn't accelerate forward

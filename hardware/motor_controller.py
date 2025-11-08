@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-10-05
-# modified: 2025-10-13
-#
+# modified: 2025-11-09
 
 import sys, traceback
 import time
@@ -100,6 +99,13 @@ class MotorController(Component):
         self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
         self._halt_slew_rate = SlewRate.from_string(_cfg.get('halt_rate'))
         self._log.info('halt rate: {}'.format(self._halt_slew_rate.name))
+        # eyeballs monitor
+        self._use_eyeballs = _cfg.get('use_eyeballs', False)
+        self._eyeballs_monitor = None
+        if self._use_eyeballs:
+            from hardware.eyeballs_monitor import EyeballsMonitor
+            self._eyeballs_monitor = EyeballsMonitor(self, level=level)
+            self._log.info('eyeballs monitor configured.')
         # slew limiters are on motors, not here
         self._slew_limiter_enabled = config['kros'].get('motor').get('enable_slew_limiter')
         _create_ext_clock    = _cfg.get('create_external_clock')
@@ -302,40 +308,6 @@ class MotorController(Component):
         avg_vector = tuple(s / len(vectors) for s in sum_vector)
         return avg_vector
 
-    def _weighted_blend_intent_vectors(self):
-        '''
-        Blends all registered intent vectors using magnitude-weighted averaging.
-
-        Each behavior returns (vx, vy, omega). The magnitude of the (vx, vy) vector
-        serves as its weight in the blend. Omega is blended using the same weights
-        but doesn't contribute to the weight calculation itself.
-
-        Behaviors with stronger sensor confidence naturally output larger
-        magnitudes and thus have more influence. Zero or near-zero magnitude
-        vectors don't participate in the blend.
-        '''
-        vectors = [fn() for fn in self._intent_vectors.values()]
-        if not vectors:
-            return (0.0, 0.0, 0.0)
-        weighted_sum = [0.0, 0.0, 0.0]
-        total_weight = 0.0
-        for i, (name, fn) in enumerate(self._intent_vectors.items()):
-            v = fn()
-            if len(v) != 3:
-                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
-            vx, vy, omega = v
-            # magnitude based on motion vector only (vx, vy), NOT omega
-            magnitude = (vx**2 + vy**2) ** 0.5
-            if not isclose(magnitude, 0.0, abs_tol=1e-6):
-                total_weight += magnitude
-                weighted_sum[0] += vx * magnitude
-                weighted_sum[1] += vy * magnitude
-                weighted_sum[2] += omega * magnitude
-        if total_weight > 0.0:
-            result = tuple(s / total_weight for s in weighted_sum)
-            return result
-        return (0.0, 0.0, 0.0)
-
     def is_closed_loop(self):
         return self._closed_loop
 
@@ -422,6 +394,8 @@ class MotorController(Component):
         else:
             self._log.info('enabling motor controller…')
             Component.enable(self)
+            if self._eyeballs_monitor:
+                self._eyeballs_monitor.enable()
             if self._external_clock:
                 self._external_clock.add_callback(self._external_callback_method)
                 for _motor in self._all_motors:
@@ -521,7 +495,6 @@ class MotorController(Component):
           - write final speeds into Motor.target_speed and call update_target_speed()
         '''
         intent = self._blend_intent_vectors()
-#       intent = self._weighted_blend_intent_vectors()
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         vx, vy, omega = intent
@@ -572,6 +545,9 @@ class MotorController(Component):
         self._state_change_check()
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()
+        # update eyeballs monitor
+        if self._eyeballs_monitor:
+            self._eyeballs_monitor.update()
 
     def _motor_loop(self, f_is_enabled):
         '''
@@ -596,70 +572,6 @@ class MotorController(Component):
             self._motor_tick()
         else:
             pass
-
-    def accelerate(self, target_speed, enabled=None):
-        '''
-        Gradually accelerate from the current speed to the target speed
-        using the provided slew rate (step size and delay).
-
-        Args:
-            target_speed (float):  Desired lower speed.
-            enabled (callable):    A function or lambda returning a bool that
-                                   determines whether deceleration should continue.
-        '''
-        if not callable(enabled):
-            raise TypeError("argument 'enabled' must be a lambda function.")
-        port_speed = self.get_mean_speed(Orientation.PORT)
-        stbd_speed = self.get_mean_speed(Orientation.STBD)
-        if port_speed < 0 or stbd_speed < 0:
-            self._log.warning('Cannot accelerate: robot not stopped or moving forward.')
-            return
-        elif port_speed >= target_speed or stbd_speed >= target_speed:
-            self._log.warning('Cannot accelerate: already at or above target speed.')
-            return
-        while enabled() and (port_speed < target_speed or stbd_speed < target_speed):
-            self.set_differential_speeds(
-                min(port_speed + self._accel_step, target_speed),
-                min(stbd_speed + self._accel_step, target_speed))
-            time.sleep(self._accel_step_delay_ms / 1000.0)
-            port_speed = self.get_mean_speed(Orientation.PORT)
-            stbd_speed = self.get_mean_speed(Orientation.STBD)
-            if isclose(port_speed, target_speed, rel_tol=1e-3, abs_tol=1e-3) and \
-               isclose(stbd_speed, target_speed, rel_tol=1e-3, abs_tol=1e-3):
-                break
-
-    def decelerate(self, target_speed=0.0, step=0.02, step_delay_ms=20, enabled=None):
-        '''
-        Gradually decelerate from the current speed to the target speed
-        using the provided slew rate (step size and delay).
-
-        Args:
-            target_speed (float):  Desired lower speed.
-            step (int):            How much to decrease the motor speed upon each step.
-            step_delay_ms (int):   The delay in milliseconds for each step.
-            enabled (callable):    A function or lambda returning a bool that
-                                   determines whether deceleration should continue.
-        '''
-        if not callable(enabled):
-            raise TypeError("Argument 'enabled' must be a callable (e.g., a lambda returning a bool).")
-        port_speed = self.get_mean_speed(Orientation.PORT)
-        stbd_speed = self.get_mean_speed(Orientation.STBD)
-        if port_speed < 0 or stbd_speed < 0:
-            self._log.warning('Cannot decelerate: robot not stopped or traveling backward.')
-            return
-        if port_speed <= target_speed or stbd_speed <= target_speed:
-            self._log.warning('Cannot decelerate: already at or below target speed.')
-            return
-        while enabled() and (port_speed > target_speed or stbd_speed > target_speed):
-            self.set_differential_speeds(
-                max(port_speed - self._decel_step, target_speed),
-                max(stbd_speed - self._decel_step, target_speed))
-            time.sleep(self._decel_step_delay_ms / 1000.0)
-            port_speed = self.get_mean_speed(Orientation.PORT)
-            stbd_speed = self.get_mean_speed(Orientation.STBD)
-            if isclose(port_speed, target_speed, rel_tol=1e-3, abs_tol=1e-3) and \
-               isclose(stbd_speed, target_speed, rel_tol=1e-3, abs_tol=1e-3):
-                break
 
     def add_state_change_callback(self, callback):
         '''
@@ -987,6 +899,8 @@ class MotorController(Component):
         Disable the motors.
         '''
         if self.enabled:
+            if self._eyeballs_monitor:
+                self._eyeballs_monitor.disable()
             # safely clear all external intent vectors before braking
             # during shutdown, no external behaviors should be influencing motor control
             self._log.info('clearing all external intent vectors before brake…')

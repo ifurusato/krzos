@@ -124,6 +124,7 @@ kros:
     motor_controller:
         closed_loop:                       True            # open or closed loop control
         create_external_clock:             True            # create external clock if not provided
+        use_eyeballs:                      True            # enable eyeballs monitor for direction display
         loop_freq_hz:                        20            # main loop delay in hz (only used when no ext clock)
         verbose:                          False            # noisy messaging
         halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
