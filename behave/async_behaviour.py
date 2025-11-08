@@ -105,7 +105,7 @@ class AsyncBehaviour(Behaviour):
         '''
         Behaviour.suppress(self)
         self._remove_intent_vector()
-        self._log.info("radiozoa suppressed.")
+        self._log.info('suppressed.')
 
     def release(self):
         '''
@@ -154,7 +154,7 @@ class AsyncBehaviour(Behaviour):
                 if not self.suppressed:
                     await self._poll()
                 else:
-                    self._log.info(Fore.WHITE + "suppressed…")
+                    self._log.info(Style.DIM + "suppressed…")
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break

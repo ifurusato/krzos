@@ -7,43 +7,51 @@
 #
 # author:   Murray Altheim
 # created:  2020-05-19
-# modified: 2025-05-08
+# modified: 2025-11-08
 #
 
-from abc import ABC, abstractmethod
 import itertools
 import asyncio
-import traceback
 from datetime import datetime as dt
 from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
 from core.component import Component
-from core.subscriber import Subscriber
-from core.util import Util
 from core.event import Event, Group
-from core.fsm import State
 from behave.behaviour import Behaviour
 from core.publisher import Publisher
+from hardware.eyeballs_monitor import EyeballsMonitor
+from hardware.eyeball import Eyeball
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Idle(Behaviour, Publisher):
     NAME = 'idle'
     _LISTENER_LOOP_NAME = '__idle_listener_loop'
-
     '''
-    Extends both Behaviour and Publisher to implement a idle behaviour.
-    This polls the MessageBus value for last message timestamp, and
-    after a certain amount of time has passed with no sensor events it
-    then triggers publication of an Event.IDLE message with a value of
-    False (inactive).
+    Monitors MessageBus activity and publishes IDLE events when the robot
+    has been inactive for a threshold period.
+    
+    This behavior acts as a persistent "nudge" mechanism: if the robot sits
+    idle (no sensor activity, no movement), Idle publishes an Event.IDLE
+    message every threshold period (e.g., every 20 seconds) until activity
+    resumes. This triggers BehaviourManager to release suppressed behaviors,
+    creating conditions where movement becomes possible.
+    
+    Idle does not guarantee robot movement - it only signals inactivity and
+    requests behavior activation. Movement depends on:
 
-    As a Behaviour, this is also a Subscriber to the MessageBus so that
-    it can capture messages in order to subsequently publish an
-    Event.IDLE message with a value of True (active).
-
-    :param name:            the name of this behaviour
+      - Roam being enabled/released
+      - Speed control (digital pot) being non-zero
+      - Robot not being physically stuck
+      - Clear path forward
+    
+    IDLE message payload: elapsed time in seconds since last activity (float)
+    
+    When idle state is detected, sets EyeballsMonitor to SLEEPY expression.
+    When activity resumes, clears EyeballsMonitor override to resume motor
+    direction display.
+    
     :param config:          the application configuration
     :param message_bus:     the asynchronous message bus
     :param message_factory: the factory for messages
@@ -51,222 +59,183 @@ class Idle(Behaviour, Publisher):
     '''
     def __init__(self, config, message_bus=None, message_factory=None, level=Level.INFO):
         if message_bus is None:
-            raise ValueException('no message bus argument.')
+            raise ValueError('no message bus argument.')
         if message_factory is None:
-            raise ValueException('no message factory argument.')
-#       self._config = config
-        self._idle_loop_running   = False
-        _component_registry = Component.get_registry()
-        # get queue publisher for initial message
-        self._queue_publisher = _component_registry.get('pub:queue')
-        if self._queue_publisher is None:
-            raise Exception('no queue publisher available.')
-        self._eyeballs = _component_registry.get('eyeballs')
-        Behaviour.__init__(self, Idle.NAME, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
-        Publisher.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
+            raise ValueError('no message factory argument.')
+        Behaviour.__init__(self, Idle.NAME, config, message_bus, message_factory, 
+                          suppressed=True, enabled=False, level=level)
+        Publisher.__init__(self, self._log, config, message_bus, message_factory, 
+                          suppressed=True, enabled=False, level=level)
         # configuration
-        _cfg = self._config['kros'].get('behaviour').get('idle')
-        self._idle_threshold_sec  = _cfg.get('idle_threshold_sec') # int value
-        self._log.info('idle threshold: {:d} sec.'.format(self._idle_threshold_sec))
-        _loop_freq_hz             = _cfg.get('loop_freq_hz')
-        self._idle_loop_delay_sec = 1.0 / _loop_freq_hz
-        self._log.info('idle loop frequency: {:d}Hz.'.format(_loop_freq_hz))
+        _cfg = config['kros']['behaviour']['idle']
+        self._idle_threshold_sec = _cfg.get('idle_threshold_sec')
+        self._loop_freq_hz = _cfg.get('loop_freq_hz', 1)
+        self._idle_loop_delay_sec = 1.0 / self._loop_freq_hz
+        self._log.info('idle threshold: {:d}s; loop freq: {:d}Hz'.format(
+            self._idle_threshold_sec, self._loop_freq_hz))
+        # components
+        _registry = Component.get_registry()
+        self._eyeballs_monitor = _registry.get(EyeballsMonitor.NAME)
+        if self._eyeballs_monitor is None:
+            self._log.warning('eyeballs monitor not available.')
+        # state tracking
         self._counter = itertools.count()
-        self._is_idle             = False
-        self._value               = None
-        self._elapsed_sec         = 0.0
-        # subscribe to all non-IDLE events
-        self.add_events([member for member in Group if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
+        self._last_activity_time = None      # datetime of last non-IDLE message
+        self._last_idle_publish_time = None  # datetime of last IDLE message published
+        self._idle_loop_running = False
+        # subscribe to all non-IDLE events to detect activity
+        self.add_events([member for member in Group 
+                        if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
         self._log.info('ready.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def name(self):
         return Idle.NAME
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def is_idle(self):
-        return self._is_idle
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def elapsed_seconds(self):
         '''
-        Return the number of elapsed seconds since the last message was
-        received by the message bus.
+        Return the number of elapsed seconds since the last activity.
         '''
-        return self._elapsed_sec
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def release(self):
-        Component.release(self)
-        self._log.debug('released.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def suppress(self):
-        Component.suppress(self)
-        self._log.debug('suppressed.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def start(self):
-        '''
-        The necessary state machine call to start the publisher, which performs
-        any initialisations of active sub-components, etc.
-        '''
-        if self.state is not State.STARTED:
-            Publisher.start(self)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if self._last_activity_time is None:
+            return 0.0
+        return (dt.now() - self._last_activity_time).total_seconds()
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if self.enabled:
-            self._log.debug('already enabled idle publisher.')
+            self._log.debug('already enabled.')
             return
-        self._log.info(Fore.WHITE + 'enabling idle…')
+        self._log.info('enabling idle…')
+        Behaviour.enable(self)
         Publisher.enable(self)
-        if self._message_bus.get_task_by_name(Idle._LISTENER_LOOP_NAME) or self._idle_loop_running:
-            self._log.warning('message bus already had idle task.')
+        # initialize activity timer
+        self._last_activity_time = dt.now()
+        self._last_idle_publish_time = None
+        # create async listener loop task
+        if self._message_bus.get_task_by_name(Idle._LISTENER_LOOP_NAME):
+            self._log.warning('idle listener loop task already exists.')
         else:
-            self._log.info('creating task for idle listener loop…')
+            self._log.info('creating idle listener loop task…')
             self._idle_loop_running = True
-            self._message_bus.loop.create_task(self._idle_listener_loop(lambda: self.enabled), name=Idle._LISTENER_LOOP_NAME)
-            self._log.info('enabled.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            self._message_bus.loop.create_task(
+                self._idle_listener_loop(lambda: self.enabled), 
+                name=Idle._LISTENER_LOOP_NAME
+            )
+        self._log.info('enabled.')
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _idle_listener_loop(self, f_is_enabled):
-        self._log.info('starting idle listener loop:\t' + Fore.YELLOW + 'idle threshold: {:d} sec'.format(self._idle_threshold_sec)
-                + ( '; (suppressed, type \'u\' to release)' if self.suppressed else '.') )
-#       self.suppress()
-        self._hello()
+        '''
+        Main loop: monitors time since last activity and publishes IDLE events
+        when threshold is exceeded. Continues publishing every threshold period
+        until activity resumes.
+        '''
+        self._log.info('idle listener loop started (threshold: {:d}s)'.format(
+            self._idle_threshold_sec))
         while f_is_enabled():
             _count = next(self._counter)
-            self._log.debug('[{:005d}] begin idle loop…; suppressed? {}'.format(_count, self.suppressed))
-            if not self.suppressed:
-                # check for last message's timestamp
-                _timestamp = self._message_bus.last_message_timestamp
-                if _timestamp is None:
-                    self._log.info('[{:005d}] idle inactive; '.format(_count) + Style.DIM + ' no previous messages.')
-                else:
-                    '''
-                    If we've passed the idle threshold then send an IDLE message, which will toggle the
-                    suppressed/released state of the Idle handler.
-                    '''
-                    _elapsed_ms = (dt.now() - _timestamp).total_seconds() * 1000.0
-                    self._elapsed_sec = _elapsed_ms / 1000.0
-#                   self._log.info(Style.DIM + 'elapsed: {:4.02f}s'.format(self._elapsed_sec))
-                    if self._elapsed_sec > self._idle_threshold_sec:
-                        if self._is_idle:
-#                           self._log.info(Style.DIM + '[{:005d}] already idle.'.format(_count))
-                            pass
-                        else:
-                            # change state only if not already idle
-                            self._is_idle = True
-                            self._log.info('[{:005d}] idle threshold met; '.format(_count)
-                                    + Fore.YELLOW + '{}'.format(Util.get_formatted_time('elapsed time since last message:', _elapsed_ms)))
-
-                            _message = self._message_factory.create_message(Event.IDLE, False)
-                            self._log.info('idle publishing message for event: {}; value: {}'.format(_message.event.name, _message.value))
-
-                            self._log.debug('key-publishing message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
-                            await Publisher.publish(self, _message)
-                            self._log.debug('key-published message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
-                            if self._eyeballs:
-                                self._eyeballs.sleepy()
-#                           Player.play(Sound.SIGH)
-
-                    elif self._is_idle:
-                        if _count % 10 == 0:
-                            self._log.info(Style.DIM + '[{:005d}] idle; '.format(_count)
-                                    + Style.DIM + '{}'.format(Util.get_formatted_time('elapsed time since last message:', _elapsed_ms)))
-                    else:
-                        if _count % 5 == 0:
-                            self._log.info(Fore.BLUE + '[{:005d}] waiting; '.format(_count)
-                                    + Style.DIM + '{}'.format(Util.get_formatted_time('elapsed time since last message:', _elapsed_ms)))
+            if self.suppressed:
+                if _count % 10 == 0:
+                    self._log.debug('[{:05d}] idle suppressed.'.format(_count))
+                await asyncio.sleep(self._idle_loop_delay_sec)
+                continue
+            # calculate elapsed time since last activity
+            elapsed_sec = self.elapsed_seconds
+            if elapsed_sec >= self._idle_threshold_sec:
+                # robot is idle - check if we should publish
+                if self._should_publish_idle():
+                    await self._publish_idle(elapsed_sec)
+                elif _count % 10 == 0:
+                    self._log.debug('[{:05d}] idle ({:.1f}s)'.format(_count, elapsed_sec))
             else:
-                self._log.info(Fore.BLACK + '[{:005d}] idle suppressed.'.format(_count))
-
+                # robot is active
+                if _count % 20 == 0:
+                    self._log.debug('[{:05d}] active ({:.1f}s since last activity)'.format(
+                        _count, elapsed_sec))
             await asyncio.sleep(self._idle_loop_delay_sec)
-            self._log.debug('[{:005d}] end idle loop.'.format(_count))
-
-        self._log.info('idle loop complete.')
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _hello(self):
+        self._log.info('idle listener loop complete.')
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _should_publish_idle(self):
         '''
-        Publishes an initial IDLE message so that it can be used to calculate
-        the elapsed time, otherwise the idle process cannot begin.
+        Return True if we should publish an IDLE message.
+        
+        Publish on first idle detection, then every threshold period while
+        idle condition persists.
         '''
-        self._log.info('publishing initial idle message…')
-        try:
-            _message = self._message_factory.create_message(Event.IDLE, False)
-            self._queue_publisher.put(_message)
-        except Exception as e:
-            self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if self._last_idle_publish_time is None:
+            return True  # first time crossing threshold
+        elapsed_since_publish = (dt.now() - self._last_idle_publish_time).total_seconds()
+        return elapsed_since_publish >= self._idle_threshold_sec
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    async def _publish_idle(self, elapsed_sec):
+        '''
+        Publish IDLE message with elapsed time as payload.
+        Sets eyeballs to SLEEPY on first publish.
+        '''
+        self._log.info('🔔 publishing IDLE message ({:.1f}s elapsed)'.format(elapsed_sec))
+        # set eyeballs to sleepy (only on first idle detection)
+        if self._last_idle_publish_time is None and self._eyeballs_monitor:
+            self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
+            self._log.debug('eyeballs set to SLEEPY')
+        # publish IDLE message with elapsed time as payload
+        _message = self._message_factory.create_message(Event.IDLE, elapsed_sec)
+        await self.publish(_message)
+        # track when we published
+        self._last_idle_publish_time = dt.now()
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
         '''
-        Process the message. If it's not an IDLE message this indicates activity.
-
-        A Subscriber method.
-
-        :param message:  the message to process.
+        Process non-IDLE messages: any activity resets the idle timer.
+        If transitioning from idle to active, clear eyeballs override.
         '''
         if message.gcd:
-            raise GarbageCollectedError('cannot process message: message has been garbage collected.')
+            raise GarbageCollectedError('cannot process message: garbage collected.')
         _event = message.event
         if _event.group == Group.IDLE:
-            self._log.warning('unexpected IDLE message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
-            # we shouldn't see this but do nothing
+            # ignore our own IDLE messages (prevent feedback loop)
+            pass
         else:
-            if self._is_idle:
-                # indicates a state-change activity, so publish an IDLE message
-                self._is_idle = False
-                self._log.debug('group: {}: message {}; '.format(_event.group.name, message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
-                self._log.info(Fore.YELLOW + '🔶 activity after {:4.2f} seconds of being idle.'.format(self.elapsed_seconds))
-                _message = self._message_factory.create_message(Event.IDLE, True)
-                self._queue_publisher.put(_message)
-                if self._eyeballs:
-                    self._eyeballs.happy()
-#               Player.play(Sound.GLITCH)
-
+            # any non-IDLE message indicates activity
+            was_idle = self.elapsed_seconds >= self._idle_threshold_sec
+            # reset activity timer
+            self._last_activity_time = dt.now()
+            self._last_idle_publish_time = None  # reset publish tracker
+            # if transitioning from idle to active, clear eyeballs
+            if was_idle:
+                if self._eyeballs_monitor:
+                    self._eyeballs_monitor.clear_eyeballs()
+                    self._log.debug('eyeballs override cleared')
+                self._log.info('☀️  activity resumed after {:.1f}s idle'.format(
+                    self.elapsed_seconds))
         await Subscriber.process_message(self, message)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def execute(self, message):
         '''
-        The method called upon each loop iteration when in EXECUTE mode.
-
-        :param message:  an optional Message passed along by the message bus
+        Behaviour.execute() - not used by Idle.
+        
+        Idle operates via process_message() as a Subscriber and publishes
+        directly via Publisher.publish(), bypassing the execute pattern.
         '''
-        self._log.info(Fore.YELLOW + 'idle execute…')
-        if self.suppressed:
-            self._log.info(Style.DIM + 'idle execute() SUPPRESSED; message: {}'.format(message.event.name))
-        else:
-            self._log.info('idle execute() RELEASED; message: {}'.format(message.event.name))
-            _payload = message.payload
-            _event   = _payload.event
-            if _event.group is Group.IDLE:
-                self._value = _payload.value
-                if self.enabled:
-#                   self._log.info('idle enabled.')
-                    self._log.info('🦋 idle enabled; value: {}.'.format(self._value))
-                else:
-#                   self._log.info('idle disabled.')
-                    self._log.info('🧈 idle disabled; value: {}.'.format(self._value))
-            else:
-                raise ValueError('expected IDLE event not: {}'.format(message.event.name))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        pass
+    
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
-        '''
-        Disable this publisher.
-        '''
         if not self.enabled:
             self._log.debug('already disabled.')
             return
-        if self._eyeballs:
-            self._eyeballs.clear()
+        
+        self._log.info('disabling idle…')
+        # clear eyeballs if currently showing SLEEPY
+        if self._eyeballs_monitor and self._last_idle_publish_time is not None:
+            self._eyeballs_monitor.clear_eyeballs()
+        self._idle_loop_running = False
         Behaviour.disable(self)
         Publisher.disable(self)
         self._log.info('disabled.')

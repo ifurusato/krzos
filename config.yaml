@@ -39,8 +39,8 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
@@ -49,8 +49,8 @@ kros:
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
         idle:
-            enable:                     False              # enable idle behaviour
-            release:                    False              # release idle behaviour on startup
+            enable:                      True              # enable idle behaviour
+            release:                     True              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
             enable:                     False              # enable radiozoa behaviour
@@ -64,7 +64,7 @@ kros:
             settling_threshold_mm:         60              # 30; all pairs within this is considered settled
         roam:
             enable:                      True              # enable roam behaviour
-            release:                     True              # release roam behaviour on startup
+            release:                    False              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -88,8 +88,8 @@ kros:
             minimum_steering_speed:         0.4            # minimum speed when steering around obstacles
             heading_mode:             'RELATIVE'           # RELATIVE or ABSOLUTE
         swerve:
-            enable:                      True              # enable swerve behaviour
-            release:                     True              # release swerve behaviour on startup
+            enable:                     False              # enable swerve behaviour
+            release:                    False              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed
@@ -100,6 +100,8 @@ kros:
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.9              # priority when obstacles very close (bumper)
             deadband_threshold:           0.02             # ignore vx below this value
+    behaviour_manager:
+            release_on_startup:           True             # if True, enable/release on startup as per config
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop

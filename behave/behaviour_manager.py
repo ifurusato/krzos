@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-02-16
-# modified: 2025-10-11
+# modified: 2025-11-09
 
 import traceback
 import os, inspect, importlib.util # to locate Behaviours
@@ -51,8 +51,12 @@ class BehaviourManager(Subscriber):
             raise ValueError('wrong type for log level argument: {}'.format(type(level)))
         self._level            = level
         self._was_suppressed   = None
+        _cfg = config['kros'].get('behaviour_manager')
         self._clip_event_list  = True #_cfg.get('clip_event_list') # used for printing only
         self._clip_length      = 42   #_cfg.get('clip_length')
+        self._release_on_startup = _cfg.get('release_on_startup')
+        self.add_event(Event.IDLE)
+        self._log.info('subscribed to IDLE events.')
         self._configured_behaviour_names = list(self._config['kros']['behaviour'].keys())
         self._find_behaviours()
         self._log.info('ready.')
@@ -143,7 +147,7 @@ class BehaviourManager(Subscriber):
         Each behaviour is enabled/released according to its own section under kros.behaviour.
         '''
         if not self.closed:
-            self._log.info('enable all behaviours…')
+            self._log.info(Fore.MAGENTA + 'enable/release all behaviours…')
             _behaviour_cfg = self._config['kros']['behaviour']
             for _behaviour in self.get_behaviours():
                 _settings = _behaviour_cfg.get(_behaviour.name, {})
@@ -254,11 +258,22 @@ class BehaviourManager(Subscriber):
         _event = message.event
         if message.gcd:
             raise GarbageCollectedError('cannot process message: message has been garbage collected. [3]')
-        self._log.info(Fore.MAGENTA + 'pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
+        # handle IDLE events
+        if _event == Event.IDLE:
+            elapsed = message.value
+            self._log.info('🔔 IDLE threshold exceeded ({:.1f}s) - releasing suppressed behaviors'.format(elapsed))
+            self.release_all_behaviours()
+        else:
+            self._log.info(Fore.MAGENTA + 'pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
         self._log.debug('awaiting subscriber process_message {}.'.format(_event.name))
         await Subscriber.process_message(self, message)
         self._log.debug('complete: awaited subscriber process_message {}.'.format(_event.name))
         self._log.debug('post-processing message {}'.format(message.name))
+#       self._log.info(Fore.MAGENTA + 'pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
+#       self._log.debug('awaiting subscriber process_message {}.'.format(_event.name))
+#       await Subscriber.process_message(self, message)
+#       self._log.debug('complete: awaited subscriber process_message {}.'.format(_event.name))
+#       self._log.debug('post-processing message {}'.format(message.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_info(self):
@@ -284,11 +299,14 @@ class BehaviourManager(Subscriber):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
-        Enable the behaviour manager and all behaviours.
+        Enable the behaviour manager. If the release on startup flag is
+        True, enables and/or releases all behaviours depending upon the
+        configuration.
         '''
-        self._log.info('enabling behaviour manager and all behaviours…')
-#       self.release_all_behaviours()
-        self.enable_all_behaviours()
+        self._log.info('enabling behaviour manager…')
+        if self._release_on_startup:
+#           self.release_all_behaviours()
+            self.enable_all_behaviours()
         Subscriber.enable(self)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
