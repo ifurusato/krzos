@@ -51,6 +51,7 @@ class SwerveSensor(Component):
         self._min_distance = _cfg.get('min_distance', 100)  # mm
         self._max_distance = _cfg.get('max_distance', 500)  # mm
         self._additional_floor_rows = _cfg.get('additional_floor_rows', 1)  # extra margin beyond calibration
+        self._exclude_rows = _cfg.get('exclude_rows', [])  # rows to exclude from sampling
         # smoothing
         self._smoothing = _cfg.get('smoothing', True)
         _smoothing_window = _cfg.get('smoothing_window', 3)
@@ -108,6 +109,14 @@ class SwerveSensor(Component):
             return None
         try:
             grid = np.array(data).reshape((8, 8))
+
+            # DIAGNOSTIC: Show ALL sampled values with their row/col
+            for row in self._non_floor_rows:
+                for col in columns:
+                    val = grid[row, col]
+                    if val is not None and val <= 350:  # only log relevant values
+                        print('  row={}, col={}, val={}mm'.format(row, col, val))
+
             # sample specified columns across pre-computed non-floor rows
             values = [grid[row, col] for row in self._non_floor_rows for col in columns]
             # filter out invalid readings and enforce min_distance threshold
@@ -132,9 +141,11 @@ class SwerveSensor(Component):
         Returns:
             float: Smoothed value or original if smoothing disabled
         '''
-        if value is None or not self._smoothing:
+        if not self._smoothing:
             return value
-
+        elif value is None:
+            window.clear()  # ← Clear stale data when no valid reading
+            return None
         window.append(value)
         smoothed = np.mean(window)
         return smoothed
@@ -174,12 +185,20 @@ class SwerveSensor(Component):
             extended_floor_rows = list(range(max_floor_row + 1 + self._additional_floor_rows))
             # compute non-floor rows (everything above extended floor)
             self._non_floor_rows = [r for r in range(8) if r not in extended_floor_rows]
+            # exclude configured problematic rows
+            if self._exclude_rows:
+                original_rows = self._non_floor_rows.copy()
+                self._non_floor_rows = [r for r in self._non_floor_rows if r not in self._exclude_rows]
+                excluded = set(original_rows) - set(self._non_floor_rows)
+                if excluded:
+                    self._log.warning('excluding rows {} from side distance sampling (configured as unreliable)'.format(
+                        sorted(excluded)))
             if not self._non_floor_rows:
-                self._log.error('no non-floor rows available after adding {} margin row(s)'.format(
-                    self._additional_floor_rows))
+                self._log.error('no non-floor rows available after adding {} margin row(s) and excluding {}'.format(
+                    self._additional_floor_rows, self._exclude_rows))
             else:
-                self._log.info(Fore.GREEN + 'computed non-floor rows: {} (calibrated floor: {}, extended floor: {})'.format(
-                    self._non_floor_rows, calibrated_floor_rows, extended_floor_rows))
+                self._log.info(Fore.GREEN + 'computed non-floor rows: {} (calibrated floor: {}, extended floor: {}, excluded: {})'.format(
+                    self._non_floor_rows, calibrated_floor_rows, extended_floor_rows, self._exclude_rows))
             Component.enable(self)
             self._log.info('swerve sensor enabled.')
         else:

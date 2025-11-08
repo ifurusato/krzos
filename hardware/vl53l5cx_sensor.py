@@ -76,6 +76,11 @@ class Vl53l5cxSensor(Component):
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
+        # flip orientation options
+        self._flip_horizontal = _cfg.get('flip_horizontal', False)
+        self._flip_vertical = _cfg.get('flip_vertical', False)
+        self._log.info('sensor orientation: flip_horizontal={}, flip_vertical={}'.format(
+            self._flip_horizontal, self._flip_vertical))
         # multiprocessing attributes
         self._use_multiprocessing = _cfg.get('use_multiprocessing', True)
         self._last_distance = None       # cache for last known reading
@@ -181,6 +186,22 @@ class Vl53l5cxSensor(Component):
             except Exception as e:
                 self._log.error("error raised stopping ranging: {}".format(e))
 
+    def _apply_orientation(self, arr):
+        '''
+        Apply horizontal and/or vertical flipping to sensor data array.
+        
+        Args:
+            arr: numpy array of shape (rows, cols)
+            
+        Returns:
+            numpy array with requested flips applied
+        '''
+        if self._flip_horizontal:
+            arr = np.fliplr(arr)  # flip left-right
+        if self._flip_vertical:
+            arr = np.flipud(arr)  # flip upside-down
+        return arr
+
     def enable(self):
         if not self.enabled:
             if not self._use_multiprocessing:
@@ -218,11 +239,10 @@ class Vl53l5cxSensor(Component):
         if self._use_multiprocessing:
             try:
                 value = self._queue.get_nowait()
-                # reshape and flip once at source
                 if value is not None:
+                    # reshape and flip as necessary
                     arr = np.array(value).reshape((self._rows, self._cols))
-                    arr = np.fliplr(arr)  # flip left-right: sensor's left becomes robot's right
-#                   arr = np.flipud(arr)  # flip upside down
+                    arr = self._apply_orientation(arr)
                     self._last_distance = arr.flatten().tolist()
                     self._last_distance_time = dt.now()
                     return self._last_distance
@@ -243,10 +263,9 @@ class Vl53l5cxSensor(Component):
                 time.sleep(0.01)
             try:
                 data = self._vl53.get_data()
-                # reshape and flip once at source
+                # reshape and flip as necessary
                 arr = np.array(data.distance_mm).reshape((self._rows, self._cols))
-                arr = np.fliplr(arr)  # flip left-right: sensor's left becomes robot's right
-#               arr = np.flipud(arr)  # flip upside down
+                arr = self._apply_orientation(arr)
                 return arr.flatten().tolist() # return as flat list, properly oriented
             except Exception as e:
                 self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))

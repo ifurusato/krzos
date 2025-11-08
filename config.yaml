@@ -243,6 +243,8 @@ kros:
             easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
         vl53l5cx_sensor:
             use_multiprocessing:           True            # handle sensor inside external multiprocessing process
+            flip_horizontal:              False            # flip sensor data horizontally
+            flip_vertical:                False            # flip sensor data vertically
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8
@@ -282,7 +284,8 @@ kros:
             max_distance:                   600            # mm - maximum detection distance
             smoothing:                     True            # apply smoothing to side distance readings
             smoothing_window:                 3            # number of samples for smoothing
-            additional_floor_rows:            1            # adds additional row(s) to designated floor rows
+            additional_floor_rows:            0            # adds additional row(s) to designated floor rows
+            exclude_rows:                   [7]            # exclude if empirical data suggests row(s) unreliable
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
             loop_freq_hz:                     5            # control loop frequency (Hz)
