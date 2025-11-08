@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-11-03
+# modified: 2025-11-08
 
 import traceback
 import time
@@ -384,7 +384,6 @@ class Vl53l5cxSensor(Component):
                 self._log.warning('no floor detected during calibration, forcibly marking bottom row (0) as floor.')
             else:
                 self._log.error('could not calibrate: not enough clear space in front of robot, forcibly marking bottom row (0) as floor.')
-        print('VL53L5CX SENSOR CALIBRATED ........................................... ')
         self._log.info('floor rows calibrated.')
 
     def _terminate_subprocess(self):
@@ -397,7 +396,7 @@ class Vl53l5cxSensor(Component):
             self._process = None
             return True
         try:
-            self._log.info('🍎 signaling subprocess to stop…')
+            self._log.info('signaling subprocess to stop…')
             self._stop_event.set()
             # give it 500ms to exit gracefully
             self._process.join(timeout=0.5)

@@ -175,7 +175,7 @@ class SwerveSensor(Component):
     def enable(self):
         if not self.enabled:
             if not self._vl53l5cx.enabled:
-                self._log.warning('VL53L5CX not enabled, enabling now…')
+                self._log.info('VL53L5CX not enabled, enabling now…')
                 self._vl53l5cx.enable()
             # compute non-floor rows once after VL53L5CX calibration
             calibrated_floor_rows = self._vl53l5cx.floor_rows
@@ -190,13 +190,12 @@ class SwerveSensor(Component):
                 self._non_floor_rows = [r for r in self._non_floor_rows if r not in self._exclude_rows]
                 excluded = set(original_rows) - set(self._non_floor_rows)
                 if excluded:
-                    self._log.warning('excluding rows {} from side distance sampling (configured as unreliable)'.format(
-                        sorted(excluded)))
+                    self._log.info('excluding rows {} from side distance sampling (configured as unreliable)'.format(sorted(excluded)))
             if not self._non_floor_rows:
                 self._log.error('no non-floor rows available after adding {} margin row(s) and excluding {}'.format(
                     self._additional_floor_rows, self._exclude_rows))
             else:
-                self._log.info(Fore.GREEN + 'computed non-floor rows: {} (calibrated floor: {}, extended floor: {}, excluded: {})'.format(
+                self._log.info('computed non-floor rows: {} (calibrated floor: {}, extended floor: {}, excluded: {})'.format(
                     self._non_floor_rows, calibrated_floor_rows, extended_floor_rows, self._exclude_rows))
             Component.enable(self)
             self._log.info('swerve sensor enabled.')

@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-31
-# modified: 2025-10-31
+# modified: 2025-11-08
 
 import os
 import sys
@@ -22,10 +22,9 @@ class BootSessionMarker:
     the current boot session. Useful for operations that only need to happen
     once per power cycle (e.g., firmware loading).
     
-    Uses /proc/uptime to detect system reboots, so markers become invalid
-    after a reboot regardless of elapsed time.
+    Uses /proc/sys/kernel/random/boot_id to detect system reboots. This UUID
+    changes on every boot, so markers automatically become invalid after reboot.
     '''
-    
     def __init__(self, marker_name='kros_session', level=Level.INFO):
         '''
         Parameters:
@@ -37,18 +36,16 @@ class BootSessionMarker:
         self._marker_path = marker_dir / '.{}_boot_marker'.format(marker_name)
         self._log.info('marker path: {}'.format(self._marker_path))
     
-    def _get_system_boot_time(self):
+    def _get_boot_id(self):
         '''
-        Get system boot time as a float timestamp.
-        This changes only when the system reboots.
+        Get unique boot session ID from kernel.
+        This UUID changes on every system reboot.
         '''
         try:
-            with open('/proc/uptime', 'r') as f:
-                uptime_seconds = float(f.readline().split()[0])
-            boot_time = time.time() - uptime_seconds
-            return boot_time
-        except (IOError, ValueError) as e:
-            self._log.warning('could not read system uptime: {}'.format(e))
+            with open('/proc/sys/kernel/random/boot_id', 'r') as f:
+                return f.read().strip()
+        except IOError as e:
+            self._log.warning('could not read boot_id: {}'.format(e))
             return None
     
     def is_marked(self):
@@ -58,31 +55,27 @@ class BootSessionMarker:
         Returns:
             True if operation was performed this boot, False otherwise
         '''
-        self._log.info('marker path: {}'.format(self._marker_path))
         if not self._marker_path.exists():
             self._log.info('no marker found for "{}"'.format(self._marker_name))
             return False
-        
         try:
-            # read boot time from marker file
+            # read boot_id from marker file
             with open(self._marker_path, 'r') as f:
-                marker_boot_time = float(f.read().strip())
-            # get current boot time
-            current_boot_time = self._get_system_boot_time()
-            if current_boot_time is None:
-                self._log.info('current boot time is None.')
+                marker_boot_id = f.read().strip()
+            # get current boot_id
+            current_boot_id = self._get_boot_id()
+            if current_boot_id is None:
+                self._log.info('current boot_id is None.')
                 return False
-            # check if marker is from this boot session
-            # allow small tolerance for clock precision
-            if abs(marker_boot_time - current_boot_time) < 1.0:
+            # check if marker is from this boot session (exact string match)
+            if marker_boot_id == current_boot_id:
                 self._log.info('marker valid for "{}" (this boot session)'.format(self._marker_name))
                 return True
             else:
-                self._log.info('marker invalid for "{}" (previous boot session)'.format(self._marker_name))
+                self._log.info('marker invalid for "{}" (different boot session)'.format(self._marker_name))
                 return False
-            
-        except (ValueError, IOError) as e:
-            self._log.warning('Error reading marker for "{}": {}'.format(self._marker_name, e))
+        except IOError as e:
+            self._log.warning('error reading marker for "{}": {}'.format(self._marker_name, e))
             return False
     
     def mark(self):
@@ -90,13 +83,13 @@ class BootSessionMarker:
         Mark the operation as completed for this boot session.
         '''
         try:
-            boot_time = self._get_system_boot_time()
-            if boot_time is not None:
+            boot_id = self._get_boot_id()
+            if boot_id is not None:
                 with open(self._marker_path, 'w') as f:
-                    f.write(str(boot_time))
+                    f.write(boot_id)
                 self._log.info('marker created for "{}"'.format(self._marker_name))
             else:
-                self._log.warning('could not determine boot time, marker not created for "{}"'.format(self._marker_name))
+                self._log.warning('could not determine boot_id, marker not created for "{}"'.format(self._marker_name))
         except IOError as e:
             self._log.warning('could not create marker for "{}": {}'.format(self._marker_name, e))
     
@@ -113,61 +106,5 @@ class BootSessionMarker:
                 self._log.info('no marker to clear for "{}"'.format(self._marker_name))
         except IOError as e:
             self._log.warning('could not clear marker for "{}": {}'.format(self._marker_name, e))
-
-"""
-def main():
-    '''
-    Test the BootSessionMarker functionality.
-    '''
-    print('Testing BootSessionMarker...\n')
-    
-    # Create a test marker
-    marker = BootSessionMarker('test_operation', level=Level.INFO)
-    
-    # Show temp directory
-    print('Temp directory: {}'.format(tempfile.gettempdir()))
-    print('Marker file: {}\n'.format(marker._marker_path))
-    
-    # Test 1: Check if marked (should be False initially)
-    print('Test 1: Initial check (should be False)')
-    is_marked = marker.is_marked()
-    print('  is_marked() = {}\n'.format(is_marked))
-    
-    # Test 2: Mark the operation
-    print('Test 2: Mark the operation')
-    marker.mark()
-    print('  Marked\n')
-    
-    # Test 3: Check again (should be True now)
-    print('Test 3: Check after marking (should be True)')
-    is_marked = marker.is_marked()
-    print('  is_marked() = {}\n'.format(is_marked))
-    
-    # Test 4: Show boot time info
-    print('Test 4: Boot time information')
-    boot_time = marker._get_system_boot_time()
-    if boot_time:
-        uptime_seconds = time.time() - boot_time
-        print('  System boot time: {}'.format(time.ctime(boot_time)))
-        print('  System uptime: {:.2f} seconds ({:.2f} hours)\n'.format(
-            uptime_seconds, uptime_seconds / 3600.0))
-    
-    # Test 5: Multiple instances share state
-    print('Test 5: Create new instance with same name')
-    marker2 = BootSessionMarker('test_operation', level=Level.INFO)
-    is_marked2 = marker2.is_marked()
-    print('  is_marked() on new instance = {}\n'.format(is_marked2))
-    
-    # Test 6: Clear the marker
-    print('Test 6: Clear the marker')
-    marker.clear()
-    is_marked = marker.is_marked()
-    print('  is_marked() after clear = {}\n'.format(is_marked))
-    
-    print('All tests completed!')
-
-if __name__ == '__main__':
-    main()
-"""
 
 # EOF

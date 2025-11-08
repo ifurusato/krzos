@@ -74,6 +74,9 @@ class Swerve(AsyncBehaviour):
             QUADRATIC:           values drop quickly at max distance, flatten near min (very aggressive at close range)
             REVERSE_LOGARITHMIC: like Avoid's aft sensor, stays low until very close then spike
         '''
+        self._max_vx_change = self._max_lateral_force / 3.0  # max change per poll, reach max in 3 polls
+        self._use_rate_limiting = False
+        self._last_vx = 0.0
         self._lateral_easing = Easing.from_string(_cfg.get('lateral_easing', 'SQUARE_ROOT'))
         self._log.info(Fore.WHITE + 'using {} lateral easing.'.format(self._lateral_easing.name))
         self._min_priority = _cfg.get('min_priority', 0.2)  # priority when far
@@ -229,6 +232,12 @@ class Swerve(AsyncBehaviour):
         # determine net lateral motion
         # port obstacle detected: move starboard (positive vx), stbd obstacle detected: move port (negative vx)
         vx = port_force - stbd_force
+        # rate limiting
+        vx_delta = vx - self._last_vx
+        if self._use_rate_limiting and (abs(vx_delta) > self._max_vx_change):
+            vx = self._last_vx + (self._max_vx_change if vx_delta > 0 else -self._max_vx_change)
+            self._log.warning('⚠️  rate limiting vx: delta={:.3f}, clamped to {:.3f}'.format(vx_delta, vx))
+        self._last_vx = vx
         # calculate priority based on closest obstacle
         closest_distance = None
         if self._port_distance is not None and self._stbd_distance is not None:
@@ -240,14 +249,14 @@ class Swerve(AsyncBehaviour):
         self._current_priority = self._calculate_priority(closest_distance, self._current_reaction_distance)
         # apply deadband
         _within_deadband = abs(vx) < self._deadband_threshold
-#       if abs(vx) < self._deadband_threshold:
         if _within_deadband:
             self.clear_intent_vector()
+            self._last_vx = 0.0
             if self._eyeballs:
 #               self._eyeballs.clear()
                 self._eyeballs.look_down()
         else:
-            vy = 0.0  # no forward control
+            vy = 0.0     # no forward control
             omega = 0.0  # no rotation control
             self._intent_vector = (vx, vy, omega)
             if self._eyeballs:

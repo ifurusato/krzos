@@ -93,7 +93,7 @@ kros:
             min_reaction_distance:        350              # mm - start reacting at zero speed
             max_reaction_distance:        500              # mm - absolute maximum reaction distance
             distance_per_speed:           200              # mm to add per 1.0 normalized speed
-            max_lateral_force:            1.5              # maximum vx magnitude
+            max_lateral_force:            0.8              # maximum vx magnitude
             lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.9              # priority when obstacles very close (bumper)
