@@ -53,8 +53,8 @@ class Avoid(AsyncBehaviour):
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
         self._priority    = _cfg.get('default_priority', 0.3)
+        self._verbose     = _cfg.get('verbose', False)
         self._squeezed    = False
-        self._verbose     = True
         self._log.info('ready.')
 
     @property
@@ -214,16 +214,17 @@ class Avoid(AsyncBehaviour):
             _priority_color = Fore.YELLOW + Style.BRIGHT
         else:
             _priority_color = Fore.CYAN + Style.DIM
-        self._log.info("intent: ({:5.2f}, {:5.2f}, {:5.2f}); {}priority: {:.2f};{} port: {};{} stbd: {};{} aft: {}{}".format(
-                vx, vy, omega,
-                _priority_color, self._priority, Style.RESET_ALL,
-                _port_color,
-                '{}mm'.format(port_distance) if port_distance else 'NA',
-                _stbd_color,
-                '{}mm'.format(stbd_distance) if stbd_distance else 'NA',
-                _aft_color,
-                '{}mm'.format(aft_distance) if aft_distance else 'NA',
-                _squeeze_indicator))
+        if self._verbose:
+            self._log.info("intent: ({:5.2f}, {:5.2f}, {:5.2f}); {}priority: {:.2f};{} port: {};{} stbd: {};{} aft: {}{}".format(
+                    vx, vy, omega,
+                    _priority_color, self._priority, Style.RESET_ALL,
+                    _port_color,
+                    '{}mm'.format(port_distance) if port_distance else 'NA',
+                    _stbd_color,
+                    '{}mm'.format(stbd_distance) if stbd_distance else 'NA',
+                    _aft_color,
+                    '{}mm'.format(aft_distance) if aft_distance else 'NA',
+                    _squeeze_indicator))
 
     def x_print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
         '''
@@ -253,23 +254,23 @@ class Avoid(AsyncBehaviour):
                 _squeeze_indicator))
 
     def enable(self):
-        if not self.enabled:
-            self._aft_sensor.enable()
-            self._port_sensor.enable()
-            self._stbd_sensor.enable()
-            AsyncBehaviour.enable(self)
-            self._log.info('enabled.')
-        else:
-            self._log.warning('already enabled.')
+        if self.enabled:
+            self._log.debug('already enabled.')
+            return
+        self._aft_sensor.enable()
+        self._port_sensor.enable()
+        self._stbd_sensor.enable()
+        AsyncBehaviour.enable(self)
+        self._log.info('enabled.')
 
     def disable(self):
-        if self.enabled:
-            self._aft_sensor.disable()
-            self._port_sensor.disable()
-            self._stbd_sensor.disable()
-            AsyncBehaviour.disable(self)
-            self._log.info('disabled.')
-        else:
-            self._log.warning('already disabled.')
+        if not self.enabled:
+            self._log.debug('already disabled.')
+            return
+        self._aft_sensor.disable()
+        self._port_sensor.disable()
+        self._stbd_sensor.disable()
+        AsyncBehaviour.disable(self)
+        self._log.info('disabled.')
 
 #EOF

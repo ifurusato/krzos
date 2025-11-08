@@ -53,7 +53,7 @@ class SwerveSensor(Component):
         # swap columns if sensor is horizontally flipped
         if _flip_horizontal:
             self._port_columns, self._stbd_columns = self._stbd_columns, self._port_columns
-            self._log.info('🍏 sensor flip horizontal: swapped port/stbd columns')
+            self._log.info('sensor flip horizontal: swapped port/stbd columns')
         # distance thresholds
         self._min_distance = _cfg.get('min_distance', 100)  # mm
         self._max_distance = _cfg.get('max_distance', 500)  # mm

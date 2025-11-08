@@ -283,7 +283,7 @@ class Swerve(AsyncBehaviour):
 
     def enable(self):
         if self.enabled:
-            self._log.warning("already enabled.")
+            self._log.debug("already enabled.")
             return
         self._log.info("enabling swerve…")
         if not self._swerve_sensor.enabled:

@@ -307,4 +307,35 @@ class Eyeballs(Component):
                 time.sleep(0.03)
         self._rgbmatrix.clear_all()
 
+    # navigation ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def look_port_fwd(self):
+        self._log.debug('look forward to port…')
+        _eyeball = Eyeball.LOOK_PORT_FWD
+        self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
+        self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
+        self._show()
+
+    def look_stbd_fwd(self):
+        self._log.debug('look forward to starboard…')
+        _eyeball = Eyeball.LOOK_STBD_FWD
+        self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
+        self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
+        self._show()
+
+    def look_port_aft(self):
+        self._log.debug('look aft to port…')
+        _eyeball = Eyeball.LOOK_PORT_AFT
+        self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
+        self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
+        self._show()
+
+    def look_stbd_aft(self):
+        self._log.debug('look aft to starboard…')
+        _eyeball = Eyeball.LOOK_STBD_AFT
+        self.set_matrix(_eyeball.array, self._port_rgbmatrix, _eyeball.color)
+        self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
+        self._show()
+
+
 #EOF

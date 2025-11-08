@@ -230,9 +230,9 @@ class DistanceSensor(Component):
                 self._log.info('adding callback to external clock…')
                 self._external_clock.add_callback(self._external_callback_method)
             Component.enable(self)
-            self._log.info('🐭 enabled.')
+            self._log.info('enabled.')
         else:
-            self._log.warning('already enabled distance sensor.')
+            self._log.debug('already enabled distance sensor.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):

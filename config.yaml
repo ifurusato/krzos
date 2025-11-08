@@ -39,8 +39,9 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
+            verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               500            # ignore aft obstacles further than this
@@ -52,8 +53,9 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
+            verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.8            # cruising speed
             dynamic_speed:               True              # if True use digital pot for default speed
@@ -61,8 +63,8 @@ kros:
             min_sensor_diff_mm:           100              # 50; minimum difference to react
             settling_threshold_mm:         60              # 30; all pairs within this is considered settled
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -73,8 +75,8 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                     False              # enable scout behaviour
-            release:                    False              # release scout behaviour on startup
+            enable:                      True              # enable scout behaviour
+            release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -224,6 +226,7 @@ kros:
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
         compass_encoder:                                   # IO Expander-based RGB Encoder breakout
             i2c_address:                   0x0F            # I²C address for the device
+            verbose:                       True            # verbose messaging
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
             wrap:                            24            # 24 is one pot turn per compass rotation, 360 is max/very slow
         lux_sensor:

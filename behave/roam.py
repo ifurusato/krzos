@@ -217,7 +217,7 @@ class Roam(AsyncBehaviour):
 
     def enable(self):
         if self.enabled:
-            self._log.warning("already enabled.")
+            self._log.debug("already enabled.")
             return
         self._log.info("enabling roam…")
         if not self._roam_sensor.enabled:
@@ -231,6 +231,6 @@ class Roam(AsyncBehaviour):
             return
         self._log.info("disabling roam…")
         AsyncBehaviour.disable(self)
-        self._log.info(Fore.YELLOW + 'disabled.')
+        self._log.info('disabled.')
 
 #EOF

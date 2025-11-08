@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-10-23
-# modified: 2025-04-29
+# modified: 2025-11-09
 #
 # The basic idea:
 #
@@ -186,6 +186,40 @@ class Eyeball(Enum):
                 [ 0, 0, 1, 0, 0 ],
                 [ 0, 1, 0, 1, 0 ],
                 [ 1, 0, 0, 0, 1 ]
+            ])
+    # additional navigation indicators .....................
+
+    LOOK_STBD_FWD = ( 5, 'look-stbd-fwd', Color.BLUE,
+            [
+                [ 0, 0, 0, 1, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 1, 0, 0, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 0, 0, 1, 0 ]
+            ])
+    LOOK_PORT_FWD = ( 6, 'look-port-fwd', Color.BLUE,
+            [
+                [ 0, 1, 0, 0, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 0, 0, 1, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 1, 0, 0, 0 ]
+            ])
+    LOOK_STBD_AFT = ( 5, 'look-stbd-aft', Color.YELLOW,
+            [
+                [ 0, 0, 0, 1, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 1, 0, 0, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 0, 0, 1, 0 ]
+            ])
+    LOOK_PORT_AFT = ( 6, 'look-port-aft', Color.YELLOW,
+            [
+                [ 0, 1, 0, 0, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 0, 0, 1, 0 ],
+                [ 0, 0, 1, 0, 0 ],
+                [ 0, 1, 0, 0, 0 ]
             ])
     
     # ignore the first param since it's already set by __new__

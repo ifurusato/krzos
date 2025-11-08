@@ -51,6 +51,7 @@ class CompassEncoder(Component):
         self._period     = int(255 / self._brightness)
         self._wrap       = _cfg.get('wrap', 24) # 24 is one turn per compass rotation, 360 is max/very slow
         self._log.info('wrap set to {}'.format(self._wrap))
+        self._verbose    = _cfg.get('verbose', False)
         self.ioe = io.IOE(i2c_addr=self._i2c_address, interrupt_pin=4)
         self.ioe.enable_interrupt_out(pin_swap=True)
         self.ioe.setup_rotary_encoder(1, 12, 3, 11)
@@ -102,8 +103,9 @@ class CompassEncoder(Component):
         r, g, b, degrees = self.compass_to_rgb(self._count)
         self._degrees = degrees
         self.set_color(r, g, b)
-        self._log.info(self.get_colorama_fore(degrees)
-                + ("{} {} → RGB({}, {}, {})".format(int(degrees), self.heading_name(degrees), r, g, b)))
+        if self._verbose:
+            self._log.info(self.get_colorama_fore(degrees)
+                    + ("{} {} → RGB({}, {}, {})".format(int(degrees), self.heading_name(degrees), r, g, b)))
 
     def get_degrees(self):
         '''
