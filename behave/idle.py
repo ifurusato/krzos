@@ -120,7 +120,7 @@ class Idle(Behaviour, Publisher):
         else:
             self._log.info('creating idle listener loop task…')
             self._idle_loop_running = True
-            self._message_bus.loop.create_task(
+            self._idle_task = self._message_bus.loop.create_task(
                 self._idle_listener_loop(lambda: self.enabled), 
                 name=Idle._LISTENER_LOOP_NAME
             )
@@ -133,29 +133,34 @@ class Idle(Behaviour, Publisher):
         when threshold is exceeded. Continues publishing every threshold period
         until activity resumes.
         '''
-        self._log.info('idle listener loop started (threshold: {:d}s)'.format(
-            self._idle_threshold_sec))
-        while f_is_enabled():
-            _count = next(self._counter)
-            if self.suppressed:
-                if _count % 10 == 0:
-                    self._log.debug('[{:05d}] idle suppressed.'.format(_count))
+        self._log.info('idle listener loop started (threshold: {:d}s)'.format(self._idle_threshold_sec))
+        try:
+            while f_is_enabled():
+                _count = next(self._counter)
+                if self.suppressed:
+                    if _count % 10 == 0:
+                        self._log.debug('[{:05d}] idle suppressed.'.format(_count))
+                    await asyncio.sleep(self._idle_loop_delay_sec)
+                    continue
+                # calculate elapsed time since last activity
+                elapsed_sec = self.elapsed_seconds
+                if elapsed_sec >= self._idle_threshold_sec:
+                    # robot is idle - check if we should publish
+                    if self._should_publish_idle():
+                        await self._publish_idle(elapsed_sec)
+                    elif _count % 10 == 0:
+                        self._log.debug('[{:05d}] idle ({:.1f}s)'.format(_count, elapsed_sec))
+                else:
+                    # robot is active
+                    if _count % 20 == 0:
+                        self._log.debug('[{:05d}] active ({:.1f}s since last activity)'.format(
+                            _count, elapsed_sec))
                 await asyncio.sleep(self._idle_loop_delay_sec)
-                continue
-            # calculate elapsed time since last activity
-            elapsed_sec = self.elapsed_seconds
-            if elapsed_sec >= self._idle_threshold_sec:
-                # robot is idle - check if we should publish
-                if self._should_publish_idle():
-                    await self._publish_idle(elapsed_sec)
-                elif _count % 10 == 0:
-                    self._log.debug('[{:05d}] idle ({:.1f}s)'.format(_count, elapsed_sec))
-            else:
-                # robot is active
-                if _count % 20 == 0:
-                    self._log.debug('[{:05d}] active ({:.1f}s since last activity)'.format(
-                        _count, elapsed_sec))
-            await asyncio.sleep(self._idle_loop_delay_sec)
+        except asyncio.CancelledError:
+            self._log.info('idle listener loop cancelled.')
+            raise # important: re-raise so task completes
+        finally:
+            self._log.info('idle listener loop complete.')
         self._log.info('idle listener loop complete.')
     
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -230,8 +235,12 @@ class Idle(Behaviour, Publisher):
         if not self.enabled:
             self._log.debug('already disabled.')
             return
-        
         self._log.info('disabling idle…')
+        # cancel the async task before calling Behaviour.disable()
+        if self._idle_task and not self._idle_task.done():
+            self._log.debug('cancelling idle listener loop task…')
+            self._idle_task.cancel()
+            # don't wait for it - just cancel and move on
         # clear eyeballs if currently showing SLEEPY
         if self._eyeballs_monitor and self._last_idle_publish_time is not None:
             self._eyeballs_monitor.clear_eyeballs()
@@ -239,5 +248,17 @@ class Idle(Behaviour, Publisher):
         Behaviour.disable(self)
         Publisher.disable(self)
         self._log.info('disabled.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def close(self):
+        '''
+        Permanently close the Idle behaviour.
+        '''
+        if not self.closed:
+            self._log.info('closing idle…')
+            self.disable()  # will cancel task
+            Behaviour.close(self)
+            Publisher.close(self)
+            self._log.info('closed.')
 
 #EOF

@@ -24,6 +24,7 @@ from core.message_factory import MessageFactory
 from core.subscriber import Subscriber
 from core.util import Util
 from behave.async_behaviour import AsyncBehaviour
+from behave.idle import Idle
 from behave.behaviour import Behaviour
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -230,12 +231,18 @@ class BehaviourManager(Subscriber):
         if not self.closed:
             self._log.info('release all behaviours…')
             for _behaviour in self.get_behaviours():
-                if self._was_suppressed:
-                    if not self._was_suppressed[_behaviour]:
-                        _behaviour.release()
+                if _behaviour.name is Idle.NAME:
+                    self._log.info(Fore.WHITE + 'ignored: {} behaviour.'.format(_behaviour.name))
+                elif _behaviour.enabled:
+                    if self._was_suppressed:
+                        if not self._was_suppressed[_behaviour]:
+                            _behaviour.release()
+                        self._log.info(Fore.GREEN + 'suppressed {} behaviour released.'.format(_behaviour.name))
+                    else:
+#                       _behaviour.release()
+                        self._log.info('no change: {} behaviour already released.'.format(_behaviour.name))
                 else:
-                    _behaviour.release()
-                self._log.info('{} behaviour released.'.format(_behaviour.name))
+                    self._log.info(Style.DIM + 'not released: {} behaviour disabled.'.format(_behaviour.name))
             self._was_suppressed = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -255,25 +262,22 @@ class BehaviourManager(Subscriber):
 
         :param message:  the message to process.
         '''
+        self._log.info('🔔 a. message received: {}'.format(message))
         _event = message.event
+        self._log.info('🔔 b. event: {}'.format(_event))
         if message.gcd:
             raise GarbageCollectedError('cannot process message: message has been garbage collected. [3]')
         # handle IDLE events
-        if _event == Event.IDLE:
+        if _event is Event.IDLE:
             elapsed = message.value
-            self._log.info('🔔 IDLE threshold exceeded ({:.1f}s) - releasing suppressed behaviors'.format(elapsed))
+            self._log.info('🔔 d. IDLE threshold exceeded ({:.1f}s) - releasing suppressed behaviors'.format(elapsed))
             self.release_all_behaviours()
         else:
-            self._log.info(Fore.MAGENTA + 'pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
-        self._log.debug('awaiting subscriber process_message {}.'.format(_event.name))
+            self._log.info(Fore.MAGENTA + '🔔 e. pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
+        self._log.info('awaiting subscriber process_message {}.'.format(_event.name))
         await Subscriber.process_message(self, message)
-        self._log.debug('complete: awaited subscriber process_message {}.'.format(_event.name))
-        self._log.debug('post-processing message {}'.format(message.name))
-#       self._log.info(Fore.MAGENTA + 'pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.name))
-#       self._log.debug('awaiting subscriber process_message {}.'.format(_event.name))
-#       await Subscriber.process_message(self, message)
-#       self._log.debug('complete: awaited subscriber process_message {}.'.format(_event.name))
-#       self._log.debug('post-processing message {}'.format(message.name))
+        self._log.info('🔔 f. complete: awaited subscriber process_message {}.'.format(_event.name))
+        self._log.info('🔔 g. post-processing message {}'.format(message.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_info(self):

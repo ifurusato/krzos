@@ -51,7 +51,7 @@ class EyeballsMonitor(Component):
         _component_registry = Component.get_registry()
         self._eyeballs = _component_registry.get(Eyeballs.NAME)
         if self._eyeballs is None:
-            raise Exception('Eyeballs not available in registry.')
+            self._eyeballs = Eyeballs(Level.INFO)
         # thresholds for detecting motion
         self._motion_threshold  = 0.05  # minimum value to consider as intentional motion
         self._lateral_threshold = 0.1   # minimum lateral (vx) for side indication

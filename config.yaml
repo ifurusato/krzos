@@ -23,7 +23,7 @@ kros:
         enable_queue_publisher:            True            # publishes from globally-available queue
 #       enable_distance_publisher:         True            # enable Distance Sensors and Publisher
         enable_system_publisher:          False            # enable System Publisher
-        enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
+        enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
 #       enable_imu_publisher:             False            # enable IMU publisher
 #       enable_pir_publisher:              True            # enable PIR publisher
 #       enable_remote_ctrl_publisher:     False            # enable Remote Control Publisher
@@ -39,7 +39,7 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                     False              # enable radiozoa behaviour
+            enable:                      True              # enable radiozoa behaviour
             release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
@@ -51,7 +51,7 @@ kros:
         idle:
             enable:                      True              # enable idle behaviour
             release:                     True              # release idle behaviour on startup
-            idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
+            idle_threshold_sec:             5              # how many seconds before we trigger an idle behaviour
         radiozoa:
             enable:                     False              # enable radiozoa behaviour
             release:                    False              # release radiozoa behaviour on startup
@@ -63,7 +63,7 @@ kros:
             min_sensor_diff_mm:           100              # 50; minimum difference to react
             settling_threshold_mm:         60              # 30; all pairs within this is considered settled
         roam:
-            enable:                      True              # enable roam behaviour
+            enable:                     False              # enable roam behaviour
             release:                    False              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
@@ -95,7 +95,7 @@ kros:
             min_reaction_distance:        350              # mm - start reacting at zero speed
             max_reaction_distance:        500              # mm - absolute maximum reaction distance
             distance_per_speed:           200              # mm to add per 1.0 normalized speed
-            max_lateral_force:            0.6              # maximum vx magnitude
+            max_lateral_force:            0.4              # maximum vx magnitude
             lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.9              # priority when obstacles very close (bumper)

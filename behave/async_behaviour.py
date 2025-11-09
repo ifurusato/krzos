@@ -12,6 +12,7 @@
 import time
 import asyncio
 import numpy as np
+import itertools
 from threading import Thread, Event as ThreadEvent
 from colorama import init, Fore, Style
 init()
@@ -38,6 +39,7 @@ class AsyncBehaviour(Behaviour):
         self._loop_instance   = None
         self._thread          = None
         self._stop_event      = ThreadEvent()
+        self._counter = itertools.count()
         if self._motor_controller:
             # get motor objects
             self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -89,6 +91,9 @@ class AsyncBehaviour(Behaviour):
         self._intent_vector = (0.0, 0.0, 0.0)
 
     def enable(self):
+        if self.enabled:
+            self._log.warning("already enabled.")
+            return
         Behaviour.enable(self)
         self._loop_instance = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop_instance)
@@ -103,6 +108,9 @@ class AsyncBehaviour(Behaviour):
         '''
         Suppresses the behaviour, removing the intent vector.
         '''
+        if self.suppressed:
+            self._log.warning("already suppressed.")
+            return
         Behaviour.suppress(self)
         self._remove_intent_vector()
         self._log.info('suppressed.')
@@ -111,14 +119,17 @@ class AsyncBehaviour(Behaviour):
         '''
         Releases suppression of the behaviour, re-registering intent vector.
         '''
+        if not self.suppressed:
+            self._log.warning("already released.")
+            return
         Behaviour.release(self)
         if not self._intent_vector_registered:
             self._register_intent_vector()
-        self._log.info("radiozoa released.")
+        self._log.info("released.")
 
     def disable(self):
         if not self.enabled:
-            self._log.info("already disabled.")
+            self._log.warning("already disabled.")
             return
         self._log.info("disabling…")
         self.clear_intent_vector()
@@ -154,7 +165,9 @@ class AsyncBehaviour(Behaviour):
                 if not self.suppressed:
                     await self._poll()
                 else:
-                    self._log.info(Style.DIM + "suppressed…")
+                    _count = next(self._counter)
+                    if _count % 50 == 0:
+                        self._log.info(Style.DIM + "suppressed…")
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break

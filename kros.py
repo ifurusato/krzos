@@ -449,22 +449,24 @@ class KROS(Component, FiniteStateMachine):
                 # closes all components that are not a publisher, subscriber, the message bus or kros itself…
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
-                    if not isinstance(_component, Publisher) and not isinstance(_component, Subscriber) \
+                    if _component is None:
+                        self._log.warning('component \'{}\' not found in registry.'.format(_name))
+                    elif not isinstance(_component, Publisher) and not isinstance(_component, Subscriber) \
                             and _component != self and _component != self._message_bus:
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
 #                       self._component_registry.deregister(_component)
                 time.sleep(0.1)
-
                 self._log.info('closing other components…')
                 # closes any remaining non-message bus or kros…
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
-                    if _component != self and _component != self._message_bus:
+                    if _component is None:
+                        self._log.warning('component \'{}\' not found in registry.'.format(_name))
+                    elif _component != self and _component != self._message_bus:
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
                         self._component_registry.deregister(_component)
-
                 _open_count = self._component_registry.count_open_components()
                 if _open_count > 2: # we expect kros and the message bus to still be open
                     self._log.info('waiting for components to close…; {} are still open.'.format(_open_count))
@@ -477,7 +479,6 @@ class KROS(Component, FiniteStateMachine):
                 self._log.info('closing kros…')
                 Component.close(self) # will call disable()
                 FiniteStateMachine.close(self)
-
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info('closing message bus from kros…')
