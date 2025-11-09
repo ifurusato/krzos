@@ -11,6 +11,8 @@ krosd:
     toggle_pin:                              10            # Rx=8, Tx=10; the GPIO pin connected to the 'enable' toggle switch
 
 kros:
+    application:                                           # application-level configuration
+        await_pushbutton:                 False            # await pushbutton on startup
     arguments:                                             # CLI arguments are copied here (required section)
         nada:                             False            # nada
     component:

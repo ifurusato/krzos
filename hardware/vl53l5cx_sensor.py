@@ -185,8 +185,10 @@ class Vl53l5cxSensor(Component):
                 else:
                     self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
+        except KeyboardInterrupt:
+            self._log.info('Ctrl-C caught: exiting…')
         except Exception as e:
-            self._log.error("error raised polling sensor: {}".format(e))
+            self._log.error('error raised polling sensor: {}'.format(e))
         finally:
             try:
                 self._vl53.stop_ranging()

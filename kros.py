@@ -104,11 +104,8 @@ class KROS(Component, FiniteStateMachine):
         self._tinyfx              = None
         self._eyeballs            = None
         self._motor_controller    = None
-
         self._system_publisher    = None
         self._system_subscriber   = None
-
-
 
         self._started             = False
         self._closing             = False
@@ -136,6 +133,12 @@ class KROS(Component, FiniteStateMachine):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
 
         _i2c_scanner = I2CScanner(self._config, level=Level.INFO)
+
+        # kros application configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        _app_cfg = self._config['kros'].get('application')
+        self._await_pushbutton = _app_cfg.get('await_pushbutton')
+        self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
 
         # configuration from command line arguments ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -279,8 +282,8 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('configured.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def has_await_pushbutton(self):
-        return self._button != None
+    def should_await_pushbutton(self):
+        return self._await_pushbutton and self._button != None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _await_start(self, arg=None):
@@ -450,8 +453,9 @@ class KROS(Component, FiniteStateMachine):
                 self._closing = True
                 if self._tinyfx:
                     self._tinyfx.off()
-                if self._irq_clock and not self._irq_clock.closed:
-                    self._irq_clock.close()
+                if self._motor_controller:
+                    print('🌺 closing motor controller')
+                    self._motor_controller.close()
                 self._log.info('closing subscribers and publishers…')
                 # closes all components that are not a publisher, subscriber, the message bus or kros itself…
                 for _name in self._component_registry.names:
@@ -464,6 +468,9 @@ class KROS(Component, FiniteStateMachine):
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
 #                       self._component_registry.deregister(_component)
+                print('🌺 close kros')
+                if self._irq_clock and not self._irq_clock.closed:
+                    self._irq_clock.close()
                 time.sleep(0.1)
                 self._log.info('closing other components…')
                 # closes any remaining non-message bus or kros…
@@ -693,11 +700,11 @@ def main(argv):
                     _log.info('configure only: ' + Fore.YELLOW + 'specify the -s argument to start kros.')
             if _args.start:
                 _counter = itertools.count()
-                if _kros.has_await_pushbutton():
-                    while _kros.has_await_pushbutton():
+                if _kros.should_await_pushbutton():
+                    while _kros.should_await_pushbutton():
                         if next(_counter) % 20 == 0:
-#                           _log.info(Fore.YELLOW + 'waiting for pushbutton…')
-                            _log.info(Fore.YELLOW + 'waiting for pushbutton on pin {}…'.format(_kros._button.pin))
+                            _log.info(Fore.YELLOW + 'waiting for pushbutton…')
+#                           _log.info(Fore.YELLOW + 'waiting for pushbutton on pin {}…'.format(_kros._button.pin))
                         time.sleep(0.1)
                     match _kros.state:
                         case State.INITIAL: # expected state

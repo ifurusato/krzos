@@ -110,6 +110,7 @@ class IrqClock(Component):
         '''
         Removes a callback from the internal list.
         '''
+        print('🍀 remove callback')
         if callback:
             if callback in self.__callbacks:
                 self.__callbacks.remove(callback)
@@ -125,6 +126,7 @@ class IrqClock(Component):
                     lf_callback()
 
     def close(self):
+        print('🍀 close')
         try:
             self._log.info('closing IRQ clock…')
             if self._input:

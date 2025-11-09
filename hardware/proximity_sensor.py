@@ -186,7 +186,7 @@ class ProximitySensor(Component):
         Stops ranging for the sensor.
         '''
         if self.enabled and self._active:
-            self._log.info('stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
+            self._log.info(Style.DIM + 'stop ranging sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             if not self._tof:
                 raise Exception('cannot stop ranging: sensor {} at 0x{:02X} does not exist.'.format(self._label, self._i2c_address))
             if self._is_ranging:
