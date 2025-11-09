@@ -41,22 +41,22 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               500            # ignore aft obstacles further than this
-            avoid_speed:                    0.99           # speed to avoid obstacles at
+            avoid_speed:                    0.6            # speed to avoid obstacles at
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
         idle:
-            enable:                      True              # enable idle behaviour
-            release:                     True              # release idle behaviour on startup
+            enable:                     False              # enable idle behaviour
+            release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.8            # cruising speed

@@ -6,7 +6,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-18
-# modified: 2025-10-20
+# modified: 2025-11-10
 
 import sys, itertools, time
 from math import isclose
@@ -66,11 +66,11 @@ class Motor(Component):
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._log.info('initialising {} motor with {} at address 0x{:02X} as motor controller…'.format(
                 orientation.name, type(self._tb).__name__, self._tb.I2cAddress))
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         _cfg = config['kros'].get('motor')
         self._scale_factor_closed = _cfg.get('scale_factor_closed') # constant converts target speed to motor speed (closed loop)
         self._scale_factor_open   = _cfg.get('scale_factor_open')   # constant converts target speed to motor speed (open loop)
-        self._max_observed_speed = 0.0                     # the observed max forward speed
+        self._max_observed_speed = 0.0                              # the observed max forward speed
         _max_speed = 1.0
         self._motor_power_limit = _cfg.get('motor_power_limit') # power limit to motor
         self._log.info('motor power limit: {:<5.2f}'.format(self._motor_power_limit))
@@ -81,26 +81,26 @@ class Motor(Component):
         self._log.info('reverse motor: {}'.format(self._reverse_motor))
         self._counter            = itertools.count()
         self.__callbacks         = []
-        self.__max_applied_power = 0.0   # capture maximum power applied
-        self.__max_power_ratio   = 0.0   # will be set by MotorConfigurer
-        self.__target_speed      = 0.0   # the current target speed of the motor
-        self.__modified_target_speed = 0.0 # ...as modified by any lambdas
-        self._last_driving_power = 0.0   # last power setting for motor
-        self._decoder            = None  # motor encoder
+        self.__max_applied_power = 0.0      # capture maximum power applied
+        self.__max_power_ratio   = 0.0      # will be set by MotorConfigurer
+        self.__target_speed      = 0.0      # the current target speed of the motor
+        self.__modified_target_speed = 0.0  # ...as modified by any lambdas
+        self._last_driving_power = 0.0      # last power setting for motor
+        self._decoder            = None     # motor encoder
         self._jerk_limiter       = None
         self.__speed_lambdas     = {}
         self._verbose            = False
         self._allow_speed_multipliers = False
-        # provides closed loop speed feedback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # provides closed loop speed feedback
         self._velocity           = Velocity(config, self, level=level)
         # add callback from motor's update method
         self.add_callback(self._velocity.tick)
         self._velocity.enable()
         self._pid_controller     = PIDController(config, self, level=level)
-        # slew limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # slew limiter
         _enable_slew_limiter     = _cfg.get('enable_slew_limiter')
         self._slew_limiter       = SlewLimiter(config, orientation, suppressed=False, enabled=_enable_slew_limiter, level=level)
-        # jerk limiter ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # jerk limiter
         _enable_jerk_limiter     = _cfg.get('enable_jerk_limiter')
         self._jerk_limiter       = JerkLimiter(config, orientation, suppressed=False, enabled=_enable_jerk_limiter, level=level)
         self._log.info('ready.')
@@ -291,13 +291,13 @@ class Motor(Component):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
         if self._slew_limiter and self._slew_limiter.is_active:
             _current_target_speed = self.__target_speed
-            _new_target_speed = target_speed 
+            _new_target_speed = target_speed
             self.__target_speed = self._slew_limiter.limit(_current_target_speed, _new_target_speed)
             if self._verbose:
                 if ( _current_target_speed < 0.0 ) or ( _new_target_speed < 0.0 ) or ( self.__target_speed < 0 ):
                     self._log.info(Fore.RED + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
                             _current_target_speed, _new_target_speed, self.__target_speed))
-                else: 
+                else:
                     self._log.info('current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
                             _current_target_speed, _new_target_speed, self.__target_speed))
         else:
@@ -305,7 +305,7 @@ class Motor(Component):
             if self._verbose:
                 if ( target_speed < 0.0 ) or ( self.__target_speed < 0 ):
                     self._log.info(Fore.RED + 'target speed: {:5.2f}'.format(self.__target_speed))
-                else: 
+                else:
                     self._log.info('target speed: {:5.2f}'.format(self.__target_speed))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -432,7 +432,7 @@ class Motor(Component):
 
         :param target_power:  the target motor power
         '''
-#       self._log.info(Fore.BLUE + 'set motor power: {}'.format(target_power))
+#       self._log.debug('set motor power: {}'.format(target_power))
         if target_power is None:
             raise ValueError('null target_power argument.')
         elif not self.enabled and target_power > 0.0: # though we'll let the power be set to zero
@@ -447,9 +447,6 @@ class Motor(Component):
 #       if self._jerk_limiter:
 #           target_power = self._jerk_limiter.limit(self.get_current_power(), target_power)
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
-        # temporary clamp
-#       _driving_power = min(0.5, max(-0.5, _driving_power))
-
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
             _driving_power *= -1.0
@@ -460,7 +457,6 @@ class Motor(Component):
             else:
                 self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(_driving_power)
-
         elif self._orientation is Orientation.SFWD:
             if _is_zero:
                 self._log.debug(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
@@ -468,7 +464,6 @@ class Motor(Component):
             else:
                 self._log.debug(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SFWD motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor2(_driving_power)
-
         elif self._orientation is Orientation.PAFT:
             if _is_zero:
                 self._log.debug(Fore.RED + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
@@ -476,7 +471,6 @@ class Motor(Component):
             else:
                 self._log.debug(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for PAFT motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor1(_driving_power)
-
         elif self._orientation is Orientation.SAFT:
             if _is_zero:
                 self._log.debug(Fore.GREEN + Style.DIM + 'target power {:5.2f} converted to driving power {:<5.2f} for SAFT motor.'.format(target_power, _driving_power))
@@ -484,13 +478,6 @@ class Motor(Component):
             else:
                 self._log.debug(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for SAFT motor.'.format(target_power, _driving_power))
                 self._tb.SetMotor1(_driving_power)
-
-#       elif self._orientation.side is Orientation.PORT:
-#           self._log.info(Fore.RED   + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
-#           self._tb.SetMotor2(_driving_power)
-#       elif self._orientation.side is Orientation.STBD:
-#           self._log.info(Fore.GREEN + 'target power {:5.2f} converted to driving power {:<5.2f} for {} motor.'.format(target_power, _driving_power, self.orientation.name))
-#           self._tb.SetMotor1(_driving_power)
         else:
             raise ValueError('cannot set speed via side.')
 

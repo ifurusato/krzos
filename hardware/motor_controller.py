@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-10-05
-# modified: 2025-11-09
+# modified: 2025-11-10
 
 import sys, traceback
 import time
@@ -535,9 +535,25 @@ class MotorController(Component):
         self._sfwd_motor.target_speed = speeds[1]
         self._paft_motor.target_speed = speeds[2]
         self._saft_motor.target_speed = speeds[3]
+
+        # DIAGNOSTIC: Capture state before PID update
+        pre_state = [(m.orientation.label, m.target_speed, m.velocity, m.get_current_power())
+                     for m in self._all_motors]
+
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
             _motor.update_target_speed()
+
+        # DIAGNOSTIC: check for unusual power changes
+        for i, _motor in enumerate(self._all_motors):
+            label, target, pre_vel, pre_power = pre_state[i]
+            post_power = _motor.get_current_power()
+            power_delta = abs(post_power - pre_power)
+            # only print if power changed significantly
+            if power_delta > 0.15:  # threshold for "surge"
+                self._log.warning('⚠️  SURGE {}: target={:.3f}, vel={:.3f}, power: {:.3f}→{:.3f} (Δ{:.3f})'.format(
+                    label, target, _motor.velocity, pre_power, post_power, power_delta))
+
         _count = next(self._event_counter)
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
@@ -812,7 +828,7 @@ class MotorController(Component):
         self._log.info('emergency stopped.')
 
     def _brake(self, name, step=0.02, closing=False):
-        self._log.info(Fore.MAGENTA + '👿 brake {} with step {}'.format(name, step))
+        self._log.debug('brake {} with step {}'.format(name, step))
         if self.is_stopped:
             self._log.info('already stopped.')
             self._braking_active = False
@@ -820,25 +836,21 @@ class MotorController(Component):
             return
         if self._braking_active:
             if self._current_brake_step is not None and step <= self._current_brake_step:
-                self._log.info(Fore.MAGENTA + '👿 brake request with step {} ignored; already braking with step {}'.format(step, self._current_brake_step))
+                self._log.info('brake request with step {} ignored; already braking with step {}'.format(step, self._current_brake_step))
                 return
             else:
-                self._log.info(Fore.MAGENTA + '👿 brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
+                self._log.info('brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
         self._braking_active = True
         self._current_brake_step = step
         factor = 1.0
         _step = step
         speed_signs = None
-        
+
         def _brake_modifier(speeds):
             nonlocal factor, _step, speed_signs
             if speed_signs is None:
                 speed_signs = [1.0 if s >= 0.0 else -1.0 for s in speeds]
             factor = max(0.0, factor - _step)
-
-            # DEBUG: Log what we're doing
-            print(Fore.MAGENTA + '👿 brake_modifier: factor={:.3f}, speeds={}; closing: {}; step: {}; speed signs: {}'.format(factor, speeds, closing, _step, speed_signs) + Style.RESET_ALL)
-
             modified = []
             for i, s in enumerate(speeds):
                 scaled = s * factor
@@ -849,6 +861,7 @@ class MotorController(Component):
             if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
                 for _m in self._all_motors:
                     _m.stop()
+                    _m.pid_controller.reset()
                 if closing:
                     self._speed_modifiers.clear()
                     self.clear_intent_vectors()
@@ -858,10 +871,9 @@ class MotorController(Component):
                 return MotorController.BRAKE_LAMBDA_NAME
             return modified
         self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
-        self.add_speed_modifier('{}-{}'.format(MotorController.BRAKE_LAMBDA_NAME, name), 
-                               (lambda speeds, _fn=_brake_modifier: _fn(speeds)), 
-                               exclusive=True)
-        self._log.info(Fore.MAGENTA + '👿 registered controller-level braking modifier.')
+        self.add_speed_modifier('{}-{}'.format(MotorController.BRAKE_LAMBDA_NAME, name),
+                (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
+        self._log.info('registered controller-level braking modifier.')
         try:
             timeout = 5.0
             self._braking_event.clear()
@@ -874,117 +886,6 @@ class MotorController(Component):
                 self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
             self._braking_active = False
             self._current_brake_step = None
-        print(Fore.MAGENTA + '👿 brake END: {}'.format(name) + Style.RESET_ALL)
-
-    def x_brake(self, step=0.02, closing=False):
-        '''
-        Brake: register a modifier to progressively reduce speeds, with the rate
-        determined by the step argument.
-        If closing is True this clears all intent vectors as part of shutting down.
-
-        Severity ordering (higher step = more urgent):
-            coast < brake < halt < stop < emergency_stop
-        A more urgent brake request interrupts a less urgent one.
-        '''
-        self._log.info(Fore.WHITE + 'brake with step {}'.format(step))
-        if self.is_stopped:
-            self._log.warning('already stopped.')
-            self._braking_active = False
-            self._current_brake_step = None
-            return
-        # check if we should interrupt current braking
-        if self._braking_active:
-            if self._current_brake_step is not None and step <= self._current_brake_step:
-                self._log.info('brake request with step {} ignored; already braking with step {}'.format(step, self._current_brake_step))
-                return
-            else:
-                self._log.info('brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
-                # will proceed to replace the modifier
-        self._braking_active = True
-        self._current_brake_step = step
-        self._log.info('_brake with step {}'.format(step))
-        # continue...
-        factor = 1.0
-        _step = step
-        speed_signs = None  # capture initial direction on first call
-        def _brake_modifier(speeds):
-            nonlocal factor, _step, speed_signs
-            if speed_signs is None:
-                speed_signs = [1.0 if s >= 0.0 else -1.0 for s in speeds]
-            factor = max(0.0, factor - _step)
-            modified = []
-            for i, s in enumerate(speeds):
-                scaled = s * factor
-                if speed_signs[i] >= 0.0:
-                    modified.append(max(0.0, scaled))
-                else:
-                    modified.append(min(0.0, scaled))
-            if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
-                for _m in self._all_motors:
-                    _m.stop()
-                if closing:
-                    self._speed_modifiers.clear()
-                    self.clear_intent_vectors()
-                # clear braking state
-                self._braking_active = False
-                self._current_brake_step = None
-                return MotorController.BRAKE_LAMBDA_NAME  # Remove immediately
-            return modified
-        self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
-        # register a lambda (so add_speed_modifier's guard accepts it)
-        self.add_speed_modifier(MotorController.BRAKE_LAMBDA_NAME, (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
-        self._log.info('registered controller-level braking modifier.')
-        try:
-            timeout = 5.0
-            self._braking_event.clear()  # Reset the event
-            # wait for the event to be set (up to timeout seconds)
-            if self._braking_event.wait(timeout):
-                self._log.info('brake complete.')
-            else:
-                self._log.warning('brake timeout after {:4.2f}s'.format(timeout))
-        finally:
-            # cleanup
-            if MotorController.BRAKE_LAMBDA_NAME in self._speed_modifiers:
-                self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
-            self._braking_active = False
-            self._current_brake_step = None
-        # in _brake_modifier, replace self._braking_active = False:
-        if all(isclose(m, 0.0, abs_tol=1e-2) for m in modified) or factor <= 0.0:
-            for _m in self._all_motors:
-                _m.stop()
-            if closing:
-                self._speed_modifiers.clear()
-                self.clear_intent_vectors()
-            self._braking_active = False
-            self._current_brake_step = None
-            self._braking_event.set()  # ← Signal completion
-            return MotorController.BRAKE_LAMBDA_NAME
-        '''
-        try:
-            timeout = 5.0
-            start = time.monotonic()
-            last_log = start
-            # wait until braking is no longer active (modifier sets this to False when done)
-#           while self._braking_active and not self.is_stopped:
-            while (lambda: self._braking_active and not self.is_stopped)():
-                elapsed = time.monotonic() - start
-                if elapsed >= timeout:
-                    self._log.warning('timeout reached on brake: {:4.2f}s'.format(elapsed))
-                    break
-                # only log every 0.5 seconds
-                self._log.info('braking in progress; {:4.2f}s elapsed.'.format(elapsed))
-#               if time.monotonic() - last_log >= 0.5:
-#                   self._log.debug('braking in progress; {:4.2f}s elapsed.'.format(elapsed))
-#                   last_log = time.monotonic()
-                time.sleep(0.05)
-        finally:
-            # cleanup - only needed if we timed out
-            if MotorController.BRAKE_LAMBDA_NAME in self._speed_modifiers:
-                self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
-            self._braking_active = False
-            self._current_brake_step = None
-        '''
-        self._log.info('brake complete.')
 
     def disable(self):
         '''
@@ -993,32 +894,24 @@ class MotorController(Component):
         if self.enabled:
             if self._eyeballs_monitor:
                 self._eyeballs_monitor.disable()
-            # safely clear all external intent vectors before braking
-            # during shutdown, no external behaviors should be influencing motor control
-            self._log.info('clearing all external intent vectors before brake…')
-            for name in list(self._intent_vectors.keys()):
-                if name != "base":  # preserve only the base intent vector
-                    del self._intent_vectors[name]
-                    self._log.info('removed intent vector: {}'.format(name))
             if not self.is_stopped:
                 if self._use_graceful_stop:
                     self._brake('coast', step=self._coast_step, closing=True)
-#                   self._brake(step=self._brake_step, closing=True)
                 else:
                     self._brake('stop', step=self._stop_step, closing=True)
                 time.sleep(3)
             if not self.is_stopped_target:
                 self.emergency_stop()
             Component.disable(self)
-            self._log.info('disabled.')
             [ motor.disable() for motor in self._all_motors ]
             if self._external_clock:
-                self._log.info('🎀 🎀 🎀 disabling by removing external clock callback…')
+                self._log.debug('disabling by removing external clock callback…')
                 self._external_clock.remove_callback(self._external_callback_method)
             if self._loop_enabled:
                 self._log.info('disabling by stopping loop…')
                 time.sleep(1)
                 self._stop_loop()
+            self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
 

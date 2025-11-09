@@ -454,7 +454,6 @@ class KROS(Component, FiniteStateMachine):
                 if self._tinyfx:
                     self._tinyfx.off()
                 if self._motor_controller:
-                    print('🌺 closing motor controller')
                     self._motor_controller.close()
                 self._log.info('closing subscribers and publishers…')
                 # closes all components that are not a publisher, subscriber, the message bus or kros itself…
@@ -468,7 +467,6 @@ class KROS(Component, FiniteStateMachine):
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
 #                       self._component_registry.deregister(_component)
-                print('🌺 close kros')
                 if self._irq_clock and not self._irq_clock.closed:
                     self._irq_clock.close()
                 time.sleep(0.1)

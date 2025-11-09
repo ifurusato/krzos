@@ -166,6 +166,131 @@ class Velocity(object):
         velocity based on the tick/step count of the motor encoder.
         '''
         if self._enabled:
+            if self._motor.enabled:
+                _steps = self._motor.steps
+                if self._steps_begin != 0:
+                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
+                    # guard against division by near-zero time
+                    if _time_diff_sec < 0.02:  # 20ms minimum
+                        # still update timestamp to prevent accumulation
+                        self._stepcount_timestamp = time.perf_counter()
+                        self._steps_begin = _steps
+                        return
+                    _diff_steps = _steps - self._steps_begin
+                    if _diff_steps == 0:
+                        self._velocity = 0.0
+                    else:
+                        _steps_per_sec = _diff_steps / _time_diff_sec
+                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
+                        self._velocity = _cm_per_sec
+                        self._max_velocity = max(self._velocity, self._max_velocity)
+                self._stepcount_timestamp = time.perf_counter()
+                self._steps_begin = _steps
+            else:
+                self._velocity = 0.0
+                self._log.warning('tick failed: motor disabled.')
+        else:
+            self._velocity = 0.0
+            self._log.warning('tick failed: disabled.')
+
+    def a_tick(self):
+        '''
+        This should be called regularly every 50ms (i.e., at 20Hz), calculating
+        velocity based on the tick/step count of the motor encoder.
+        '''
+        if self._enabled:
+            if self._motor.enabled:
+                _steps = self._motor.steps
+                if self._steps_begin != 0:
+                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
+                    # guard against division by near-zero time
+                    if _time_diff_sec < 0.02:  # 20ms minimum (40% of expected period)
+                        return
+                    _diff_steps = _steps - self._steps_begin
+                    if _diff_steps == 0:
+                        self._velocity = 0.0
+                    else:
+                        _steps_per_sec = _diff_steps / _time_diff_sec
+                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
+                        # sanity check: reject physically impossible velocities
+                        if abs(_cm_per_sec) > 50.0:  # ~50cm/s is reasonable max
+                            # spurious reading, keep previous velocity
+                            return
+                        self._velocity = _cm_per_sec
+                        self._max_velocity = max(self._velocity, self._max_velocity)
+                self._stepcount_timestamp = time.perf_counter()
+                self._steps_begin = _steps
+            else:
+                self._velocity = 0.0
+                self._log.warning('tick failed: motor disabled.')
+        else:
+            self._velocity = 0.0
+            self._log.warning('tick failed: disabled.')
+
+    def z_tick(self):
+        '''
+        This should be called regularly every 50ms (i.e., at 20Hz), calculating
+        velocity based on the tick/step count of the motor encoder.
+        '''
+        if self._enabled:
+            if self._motor.enabled:
+                _steps = self._motor.steps
+                if self._steps_begin != 0:
+                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
+                    # guard against division by near-zero time
+                    if _time_diff_sec < 0.01:  # 10ms minimum
+                        return  # skip this tick, wait for meaningful time interval
+                    _diff_steps = _steps - self._steps_begin
+                    if _diff_steps == 0:
+                        self._velocity = 0.0
+                    else:
+                        _steps_per_sec = _diff_steps / _time_diff_sec
+                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
+                        self._velocity = _cm_per_sec
+                        self._max_velocity = max(self._velocity, self._max_velocity)
+                self._stepcount_timestamp = time.perf_counter()
+                self._steps_begin = _steps
+            else:
+                self._velocity = 0.0
+                self._log.warning('tick failed: motor disabled.')
+        else:
+            self._velocity = 0.0
+            self._log.warning('tick failed: disabled.')
+
+    def y_tick(self):
+        '''
+        This should be called regularly every 50ms (i.e., at 20Hz), calculating
+        velocity based on the tick/step count of the motor encoder.
+        '''
+        if self._enabled:
+            if self._motor.enabled:
+                _steps = self._motor.steps
+                if self._steps_begin != 0:
+                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
+                    _diff_steps = _steps - self._steps_begin
+                    if _diff_steps == 0:
+                        self._velocity = 0.0
+                    else:
+                        # calculate steps per second directly from actual elapsed time
+                        _steps_per_sec = _diff_steps / _time_diff_sec
+                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
+                        self._velocity = _cm_per_sec
+                        self._max_velocity = max(self._velocity, self._max_velocity)
+                self._stepcount_timestamp = time.perf_counter()
+                self._steps_begin = _steps
+            else:
+                self._velocity = 0.0
+                self._log.warning('tick failed: motor disabled.')
+        else:
+            self._velocity = 0.0
+            self._log.warning('tick failed: disabled.')
+
+    def x_tick(self):
+        '''
+        This should be called regularly every 50ms (i.e., at 20Hz), calculating
+        velocity based on the tick/step count of the motor encoder.
+        '''
+        if self._enabled:
             if self._motor.enabled: # then calculate velocity from motor encoder's step count
                 _time_diff_ms = 0.0
                 _steps = self._motor.steps

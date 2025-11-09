@@ -186,6 +186,7 @@ class Vl53l5cxSensor(Component):
                     self._log.info(Fore.MAGENTA + "data not ready.")
                 time.sleep(poll_interval)
         except KeyboardInterrupt:
+            print('')
             self._log.info('Ctrl-C caught: exiting…')
         except Exception as e:
             self._log.error('error raised polling sensor: {}'.format(e))
