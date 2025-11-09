@@ -134,6 +134,8 @@ class Idle(Behaviour, Publisher):
         '''
         self._last_activity_time = dt.now()
         self._last_idle_publish_time = None
+        if self._eyeballs_monitor:
+            self._eyeballs_monitor.clear_eyeballs()
         self._log.debug('activity timer reset by external call.')
     
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

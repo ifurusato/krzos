@@ -228,28 +228,44 @@ class BehaviourManager(Subscriber):
         If the suppressed state of each Behaviour has been stored this will
         determine whether a given Behaviour is released.
         '''
-        if not self.closed:
-            self._log.info('release all behaviours…')
-            _idle_behaviour = None
-            for _behaviour in self.get_behaviours():
-                if _behaviour.name is Idle.NAME:
-                    _idle_behaviour = _behaviour
-                    self._log.info(Fore.WHITE + 'ignored: {} behaviour.'.format(_behaviour.name))
-                elif _behaviour.enabled:
-                    if self._was_suppressed:
-                        if not self._was_suppressed[_behaviour]:
-                            _behaviour.release()
-                        self._log.info(Fore.GREEN + 'suppressed {} behaviour released.'.format(_behaviour.name))
-                    else:
-#                       _behaviour.release()
-                        self._log.info('no change: {} behaviour already released.'.format(_behaviour.name))
+        if self.closed:
+            self._log.warning('cannot release behaviours: behaviour manager is closed.')
+            return
+        elif not self.enabled:
+            self._log.warning('cannot release behaviours: behaviour manager is disabled.')
+            return
+        self._log.info('release all behaviours…')
+        _idle_behaviour = None
+        for _behaviour in self.get_behaviours():
+            # special handling for Idle - reset its timer instead of releasing
+            if _behaviour.name == Idle.NAME:
+                _idle_behaviour = _behaviour
+                self._log.debug('found idle behaviour, will reset timer after releasing others.')
+                continue
+            # only process enabled behaviours
+            if not _behaviour.enabled:
+                self._log.debug('skipping disabled behaviour: {}'.format(_behaviour.name))
+                continue
+            # if we have stored suppression states, restore them
+            if self._was_suppressed is not None:
+                if not self._was_suppressed.get(_behaviour, True):  # was not suppressed before
+                    _behaviour.release()
+                    self._log.info(Fore.GREEN + '{} behaviour released (restored state).'.format(_behaviour.name))
                 else:
-                    self._log.info(Style.DIM + 'not released: {} behaviour disabled.'.format(_behaviour.name))
-            # reset Idle's timer after releasing other behaviors
-            if _idle_behaviour and not _idle_behaviour.suppressed:
-                _idle_behaviour.reset_activity_timer()
-                self._log.info(Fore.GREEN + 'idle activity timer reset.')
-            self._was_suppressed = None
+                    self._log.debug('{} behaviour remains suppressed (restored state).'.format(_behaviour.name))
+            else:
+                # no stored state - release if currently suppressed
+                if _behaviour.suppressed:
+                    _behaviour.release()
+                    self._log.info(Fore.GREEN + '{} behaviour released.'.format(_behaviour.name))
+                else:
+                    self._log.debug('{} behaviour already released.'.format(_behaviour.name))
+        # reset Idle's timer after releasing other behaviors
+        if _idle_behaviour and _idle_behaviour.enabled and not _idle_behaviour.suppressed:
+            _idle_behaviour.reset_activity_timer()
+            self._log.info(Fore.GREEN + 'idle activity timer reset.')
+        # clear stored states
+        self._was_suppressed = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close_all_behaviours(self):

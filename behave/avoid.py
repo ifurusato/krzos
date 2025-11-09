@@ -79,7 +79,6 @@ class Avoid(AsyncBehaviour):
 
     async def _poll(self):
         try:
-            pass
             # poll sensors and set intent vector accordingly
             _port_distance = self._port_sensor.get_distance()
             _stbd_distance = self._stbd_sensor.get_distance()

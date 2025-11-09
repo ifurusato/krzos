@@ -124,6 +124,7 @@ kros:
         distance_sensors:
             verbose:                       True            # noisy sensor output
     motor_controller:
+        enable:                            True            # enable motor controller on startup
         closed_loop:                       True            # open or closed loop control
         create_external_clock:             True            # create external clock if not provided
         use_eyeballs:                      True            # enable eyeballs monitor for direction display

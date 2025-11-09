@@ -94,7 +94,7 @@ class Icm20948(Component):
             # configure potentiometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             self._digital_pot = _component_registry.get('digital-pot')
             if self._digital_pot:
-                self._log.info('🎀 using digital pot at: ' + Fore.GREEN + '0x0A')
+                self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
                 self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
         # add numeric display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._low_brightness    = 0.15

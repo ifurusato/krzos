@@ -342,6 +342,13 @@ class KROS(Component, FiniteStateMachine):
         if self._tinyfx:
             self._tinyfx.play('beep')
 
+        _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
+        if _motor_ctrl_cfg.get('enable'):
+            self._log.info('enable motor controller…')
+            self._motor_controller.enable()
+        else:
+            self._log.warning('motor controller disabled.')
+
         # ════════════════════════════════════════════════════════════════════
         # now in main application loop until quit or Ctrl-C…
         self._started = True
