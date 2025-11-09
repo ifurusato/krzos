@@ -108,7 +108,7 @@ class ComponentRegistry:
             raise TypeError('argument \'{}\' is not a component.'.format(type(component)))
         else:
             self._dict[component.name] = component
-            self._log.info(Style.DIM + 'added component \'{}\' to registry ({:d} total).'.format(component.name, len(self._dict)))
+            self._log.info(Style.DIM + 'added component \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has(self, name):
@@ -123,12 +123,13 @@ class ComponentRegistry:
         Remove a component from the registry by name. Logs a warning if the
         name is not found.
         '''
+        print(Fore.RED + '💋 REMOVE COMPONENT: {}'.format(name) + Style.RESET_ALL)
         if name in self._dict:
             removed = self._dict.pop(name)
-            self._log.info("removed component '{}' from registry ({} remaining).".format(name, len(self._dict)))
+            self._log.info(Fore.WHITE + "removed component '{}' ({}) from registry ({} remaining).".format(name, removed.uuid, len(self._dict)))
             return removed
         else:
-            self._log.debug("cannot remove '{}'; not found in registry.".format(name))
+            self._log.warning("cannot remove '{}'; not found in registry.".format(name))
             return None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

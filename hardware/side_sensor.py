@@ -46,7 +46,7 @@ class SideSensor(Component):
         if not orientation:
             raise ValueError('missing required orientation argument.')
         self._orientation = orientation
-        self._name = '{}-side-sensor'.format(orientation.name)
+        self._name = '{}-side-sensor'.format(orientation.label)
         self._log = Logger(self._name, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None or not isinstance(config, dict):

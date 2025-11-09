@@ -64,7 +64,7 @@ class Logger(object):
     __suppress       = False
     __color_debug    = Fore.BLUE   + Style.DIM
     __color_info     = Fore.CYAN   + Style.NORMAL
-    __color_notice   = Fore.CYAN   + Style.BRIGHT
+    __color_notice   = Fore.WHITE  + Style.BRIGHT
     __color_warning  = Fore.YELLOW + Style.NORMAL
     __color_error    = Fore.RED    + Style.NORMAL
     __color_critical = Fore.WHITE  + Style.NORMAL

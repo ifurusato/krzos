@@ -228,8 +228,8 @@ class ProximitySensor(Component):
             Component.close(self)
 
     def __str__(self):
-        return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, xshut_pin={}, enabled={})".format(
-            self._id, self._label, self._i2c_address, self._xshut_pin, self._enabled
+        return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, enabled={})".format(
+            self._id, self._label, self._i2c_address, self._enabled
         )
 
 #EOF

@@ -277,7 +277,6 @@ class BehaviourManager(Subscriber):
         self._log.info('awaiting subscriber process_message {}.'.format(_event.name))
         await Subscriber.process_message(self, message)
         self._log.info('🔔 f. complete: awaited subscriber process_message {}.'.format(_event.name))
-        self._log.info('🔔 g. post-processing message {}'.format(message.name))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_info(self):
@@ -329,7 +328,7 @@ class BehaviourManager(Subscriber):
         Permanently close and disable the behaviour manager and all behaviours.
         '''
         if not self.closed:
-            Subscriber.close(self) # will call disable
             self.close_all_behaviours()
+            Subscriber.close(self) # will call disable
 
 #EOF

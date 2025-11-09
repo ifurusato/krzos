@@ -450,7 +450,8 @@ class KROS(Component, FiniteStateMachine):
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
-                        self._log.warning('component \'{}\' not found in registry.'.format(_name))
+                        # already gone
+                        self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
                     elif not isinstance(_component, Publisher) and not isinstance(_component, Subscriber) \
                             and _component != self and _component != self._message_bus:
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
@@ -462,7 +463,8 @@ class KROS(Component, FiniteStateMachine):
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
-                        self._log.warning('component \'{}\' not found in registry.'.format(_name))
+                        # already gone
+                        self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
                     elif _component != self and _component != self._message_bus:
                         self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()

@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-06-29
-# modified: 2025-08-31
+# modified: 2025-11-09
 #
 # MissingComponentError at bottom
 #
@@ -52,8 +52,9 @@ class Component:
             raise ValueError('wrong type for suppressed argument: {}'.format(type(suppressed)))
         if not isinstance(enabled, bool):
             raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
-        Component._registry.add(self)
         self._uuid       = uuid.uuid4()
+        if not Component._registry.has(self._log.name): # properly handle multiple inheritance
+            Component._registry.add(self)
         self._suppressed = suppressed
         self._enabled    = enabled
         self._closed     = False

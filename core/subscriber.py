@@ -45,7 +45,8 @@ class Subscriber(Component, FiniteStateMachine):
             self._log = log_or_name
             self._name = self._log.name
         elif isinstance(log_or_name, str):
-            self._log = Logger('sub:{}'.format(log_or_name), level)
+#           self._log = Logger('sub:{}'.format(log_or_name), level)
+            self._log = Logger('{}'.format(log_or_name), level)
             self._name = log_or_name
         else:
             raise ValueError('wrong type for log_or_name argument: {}'.format(type(log_or_name)))
@@ -344,7 +345,7 @@ class Subscriber(Component, FiniteStateMachine):
         if self.enabled:
             Component.disable(self)
             FiniteStateMachine.disable(self)
-            self._log.debug('subscriber {} disabled.'.format(self.name))
+            self._log.info('subscriber {} disabled.'.format(self.name))
         else:
             self._log.warning('subscriber {} already disabled.'.format(self.name))
 
@@ -353,7 +354,7 @@ class Subscriber(Component, FiniteStateMachine):
         if not self.closed:
             Component.close(self)
             FiniteStateMachine.close(self)
-            self._log.debug('subscriber {} closed.'.format(self.name))
+            self._log.info('subscriber {} closed.'.format(self.name))
         else:
             self._log.warning('subscriber {} already closed.'.format(self.name))
 
