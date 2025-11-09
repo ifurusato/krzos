@@ -311,7 +311,7 @@ class PID(object):
         problems when starting up again. The reset() function cleans
         any stored state.
         '''
-        self._log.info('reset.')
+#       self._log.info('reset.')
 #       self._setpoint     = 0.0
         self._proportional = 0.0
         self._integral     = 0.0

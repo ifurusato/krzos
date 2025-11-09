@@ -221,11 +221,12 @@ class Event(Enum):
 
     # high level behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     AVOID                  = ( 500, "avoid",                  150,   Group.BEHAVIOUR )
-    MOTION_DETECT          = ( 501, "motion detect",          151,   Group.BEHAVIOUR )
-    ROAM                   = ( 502, "roam",                   152,   Group.BEHAVIOUR )
-    MOTH                   = ( 503, "moth",                   153,   Group.BEHAVIOUR )
-    SCAN                   = ( 504, "scan",                   154,   Group.BEHAVIOUR )
-    SWERVE                 = ( 505, "swerve",                 155,   Group.BEHAVIOUR )
+    ROAM                   = ( 501, "roam",                   151,   Group.BEHAVIOUR )
+    MOTH                   = ( 502, "moth",                   152,   Group.BEHAVIOUR )
+    SCAN                   = ( 503, "scan",                   153,   Group.BEHAVIOUR )
+    SWERVE                 = ( 504, "swerve",                 154,   Group.BEHAVIOUR )
+
+    MOTION_DETECT          = ( 505, "motion detect",          155,   Group.BEHAVIOUR )
     SNIFF                  = ( 506, "sniff",                  156,   Group.BEHAVIOUR ) # A Button
     EVENT_L2               = ( 507, "L2",                     157,   Group.BEHAVIOUR ) # L2 Button
     EVENT_R1               = ( 508, "cruise",                 158,   Group.BEHAVIOUR ) # R1 Button

@@ -437,12 +437,19 @@ class Motor(Component):
             raise ValueError('null target_power argument.')
         elif not self.enabled and target_power > 0.0: # though we'll let the power be set to zero
             raise Exception('motor {} not enabled.'.format(self.orientation.name))
+
+        # WARNING: check for excessive target power BEFORE scaling
+        if abs(target_power) > 1.0:
+            self._log.error('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f} (before scaling)'.format(
+                self.orientation.name, target_power))
+
         # even if disabled or suppressed, JerkLimiter still clips
 #       if self._jerk_limiter:
 #           target_power = self._jerk_limiter.limit(self.get_current_power(), target_power)
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
         # temporary clamp
 #       _driving_power = min(0.5, max(-0.5, _driving_power))
+
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
             _driving_power *= -1.0

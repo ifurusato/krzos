@@ -467,12 +467,30 @@ class MotorController(Component):
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         vx, vy, omega = intent
         self._blended_intent_vector = intent # for access as property
+
+        # WARNING: check for excessive intent vector values
+        if abs(vx) > 1.0 or abs(vy) > 1.0 or abs(omega) > 1.0:
+            self._log.error('⚠️  EXCESSIVE INTENT VECTOR: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
+            # list all active intent vectors for debugging
+            for name, entry in self._intent_vectors.items():
+                _vector = entry['vector']()
+                _priority = entry['priority']()
+                self._log.error('  - {}: vector={}, priority={:.3f}'.format(name, _vector, _priority))
+
         # mecanum -> wheel speeds
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
         paft = vy - vx + omega
         saft = vy + vx - omega
         speeds = [pfwd, sfwd, paft, saft]
+
+        # WARNING: check for excessive wheel speeds before normalization
+        max_abs = max(abs(s) for s in speeds)
+        if max_abs > 1.0:
+            self._log.warning('⚠️  wheel speeds exceed 1.0 before normalization: max={:.3f}, speeds={}'.format(
+                max_abs, ['{:.3f}'.format(s) for s in speeds]))
+            speeds = [s / max_abs for s in speeds]
+
 #       self._log.info('A. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         # normalize if any magnitude > 1.0
         max_abs = max(abs(s) for s in speeds)
@@ -499,6 +517,13 @@ class MotorController(Component):
             speeds = [s / max_abs for s in speeds]
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
+
+        # WARNING: final sanity check before setting motor speeds
+        for i, _speed in enumerate(speeds):
+            if abs(_speed) > 1.0:
+                self._log.error('⚠️  EXCESSIVE MOTOR TARGET SPEED: motor {} speed={:.3f}'.format(
+                    ['pfwd', 'sfwd', 'paft', 'saft'][i], _speed))
+
 #       self._log.info('B. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         self._pfwd_motor.target_speed = speeds[0]
         self._sfwd_motor.target_speed = speeds[1]

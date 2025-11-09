@@ -40,7 +40,7 @@ kros:
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
             enable:                      True              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
