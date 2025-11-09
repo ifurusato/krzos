@@ -150,40 +150,6 @@ class DistanceSensor(Component):
         self._last_read_time = time.time()
         return int(distance_mm)
 
-    def x_compute_distance(self):
-        '''
-        Compute and update the distance based on the current pulse width,
-        returning the distance or None if out of range or if we do not have
-        enough recent consistent readings. Requires 3 consecutive readings
-        within a tolerance of their median to report a distance.
-        '''
-        pulse_us = self._measure_pulse_width()
-        if pulse_us is None:
-            self._log.debug("pulse width reading None.")
-            return None
-        if not (self._min_valid_pulse_us <= pulse_us <= self._max_valid_pulse_us):
-    #       self._log.debug("pulse width {} out of expected sensor range.".format(pulse_us))
-            return None
-        distance_mm = (pulse_us - self._min_valid_pulse_us) * 3 / 4
-        self._last_read_time = time.time()
-        if self._smoothing:
-            required_consistent_count = 3     # consecutive recent readings required to agree before reporting
-            tolerance_fraction        = 0.25  # allowed fractional deviation from the median (0.25 == ±25%)
-            # append the new reading to the existing window
-            self._window.append(distance_mm)
-            if len(self._window) < required_consistent_count:
-                return None
-            recent_readings = list(self._window)[-required_consistent_count:]
-            sorted_recent = sorted(recent_readings)
-            median_index = required_consistent_count // 2
-            median_of_recent = sorted_recent[median_index] if required_consistent_count % 2 else \
-                (sorted_recent[median_index - 1] + sorted_recent[median_index]) / 2.0
-            # all recent readings must be within tolerance_fraction of the median
-            if all(abs(v - median_of_recent) <= max(1.0, median_of_recent * tolerance_fraction) for v in recent_readings):
-                return int(median_of_recent)
-            return None
-        return int(distance_mm)
-
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _external_callback_method(self):
         ''' 

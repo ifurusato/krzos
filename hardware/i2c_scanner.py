@@ -228,39 +228,6 @@ class I2CScanner:
         else:
             self._log.info("found no devices (no devices are available, or no smbus is available).")
 
-    def x_py_scan_addresses(self):
-        '''
-        Scans the I2C bus, populating the int and hex lists.
-        '''
-        self._log.warning('scanning I²C address bus using python method…')
-        device_count = 0
-        try:
-            for address in range(3, 128):
-                try:
-                    self._i2c_bus.write_byte(address, 0)
-                    _hex_address = hex(address)
-                    _str_value = '0x{:02X}'.format(address)
-                    self._log.info("found I²C device at 0x{:02X} (hex: '{}'; str: '{}')".format(address, _hex_address, _str_value))
-                    self._int_list.append(address)
-                    self._hex_list.append(_str_value)
-                    device_count = device_count + 1
-                except IOError as e:
-                    if e.errno != errno.EREMOTEIO:
-                        self._log.debug('{0} on address {1}'.format(e, hex(address)))
-                except Exception as e: # exception if read_byte fails
-                    self._log.error('{0} error on address {1}'.format(e, hex(address)))
-            self._log.info('scanning complete.')
-        except ImportError:
-            self._log.warning('import error, unable to initialise: this script requires smbus2. Scan will return an empty result.')
-        except Exception as e:
-            self._log.warning('{} while initialising I²C bus: scan will return an empty result.'.format(e))
-        if device_count == 1:
-            self._log.info("found one I²C device.".format(device_count))
-        elif device_count > 1:
-            self._log.info("found {:d} I²C devices.".format(device_count))
-        else:
-            self._log.info("found no devices (no devices are available, or no smbus is available).")
-
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_device_list(self):
         self._addrDict = dict(list(map(lambda x, y:(x,y), self.get_int_addresses(), self.get_hex_addresses())))

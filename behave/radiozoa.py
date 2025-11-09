@@ -209,47 +209,6 @@ class Radiozoa(AsyncBehaviour):
         if self._verbose:
             self._display_info()
 
-    def x_update_intent_vector(self, distances):
-        '''
-        Compute the robot's movement intent as a single (vx, vy, omega) vector.
-        Each pair contributes force only if its imbalance exceeds min_sensor_diff_mm.
-        Robot settles naturally when all pairs are balanced within threshold.
-        '''
-        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
-        force_vec = np.zeros(2)
-        pair_active = False
-        for c1, c2 in self._pairs:
-            d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
-            d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
-            d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
-            d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
-            # both sensors out of range - ignore this pair
-            if d1 >= far_threshold and d2 >= far_threshold:
-                continue
-            diff = abs(d1 - d2)
-            # only contribute force if difference exceeds threshold
-            if diff >= self._min_sensor_diff:
-                signed_diff = d1 - d2
-                vec = self._directions[(c1, c2)] * signed_diff
-                force_vec += vec
-                pair_active = True
-        # if no pairs are contributing force, we're settled
-        if not pair_active:
-            self._intent_vector = (0.0, 0.0, 0.0)
-            self._smoothed_vector = np.array([0.0, 0.0])
-            return
-        # normalize the raw force vector
-        max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
-        normalized_vec = force_vec / max_abs
-        # apply exponential moving average for smoothing
-        self._smoothed_vector = (self._smoothing_factor * self._smoothed_vector +
-                                 (1.0 - self._smoothing_factor) * normalized_vec)
-        vx, vy = self._smoothed_vector
-        amplitude = self._default_speed
-        self._intent_vector = (vx * amplitude, vy * amplitude, 0.0)
-        if self._verbose:
-            self._display_info()
-
     def _get_highlight_color(self, value):
         '''
         Return colorama color/style for multiplier legend.

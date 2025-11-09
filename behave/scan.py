@@ -129,19 +129,6 @@ class Scan(AsyncBehaviour):
         else:
             self._log.warning('unexpected message event: {}'.format(message.event))
 
-    def x_execute(self, message):
-        '''
-        Called when STUCK message received via message bus.
-        '''
-        if message.event is Event.STUCK:
-            self._log.info('STUCK event received, initiating scan…')
-            if not self._scan_active:
-                self._initiate_scan()
-            else:
-                self._log.warning('scan already in progress, ignoring STUCK event')
-        else:
-            self._log.warning('unexpected message event: {}'.format(message.event))
-
     def _on_rotation_phase_change(self, old_phase, new_phase):
         '''
         Callback for RotationController phase transitions.

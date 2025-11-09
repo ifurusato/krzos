@@ -37,16 +37,6 @@ class ScoutVisualiser(Component):
         self.rows = rows
         self._log.info('ready.')
 
-    def x__init__(self, cols, rows, flip_horizontal=False, flip_vertical=False):
-        self._log = Logger('display', level=Level.INFO)
-        Component.__init__(self, self._log, suppressed=False, enabled=True)
-        self.cols = cols
-        self.rows = rows
-        self._flip_horizontal = flip_horizontal
-        self._flip_vertical = flip_vertical
-        self._log.info('ready (flip_horizontal={}, flip_vertical={}).'.format(
-            flip_horizontal, flip_vertical))
-
     def get_dist_color(self, val):
         for low, high, color in self.DIST_COLORS:
             if low <= val <= high:
@@ -72,45 +62,6 @@ class ScoutVisualiser(Component):
             result['target_offset'],
             result.get('heading_offset', 0.0)
         )
-
-    def x_print_colored_grid(self, distance, COLS, floor_row_means, margin):
-        '''
-        Prints the 8x8 distance grid with color coding:
-        - Magenta: Floor rows (detected during calibration)
-        - Red/Yellow/Green/Blue: Obstacle distances
-        - Black: Far/no obstacle
-        
-        Respects flip_horizontal and flip_vertical settings to match sensor orientation.
-        '''
-        print("\033[1m" + "{}".format("┈" * (COLS * 6)) + "\033[0m")
-        self._log.debug("floor_row_means = {}".format(floor_row_means))
-        self._log.debug("Floor rows (indices): {}".format([i for i, v in enumerate(floor_row_means) if v is not None]))
-        # determine row iteration order based on flip_vertical setting
-        if self._flip_vertical:
-            row_range = range(distance.shape[0])  # Normal order: 0 to 7 (top to bottom)
-        else:
-            row_range = reversed(range(distance.shape[0]))  # Reversed: 7 to 0 (original behavior)
-        # determine column iteration order based on flip_horizontal setting
-        if self._flip_horizontal:
-            col_range = reversed(range(distance.shape[1]))  # Reversed: 7 to 0 (right to left)
-        else:
-            col_range = range(distance.shape[1])  # Normal order: 0 to 7 (left to right)
-        for row in row_range:
-            line = ""
-            for col in col_range:
-                val = distance[row, col]
-                floor_mean = floor_row_means[row]
-                # only color as floor for values in floor rows, unless obstacle
-                if floor_mean is not None:
-                    if val >= (floor_mean - margin):
-                        color = self.FLOOR_COLOR
-                    else:
-                        color = self.get_dist_color(val)  # obstacle color
-                else:
-                    color = self.get_dist_color(val)
-                line += "{}{:4d}{} ".format(color, val, Style.RESET_ALL)
-            print(line)
-        print(Style.RESET_ALL)
 
     def print_colored_grid(self, distance, COLS, floor_row_means, margin):
         '''

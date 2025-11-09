@@ -245,22 +245,6 @@ class MotorController(Component):
         }
         self._log.info('added intent vector: {}'.format(name))
 
-    def x_add_intent_vector(self, name, vector_lambda, exclusive=False):
-        '''
-        Register a behaviour's intent vector lambda.
-        The lambda should return (vx, vy, omega).
-        '''
-        if exclusive:
-            self.clear_intent_vectors()
-        else:
-            if name in self._intent_vectors:
-                raise Exception("intent vector '{}' already registered; ignoring duplicate.".format(name))
-        if vector_lambda.__name__ != "<lambda>":
-            raise TypeError('expected lambda function, not {}'.format(type(vector_lambda)))
-        self._log.info('adding intent vector: {}'.format(name))
-        self._intent_vectors[name] = vector_lambda
-        self._log.info('added intent vector: {}'.format(name))
-
     def remove_intent_vector(self, name):
         '''
         Remove a behaviour's intent vector lambda.
@@ -291,22 +275,6 @@ class MotorController(Component):
         if total_weight == 0.0:
             return (0.0, 0.0, 0.0)
         return tuple(s / total_weight for s in weighted_sum)
-
-    def x_blend_intent_vectors(self):
-        '''
-        Simple unweighted averaging of all intent vectors.
-        '''
-        vectors = [fn() for fn in self._intent_vectors.values()]
-        if not vectors:
-            return (0.0, 0.0, 0.0)
-        sum_vector = [0.0, 0.0, 0.0]
-        for v in vectors:
-            if len(v) != 3:
-                raise Exception('expected length of 3, not {}; {}'.format(len(v), v))
-            for i in range(3):
-                sum_vector[i] += v[i]
-        avg_vector = tuple(s / len(vectors) for s in sum_vector)
-        return avg_vector
 
     def is_closed_loop(self):
         return self._closed_loop
