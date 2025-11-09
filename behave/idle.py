@@ -125,6 +125,16 @@ class Idle(Behaviour, Publisher):
                 name=Idle._LISTENER_LOOP_NAME
             )
         self._log.info('enabled.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def reset_activity_timer(self):
+        '''
+        Reset the activity timer to now, preventing IDLE messages from being published
+        until the threshold period has elapsed again.
+        '''
+        self._last_activity_time = dt.now()
+        self._last_idle_publish_time = None
+        self._log.debug('activity timer reset by external call.')
     
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _idle_listener_loop(self, f_is_enabled):

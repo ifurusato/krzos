@@ -230,8 +230,10 @@ class BehaviourManager(Subscriber):
         '''
         if not self.closed:
             self._log.info('release all behaviours…')
+            _idle_behaviour = None
             for _behaviour in self.get_behaviours():
                 if _behaviour.name is Idle.NAME:
+                    _idle_behaviour = _behaviour
                     self._log.info(Fore.WHITE + 'ignored: {} behaviour.'.format(_behaviour.name))
                 elif _behaviour.enabled:
                     if self._was_suppressed:
@@ -243,6 +245,10 @@ class BehaviourManager(Subscriber):
                         self._log.info('no change: {} behaviour already released.'.format(_behaviour.name))
                 else:
                     self._log.info(Style.DIM + 'not released: {} behaviour disabled.'.format(_behaviour.name))
+            # reset Idle's timer after releasing other behaviors
+            if _idle_behaviour and not _idle_behaviour.suppressed:
+                _idle_behaviour.reset_activity_timer()
+                self._log.info(Fore.GREEN + 'idle activity timer reset.')
             self._was_suppressed = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
