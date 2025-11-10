@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-11-04
+# modified: 2025-11-10
 
 import sys
 import time
@@ -140,39 +140,17 @@ class Roam(AsyncBehaviour):
         if self._motor_controller.braking_active:
             self._log.warning('braking active: intent vector suppressed')
             return
-
         amplitude = self._default_speed
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
-
         if isclose(amplitude, 0.0, abs_tol=0.01):
             self.clear_intent_vector()
             if self._verbose:
                 self._display_info('stopped')
             return
-
         # obstacle scaling only for forward motion
         if amplitude > 0.0:
-            self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
-
-            self._log.info('🍎 front_distance: {:.1f}mm, max_distance: {:.1f}mm'.format(self._front_distance, self._max_distance))
-
-#           if self._front_distance < 0.0:
-#               self._log.warning('braking: no long range distance available.')
-#               self._motor_controller.brake()
-#               return
-#           elif self._front_distance is None:
-#               self._log.info(Fore.BLUE + 'roam sensor returned: None; maintaining current vector')
-#               return
-#           elif self._front_distance >= self._max_distance:
-#               obstacle_scale = 1.0
-#           elif self._front_distance <= self._min_distance:
-#               obstacle_scale = 0.0  # stop at obstacle
-#           else:
-#               # scale between min and max distance
-#               obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
-#               obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
-
+            self._front_distance = self._roam_sensor.get_distance()
             if self._front_distance >= self._clear_path_threshold:
                 obstacle_scale = 1.0  # clear path, full speed
             elif self._front_distance <= self._min_distance:
@@ -183,9 +161,7 @@ class Roam(AsyncBehaviour):
                 normalised = np.clip(normalised, 0.0, 1.0)
                 # apply easing function to shape the speed response curve
                 obstacle_scale = self._obstacle_easing.apply(normalised)
-
             amplitude *= obstacle_scale
-            self._log.info('🍎 amplitude after obstacle scaling: {:.3f} (scale: {:.3f})'.format(amplitude, obstacle_scale))
         else:
             # reverse motion - no obstacle detection
             self._front_distance = 0.0

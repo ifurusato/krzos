@@ -547,7 +547,7 @@ class MotorController(Component):
             post_power = _motor.get_current_power()
             power_delta = abs(post_power - pre_power)
             # only print if power changed significantly
-            if power_delta > 0.15:  # threshold for "surge"
+            if power_delta > 0.20:  # threshold for "surge"
                 self._log.warning('⚠️  SURGE {}: target={:.3f}, vel={:.3f}, power: {:.3f}→{:.3f} (Δ{:.3f})'.format(
                     label, target, _motor.velocity, pre_power, post_power, power_delta))
 

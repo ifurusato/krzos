@@ -18,7 +18,6 @@ from core.component import Component
 from core.orientation import Orientation
 from hardware.pid_controller import PIDController
 from hardware.velocity import Velocity
-from hardware.power_change_limiter import PowerChangeLimiter
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Motor(Component):
@@ -81,13 +80,6 @@ class Motor(Component):
         self.__speed_lambdas     = {}
         self._verbose            = False
         self._allow_speed_multipliers = False
-        # power change limiter
-        self._power_change_limiter = None
-        _power_change_cfg = _cfg.get('power_change_limiter')
-        _power_change_enabled = _power_change_cfg.get('enabled', False)
-        if _power_change_enabled:
-            self._power_change_limiter = PowerChangeLimiter(config, orientation, level=level)
-            self._power_change_limiter.enable()
         # provides closed loop speed feedback
         self._velocity           = Velocity(config, self, level=level)
         # add callback from motor's update method
@@ -386,11 +378,6 @@ class Motor(Component):
 
         if abs(target_power) > 1.0:
             self._log.warning('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power))
-
-        if self._power_change_limiter:
-            target_power = self._power_change_limiter.limit(self._last_driving_power / self.max_power_ratio, target_power)
-            if abs(target_power) > 1.0:
-                self._log.warning('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f} (after power change limiting)'.format(self.orientation.name, target_power))
 
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
 

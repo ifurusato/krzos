@@ -175,9 +175,6 @@ kros:
         reverse_motor_sfwd:                True            # ditto
         reverse_motor_paft:               False            # ditto
         reverse_motor_saft:                True            # ditto
-        power_change_limiter:
-            enabled:                      False
-            max_power_change_rate:           2.0           # max 2.0 power units/second at 20Hz = 0.10/tick max change
         odometry:
             motor_encoder_sfwd_a:            26            # stbd fwd A channel
             motor_encoder_sfwd_b:            19            # stbd fwd B channel
@@ -286,7 +283,6 @@ kros:
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
             stale_timeout_ms:               250            # value cannot be older than this
         swerve_sensor:
             port_columns:                [0, 1]            # VL53L5CX columns for port side detection

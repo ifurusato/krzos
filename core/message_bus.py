@@ -337,12 +337,12 @@ class MessageBus(Component):
         '''
         self._enable_publishers()
         _subscribers = self.subscribers
-        self._log.info(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(
+        self._log.info('starting consume loop with {:d} subscriber{}…'.format(
                 len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         for _subscriber in _subscribers:
             if isinstance(_subscriber, Subscriber):
                 if _subscriber.enabled and not _subscriber.suppressed:
-                    self._log.info(Fore.MAGENTA + "starting subscriber '{}'…".format(_subscriber.name))
+                    self._log.info("starting subscriber '{}'…".format(_subscriber.name))
                     _subscriber.start()
             else:
                 self._log.warning('unable to start non-subscriber: {}; value: {}'.format(type(_subscriber), _subscriber))

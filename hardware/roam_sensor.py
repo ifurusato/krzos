@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-07
-# modified:  2025-10-07
+# modified: 2025-11-10
 #
 # Provides fused distance readings for Roam behaviour, blending PWM and VL53L5CX sensor values.
 
@@ -22,7 +22,6 @@ init()
 from core.logger import Logger, Level
 from core.component import Component
 from core.orientation import Orientation
-from hardware.easing import Easing
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from hardware.distance_sensors import DistanceSensors
 from hardware.distance_sensor import DistanceSensor
@@ -63,10 +62,7 @@ class RoamSensor(Component):
         self._max_distance   = _cfg.get('max_distance')   # mm, the "no obstacle" threshold
         self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
         self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
-        _easing_value        = _cfg.get('easing', 'logarithmic')
         self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
-        self._easing         = Easing.from_string(_easing_value)
-        self._log.info('easing function: {}'.format(self._easing.name))
         self._verbose        = False
         self._counter = itertools.count()
         # sensor instantiation
@@ -193,57 +189,28 @@ class RoamSensor(Component):
 #       self._log.info(Fore.WHITE + 'smoothed: {:.2f}'.format(smoothed))
         return smoothed
 
-    def _normalise_and_ease(self, value):
+    def get_distance(self):
         '''
-        Clamps, normalises, eases, and rescales the value.
-        Returns eased value (mm) or None.
-        '''
-        if value is None:
-            return None
-        clamped = min(value, self._max_distance)
-        normalised = clamped / self._max_distance
-        eased = self._easing.apply(normalised)
-        eased_mm = eased * self._max_distance
-#       self._log.info(Fore.WHITE + 'eased: {:.2f}'.format(eased_mm))
-        return eased_mm
-
-    def get_distance(self, apply_easing=True):
-        '''
-        Returns a fused, smoothed, and optionally eased value for Roam behaviour.
+        Returns a fused and smoothed distance value for Roam behaviour.
         Uses sigmoid weighting to blend PWM (close range) and VL53 (long range).
         '''
         _short_range_distance = self._distance_sensor.get_distance()
         _long_range_distance  = self._get_vl53l5cx_front_distance()
-        # DIAGNOSTIC
-#       if next(self._counter) % 5 == 0:
-#           print(Fore.CYAN + 'sensors: PWM={}, VL53={}'.format(
-#               '{:.1f}mm'.format(_short_range_distance) if _short_range_distance else 'None',
-#               '{:.1f}mm'.format(_long_range_distance) if _long_range_distance else 'None') + Style.RESET_ALL)
-        # handle case where both sensors return None
         if _short_range_distance is None and _long_range_distance is None:
             now = dt.now()
             elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
             if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
                 self._log.info('both sensors None, using last value: {:.1f}mm (age: {:.0f}ms)'.format(
                     self._last_value, elapsed_ms))
-                if apply_easing:
-                    return self._normalise_and_ease(self._last_value)
-                else:
-                    return self._last_value
+                return self._last_value
             return -1.0
-        # fuse sensors using sigmoid or min strategy
         value = self._fuse(_short_range_distance, _long_range_distance)
-        # apply smoothing if enabled
         if self._smoothing and value is not None:
             value = self._smooth(value)
-        # update cache with fresh data
         if value is not None:
             self._last_value = value
             self._last_read_time = dt.now()
-            if apply_easing:
-                return self._normalise_and_ease(value)
-            else:
-                return value
+            return value
         return None
 
     def check_timeout(self):
