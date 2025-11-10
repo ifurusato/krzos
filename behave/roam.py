@@ -56,7 +56,6 @@ class Roam(AsyncBehaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
-        self._clear_path_threshold = _cfg.get('clear_path_threshold', 600)
         _easing_value = _cfg.get('obstacle_easing', 'SQUARE_ROOT')
         self._obstacle_easing = Easing.from_string(_easing_value)
         self._log.info('obstacle easing function: {}'.format(self._obstacle_easing.name))
@@ -151,15 +150,15 @@ class Roam(AsyncBehaviour):
         # obstacle scaling only for forward motion
         if amplitude > 0.0:
             self._front_distance = self._roam_sensor.get_distance()
-            if self._front_distance >= self._clear_path_threshold:
-                obstacle_scale = 1.0  # clear path, full speed
+            if self._front_distance >= self._max_distance:
+                obstacle_scale = 1.0  # beyond sensor range, full speed
             elif self._front_distance <= self._min_distance:
                 obstacle_scale = 0.0  # too close, stop
             else:
-                # normalize distance to [0,1] range between min and clear threshold
-                normalised = (self._front_distance - self._min_distance) / (self._clear_path_threshold - self._min_distance)
+                # scale between min_distance and max_distance (the ORIGINAL way)
+                normalised = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
                 normalised = np.clip(normalised, 0.0, 1.0)
-                # apply easing function to shape the speed response curve
+                # Apply easing function to shape the speed response curve
                 obstacle_scale = self._obstacle_easing.apply(normalised)
             amplitude *= obstacle_scale
         else:

@@ -71,8 +71,7 @@ kros:
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
             deadband_threshold:             0.07
-            clear_path_threshold:         600              # distance (mm) beyond which path is considered fully clear
-            obstacle_easing: 'SQUARE_ROOT'                 # easing function for obstacle scaling
+            obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
         scan:
             enable:                     False              # enable scan behaviour
             release:                    False              # release scan behaviour on startup
