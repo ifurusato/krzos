@@ -41,12 +41,12 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
-            aft_threshold_mm:               500            # ignore aft obstacles further than this
+            aft_threshold_mm:               250            # ignore aft obstacles further than this
             avoid_speed:                    0.6            # speed to avoid obstacles at
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
@@ -65,8 +65,8 @@ kros:
             min_sensor_diff_mm:           100              # 50; minimum difference to react
             settling_threshold_mm:         60              # 30; all pairs within this is considered settled
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -172,6 +172,9 @@ kros:
         reverse_motor_sfwd:                True            # ditto
         reverse_motor_paft:               False            # ditto
         reverse_motor_saft:                True            # ditto
+        power_change_limiter:
+            enabled:                      False
+            max_power_change_rate:           2.0           # max 2.0 power units/second at 20Hz = 0.10/tick max change
         odometry:
             motor_encoder_sfwd_a:            26            # stbd fwd A channel
             motor_encoder_sfwd_b:            19            # stbd fwd B channel

@@ -70,6 +70,7 @@ class PIDController(Component):
         self._power        = 0.0
         self._last_power   = 0.0
         self._last_time = dt.now() # for calculating elapsed time
+        self._check_near_zero = False # use isclose block for zero checking
         self._verbose      = False
         self._log.info('ready.')
 
@@ -147,7 +148,8 @@ class PIDController(Component):
         if self.enabled:
             _elapsed_ms = round(( dt.now() - self._last_time ).total_seconds() * 1000.0)
             _count = next(self._counter)
-            if isclose(target_speed, 0.0, abs_tol=1e-2):
+#           if self._check_near_zero and isclose(target_speed, 0.0, abs_tol=1e-2):
+            if self._check_near_zero and isclose(target_speed, 0.0, abs_tol=1e-2) and abs(self._motor.velocity) < 0.2:
                 self._pid.setpoint = 0.0
                 self._pid.target   = 0.0
                 self._power        = 0.0
@@ -181,6 +183,7 @@ class PIDController(Component):
             self._last_power = self._power
             self._last_time = dt.now()
             return _motor_power
+
         else:
             self._log.info(Fore.RED + 'pid controller disabled.')
             return 0.0

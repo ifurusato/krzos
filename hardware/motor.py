@@ -18,6 +18,7 @@ from core.component import Component
 from core.orientation import Orientation
 from hardware.pid_controller import PIDController
 from hardware.velocity import Velocity
+from hardware.power_change_limiter import PowerChangeLimiter
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Motor(Component):
@@ -80,6 +81,13 @@ class Motor(Component):
         self.__speed_lambdas     = {}
         self._verbose            = False
         self._allow_speed_multipliers = False
+        # power change limiter
+        self._power_change_limiter = None
+        _power_change_cfg = _cfg.get('power_change_limiter')
+        _power_change_enabled = _power_change_cfg.get('enabled', False)
+        if _power_change_enabled:
+            self._power_change_limiter = PowerChangeLimiter(config, orientation, level=level)
+            self._power_change_limiter.enable()
         # provides closed loop speed feedback
         self._velocity           = Velocity(config, self, level=level)
         # add callback from motor's update method
@@ -333,12 +341,10 @@ class Motor(Component):
         if self.enabled:
             for callback in self.__callbacks:
                 callback()
-            _count = next(self._counter)
             # we start with the current value of the target speed
             self.__modified_target_speed = self.__target_speed
             _returned_value = 0.0
             if len(self.__speed_lambdas) > 0:
-#               self._log.info('processing {:d} lambdas…'.format(len(self.__speed_lambdas)))
                 for _name, _lambda in self.__speed_lambdas.items():
                     _returned_value = _lambda(self.__modified_target_speed)
                     if isinstance(_returned_value, str):
@@ -349,8 +355,6 @@ class Motor(Component):
                         self.__modified_target_speed = _returned_value
                         if 'accum' in _name: # update stored target speed if lambda name includes "accum"
                             self.__target_speed = self.__modified_target_speed
-#                       self._log.info(Fore.WHITE + 'set: {:5.2f}; before: {:5.2f}; target: {:5.2f}; {} lambda for {} motor.'.format(
-#                               self.__target_speed, _before_lambda_speed, self.__modified_target_speed, _name, self._orientation.label))
                 if isinstance(_returned_value, str):
                     # the lambda name was returned; this only should apply to brake, halt and stop.
                     _lambda_name = _returned_value
@@ -360,17 +364,9 @@ class Motor(Component):
                     return None
             if self._pid_controller.is_active:
                 _motor_speed = self.__modified_target_speed * self._scale_factor_closed
-#               if _count % 20 == 0:
-#                   if self._orientation is Orientation.PAFT:
-#                       self._log.debug(Fore.MAGENTA + 'updating {} target speed to: {:<5.2f} motor speed: {:5.2f}; {} steps'.format(
-#                               self._orientation.label, self.__modified_target_speed, _motor_speed, self.steps))
                 return self._pid_controller.set_speed(_motor_speed)
             else:
                 _motor_speed = self.__modified_target_speed * self._scale_factor_open
-#               if _count % 20 == 0:
-#                   if self._orientation is Orientation.PAFT:
-#                       self._log.debug(Fore.MAGENTA + 'OPEN LOOP updating {} target speed to: {:<5.2f} (from {:5.2f}); motor speed: {:5.2f}; {} steps.'.format(
-#                               self._orientation.label, self.__modified_target_speed, self.__target_speed, _motor_speed, self.steps))
                 self.set_motor_power(_motor_speed)
                 return _motor_speed
 
@@ -383,18 +379,24 @@ class Motor(Component):
 
         :param target_power:  the target motor power
         '''
-#       self._log.debug('set motor power: {}'.format(target_power))
         if target_power is None:
             raise ValueError('null target_power argument.')
         elif not self.enabled and target_power > 0.0: # though we'll let the power be set to zero
             raise Exception('motor {} not enabled.'.format(self.orientation.name))
 
-        # WARNING: check for excessive target power BEFORE scaling
         if abs(target_power) > 1.0:
-            self._log.error('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f} (before scaling)'.format(
-                self.orientation.name, target_power))
+            self._log.warning('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power))
+
+        if self._power_change_limiter:
+            target_power = self._power_change_limiter.limit(self._last_driving_power / self.max_power_ratio, target_power)
+            if abs(target_power) > 1.0:
+                self._log.warning('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f} (after power change limiting)'.format(self.orientation.name, target_power))
 
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
+
+        if abs(_driving_power) > 0.5:
+            self._log.warning('⚠️  EXCESSIVE DRIVING POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power))
+
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
             _driving_power *= -1.0

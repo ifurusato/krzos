@@ -43,7 +43,7 @@ class SlewLimiter(Component):
         # state tracking
         self._last_intent = (0.0, 0.0, 0.0)
         self._last_time = time.perf_counter()
-        self._verbose   = True
+        self._verbose   = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -85,8 +85,7 @@ class SlewLimiter(Component):
         if self._verbose:
             # log if any component was limited
             if limited_intent != target_intent:
-#               self._log.info('slew limited (Δt={:.1f}ms): target=({:.3f}, {:.3f}, {:.3f}) → limited=({:.3f}, {:.3f}, {:.3f})'.format(
-                print('slew limited (Δt={:.1f}ms): target=({:.3f}, {:.3f}, {:.3f}) → limited=({:.3f}, {:.3f}, {:.3f})'.format(
+                self._log.info('slew limited (Δt={:.1f}ms): target=({:.3f}, {:.3f}, {:.3f}) → limited=({:.3f}, {:.3f}, {:.3f})'.format(
                     elapsed_sec * 1000.0, tgt_vx, tgt_vy, tgt_omega, limited_vx, limited_vy, limited_omega))
         return limited_intent
 

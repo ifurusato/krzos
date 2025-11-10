@@ -93,7 +93,7 @@ class Vl53l5cxSensor(Component):
         self._last_distance = None       # cache for last known reading
         self._last_distance_time = None  # timestamp of last reading
         self._stale_data_timeout_sec = _cfg.get('stale_data_timeout_sec', 0.5)
-        _queue_maxsize = 50 # was 20 TODO config?
+        _queue_maxsize = 50 # was 20 config?
         self._queue = Queue(maxsize=_queue_maxsize)
         self._stop_event = Event()
         self._process = None
@@ -116,7 +116,7 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_integration_time_ms(_cfg.get('integration_time_ms', 20))
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-        self._log.info(Fore.MAGENTA + 'VL53L5CX device ready: elapsed: {:d}ms'.format(_elapsed_ms))
+        self._log.info('VL53L5CX device ready: elapsed: {:d}ms'.format(_elapsed_ms))
 
     @property
     def floor_margin(self):
@@ -183,7 +183,7 @@ class Vl53l5cxSensor(Component):
                     except Exception as e:
                         self._log.error("{} raised converting distance_mm: {}".format(type(e), e))
                 else:
-                    self._log.info(Fore.MAGENTA + "data not ready.")
+                    self._log.info(Style.DIM + "data not ready.")
                 time.sleep(poll_interval)
         except KeyboardInterrupt:
             print('')
