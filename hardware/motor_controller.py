@@ -29,26 +29,11 @@ from core.logger import Logger, Level
 from hardware.i2c_scanner import I2CScanner
 from hardware.irq_clock import IrqClock
 from hardware.motor_configurer import MotorConfigurer
-from hardware.slew_rate import SlewRate
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorController(Component):
     NAME = 'motor-ctrl'
-    STOP_LAMBDA_NAME  = "__stop_accum"  # TEMP moved to StopHandler
-    HALT_LAMBDA_NAME  = "__halt_accum"  # TEMP moved to StopHandler
-    BRAKE_LAMBDA_NAME = "__brake_accum" # TEMP moved to StopHandler
-    PORT_CW_ROTATE_LAMBDA_NAME   = "__port_rotate_cw_steering"
-    STBD_CW_ROTATE_LAMBDA_NAME   = "__stbd_rotate_cw_steering"
-
-    PORT_CCW_ROTATE_LAMBDA_NAME  = "__port_rotate_ccw_steering"
-    STBD_CCW_ROTATE_LAMBDA_NAME  = "__stbd_ccw_rotate_steering"
-
-    FWD_REPOSITION_ROTATE_LAMBDA_NAME = "__fwd_reposition_rotate_steering"
-    REV_REPOSITION_ROTATE_LAMBDA_NAME = "__aft_reposition_rotate_steering"
-
-    FWD_REPOSITION_RETURN_LAMBDA_NAME = "__fwd_reposition_return_steering"
-    AFT_REPOSITION_RETURN_LAMBDA_NAME = "__aft_reposition_return_steering"
-
+    BRAKE_LAMBDA_NAME = "__brake_lambda"
     '''
     The controller for 4 motors:
 
@@ -97,8 +82,6 @@ class MotorController(Component):
         self._halt_step           = _cfg.get('halt_step', 0.067)   # rate for halting (quickly)
         self._stop_step           = _cfg.get('stop_step', 0.09)    # rate for stopping (abrupt)
         self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
-        self._halt_slew_rate = SlewRate.from_string(_cfg.get('halt_rate'))
-        self._log.info('halt rate: {}'.format(self._halt_slew_rate.name))
         # eyeballs monitor
         self._use_eyeballs = _cfg.get('use_eyeballs', False)
         self._eyeballs_monitor = None
@@ -106,8 +89,9 @@ class MotorController(Component):
             from hardware.eyeballs_monitor import EyeballsMonitor
             self._eyeballs_monitor = EyeballsMonitor(self, level=level)
             self._log.info('eyeballs monitor configured.')
-        # slew limiters are on motors, not here
+        # slew limiters enabled?
         self._slew_limiter_enabled = config['kros'].get('motor').get('enable_slew_limiter')
+        # TODO actually implement this!
         _create_ext_clock    = _cfg.get('create_external_clock')
         if external_clock:
             self._external_clock = external_clock
@@ -727,20 +711,6 @@ class MotorController(Component):
         '''
         return self._clamp(value)
 
-    def _reset_slew_rate(self):
-        '''
-        Halts any automated acceleration or deceleration.
-        '''
-        for _motor in self._all_motors:
-            _motor.slew_limiter.reset()
-
-    def _set_slew_rate(self, slew_rate):
-        '''
-        Set the slew rate for all motors to the argument.
-        '''
-        for _motor in self._all_motors:
-            _motor.slew_limiter.slew_rate = slew_rate
-
     @property
     def all_motors_are_stopped(self):
         '''
@@ -750,21 +720,6 @@ class MotorController(Component):
             if not _motor.is_stopped:
                 return False
         return True
-
-    def reset_stopping(self):
-        for _motor in self._all_motors:
-            if _motor.has_speed_multiplier(MotorController.STOP_LAMBDA_NAME):
-                _motor.remove_speed_multiplier(MotorController.STOP_LAMBDA_NAME)
-            if _motor.has_speed_multiplier(MotorController.HALT_LAMBDA_NAME):
-                _motor.remove_speed_multiplier(MotorController.HALT_LAMBDA_NAME)
-            if _motor.has_speed_multiplier(MotorController.BRAKE_LAMBDA_NAME):
-                _motor.remove_speed_multiplier(MotorController.BRAKE_LAMBDA_NAME)
-        self._reset_slew_rate()
-
-    def reset_rotating(self):
-        for _motor in self._all_motors:
-            _motor.remove_speed_multiplier('rotate')
-        self._reset_slew_rate()
 
     def clear_speed_multipliers(self):
         '''

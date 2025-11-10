@@ -17,8 +17,6 @@ from core.logger import Level, Logger
 from core.component import Component
 from core.orientation import Orientation
 from hardware.pid_controller import PIDController
-from hardware.slew_limiter import SlewLimiter
-from hardware.jerk import JerkLimiter
 from hardware.velocity import Velocity
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -27,17 +25,9 @@ class Motor(Component):
     Controls a motor that uses a Hall Effect encoder to determine the robot's
     velocity and distance traveled.
 
-    This Motor class takes an input as speed (-1.0 to 1.0), pre-processed by
-    a SlewLimiter (which buffers sudden changes to the target speed), then is
-    passed along to a PIDController, which converts the speed to power (-1.0
-    to 1.0), which is then passed through a JerkLimiter to avoid sudden (and
-    potentially dangerous) changes to the motor. All three are optional; when
-    the PIDController is disabled a speed-to-power dual-axis proportional
-    interpolating function is used.
+    This Motor class takes an input as speed (-1.0 to 1.0).
 
-    This uses the kros:motor: section of the configuration. The suppressed state
-    of the slew limiter, PID controller and jerk limiter is initially set to the
-    opposite of the enabled configuration value.
+    This uses the kros:motor: section of the configuration.
 
     There are three reported speed properties of the motor:
 
@@ -87,7 +77,6 @@ class Motor(Component):
         self.__modified_target_speed = 0.0  # ...as modified by any lambdas
         self._last_driving_power = 0.0      # last power setting for motor
         self._decoder            = None     # motor encoder
-        self._jerk_limiter       = None
         self.__speed_lambdas     = {}
         self._verbose            = False
         self._allow_speed_multipliers = False
@@ -97,12 +86,6 @@ class Motor(Component):
         self.add_callback(self._velocity.tick)
         self._velocity.enable()
         self._pid_controller     = PIDController(config, self, level=level)
-        # slew limiter
-        _enable_slew_limiter     = _cfg.get('enable_slew_limiter')
-        self._slew_limiter       = SlewLimiter(config, orientation, suppressed=False, enabled=_enable_slew_limiter, level=level)
-        # jerk limiter
-        _enable_jerk_limiter     = _cfg.get('enable_jerk_limiter')
-        self._jerk_limiter       = JerkLimiter(config, orientation, suppressed=False, enabled=_enable_jerk_limiter, level=level)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -216,22 +199,6 @@ class Motor(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
-    def slew_limiter(self):
-        '''
-        Returns the slew limiter used by this motor.
-        '''
-        return self._slew_limiter
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def jerk_limiter(self):
-        '''
-        Returns the jerk limiter used by this motor.
-        '''
-        return self._jerk_limiter
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
     def pid_controller(self):
         '''
         Returns the PID controller used by this motor.
@@ -284,29 +251,16 @@ class Motor(Component):
     @target_speed.setter
     def target_speed(self, target_speed):
         '''
-        Set the target speed of the Motor. This is affected by the slew
-        limiter, if active.
+        Set the target speed of the Motor.
         '''
         if not isinstance(target_speed, float):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
-        if self._slew_limiter and self._slew_limiter.is_active:
-            _current_target_speed = self.__target_speed
-            _new_target_speed = target_speed
-            self.__target_speed = self._slew_limiter.limit(_current_target_speed, _new_target_speed)
-            if self._verbose:
-                if ( _current_target_speed < 0.0 ) or ( _new_target_speed < 0.0 ) or ( self.__target_speed < 0 ):
-                    self._log.info(Fore.RED + 'current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
-                            _current_target_speed, _new_target_speed, self.__target_speed))
-                else:
-                    self._log.info('current speed: {:5.2f}; target speed: {:5.2f}; slewed as: {:5.2f}'.format(
-                            _current_target_speed, _new_target_speed, self.__target_speed))
-        else:
-            self.__target_speed = target_speed
-            if self._verbose:
-                if ( target_speed < 0.0 ) or ( self.__target_speed < 0 ):
-                    self._log.info(Fore.RED + 'target speed: {:5.2f}'.format(self.__target_speed))
-                else:
-                    self._log.info('target speed: {:5.2f}'.format(self.__target_speed))
+        self.__target_speed = target_speed
+        if self._verbose:
+            if ( target_speed < 0.0 ) or ( self.__target_speed < 0 ):
+                self._log.info(Fore.RED + 'target speed: {:5.2f}'.format(self.__target_speed))
+            else:
+                self._log.info('target speed: {:5.2f}'.format(self.__target_speed))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -427,9 +381,6 @@ class Motor(Component):
         between -1.0 and 1.0, with the actual limits set by the max_power_ratio,
         which alters the value to match the power/motor voltage ratio.
 
-        If the JerkLimiter is active this acts as a sanity check on
-        overly-rapid changes to motor power.
-
         :param target_power:  the target motor power
         '''
 #       self._log.debug('set motor power: {}'.format(target_power))
@@ -443,9 +394,6 @@ class Motor(Component):
             self._log.error('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f} (before scaling)'.format(
                 self.orientation.name, target_power))
 
-        # even if disabled or suppressed, JerkLimiter still clips
-#       if self._jerk_limiter:
-#           target_power = self._jerk_limiter.limit(self.get_current_power(), target_power)
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
@@ -571,10 +519,6 @@ class Motor(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.enabled:
-            if self._slew_limiter:
-                self._slew_limiter.enable()
-            if self._jerk_limiter:
-                self._jerk_limiter.enable()
             Component.enable(self)
         self._log.info('enabled.')
 
@@ -582,10 +526,6 @@ class Motor(Component):
     def disable(self):
         if self.enabled:
             Component.disable(self)
-            if self._slew_limiter:
-                self._slew_limiter.disable()
-            if self._jerk_limiter:
-                self._jerk_limiter.disable()
             self.pid_controller.disable()
             self._log.info('disabled.')
         else:
