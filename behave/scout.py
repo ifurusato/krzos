@@ -154,7 +154,9 @@ class Scout(AsyncBehaviour):
         Returns dynamic priority based on environmental constraint.
         '''
         _, max_open_distance = self._scout_sensor.get_heading_offset()
-        return self._calculate_priority(max_open_distance)
+        _priority = self._calculate_priority(max_open_distance)
+        self._log.info('priority: {:.2f}°'.format(_priority))
+        return _priority
 
     def callback(self):
         raise NotImplementedError('callback unsupported in Scout.')
