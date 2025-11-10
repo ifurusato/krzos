@@ -85,12 +85,11 @@ kros:
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             rotation_speed:                 0.5            # motor speed when rotating in place
             rotation_tolerance:             1.0            # used to calculate omega
-#           hysteresis_multiplier:          3.0            # multiply tolerance when already rotating
-#           omega_threshold:                0.10           # minimum omega to consider "rotating"
-#           max_omega_change:               0.08           # maximum change in omega per iteration
             min_distance:                 200.0            # closest distance for priority/urgency calculations
             omega_gain:                     0.08           # rotational gain
             heading_mode:           'RELATIVE'             # RELATIVE or ABSOLUTE
+            damping_window:                10.0            # reduce target_omega when error is small to prevent overshoot
+            smoothing_factor:               0.3            # low pass filter on transition towards target
         swerve:
             enable:                     False              # enable swerve behaviour
             release:                    False              # release swerve behaviour on startup

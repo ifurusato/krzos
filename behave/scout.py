@@ -89,17 +89,15 @@ class Scout(AsyncBehaviour):
         self._use_color = True
         self._heading_mode = HeadingMode.from_string(_cfg.get('heading_mode', 'RELATIVE'))
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
+        self._damping_window         = _cfg.get('damping_window', 10.0) # reduce target_omega when error is small to prevent overshoot
+        self._smoothing_factor       = _cfg.get('smoothing_factor', 0.3) # low pass filter on transition towards target
         # heading control
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
         self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
         self._rotation_tolerance     = _cfg.get('rotation_tolerance', 0.5) # initially 2.0, then 0.5 was too low
-#       self._hysteresis_multiplier  = _cfg.get('hysteresis_multiplier', 3.0)
-#       self._omega_threshold        = _cfg.get('omega_threshold', 0.05)
-#       self._max_omega_change       = _cfg.get('max_omega_change', 0.08)  # was 0.05 maximum change in omega per iteration
         self._min_distance           = _cfg.get('min_distance', 200.0)
         self._omega_gain             = _cfg.get('omega_gain', 0.10)        # base proportional gain
-        # compass encoder WAS HERE
         # encoder tracking for RELATIVE mode
         self._last_encoder_pfwd      = None
         self._last_encoder_sfwd      = None
@@ -152,11 +150,10 @@ class Scout(AsyncBehaviour):
     def priority(self):
         '''
         Returns dynamic priority based on environmental constraint.
+        Calculated fresh each time based on current sensor data.
         '''
         _, max_open_distance = self._scout_sensor.get_heading_offset()
-        _priority = self._calculate_priority(max_open_distance)
-        self._log.info('priority: {:.2f}°'.format(_priority))
-        return _priority
+        return self._calculate_priority(max_open_distance)
 
     def callback(self):
         raise NotImplementedError('callback unsupported in Scout.')
@@ -241,7 +238,6 @@ class Scout(AsyncBehaviour):
         actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
         # get exploration guidance from ScoutSensor (get this early so it's available)
         scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
-
         self._fix_bug = True
         if self._fix_bug:
             # consume rotation from target offset ONLY if there was a meaningful target to consume
@@ -271,7 +267,6 @@ class Scout(AsyncBehaviour):
                 # only reset when no obstacles present to avoid snap-back
                 if abs(scout_offset) < 1.0:
                     self._heading_degrees = 0.0
-
         # error is simply the sum of both inputs
         error = self._target_relative_offset + scout_offset
         # normalize
@@ -279,15 +274,14 @@ class Scout(AsyncBehaviour):
             error -= 360
         elif error < -180:
             error += 360
-        # calculate priority and omega
-        priority = self._calculate_priority(max_open_distance)
+        # calculate omega
         omega = self._calculate_omega(error, max_open_distance)
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
         if self._verbose:
             self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
-                self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, priority, omega))
+                self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, self.priority, omega))
             self._display_info('RELATIVE')
 
     def _update_intent_vector_absolute(self):
@@ -298,27 +292,21 @@ class Scout(AsyncBehaviour):
         '''
         # base heading from self._heading_degrees
         base_heading = self._heading_degrees % 360.0
-
         # get dynamic offset from ScoutSensor
         offset, max_open_distance = self._scout_sensor.get_heading_offset()
-
         # combine base + offset for final world heading
         desired_heading = (base_heading + offset) % 360.0
         current_heading = self._imu.poll() % 360.0
         error = (desired_heading - current_heading + 180.0) % 360.0 - 180.0
-
-        # calculate priority and omega based on environmental constraint
-        priority = self._calculate_priority(max_open_distance)
+        # calculate omega based on environmental constraint
         omega = self._calculate_omega(error, max_open_distance)
-
         # scout only rotates
         vx = 0.0
         vy = 0.0
         self._intent_vector = (vx, vy, omega)
-
         if self._verbose:
             self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
-                base_heading, offset, desired_heading, current_heading, error, max_open_distance, priority, omega))
+                base_heading, offset, desired_heading, current_heading, error, max_open_distance, self.priority, omega))
             self._display_info('ABSOLUTE')
 
     def _calculate_priority(self, max_open_distance):
@@ -341,10 +329,6 @@ class Scout(AsyncBehaviour):
         Damping reduces omega when approaching target to prevent overshoot.
         '''
         abs_error = abs(error)
-        # deadzone - simple, no hysteresis
-#       if abs_error <= self._rotation_tolerance:
-#           self._last_omega = 0.0
-#           return 0.0
         # deadzone with small expansion when settling
         settling_bonus = 0.5 if abs(self._last_omega) < 0.15 else 0.0  # extra tolerance when nearly stopped
         effective_tolerance = self._rotation_tolerance + settling_bonus
@@ -359,13 +343,11 @@ class Scout(AsyncBehaviour):
         target_omega = max(min(target_omega, self._rotation_speed), 0.08)
         target_omega = target_omega * (1 if error > 0 else -1)
         # damping: reduce target_omega when error is small to prevent overshoot
-        _damping_window = 10.0 # TODO config
-        if abs_error < _damping_window: # within 10 degrees
-            damping_factor = abs_error / _damping_window # 0.0 to 1.0
+        if abs_error < self._damping_window: # within 10 degrees
+            damping_factor = abs_error / self._damping_window # 0.0 to 1.0
             target_omega *= damping_factor
         # smooth transition toward target (simple low-pass filter)
-        _smoothing_factor = 0.3 # 0=no change, 1=immediate TODO config
-        alpha = _smoothing_factor 
+        alpha = self._smoothing_factor 
         omega = self._last_omega + alpha * (target_omega - self._last_omega)
         self._last_omega = omega
         return omega
