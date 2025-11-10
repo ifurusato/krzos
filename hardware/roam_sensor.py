@@ -63,6 +63,8 @@ class RoamSensor(Component):
         self._pwm_max_range  = _cfg.get('pwm_max_range')  # PWM sensor range in mm for fusion
         self._use_sigmoid    = _cfg.get('use_sigmoid_fusion')
         self._stale_timeout_ms = _cfg.get('stale_timeout_ms', 250) # 100ms default
+        self._non_floor_row_offset = _cfg.get('non_floor_row_offset', 0)
+        self._log.info('non-floor row offset: {}'.format(self._non_floor_row_offset))
         self._verbose        = False
         self._counter = itertools.count()
         # sensor instantiation
@@ -75,7 +77,7 @@ class RoamSensor(Component):
         else:
             self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
             if self._vl53l5cx is None:
-                self._log.info('💮 creating VL53L5CX sensor…')
+                self._log.info('creating VL53L5CX sensor…')
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
         if distance_sensors:
             self._distance_sensor = distance_sensors.get_sensor(Orientation.FWD)
@@ -142,7 +144,8 @@ class RoamSensor(Component):
         try:
             grid = np.array(data).reshape((8, 8))
             # get first two non-floor rows from calibration
-            non_floor_rows = self._vl53l5cx.non_floor_rows[:2]
+#           non_floor_rows = self._vl53l5cx.non_floor_rows[:2]
+            non_floor_rows = self._vl53l5cx.non_floor_rows[self._non_floor_row_offset:self._non_floor_row_offset+2]
             center_cols = [3, 4]  # middle two columns
             values = [grid[row, col] for row in non_floor_rows for col in center_cols]
             # filter out invalid readings

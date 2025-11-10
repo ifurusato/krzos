@@ -55,18 +55,18 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.8            # cruising speed
             dynamic_speed:               True              # if True use digital pot for default speed
             smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
             min_sensor_diff_mm:           100              # 50; minimum difference to react
-            settling_threshold_mm:         60              # 30; all pairs within this is considered settled
+            settling_threshold_mm:         90              # 30; all pairs within this is considered settled
         roam:
-            enable:                      True              # enable roam behaviour
-            release:                     True              # release roam behaviour on startup
+            enable:                     False              # enable roam behaviour
+            release:                    False              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -283,6 +283,7 @@ kros:
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             stale_timeout_ms:               250            # value cannot be older than this
+            non_floor_row_offset:             1            # bump floor rows upwards by this 
         swerve_sensor:
             port_columns:                [0, 1]            # VL53L5CX columns for port side detection
             stbd_columns:                [6, 7]            # VL53L5CX columns for starboard side detection
