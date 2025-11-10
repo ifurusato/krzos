@@ -70,6 +70,9 @@ kros:
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
+            deadband_threshold:             0.07
+            clear_path_threshold:         600              # distance (mm) beyond which path is considered fully clear
+            obstacle_easing: 'SQUARE_ROOT'                 # easing function for obstacle scaling
         scan:
             enable:                     False              # enable scan behaviour
             release:                    False              # release scan behaviour on startup
@@ -245,7 +248,7 @@ kros:
         distance_sensors:                                  # distance sensors (trio of distance sensors)
             min_distance:                     1            # practical minimum distance in mm
             max_distance:                   270            # practical maximum distance in mm
-            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
+            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
         vl53l5cx_sensor:
             use_multiprocessing:           True            # handle sensor inside external multiprocessing process
             flip_horizontal:               True            # flip sensor data horizontally
@@ -283,7 +286,7 @@ kros:
             min_distance:                   200            # minimum distance in mm of VL53L5CX
             max_distance:                  1111            # maximum distance in mm of VL53L5CX (actual range is 4m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            easing:                     'LINEAR'           # normalisation easing formula, see hardware.easing
+            easing:                'LOGARITHMIC'           # normalisation easing formula, see hardware.easing
             stale_timeout_ms:               250            # value cannot be older than this
         swerve_sensor:
             port_columns:                [0, 1]            # VL53L5CX columns for port side detection

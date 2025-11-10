@@ -21,6 +21,7 @@ from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.event import Event
 from behave.async_behaviour import AsyncBehaviour
+from hardware.easing import Easing
 from hardware.roam_sensor import RoamSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
@@ -55,6 +56,10 @@ class Roam(AsyncBehaviour):
         self._default_speed = _cfg.get('default_speed', 0.8)
         self._use_dynamic_speed = _cfg.get('use_dynamic_speed', True)
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.07)
+        self._clear_path_threshold = _cfg.get('clear_path_threshold', 600)
+        _easing_value = _cfg.get('obstacle_easing', 'SQUARE_ROOT')
+        self._obstacle_easing = Easing.from_string(_easing_value)
+        self._log.info('obstacle easing function: {}'.format(self._obstacle_easing.name))
         # roam sensor configuration
         _rs_cfg = config['kros'].get('hardware').get('roam_sensor')
         self._min_distance = _rs_cfg.get('min_distance')
@@ -149,22 +154,38 @@ class Roam(AsyncBehaviour):
         # obstacle scaling only for forward motion
         if amplitude > 0.0:
             self._front_distance = self._roam_sensor.get_distance(apply_easing=True)
-            if self._front_distance < 0.0:
-                self._log.warning('braking: no long range distance available.')
-                self._motor_controller.brake()
-                return
-            elif self._front_distance is None:
-                self._log.info(Fore.BLUE + 'roam sensor returned: None; maintaining current vector')
-                return
-            elif self._front_distance >= self._max_distance:
-                obstacle_scale = 1.0
+
+            self._log.info('🍎 front_distance: {:.1f}mm, max_distance: {:.1f}mm'.format(self._front_distance, self._max_distance))
+
+#           if self._front_distance < 0.0:
+#               self._log.warning('braking: no long range distance available.')
+#               self._motor_controller.brake()
+#               return
+#           elif self._front_distance is None:
+#               self._log.info(Fore.BLUE + 'roam sensor returned: None; maintaining current vector')
+#               return
+#           elif self._front_distance >= self._max_distance:
+#               obstacle_scale = 1.0
+#           elif self._front_distance <= self._min_distance:
+#               obstacle_scale = 0.0  # stop at obstacle
+#           else:
+#               # scale between min and max distance
+#               obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
+#               obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+
+            if self._front_distance >= self._clear_path_threshold:
+                obstacle_scale = 1.0  # clear path, full speed
             elif self._front_distance <= self._min_distance:
-                obstacle_scale = 0.0  # stop at obstacle
+                obstacle_scale = 0.0  # too close, stop
             else:
-                # scale between min and max distance
-                obstacle_scale = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
-                obstacle_scale = np.clip(obstacle_scale, 0.0, 1.0)
+                # normalize distance to [0,1] range between min and clear threshold
+                normalised = (self._front_distance - self._min_distance) / (self._clear_path_threshold - self._min_distance)
+                normalised = np.clip(normalised, 0.0, 1.0)
+                # apply easing function to shape the speed response curve
+                obstacle_scale = self._obstacle_easing.apply(normalised)
+
             amplitude *= obstacle_scale
+            self._log.info('🍎 amplitude after obstacle scaling: {:.3f} (scale: {:.3f})'.format(amplitude, obstacle_scale))
         else:
             # reverse motion - no obstacle detection
             self._front_distance = 0.0
