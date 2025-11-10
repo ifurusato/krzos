@@ -29,6 +29,7 @@ from core.logger import Logger, Level
 from hardware.i2c_scanner import I2CScanner
 from hardware.irq_clock import IrqClock
 from hardware.motor_configurer import MotorConfigurer
+from hardware.slew_limiter import SlewLimiter
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorController(Component):
@@ -89,9 +90,16 @@ class MotorController(Component):
             from hardware.eyeballs_monitor import EyeballsMonitor
             self._eyeballs_monitor = EyeballsMonitor(self, level=level)
             self._log.info('eyeballs monitor configured.')
-        # slew limiters enabled?
-        self._slew_limiter_enabled = config['kros'].get('motor').get('enable_slew_limiter')
-        # TODO actually implement this!
+        # slew limiter for intent vectors
+        _slew_cfg = _cfg.get('slew_limiter')
+        _slew_enabled = _slew_cfg.get('enabled', False)
+        self._slew_limiter = None
+        if _slew_enabled:
+            self._slew_limiter = SlewLimiter(config, level=level)
+            self._slew_limiter.enable()
+            self._log.info(Fore.GREEN + 'slew limiter enabled.')
+        else:
+            self._log.warning('slew limiter disabled.')
         _create_ext_clock    = _cfg.get('create_external_clock')
         if external_clock:
             self._external_clock = external_clock
@@ -455,6 +463,11 @@ class MotorController(Component):
         intent = self._blend_intent_vectors()
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
+
+        # apply time-based slew limiting
+        if self._slew_limiter:
+            intent = self._slew_limiter.limit(intent)
+
         vx, vy, omega = intent
         self._blended_intent_vector = intent # for access as property
 

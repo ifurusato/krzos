@@ -41,8 +41,8 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
@@ -55,8 +55,8 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.8            # cruising speed
@@ -132,11 +132,7 @@ kros:
         use_eyeballs:                      True            # enable eyeballs monitor for direction display
         loop_freq_hz:                        20            # main loop delay in hz (only used when no ext clock)
         verbose:                          False            # noisy messaging
-        halt_rate:                    'SLOWEST'            # slew rate for quick halt behaviour
-        brake_rate:                   'SLOWEST'            # slew rate for slower braking behaviour
         max_speed:                            1.0          # maximum motor speed (0.0-1.0)
-#       spin_speed:                 'TWO_THIRDS'           # motor speed when spinning (KROS)
-#       use_speed_indicator:              False            # publish RGB events for motor speed indication
         accel_step:                           0.01         # step size for acceleration
         accel_step_delay_ms:                 20            # acceleration step delay in milliseconds
         decel_step:                           0.01         # step size for deceleration
@@ -147,6 +143,11 @@ kros:
         stop_step:                            0.09         # determines stop deceleration
         emergency_stop_step:                  0.25         # determines emergency stop deceleration
         stopping_steps:                      10            # determines stopping deceleration (unused)
+        slew_limiter:
+            enabled:                         True
+            max_vx_rate:                      1.0          # max lateral velocity change per second
+            max_vy_rate:                      1.0          # max forward velocity change per second  
+            max_omega_rate:                   0.6          # max rotation velocity change per second
     rotation_controller:
         verbose:                            False
         max_acceleration_deg_per_sec_sq:     15.0          # safe acceleration limit
@@ -166,7 +167,6 @@ kros:
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
         scale_factor_open:                  1.5            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
         scale_factor_closed:                5.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
-        enable_slew_limiter:               True            # initial enabled state for slew limiter (if disabled, no halt or brake)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
         reverse_motor_pfwd:               False            # in case you wire up the motors backwards
         reverse_motor_sfwd:                True            # ditto
@@ -193,13 +193,6 @@ kros:
             maximum_output:                  10.0          # upper output limit
             sample_freq_hz:                  20            # 20Hz equiv to 50ms/0.05s
             hyst_queue_len:                  20            # size of queue used for running average for hysteresis
-        slew_limiter:
-            minimum_output:                  -1.0          # lower limit of permitted speed output values
-            maximum_output:                   1.0          # upper limit, both should match motor_controller:scale_factor
-            default_rate:               'NORMAL'           # select value of enum: SLOWEST, SLOWER, SLOW, NORMAL, FAST, FASTER, FASTEST
-            hysteresis:                       2.0          # how close do we get to the target speed?
-        jerk_limiter:
-            jerk_tolerance:                  10            # percentage limit of permitted change per iteration
     hardware:
         system:
             battery_channel:                  1            # AD channel for raw battery voltage
