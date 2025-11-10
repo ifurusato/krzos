@@ -149,6 +149,13 @@ class Radiozoa(AsyncBehaviour):
         Priority scales continuously with imbalance severity and obstacle proximity
         using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
         '''
+        # check for impossibly close readings (likely sensor seeing robot itself)
+        for i, d in enumerate(distances):
+            if d is not None and d < 60:
+                _cardinal = Cardinal.from_index(i)
+                self._log.warning('impossibly close reading from {} sensor: {}mm (likely obstruction on robot)'.format(
+                    _cardinal.label, d))
+
         far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
@@ -157,8 +164,16 @@ class Radiozoa(AsyncBehaviour):
         for c1, c2 in self._pairs:
             d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
             d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
-            d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
-            d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
+
+            if d1 < 0 or d2 < 0: # DIAGNOSTIC
+                self._log.warning('d1 {} or d2 are less than zero.',format(d1, d2))
+
+#           d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
+#           d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
+            # treat None, zero, negative, or beyond FAR_THRESHOLD as FAR_THRESHOLD
+            d1 = d1 if d1 is not None and 0 < d1 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
+            d2 = d2 if d2 is not None and 0 < d2 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
+
             # track closest obstacle across all sensors
             min_distance = min(min_distance, d1, d2)
             # both sensors out of range - ignore this pair
@@ -206,6 +221,16 @@ class Radiozoa(AsyncBehaviour):
         # imbalance contributes 0.0-0.2: centering force
         # proximity contributes 0.0-0.4: obstacle urgency
         self._priority = 0.4 + (imbalance_urgency * 0.2) + (proximity_urgency * 0.4)
+
+        if abs(self._intent_vector[0]) > 0.3 or abs(self._intent_vector[1]) > 0.3:
+            self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}'.format(
+                self._intent_vector[0], self._intent_vector[1], self._priority))
+            for c1, c2 in self._pairs:
+                d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
+                d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
+                self._log.warning('  {}-{}: {}mm vs {}mm, diff={}mm'.format(
+                    c1.label, c2.label, d1, d2, abs(d1-d2) if d1 and d2 else 'N/A'))
+
         if self._verbose:
             self._display_info()
 
