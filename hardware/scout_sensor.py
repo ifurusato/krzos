@@ -20,6 +20,7 @@ from core.component import Component
 from core.logger import Logger, Level
 from core.rate import Rate
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
+from hardware.scout_visualiser import ScoutVisualiser
 
 class ScoutSensor(Component):
     NAME = 'scout-sensor'
@@ -63,15 +64,29 @@ class ScoutSensor(Component):
         self._distance_threshold = _cfg.get('distance_threshold', 1000)
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self._rate = Rate(_cfg.get('loop_freq_hz', 5)) # 5Hz, 200ms default
-        self._verbose = _cfg.get('verbose', False)
+        self._verbose   = _cfg.get('verbose', False)
+        self._visualise = _cfg.get('visualise', False)
+        if self._visualise:
+            if visualiser:
+                self._visualiser = visualiser
+            else:
+                _show_grid        = _cfg.get('show_grid', True)
+                _show_target_row  = _cfg.get('show_target_row', True)
+                _show_target_info = _cfg.get('show_target_info', True)
+                self._visualiser = ScoutVisualiser(
+                        cols=8,
+                        rows=8,
+                        show_grid=_show_grid,
+                        show_target_row=_show_target_row,
+                        show_target_info=_show_target_info 
+                    )
         # variables
-        self.set_visualiser(visualiser)
         self._thread  = None
         self._running = False
         self._heading_offset_degrees = 0.0
         self._min_obstacle_distance = self._distance_threshold # initially
         self._max_open_distance = self._distance_threshold
-        self._log.info('scout sensor ready.')
+        self._log.info('ready.')
 
     @property
     def distance_threshold(self):
@@ -85,9 +100,9 @@ class ScoutSensor(Component):
 
     def get_heading_offset(self):
         '''
-        returns current heading offset and max open distance.
+        Returns current heading offset and max open distance.
 
-        returns:
+        Returns:
             tuple: (heading_offset_degrees, max_open_distance_mm)
                 - heading_offset_degrees: negative = turn port, positive = turn starboard
                   range: approximately -23.5° to +23.5° (half of horizontal fov)

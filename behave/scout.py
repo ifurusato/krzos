@@ -28,6 +28,7 @@ from hardware.compass_encoder import CompassEncoder
 from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
 from core.orientation import Orientation
+from hardware.scout_sensor import ScoutSensor
 
 class HeadingMode(Enum):
     '''
@@ -92,10 +93,10 @@ class Scout(AsyncBehaviour):
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
         self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
-        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 2.0)
+        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 0.5) # initially 2.0
         self._min_distance           = _cfg.get('min_distance', 200.0)
         self._omega_gain             = _cfg.get('omega_gain', 0.10) # base proportional gain
-        # compass encoder tracking for dynamic heading updates
+        # compass encoder WAS HERE
         # encoder tracking for RELATIVE mode
         self._last_encoder_pfwd      = None
         self._last_encoder_sfwd      = None
@@ -104,8 +105,6 @@ class Scout(AsyncBehaviour):
         self._last_encoder_value     = None
         self._last_omega             = 0.0
         self._max_omega_change       = 0.05  # maximum change in omega per iteration
-        # ScoutSensor - always needed since both modes use it
-        from hardware.scout_sensor import ScoutSensor
         self._scout_sensor = _component_registry.get(ScoutSensor.NAME)
         if self._scout_sensor is None:
             self._log.info(Fore.WHITE + 'creating Scout sensor…')
@@ -113,33 +112,17 @@ class Scout(AsyncBehaviour):
         else:
             self._log.info(Fore.WHITE + 'using existing Scout sensor.')
         self._max_distance = self._scout_sensor.distance_threshold
-        # IMU - only needed for ABSOLUTE mode
-        self._imu = None
+        self._imu = None # only needed for ABSOLUTE mode
         if self._heading_mode == HeadingMode.ABSOLUTE:
             self._imu = _component_registry.get(Usfs.NAME)
             if self._imu is None:
                 raise MissingComponentError('IMU not available for ABSOLUTE mode.')
+        self._log.info('heading mode: {}'.format(self._heading_mode.name))
         # compass encoder for dynamic heading input
         self._compass_encoder = None
         if self._use_dynamic_heading:
             self._compass_encoder = _component_registry.get(CompassEncoder.NAME)
-        # get motor objects
-#       self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
-#       self._motor_sfwd = self._motor_controller.get_motor(Orientation.SFWD)
-#       self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
-#       self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
-#       # geometry configuration
-#       velocity = self._motor_pfwd.get_velocity()
-#       self._steps_per_rotation = velocity.steps_per_rotation
-#       self._wheel_diameter_mm = velocity._wheel_diameter
-#       self._wheel_track_mm = config['kros']['geometry']['wheel_track']
-#       wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
-#       rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
-#       steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
-#       self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
-#       self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
-#       self._log.info('ready.')
-        self._log.info('ready with heading mode: {}'.format(self._heading_mode.name))
+        self._log.info('ready.')
 
     def set_heading_degrees(self, degrees):
         '''

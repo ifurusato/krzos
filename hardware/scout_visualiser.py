@@ -6,8 +6,8 @@
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
-# created:  2019-12-23
-# modified: 2025-11-04
+# created:  2025-10-13
+# modified: 2025-11-11
 
 import numpy as np
 from colorama import init, Fore, Style
@@ -28,13 +28,16 @@ class ScoutVisualiser(Component):
         (801,  1000,  Fore.BLACK),
         (1001, 99999, Fore.BLACK + Style.DIM),
     ]
-    FLOOR_COLOR = "\033[35;1m"  # Bright magenta
+    FLOOR_COLOR = "\033[35;1m"  # bright magenta
 
-    def __init__(self, cols, rows):
-        self._log = Logger('display', level=Level.INFO)
+    def __init__(self, cols=8, rows=8, show_grid=True, show_target_row=True, show_target_info=True):
+        self._log = Logger('scout-viz', level=Level.INFO)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self.cols = cols
         self.rows = rows
+        self._show_grid        = show_grid
+        self._show_target_row  = show_target_row
+        self._show_target_info = show_target_info
         self._log.info('ready.')
 
     def get_dist_color(self, val):
@@ -48,22 +51,24 @@ class ScoutVisualiser(Component):
         Updates the display with current sensor data and heading analysis.
         
         Args:
-            distance_mm: Flattened 64-element distance array
-            floor_row_means: List of floor row mean values (None for non-floor rows)
-            margin: Floor detection margin in mm
-            result: Dict containing analysis results from ScoutSensor._process()
+            distance_mm:      flattened 64-element distance array
+            floor_row_means:  list of floor row mean values (None for non-floor rows)
+            margin:           floor detection margin in mm
+            result:           dict containing analysis results from ScoutSensor._process()
         '''
         distance = np.array(distance_mm).reshape((len(floor_row_means), self.cols))
-        self.print_colored_grid(distance, self.cols, floor_row_means, margin)
-        self.print_target_row(
-            result['weighted_avgs'],
-            result['highlighted_idx'],
-            result['pixel_angles'],
-            result['target_offset'],
-            result.get('heading_offset', 0.0)
-        )
+        if self._show_grid:
+            self._display_grid(distance, self.cols, floor_row_means, margin)
+        if self._show_target_row:
+            self._display_target_row(
+                result['weighted_avgs'],
+                result['highlighted_idx'],
+                result['pixel_angles'],
+                result['target_offset'],
+                result.get('heading_offset', 0.0)
+            )
 
-    def print_colored_grid(self, distance, COLS, floor_row_means, margin):
+    def _display_grid(self, distance, COLS, floor_row_means, margin):
         '''
         Prints the 8x8 distance grid with color coding:
         - Magenta: Floor rows (detected during calibration)
@@ -78,7 +83,7 @@ class ScoutVisualiser(Component):
             for col in range(distance.shape[1]):
                 val = distance[row, col]
                 floor_mean = floor_row_means[row]
-                # Only color as floor for values in floor rows, unless obstacle
+                # only color as floor for values in floor rows, unless obstacle
                 if floor_mean is not None:
                     if val >= (floor_mean - margin):
                         color = self.FLOOR_COLOR
@@ -90,7 +95,7 @@ class ScoutVisualiser(Component):
             print(line)
         print(Style.RESET_ALL)
 
-    def print_target_row(self, weighted_avgs, highlighted_idx, pixel_angles, target_offset, heading_offset):
+    def _display_target_row(self, weighted_avgs, highlighted_idx, pixel_angles, target_offset, heading_offset):
         '''
         Prints the weighted average row showing which column is most open,
         and displays the calculated heading offset.
@@ -110,8 +115,7 @@ class ScoutVisualiser(Component):
                 color = Fore.BLACK
             line += "{}{:4d}{} ".format(color, int(val), Style.RESET_ALL)
         print(line)
-        
-        # Display heading information with directional color coding
+        # display heading information with directional color coding
         if heading_offset < -2.0:
             direction_color = Fore.RED  # Strong left
             direction = "← LEFT"
@@ -121,8 +125,8 @@ class ScoutVisualiser(Component):
         else:
             direction_color = Fore.CYAN  # Near center
             direction = "CENTER"
-        
-        self._log.info("target: {:+.2f}°; {}heading: {:+.2f}° {}".format(
-            target_offset, direction_color, heading_offset, direction + Style.RESET_ALL))
+        if self._show_target_info:
+            self._log.info("target: {:+.2f}°; {}heading: {:+.2f}° {}".format(
+                target_offset, direction_color, heading_offset, direction + Style.RESET_ALL))
 
 #EOF

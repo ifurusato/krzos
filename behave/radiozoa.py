@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-10
-# modified: 2025-11-08
+# modified: 2025-11-10
 
 import time
 import numpy as np
@@ -36,16 +36,15 @@ class Radiozoa(AsyncBehaviour):
         _motor_controller = _component_registry.get(MotorController.NAME)
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
-#       Behaviour.__init__(self, self._log, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._counter    = itertools.count()
-        _default_speed   = _cfg.get('default_speed', 1.0)
-        _dynamic_speed   = _cfg.get('dynamic_speed')
-        self._priority   = _cfg.get('default_priority', 0.4)
-        self._verbose    = _cfg.get('verbose', False)
+        self._default_speed     = _cfg.get('default_speed', 0.4)
+        self._use_dynamic_speed = _cfg.get('dynamic_speed')
+        self._priority          = _cfg.get('default_priority', 0.4)
+        self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
         '''
         Smoothing and hysteresis parameters:
@@ -85,11 +84,9 @@ class Radiozoa(AsyncBehaviour):
         # registry lookups
         _component_registry = Component.get_registry()
         self._digital_pot = None
-        if _dynamic_speed:
+        if self._use_dynamic_speed:
             self._default_speed = 0.0
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-        else:
-            self._default_speed = _default_speed
         self._radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
         if self._radiozoa_sensor is None:
             self._log.info(Fore.WHITE + 'creating Radiozoa sensor…')
@@ -124,12 +121,13 @@ class Radiozoa(AsyncBehaviour):
         else:
             self._digital_pot.set_rgb(self._digital_pot.value)
             self._default_speed = _speed
-            self._log.info(Fore.BLUE + "set default speed: {:4.2f}".format(self._default_speed))
+            self._log.debug("set default speed: {:4.2f}".format(self._default_speed))
 
     async def _poll(self):
         try:
-            if next(self._counter) % 5 == 0:
-                self._dynamic_set_default_speed()
+            if self._use_dynamic_speed:
+                if next(self._counter) % 5 == 0:
+                    self._dynamic_set_default_speed()
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
                 # stop when sensors are unavailable or out of range.
@@ -149,13 +147,10 @@ class Radiozoa(AsyncBehaviour):
         Priority scales continuously with imbalance severity and obstacle proximity
         using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
         '''
-        # check for impossibly close readings (likely sensor seeing robot itself)
         for i, d in enumerate(distances):
-            if d is not None and d < 60:
-                _cardinal = Cardinal.from_index(i)
-                self._log.warning('impossibly close reading from {} sensor: {}mm (likely obstruction on robot)'.format(
-                    _cardinal.label, d))
-
+            if d is not None and d < 50:
+                self._log.warning('impossibly close reading from {} sensor: {}mm'.format(Cardinal.from_index(i).label, d))
+                return
         far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
@@ -167,13 +162,9 @@ class Radiozoa(AsyncBehaviour):
 
             if d1 < 0 or d2 < 0: # DIAGNOSTIC
                 self._log.warning('d1 {} or d2 are less than zero.',format(d1, d2))
-
-#           d1 = d1 if d1 is not None and d1 > 0 else RadiozoaSensor.FAR_THRESHOLD
-#           d2 = d2 if d2 is not None and d2 > 0 else RadiozoaSensor.FAR_THRESHOLD
             # treat None, zero, negative, or beyond FAR_THRESHOLD as FAR_THRESHOLD
             d1 = d1 if d1 is not None and 0 < d1 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
             d2 = d2 if d2 is not None and 0 < d2 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
-
             # track closest obstacle across all sensors
             min_distance = min(min_distance, d1, d2)
             # both sensors out of range - ignore this pair
@@ -208,8 +199,7 @@ class Radiozoa(AsyncBehaviour):
         # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
         if max_imbalance > self._min_sensor_diff:
             # scale from 0.0 at min_sensor_diff to 1.0 at FAR_THRESHOLD
-            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) /
-                                         (RadiozoaSensor.FAR_THRESHOLD - self._min_sensor_diff))
+            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / (RadiozoaSensor.FAR_THRESHOLD - self._min_sensor_diff))
         else:
             imbalance_urgency = 0.0
         # proximity urgency: normalized from FAR_THRESHOLD (0.0) to 0mm (1.0)
@@ -221,16 +211,9 @@ class Radiozoa(AsyncBehaviour):
         # imbalance contributes 0.0-0.2: centering force
         # proximity contributes 0.0-0.4: obstacle urgency
         self._priority = 0.4 + (imbalance_urgency * 0.2) + (proximity_urgency * 0.4)
-
-        if abs(self._intent_vector[0]) > 0.3 or abs(self._intent_vector[1]) > 0.3:
-            self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}'.format(
-                self._intent_vector[0], self._intent_vector[1], self._priority))
-            for c1, c2 in self._pairs:
-                d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
-                d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
-                self._log.warning('  {}-{}: {}mm vs {}mm, diff={}mm'.format(
-                    c1.label, c2.label, d1, d2, abs(d1-d2) if d1 and d2 else 'N/A'))
-
+        if abs(self._intent_vector[0]) > 0.4 or abs(self._intent_vector[1]) > 0.4:
+            self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}, max_imbal={:.1f}mm, min_dist={:.1f}mm'.format(
+                self._intent_vector[0], self._intent_vector[1], self._priority, max_imbalance, min_distance))
         if self._verbose:
             self._display_info()
 

@@ -376,13 +376,13 @@ class Motor(Component):
         elif not self.enabled and target_power > 0.0: # though we'll let the power be set to zero
             raise Exception('motor {} not enabled.'.format(self.orientation.name))
 
-        if abs(target_power) > 1.0:
-            self._log.warning('⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power))
+#       if abs(target_power) > 1.0:
+#           print(Fore.YELLOW + '⚠️  EXCESSIVE TARGET POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power) + Style.RESET_ALL)
 
         _driving_power = round(self._power_clip(float(target_power * self.max_power_ratio)), 4) # round to 4 decimal
 
-        if abs(_driving_power) > 0.5:
-            self._log.warning('⚠️  EXCESSIVE DRIVING POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power))
+#       if abs(_driving_power) > 0.5:
+#           print(Fore.YELLOW + '⚠️  EXCESSIVE DRIVING POWER for {} motor: {:.3f}'.format(self.orientation.name, target_power) + Style.RESET_ALL)
 
         _is_zero = isclose(_driving_power, 0.0, abs_tol=0.05) # deadband
         if self._reverse_motor:
