@@ -83,10 +83,13 @@ kros:
             release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
-            rotation_speed:                 0.7            # motor speed when rotating in place
-            rotation_tolerance:             0.5            # used to calculate omega
+            rotation_speed:                 0.5            # motor speed when rotating in place
+            rotation_tolerance:             1.0            # used to calculate omega
+#           hysteresis_multiplier:          3.0            # multiply tolerance when already rotating
+#           omega_threshold:                0.10           # minimum omega to consider "rotating"
+#           max_omega_change:               0.08           # maximum change in omega per iteration
             min_distance:                 200.0            # closest distance for priority/urgency calculations
-            omega_gain:                     0.10           # rotational gain
+            omega_gain:                     0.08           # rotational gain
             heading_mode:           'RELATIVE'             # RELATIVE or ABSOLUTE
         swerve:
             enable:                     False              # enable swerve behaviour
@@ -292,13 +295,15 @@ kros:
             exclude_rows:                   [7]            # exclude if empirical data suggests row(s) unreliable
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
+            flip_horizontal:               True            # flip sensor data horizontally
+            flip_vertical:                 True            # flip sensor data vertically
             loop_freq_hz:                     5            # control loop frequency (Hz)
             weights:
                 - 0.6
                 - 0.3
                 - 0.1
-            visualise:                     True            # use scout visualiser
-            show_grid:                    False            # show colored grid
+            visualise:                    False            # use scout visualiser
+            show_grid:                     True            # show colored grid
             show_target_row:               True            # show target row with selected column
             show_target_info:             False            # show log line with target info
         usfs:

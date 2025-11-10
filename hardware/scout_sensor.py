@@ -64,8 +64,15 @@ class ScoutSensor(Component):
         self._distance_threshold = _cfg.get('distance_threshold', 1000)
         self._weights = np.array(_cfg.get('weights', [0.6, 0.3, 0.1]))
         self._rate = Rate(_cfg.get('loop_freq_hz', 5)) # 5Hz, 200ms default
+        self._flip_horizontal = _cfg.get('flip_horizontal', False)
+        if self._flip_horizontal:
+            self._log.info('flip horizontal active.')
+        self._flip_vertical = _cfg.get('flip_vertical', False)
+        if self._flip_vertical:
+            self._log.info('flip vertical active.')
         self._verbose   = _cfg.get('verbose', False)
         self._visualise = _cfg.get('visualise', False)
+        self._visualiser = None
         if self._visualise:
             if visualiser:
                 self._visualiser = visualiser
@@ -145,6 +152,8 @@ class ScoutSensor(Component):
         if distance_mm is None:
             return [self._distance_threshold] * self._cols
         distance = np.array(distance_mm).reshape((self._rows, self._cols))
+        if self._flip_vertical:
+            distance = np.flipud(distance)
         # get non-floor rows, fallback to upper half if calibration failed
         obstacle_rows = self._vl53l5cx.non_floor_rows
         if not obstacle_rows:
@@ -172,6 +181,8 @@ class ScoutSensor(Component):
             else:
                 # no valid readings in this column - assume threshold
                 weighted_avgs.append(self._distance_threshold)
+        if self._flip_horizontal:
+            weighted_avgs.reverse()
         return weighted_avgs
 
     def _process(self):

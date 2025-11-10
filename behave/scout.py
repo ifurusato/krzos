@@ -93,9 +93,12 @@ class Scout(AsyncBehaviour):
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
         self._rotation_speed         = _cfg.get('rotation_speed', 0.5)
-        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 0.5) # initially 2.0
+        self._rotation_tolerance     = _cfg.get('rotation_tolerance', 0.5) # initially 2.0, then 0.5 was too low
+#       self._hysteresis_multiplier  = _cfg.get('hysteresis_multiplier', 3.0)
+#       self._omega_threshold        = _cfg.get('omega_threshold', 0.05)
+#       self._max_omega_change       = _cfg.get('max_omega_change', 0.08)  # was 0.05 maximum change in omega per iteration
         self._min_distance           = _cfg.get('min_distance', 200.0)
-        self._omega_gain             = _cfg.get('omega_gain', 0.10) # base proportional gain
+        self._omega_gain             = _cfg.get('omega_gain', 0.10)        # base proportional gain
         # compass encoder WAS HERE
         # encoder tracking for RELATIVE mode
         self._last_encoder_pfwd      = None
@@ -104,7 +107,6 @@ class Scout(AsyncBehaviour):
         self._last_encoder_saft      = None
         self._last_encoder_value     = None
         self._last_omega             = 0.0
-        self._max_omega_change       = 0.05  # maximum change in omega per iteration
         self._scout_sensor = _component_registry.get(ScoutSensor.NAME)
         if self._scout_sensor is None:
             self._log.info(Fore.WHITE + 'creating Scout sensor…')
@@ -237,21 +239,37 @@ class Scout(AsyncBehaviour):
         actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
         # get exploration guidance from ScoutSensor (get this early so it's available)
         scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
-        # consume rotation from target offset ONLY if encoder has been meaningfully active
-        if abs(self._target_relative_offset) > 2.0:  # threshold above noise
-            self._target_relative_offset -= actual_rotation
-            # normalize
-            if self._target_relative_offset > 180:
-                self._target_relative_offset -= 360
-            elif self._target_relative_offset < -180:
-                self._target_relative_offset += 360
+
+        self._fix_bug = True
+        if self._fix_bug:
+            # consume rotation from target offset ONLY if there was a meaningful target to consume
+            if abs(self._target_relative_offset) > 2.0:  # threshold above noise
+                self._target_relative_offset -= actual_rotation
+                # normalize
+                if self._target_relative_offset > 180:
+                    self._target_relative_offset -= 360
+                elif self._target_relative_offset < -180:
+                    self._target_relative_offset += 360
+            else:
+                # near zero - clamp to exactly zero to prevent accumulation from scout_offset affecting it
+                self._target_relative_offset = 0.0
         else:
-            # near zero - clamp to exactly zero to prevent drift from chase affecting it
-            self._target_relative_offset = 0.0
-            # reset odometry reference so chase doesn't accumulate drift
-            # only reset when no obstacles present to avoid snap-back
-            if abs(scout_offset) < 1.0:
-                self._heading_degrees = 0.0
+            # consume rotation from target offset ONLY if encoder has been meaningfully active
+            if abs(self._target_relative_offset) > 2.0:  # threshold above noise
+                self._target_relative_offset -= actual_rotation
+                # normalize
+                if self._target_relative_offset > 180:
+                    self._target_relative_offset -= 360
+                elif self._target_relative_offset < -180:
+                    self._target_relative_offset += 360
+            else:
+                # near zero - clamp to exactly zero to prevent drift from chase affecting it
+                self._target_relative_offset = 0.0
+                # reset odometry reference so chase doesn't accumulate drift
+                # only reset when no obstacles present to avoid snap-back
+                if abs(scout_offset) < 1.0:
+                    self._heading_degrees = 0.0
+
         # error is simply the sum of both inputs
         error = self._target_relative_offset + scout_offset
         # normalize
@@ -317,13 +335,18 @@ class Scout(AsyncBehaviour):
 
     def _calculate_omega(self, error, max_open_distance):
         '''
-        Calculate rotation speed with urgency scaling and rate limiting.
-        Closer obstacles = faster rotation toward opening.
-        Rate limiting prevents oscillation while allowing quick response to sign changes.
+        Calculate rotation speed with urgency scaling and damping.
+        Damping reduces omega when approaching target to prevent overshoot.
         '''
         abs_error = abs(error)
-        # deadzone
-        if abs_error <= self._rotation_tolerance:
+        # deadzone - simple, no hysteresis
+#       if abs_error <= self._rotation_tolerance:
+#           self._last_omega = 0.0
+#           return 0.0
+        # deadzone with small expansion when settling
+        settling_bonus = 0.5 if abs(self._last_omega) < 0.15 else 0.0  # extra tolerance when nearly stopped
+        effective_tolerance = self._rotation_tolerance + settling_bonus
+        if abs_error <= effective_tolerance:
             self._last_omega = 0.0
             return 0.0
         # urgency multiplier based on environmental constraint
@@ -333,15 +356,15 @@ class Scout(AsyncBehaviour):
         # clamp to limits
         target_omega = max(min(target_omega, self._rotation_speed), 0.08)
         target_omega = target_omega * (1 if error > 0 else -1)
-        # check for sign change (overshoot detection)
-        sign_changed = (self._last_omega * target_omega < 0)
-        # rate limit: allow faster change on sign flip
-        omega_change = target_omega - self._last_omega
-        max_change = self._max_omega_change * 3.0 if sign_changed else self._max_omega_change
-        if abs(omega_change) > max_change:
-            omega = self._last_omega + max_change * (1 if omega_change > 0 else -1)
-        else:
-            omega = target_omega
+        # damping: reduce target_omega when error is small to prevent overshoot
+        _damping_window = 10.0 # TODO config
+        if abs_error < _damping_window: # within 10 degrees
+            damping_factor = abs_error / _damping_window # 0.0 to 1.0
+            target_omega *= damping_factor
+        # smooth transition toward target (simple low-pass filter)
+        _smoothing_factor = 0.3 # 0=no change, 1=immediate TODO config
+        alpha = _smoothing_factor 
+        omega = self._last_omega + alpha * (target_omega - self._last_omega)
         self._last_omega = omega
         return omega
 
