@@ -170,10 +170,11 @@ class Roam(AsyncBehaviour):
         if abs(delta) > max_amplitude_change:
             amplitude = self._last_amplitude + (max_amplitude_change if delta > 0 else -max_amplitude_change)
         self._last_amplitude = amplitude
-        # log every 10 cycles
-        if next(self._counter) % 10 == 0:
-            direction = "FWD" if amplitude >= 0.0 else "REV"
-            self._log.info('{}: amp: {:.3f}; dist: {:.1f}mm'.format(direction, amplitude, self._front_distance))
+        if self._verbose:
+            # log every 10 cycles
+            if next(self._counter) % 10 == 0:
+                direction = "FWD" if amplitude >= 0.0 else "REV"
+                self._log.info('{}: amp: {:.3f}; dist: {:.1f}mm'.format(direction, amplitude, self._front_distance))
         # deadband
         if abs(amplitude) < self._deadband_threshold:
             self.clear_intent_vector()

@@ -214,12 +214,12 @@ class KROS(Component, FiniteStateMachine):
         self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
         self._usfs.set_verbose(False)
 
-        _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
-        if _enable_vl53l5cx:
-            self._log.info('creating VL53L5CX sensor…')
-            self._vl53_sensor = Vl53l5cxSensor(self._config, level=self._level)
+#       _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
+#       if _enable_vl53l5cx:
+#           self._log.info('creating VL53L5CX sensor…')
+#           self._vl53_sensor = Vl53l5cxSensor(self._config, level=self._level)
 #           self._vl53_sensor = Vl53l5cxSensor(self._config, skip=('skip' in sys.argv or True in sys.argv), level=self._level)
-            self._vl53_sensor.enable()
+#           self._vl53_sensor.enable()
 
         _enable_radiozoa = _cfg.get('enable_radiozoa')
         if _enable_radiozoa:

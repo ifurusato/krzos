@@ -14,40 +14,32 @@ kros:
     application:                                           # application-level configuration
         await_pushbutton:                 False            # await pushbutton on startup
     arguments:                                             # CLI arguments are copied here (required section)
-        nada:                             False            # nada
+        nada:                             False            # placeholder
     component:
-        enable_motor_controller:           True            # enable Motor 2040
         enable_external_clock:             True            # if True use external clock, ignoring loop delay value
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
+        enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
+        enable_gamepad_publisher:         False            # enable gamepad support
+        enable_motor_controller:           True            # enable Motor 2040
         enable_radiozoa:                   True            # if True enable Radiozoa sensor
+        enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
         # publishers .......................................
         enable_queue_publisher:            True            # publishes from globally-available queue
-#       enable_distance_publisher:         True            # enable Distance Sensors and Publisher
-        enable_system_publisher:          False            # enable System Publisher
-        enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
-#       enable_imu_publisher:             False            # enable IMU publisher
-#       enable_pir_publisher:              True            # enable PIR publisher
-#       enable_remote_ctrl_publisher:     False            # enable Remote Control Publisher
-#       enable_rtof_publisher:            False            # enable Ranging ToF publisher
-        enable_gamepad_publisher:         False            # enable gamepad support
-#       enable_killswitch:                 True            # enable toggle kill switch
-        enable_pushbutton:                 True            # enable pushbutton
-#       enable_eyeballs  :                 True            # enable eyeballs
         # subscribers ......................................
-#       enable_distance_subscriber:       False            # enable Distance Sensors Subscriber
-        enable_sound_subscriber:           True            # enable sounds for various events
+        # ...
     behaviour:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
+            boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               250            # ignore aft obstacles further than this
-            avoid_speed:                    0.6            # speed to avoid obstacles at
+            avoid_speed:                    0.4            # speed to avoid obstacles at
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
         idle:
@@ -55,8 +47,8 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.4            # default behaviour priority
             default_speed:                  0.4            # cruising speed
@@ -65,8 +57,8 @@ kros:
             min_sensor_diff_mm:           100              # 50; minimum difference to react
             settling_threshold_mm:         30              # 30; all pairs within this is considered settled
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.9            # cruising speed
             use_dynamic_speed:           True              # if True use digital pot for default speed
@@ -79,8 +71,8 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             rotation_speed:                 0.5            # motor speed when rotating in place

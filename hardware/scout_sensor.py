@@ -51,7 +51,7 @@ class ScoutSensor(Component):
             _component_registry = Component.get_registry()
             self._vl53l5cx = _component_registry.get(Vl53l5cxSensor.NAME)
             if self._vl53l5cx is None:
-                # otherwise we make one
+                self._log.info('creating VL53L5CX sensor…')
                 self._vl53l5cx = Vl53l5cxSensor(config, level=Level.INFO)
         else:
             self._vl53l5cx = vl53l5cx

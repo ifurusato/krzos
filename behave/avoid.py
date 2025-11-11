@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-01
-# modified: 2025-11-01
+# modified: 2025-11-11
 
 import time
 import numpy as np
@@ -47,13 +47,17 @@ class Avoid(AsyncBehaviour):
         self._side_threshold_mm = _cfg.get('side_threshold_mm', 280)
         self._aft_threshold_mm  = _cfg.get('aft_threshold_mm', 500)
         self._avoid_speed = _cfg.get('avoid_speed', 1.0)
+        self._log.info('side threshold: {}mm; aft threshold: {}mm; avoid speed: {:4.2f}'.format(
+                self._side_threshold_mm, self._aft_threshold_mm, self._avoid_speed))
         self._side_easing = Easing.from_string(_cfg.get('easing', 'SQUARE_ROOT'))
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
         self._aft_sensor  = AftSensor(config, level=Level.INFO)
+        self._log.info('side easing: {}; aft easing: {}'.format(self._side_easing.name, self._aft_easing.name))
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
         self._priority    = _cfg.get('default_priority', 0.3)
         self._verbose     = _cfg.get('verbose', False)
+        self._boost_when_squeezed = _cfg.get('boost_when_squeezed', True)
         self._squeezed    = False
         self._log.info('ready.')
 
@@ -141,13 +145,18 @@ class Avoid(AsyncBehaviour):
         self._priority = 0.3 + (max_urgency * 0.7)
         # squeeze boost: ensure lateral balancing dominates when threading narrow gaps
         if self._squeezed:
-            # squeeze severity based on tightest constraint (minimum of side urgencies)
-            squeeze_severity = min(port_urgency, stbd_urgency)
-            # boost priority by up to 0.15 based on squeeze tightness
-            squeeze_boost = squeeze_severity * 0.15
-            self._priority = min(1.0, self._priority + squeeze_boost)
+            if self._boost_when_squeezed:
+                # squeeze severity based on tightest constraint (minimum of side urgencies)
+                squeeze_severity = min(port_urgency, stbd_urgency)
+                # boost priority by up to 0.15 based on squeeze tightness
+                squeeze_boost = squeeze_severity * 0.15
+                self._priority = min(1.0, self._priority + squeeze_boost)
+                self._log.info(Fore.YELLOW + 'squeezed; boosted priority: {:4.2f}'.format(self._priority))
+            else:
+                self._log.info('squeezed; priority: {:4.2f}'.format(self._priority))
+        self._log.info('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
         self._intent_vector = (vx, vy, omega)
-        if self._verbose:
+        if True or self._verbose:
             self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
 
     def _print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
