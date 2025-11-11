@@ -32,8 +32,8 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.3            # default behaviour priority
@@ -181,11 +181,12 @@ kros:
             reverse_encoder_paft:          True            # ditto
             reverse_encoder_saft:         False            # ditto
         pid_controller:
-            kp:                               0.05000      # proportional gain
-            ki:                               0.00500      # integral gain
-            kd:                               0.00000      # derivative gain
-            minimum_output:                 -10.0          # lower output limit
-            maximum_output:                  10.0          # upper output limit
+            use_velocity_class:           False            # if true use separate class otherwise integrated calculation
+            kp:                               0.05000      # proportional gain (was: 0.05000) 
+            ki:                               0.00500      # integral gain (was: 0.00500)
+            kd:                               0.00005      # derivative gain (was: 0.00000)
+            minimum_output:                  -1.0          # lower output limit
+            maximum_output:                   1.0          # upper output limit
             sample_freq_hz:                  20            # 20Hz equiv to 50ms/0.05s
             hyst_queue_len:                  20            # size of queue used for running average for hysteresis
     hardware:

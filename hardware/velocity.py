@@ -7,12 +7,11 @@
 #
 # author:   Murray Altheim
 # created:  2020-09-13
-# modified: 2025-09-22
+# modified: 2025-11-11
 #
 # This class' configuration involves the physical geometry of the robot and
 # the specifics of the motor encoders. Unconfigured it always returns 0.0,
 # which is harmless but likewise not useful.
-#
 
 import sys, math, time
 from colorama import init, Fore, Style
@@ -34,48 +33,48 @@ class Velocity(object):
 
     Based on some hardware constants from the KRZ04 robot:
 
-          104mm diameter tires
-          326.725635973mm/32.67256360cm wheel circumference
-          494.0 encoder steps per rotation
+          104mm diameter tires
+          326.725635973mm/32.67256360cm wheel circumference
+          494.0 encoder steps per rotation
 
     we can noodle around and deduce various related values:
 
-          494.0 steps = 326.725635973mm
-          494.0 steps = 32.67256360cm
+          494.0 steps = 326.725635973mm
+          494.0 steps = 32.67256360cm
 
-          1511.972 steps per meter
-          15.11972 steps per cm
-          1.511972 steps per mm
+          1511.972 steps per meter
+          15.11972 steps per cm
+          1.511972 steps per mm
 
-          3.060672 rotations per meter
-          0.03060672 rotations per cm
-          0.003060672 rotations per mm
-          0.6613879mm per step
+          3.060672 rotations per meter
+          0.03060672 rotations per cm
+          0.003060672 rotations per mm
+          0.6613879mm per step
 
     further deriving:
 
-          1 wheel rotation/sec = 32.67256360cm/sec
-          494 steps/minute = 8.2333 steps/second @ 1rpm
-          4940 steps/minute = 82.3333 steps/second @ 10rpm
-          49400 steps/minute = 823.3333 steps/second @ 100rpm
-          1 rps = 494.0 steps/second = 32.67256360cm/sec
+          1 wheel rotation/sec = 32.67256360cm/sec
+          494 steps/minute = 8.2333 steps/second @ 1rpm
+          4940 steps/minute = 82.3333 steps/second @ 10rpm
+          49400 steps/minute = 823.3333 steps/second @ 100rpm
+          1 rps = 494.0 steps/second = 32.67256360cm/sec
 
-          1511.972 steps per second @ 1 m/sec
-          1511.972 steps per second @ 100 cm/sec
-          151.1972 steps per second @ 10 cm/sec
-          15.11972 steps per second @ 1 cm/sec
-          1 cm/sec = 15.11972 steps/sec
+          1511.972 steps per second @ 1 m/sec
+          1511.972 steps per second @ 100 cm/sec
+          151.1972 steps per second @ 10 cm/sec
+          15.11972 steps per second @ 1 cm/sec
+          1 cm/sec = 15.11972 steps/sec
 
     And so for our 10.00ms (100Hz) loop:
 
-          1/100th wheel rotation = 4.9 steps
-          1/100th rotation = 0.3267256cm
-          1/100th rotation = 3.2672564mm
-          0.1511972 steps per 1/100th sec @ 1 cm/sec
+          1/100th wheel rotation = 4.9 steps
+          1/100th rotation = 0.3267256cm
+          1/100th rotation = 3.2672564mm
+          0.1511972 steps per 1/100th sec @ 1 cm/sec
 
     The most important for our purposes being:
 
-          494.0 steps/sec = 32.67256360cm/sec
+          494.0 steps/sec = 32.67256360cm/sec
 
     If we wish to calculate velocity in cm/sec we need to find out how many steps
     have occurred since the last function call, then use that to obtain velocity.
@@ -84,8 +83,8 @@ class Velocity(object):
     to properly calculate how many steps we might expect in a certain number of
     milliseconds, we go back to our earlier deduction:
 
-          15.11972 steps per 1000ms = 1 cm/sec
-          0.01511972 steps per 1ms = 1 cm/sec
+          15.11972 steps per 1000ms = 1 cm/sec
+          0.01511972 steps per 1ms = 1 cm/sec
 
     and multiply that constant times the number of milliseconds passed since the
     last function call.
@@ -141,8 +140,9 @@ class Velocity(object):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def reset_steps(self):
-#       self._steps_begin = 0
-        self._steps_begin = self._motor.steps
+        self._log.info(Fore.YELLOW + 'reset steps.')
+        self._steps_begin = 0
+#       self._steps_begin = self._motor.steps
         self._stepcount_timestamp = time.perf_counter()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -166,131 +166,6 @@ class Velocity(object):
         velocity based on the tick/step count of the motor encoder.
         '''
         if self._enabled:
-            if self._motor.enabled:
-                _steps = self._motor.steps
-                if self._steps_begin != 0:
-                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
-                    # guard against division by near-zero time
-                    if _time_diff_sec < 0.02:  # 20ms minimum
-                        # still update timestamp to prevent accumulation
-                        self._stepcount_timestamp = time.perf_counter()
-                        self._steps_begin = _steps
-                        return
-                    _diff_steps = _steps - self._steps_begin
-                    if _diff_steps == 0:
-                        self._velocity = 0.0
-                    else:
-                        _steps_per_sec = _diff_steps / _time_diff_sec
-                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
-                        self._velocity = _cm_per_sec
-                        self._max_velocity = max(self._velocity, self._max_velocity)
-                self._stepcount_timestamp = time.perf_counter()
-                self._steps_begin = _steps
-            else:
-                self._velocity = 0.0
-                self._log.warning('tick failed: motor disabled.')
-        else:
-            self._velocity = 0.0
-            self._log.warning('tick failed: disabled.')
-
-    def a_tick(self):
-        '''
-        This should be called regularly every 50ms (i.e., at 20Hz), calculating
-        velocity based on the tick/step count of the motor encoder.
-        '''
-        if self._enabled:
-            if self._motor.enabled:
-                _steps = self._motor.steps
-                if self._steps_begin != 0:
-                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
-                    # guard against division by near-zero time
-                    if _time_diff_sec < 0.02:  # 20ms minimum (40% of expected period)
-                        return
-                    _diff_steps = _steps - self._steps_begin
-                    if _diff_steps == 0:
-                        self._velocity = 0.0
-                    else:
-                        _steps_per_sec = _diff_steps / _time_diff_sec
-                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
-                        # sanity check: reject physically impossible velocities
-                        if abs(_cm_per_sec) > 50.0:  # ~50cm/s is reasonable max
-                            # spurious reading, keep previous velocity
-                            return
-                        self._velocity = _cm_per_sec
-                        self._max_velocity = max(self._velocity, self._max_velocity)
-                self._stepcount_timestamp = time.perf_counter()
-                self._steps_begin = _steps
-            else:
-                self._velocity = 0.0
-                self._log.warning('tick failed: motor disabled.')
-        else:
-            self._velocity = 0.0
-            self._log.warning('tick failed: disabled.')
-
-    def z_tick(self):
-        '''
-        This should be called regularly every 50ms (i.e., at 20Hz), calculating
-        velocity based on the tick/step count of the motor encoder.
-        '''
-        if self._enabled:
-            if self._motor.enabled:
-                _steps = self._motor.steps
-                if self._steps_begin != 0:
-                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
-                    # guard against division by near-zero time
-                    if _time_diff_sec < 0.01:  # 10ms minimum
-                        return  # skip this tick, wait for meaningful time interval
-                    _diff_steps = _steps - self._steps_begin
-                    if _diff_steps == 0:
-                        self._velocity = 0.0
-                    else:
-                        _steps_per_sec = _diff_steps / _time_diff_sec
-                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
-                        self._velocity = _cm_per_sec
-                        self._max_velocity = max(self._velocity, self._max_velocity)
-                self._stepcount_timestamp = time.perf_counter()
-                self._steps_begin = _steps
-            else:
-                self._velocity = 0.0
-                self._log.warning('tick failed: motor disabled.')
-        else:
-            self._velocity = 0.0
-            self._log.warning('tick failed: disabled.')
-
-    def y_tick(self):
-        '''
-        This should be called regularly every 50ms (i.e., at 20Hz), calculating
-        velocity based on the tick/step count of the motor encoder.
-        '''
-        if self._enabled:
-            if self._motor.enabled:
-                _steps = self._motor.steps
-                if self._steps_begin != 0:
-                    _time_diff_sec = time.perf_counter() - self._stepcount_timestamp
-                    _diff_steps = _steps - self._steps_begin
-                    if _diff_steps == 0:
-                        self._velocity = 0.0
-                    else:
-                        # calculate steps per second directly from actual elapsed time
-                        _steps_per_sec = _diff_steps / _time_diff_sec
-                        _cm_per_sec = self.steps_to_cm(_steps_per_sec)
-                        self._velocity = _cm_per_sec
-                        self._max_velocity = max(self._velocity, self._max_velocity)
-                self._stepcount_timestamp = time.perf_counter()
-                self._steps_begin = _steps
-            else:
-                self._velocity = 0.0
-                self._log.warning('tick failed: motor disabled.')
-        else:
-            self._velocity = 0.0
-            self._log.warning('tick failed: disabled.')
-
-    def x_tick(self):
-        '''
-        This should be called regularly every 50ms (i.e., at 20Hz), calculating
-        velocity based on the tick/step count of the motor encoder.
-        '''
-        if self._enabled:
             if self._motor.enabled: # then calculate velocity from motor encoder's step count
                 _time_diff_ms = 0.0
                 _steps = self._motor.steps
@@ -302,10 +177,8 @@ class Velocity(object):
                     # what would be the step count for our 50.0ms period
                     _diff_steps = _steps - self._steps_begin
                     if _diff_steps == 0:
-#                       self._log.info(Fore.BLUE + Style.DIM + '{:+d} steps diff'.format(_diff_steps))
                         self._velocity = 0.0
                     else:
-#                       self._log.info(Fore.BLUE + '{:+d} steps diff'.format(_diff_steps))
                         _time_error_percent = _time_error_ms / self._period_ms
                         _corrected_diff_steps = _diff_steps + ( _diff_steps * _time_error_percent )
                         # multiply the steps per period by the loop frequency (20) to get steps/second
@@ -313,13 +186,8 @@ class Velocity(object):
                         _cm_per_sec = self.steps_to_cm(_steps_per_sec)
                         self._velocity = _cm_per_sec
                         self._max_velocity = max(self._velocity, self._max_velocity)
-#                       if _steps % 10 == 0:
-#                           self._log.info(Fore.BLUE + '{:+d} steps, {:+d}/{:5.2f} diff/corrected; time diff: {:>5.2f}ms; error: {:>5.2f}%;\t'.format(
-#                                   self._motor.steps, _diff_steps, _corrected_diff_steps, _time_diff_ms, _time_error_percent * 100.0)
-#                                   + Fore.YELLOW + 'motor power: {}; velocity: {:>5.2f} steps/sec; {:<5.2f}cm/sec'.format(self._motor.last_power, _steps_per_sec, self._velocity))
                 self._stepcount_timestamp = time.perf_counter()
                 self._steps_begin = _steps
-#               self._log.info(Fore.BLUE + '{:+d} steps, {:+d} begin'.format(self._motor.steps, self._steps_begin))
             else:
                 self._velocity = 0.0
                 self._log.warning('tick failed: motor disabled.')
@@ -336,16 +204,7 @@ class Velocity(object):
         '''
         if self._motor.is_stopped:
             return 0.0
-        else:
-            return self._velocity
-#       return self._velocity
-
-#   def __call__(self):
-#       '''
-#       Enables this class to be called as if it were a function, returning
-#       the current velocity value.
-#       '''
-#       return self._velocity
+        return self._velocity
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property

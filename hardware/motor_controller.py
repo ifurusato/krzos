@@ -466,10 +466,7 @@ class MotorController(Component):
 
         # apply time-based slew limiting
         if self._slew_limiter:
-#           pre_slew = intent
             intent = self._slew_limiter.limit(intent)
-#           if pre_slew != intent:
-#               print(Fore.WHITE + 'slew limited: {} -> {}'.format(pre_slew, intent))
 
         vx, vy, omega = intent
         self._blended_intent_vector = intent # for access as property
@@ -496,7 +493,6 @@ class MotorController(Component):
             self._log.warning('⚠️  wheel speeds exceed 1.0 before normalization: max={:.3f}, speeds={}'.format(max_abs, ['{:.3f}'.format(s) for s in speeds]))
             speeds = [s / max_abs for s in speeds]
 
-#       self._log.info('A. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         # normalize if any magnitude > 1.0
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
