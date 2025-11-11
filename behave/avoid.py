@@ -53,9 +53,10 @@ class Avoid(AsyncBehaviour):
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
         self._aft_sensor  = AftSensor(config, level=Level.INFO)
         self._log.info('side easing: {}; aft easing: {}'.format(self._side_easing.name, self._aft_easing.name))
+        self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
-        self._priority    = _cfg.get('default_priority', 0.3)
+        self._priority    = 
         self._verbose     = _cfg.get('verbose', False)
         self._boost_when_squeezed = _cfg.get('boost_when_squeezed', True)
         self._squeezed    = False
@@ -143,6 +144,7 @@ class Avoid(AsyncBehaviour):
         # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
         max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
         self._priority = 0.3 + (max_urgency * 0.7)
+        self._priority = min(self._max_urgency, self._priority) # clamp to maximum
         # squeeze boost: ensure lateral balancing dominates when threading narrow gaps
         if self._squeezed:
             if self._boost_when_squeezed:

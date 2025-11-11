@@ -38,10 +38,11 @@ kros:
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.3            # default behaviour priority
             side_threshold_mm:              250            # ignore side obstacles further than this
-            aft_threshold_mm:               250            # ignore aft obstacles further than this
-            avoid_speed:                    0.4            # speed to avoid obstacles at
+            aft_threshold_mm:               150            # ignore aft obstacles further than this
+            avoid_speed:                    0.3            # speed to avoid obstacles
             side_easing:         'SQUARE_ROOT'             # relationship between distance and force/speed for side sensors
             aft_easing:  'REVERSE_LOGARITHMIC'             # relationship between distance and force/speed for aft sensor
+            max_urgency:                    0.7            # clamp at this level
         idle:
             enable:                     False              # enable idle behaviour
             release:                    False              # release idle behaviour on startup
