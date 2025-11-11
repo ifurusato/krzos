@@ -140,8 +140,8 @@ kros:
         stopping_steps:                      10            # determines stopping deceleration (unused)
         slew_limiter:
             enabled:                         True
-            max_vx_rate:                      1.0          # max lateral velocity change per second
-            max_vy_rate:                      1.0          # max forward velocity change per second
+            max_vx_rate:                      0.6          # max lateral velocity change per second
+            max_vy_rate:                      0.6          # max forward velocity change per second
             max_omega_rate:                   0.6          # max rotation velocity change per second
     rotation_controller:
         verbose:                            False
