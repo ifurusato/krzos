@@ -52,6 +52,7 @@ class Avoid(AsyncBehaviour):
         self._side_easing = Easing.from_string(_cfg.get('easing', 'SQUARE_ROOT'))
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
         self._aft_sensor  = AftSensor(config, level=Level.INFO)
+        self._aft_sensor_enabled = False # TODO config
         self._log.info('side easing: {}; aft easing: {}'.format(self._side_easing.name, self._aft_easing.name))
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = SideSensor(config, Orientation.PORT)
@@ -157,7 +158,7 @@ class Avoid(AsyncBehaviour):
         # squeeze detection
         self._squeezed = port_active and stbd_active
         # aft sensor: obstacle closer → push forward (positive vy)
-        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
+        if self._aft_sensor_enabled and aft_distance is not None and aft_distance < self._aft_threshold_mm:
             normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
             aft_scale = self._aft_easing.apply(normalised)
             if aft_scale > 0.05: # ignore weak signals below 5%
