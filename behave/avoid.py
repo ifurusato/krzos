@@ -56,7 +56,7 @@ class Avoid(AsyncBehaviour):
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
-        self._priority    = 
+        self._priority    = _cfg.get('default_priority', 0.3) 
         self._verbose     = _cfg.get('verbose', False)
         self._boost_when_squeezed = _cfg.get('boost_when_squeezed', True)
         self._squeezed    = False
