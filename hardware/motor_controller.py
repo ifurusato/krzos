@@ -29,6 +29,7 @@ from core.logger import Logger, Level
 from hardware.i2c_scanner import I2CScanner
 from hardware.irq_clock import IrqClock
 from hardware.motor_configurer import MotorConfigurer
+from hardware.odometer import Odometer
 from hardware.slew_limiter import SlewLimiter
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -83,6 +84,8 @@ class MotorController(Component):
         self._halt_step           = _cfg.get('halt_step', 0.067)   # rate for halting (quickly)
         self._stop_step           = _cfg.get('stop_step', 0.09)    # rate for stopping (abrupt)
         self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
+        # odometer
+        self._odometer = Odometer(config)
         # eyeballs monitor
         self._use_eyeballs = _cfg.get('use_eyeballs', False)
         self._eyeballs_monitor = None
@@ -531,22 +534,31 @@ class MotorController(Component):
         self._saft_motor.target_speed = speeds[3]
 
         # DIAGNOSTIC: Capture state before PID update
-        pre_state = [(m.orientation.label, m.target_speed, m.velocity, m.get_current_power())
-                     for m in self._all_motors]
+#       pre_state = [(m.orientation.label, m.target_speed, m.velocity, m.get_current_power())
+#                    for m in self._all_motors]
 
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
             _motor.update_target_speed()
 
-        # DIAGNOSTIC: check for unusual power changes
-        for i, _motor in enumerate(self._all_motors):
-            label, target, pre_vel, pre_power = pre_state[i]
-            post_power = _motor.get_current_power()
-            power_delta = abs(post_power - pre_power)
-            # only print if power changed significantly
-            if power_delta > 0.20:  # threshold for "surge"
-                self._log.warning('⚠️  SURGE {}: target={:.3f}, vel={:.3f}, power: {:.3f}→{:.3f} (Δ{:.3f})'.format(
-                    label, target, _motor.velocity, pre_power, post_power, power_delta))
+        # odometry update
+        step_counts = {
+            'pfwd': self._pfwd_motor.steps,
+            'sfwd': self._sfwd_motor.steps,
+            'paft': self._paft_motor.steps,
+            'saft': self._saft_motor.steps,
+        }
+        self._odometer.update(step_counts, time.monotonic())
+
+#       # DIAGNOSTIC: check for unusual power changes
+#       for i, _motor in enumerate(self._all_motors):
+#           label, target, pre_vel, pre_power = pre_state[i]
+#           post_power = _motor.get_current_power()
+#           power_delta = abs(post_power - pre_power)
+#           # only print if power changed significantly
+#           if power_delta > 0.20:  # threshold for "surge"
+#               self._log.warning('⚠️  SURGE {}: target={:.3f}, vel={:.3f}, power: {:.3f}→{:.3f} (Δ{:.3f})'.format(
+#                   label, target, _motor.velocity, pre_power, post_power, power_delta))
 
         _count = next(self._event_counter)
         if self._verbose:

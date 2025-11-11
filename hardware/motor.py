@@ -1,12 +1,12 @@
 #!/usr/bin/env python3 # -*- coding: utf-8 -*-
 #
-# Copyright 2020 by Murray Altheim. All rights reserved. This file is part of
-# the Robot OS project and is released under the "Apache Licence, Version 2.0".
-# Please see the LICENSE file included as part of this package.
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2020-01-18
-# modified: 2025-11-10
+# modified: 2025-11-11
 
 import sys, itertools, time
 from math import isclose
@@ -17,7 +17,6 @@ from core.logger import Level, Logger
 from core.component import Component
 from core.orientation import Orientation
 from hardware.pid_controller import PIDController
-from hardware.velocity import Velocity
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Motor(Component):
@@ -80,11 +79,6 @@ class Motor(Component):
         self.__speed_lambdas     = {}
         self._verbose            = False
         self._allow_speed_multipliers = False
-        # provides closed loop speed feedback
-        self._velocity           = Velocity(config, self, level=level)
-        # add callback from motor's update method
-        self.add_callback(self._velocity.tick)
-        self._velocity.enable()
         self._pid_controller     = PIDController(config, self, level=level)
         self._log.info('ready.')
 
@@ -93,7 +87,8 @@ class Motor(Component):
         '''
         Used by the Velocity class to obtain a callback on the motor loop.
         '''
-        self.__callbacks.append(callback)
+#       self.__callbacks.append(callback)
+        raise NotImplementedError('add_callback unsupported in Motor.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -214,23 +209,6 @@ class Motor(Component):
     @decoder.setter
     def decoder(self, decoder):
         self._decoder = decoder
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def get_velocity(self):
-        '''
-        Return the Velocity object for this Motor. This is a good source
-        of ticks.
-        '''
-        return self._velocity
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def velocity(self):
-        '''
-        Return the current (calculated) velocity of this Motor as a value.
-        This is used as an argument for the PID controller.
-        '''
-        return self._velocity.value
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
