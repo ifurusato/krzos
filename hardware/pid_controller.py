@@ -198,7 +198,10 @@ class PIDController(Component):
             self._pid.target = _velocity
             _error = self._pid.setpoint - self._pid.target
             _pid_output = self._pid()
-            self._power += _pid_output
+
+#           self._power += _pid_output
+            self._power = max(-1.0, min(1.0, self._power + _pid_output))  # accumulate but clamp
+
             if self._verbose:
                 self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, _velocity))
             _motor_power = self._power
