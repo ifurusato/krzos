@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-14
-# modified: 2025-08-31
+# modified: 2025-11-11
 #
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -16,12 +16,16 @@ class LogStats(object):
     Provides a simple count for each call to the Logger.
     '''
     def __init__(self):
+        self._data_count     = 0
         self._debug_count    = 0
         self._info_count     = 0
         self._warn_count     = 0
         self._error_count    = 0
         self._critical_count = 0
         pass
+
+    def data_count(self):
+        self._data_count += 1
 
     def debug_count(self):
         self._debug_count += 1
@@ -40,7 +44,7 @@ class LogStats(object):
 
     @property
     def counts(self):
-        return ( self._debug_count, self._info_count, self._warn_count,
-                self._error_count, self._critical_count )
+        return ( self._data_count, self._debug_count, self._info_count,
+                self._warn_count, self._error_count, self._critical_count )
 
 #EOF

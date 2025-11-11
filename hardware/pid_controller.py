@@ -129,6 +129,7 @@ class PIDController(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def reset_steps(self):
+        print(Fore.RED + 'RESET STEPS' + Style.RESET_ALL)
         self._motor._steps = 0
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -151,7 +152,6 @@ class PIDController(Component):
         return kp, ki, kd, cp, ci, cd, self._last_power, self._motor.get_current_power(), self._power, self._motor.target_speed, self._pid.setpoint, self._motor.steps
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def set_speed(self, target_speed):
         _changed = target_speed != self._target_speed
         if _changed:
@@ -175,6 +175,16 @@ class PIDController(Component):
                     _diff_steps = _current_steps - self._last_steps
                     _steps_per_sec = _diff_steps / _elapsed
                     _velocity = self._motor.get_velocity().steps_to_cm(_steps_per_sec)
+
+#                   # DIAGNOSTIC
+#                   if abs(_velocity) < -1.0: 
+#                       self._log.warning('⚠️  NEGATIVE VEL: steps {} → {}, diff={}, elapsed={:.4f}s, vel={:.3f}, power={:.3f}'.format(
+#                           self._last_steps, _current_steps, _diff_steps, _elapsed, _velocity, self._motor.get_current_power()))
+#                   # DIAGNOSTIC - log when steps go backwards
+#                   if _diff_steps < 0:
+#                       self._log.error('⚠️  STEPS BACKWARDS: {} → {}, diff={}, elapsed={:.4f}s, power={:.3f}'.format(
+#                           self._last_steps, _current_steps, _diff_steps, _elapsed, self._motor.get_current_power()))
+
                     # update state only when we calculate
                     self._last_steps = _current_steps
                     self._last_time_perf = _current_time
@@ -192,7 +202,9 @@ class PIDController(Component):
         self._pid.target = _velocity
         _error = self._pid.setpoint - self._pid.target
         _pid_output = self._pid()
-        self._power = max(-1.0, min(1.0, self._power + _pid_output))  # accumulate but clamp
+        self._power += _pid_output
+#       self._power = max(-1.0, min(1.0, self._power + _pid_output))  # accumulate but clamp
+#       self._power = max(-1.0, min(1.0, _pid_output))  # direct
         if self._verbose:
             self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, _velocity))
         _motor_power = self._power

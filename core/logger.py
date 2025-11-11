@@ -70,7 +70,7 @@ class Logger(object):
     __color_critical = Fore.WHITE  + Style.NORMAL
     __color_reset    = Style.RESET_ALL
 
-    def __init__(self, name, log_to_console=True, log_to_file=False, level=Level.INFO):
+    def __init__(self, name, log_to_console=True, log_to_file=False, data_logger=False, level=Level.INFO):
         '''
         Writes to a named log with the provided level, defaulting to a
         console (stream) handler unless 'log_to_file' is True, in which
@@ -130,7 +130,9 @@ class Logger(object):
                         Logger._fh = AnsiFilteringRotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
                     else: # using rotating file handler
                         Logger._fh = RotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
-                    if self._include_timestamp:
+                    if data_logger:
+                        fmt = '%(message)s'
+                    elif self._include_timestamp:
                         fmt = '{timestamp}|%(name)s|%(message)s'.format(timestamp=Logger.timestamp_format())
                     else:
                         fmt = '%(name)s|%(message)s'
@@ -248,6 +250,16 @@ class Logger(object):
         Return True if this logger has been suppressed.
         '''
         return type(self).__suppress
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def data(self, message):
+        '''
+        Prints an unformatted data message with no timestamp.
+        '''
+        if not self.suppressed:
+            Logger._log_stats.data_count()
+            with self.__mutex:
+                self.__log.info('{}'.format(message))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def debug(self, message):

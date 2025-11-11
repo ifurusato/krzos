@@ -77,7 +77,6 @@ class Roam(AsyncBehaviour):
         self._digital_pot = None
         if self._use_dynamic_speed:
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-
         self._log.info('ready.')
 
     @property
