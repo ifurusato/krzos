@@ -7,8 +7,10 @@
 #
 # author:   altheim
 # created:  2025-11-01
-# modified: 2025-11-01
+# modified: 2025-11-11
 
+import numpy as np
+from collections import deque
 import ioexpander as io
 from colorama import init, Fore, Style
 init()
@@ -34,7 +36,12 @@ class AftSensor(Component):
         _cfg = config['kros'].get('hardware').get('aft_sensor')
         self._i2c_address = _cfg.get('i2c_address')
         self._sensor_pin  = _cfg.get('sensor_pin')
-        self._log.info('aft sensor pin assignment: {:d}'.format(self._sensor_pin))
+        # smoothing configuration
+        self._smoothing      = _cfg.get('smoothing', True)
+        _smoothing_window    = _cfg.get('smoothing_window', 5)
+        self._window         = deque(maxlen=_smoothing_window) if self._smoothing else None
+        self._log.info('aft sensor pin assignment: {:d}; smoothing: {}; window: {}'.format(
+            self._sensor_pin, self._smoothing, _smoothing_window if self._smoothing else 'N/A'))
         self._ioe = None
         # confirm availability of IO Expander, set ADC reference and configure pin
         _component_registry = Component.get_registry()
@@ -53,7 +60,7 @@ class AftSensor(Component):
         except ImportError:
             raise Exception('This script requires the pimoroni-ioexpander module\nInstall with: pip3 install --user pimoroni-ioexpander')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_raw_value(self):
         '''
         Return the current (live) raw analog value from the sensor.
@@ -62,7 +69,7 @@ class AftSensor(Component):
             raise Exception('IO Expander not configured.')
         return self._ioe.input(self._sensor_pin)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_value(self):
         '''
         Return the current (live) scaled analog value from the sensor (0-100).
@@ -71,15 +78,28 @@ class AftSensor(Component):
             raise Exception('IO Expander not configured.')
         return int(round(self._ioe.input(self._sensor_pin) * 100.0))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _smooth(self, value):
+        '''
+        Applies smoothing to the value if enabled.
+        Returns smoothed value or original if smoothing disabled.
+        '''
+        if value is None or not self._smoothing:
+            return value
+        self._window.append(value)
+        smoothed = np.mean(self._window)
+        return smoothed
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_distance(self):
         '''
-        Return the current (live) distance in centimeters.
+        Return the current (live) distance in centimeters with optional smoothing.
         '''
         _value = self.get_value()
-        return int(Convert.convert_to_distance(_value))
+        _distance_cm = int(Convert.convert_to_distance(_value))
+        return int(self._smooth(_distance_cm)) if self._smoothing else _distance_cm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
         Enables the sensor.
@@ -90,7 +110,7 @@ class AftSensor(Component):
         else:
             self._log.info('already enabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disables the sensor.
@@ -101,7 +121,7 @@ class AftSensor(Component):
         else:
             self._log.info('already disabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         Closes the sensor and frees resources.

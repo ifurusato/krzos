@@ -32,11 +32,12 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.3            # default behaviour priority
+            dynamic_priority:           False              # if True, alter priority based on distance
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               150            # ignore aft obstacles further than this
             avoid_speed:                    0.3            # speed to avoid obstacles
@@ -265,6 +266,8 @@ kros:
         aft_sensor:
             i2c_address:                   0x18            # I²C address for the IO Expander
             sensor_pin:                      14            # pin on the IO Expander for the analog distance sensor
+            smoothing:                     True            # enable smoothing
+            smoothing_window:                 5            # window size for moving average
         roam_sensor:
             use_sigmoid_fusion:            True            # use either sigmoid or minimum fusion
             sigmoid_d0:                     250            # sigmoid inflection point (at 250mm)

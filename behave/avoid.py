@@ -56,9 +56,16 @@ class Avoid(AsyncBehaviour):
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
-        self._priority    = _cfg.get('default_priority', 0.3) 
-        self._verbose     = _cfg.get('verbose', False)
         self._boost_when_squeezed = _cfg.get('boost_when_squeezed', True)
+        self._dynamic_priority    = _cfg.get('dynamic_priority', True) 
+        self._default_priority    = _cfg.get('default_priority', 0.3) 
+        self._priority            = self._default_priority
+        self._verbose     = _cfg.get('verbose', False)
+        # variables
+        self._last_vx = 0.0
+        self._last_vy = 0.0
+        self._max_vx_change = 0.05  # max change per iteration
+        self._max_vy_change = 0.05
         self._squeezed    = False
         self._log.info('ready.')
 
@@ -69,6 +76,17 @@ class Avoid(AsyncBehaviour):
     @property
     def is_ballistic(self):
         return False
+
+    @property
+    def priority(self):
+        '''
+        Returns the current priority, dynamically modified by distance if
+        the dynamic priority flag is true, otherwise the default value.
+        '''
+        if self._dynamic_priority:
+            return self._priority
+        else:
+            return self._default_priority
 
     def execute(self, message):
         self._log.info('execute message {}.'.format(message))
@@ -161,6 +179,17 @@ class Avoid(AsyncBehaviour):
                 self._log.info(Fore.YELLOW + 'squeezed; boosted priority: {:4.2f}'.format(self._priority))
             else:
                 self._log.info('squeezed; priority: {:4.2f}'.format(self._priority))
+        self._rate_limiting = True # TODO config
+        if self._rate_limiting:
+            # rate limit vx and vy changes to prevent sudden motor target swings
+            vx_delta = vx - self._last_vx
+            if abs(vx_delta) > self._max_vx_change:
+                vx = self._last_vx + (self._max_vx_change if vx_delta > 0 else -self._max_vx_change)
+            vy_delta = vy - self._last_vy
+            if abs(vy_delta) > self._max_vy_change:
+                vy = self._last_vy + (self._max_vy_change if vy_delta > 0 else -self._max_vy_change)
+            self._last_vx = vx
+            self._last_vy = vy
         self._log.info('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
         self._intent_vector = (vx, vy, omega)
         if True or self._verbose:
