@@ -88,6 +88,10 @@ class Avoid(AsyncBehaviour):
             _port_distance = self._port_sensor.get_distance()
             _stbd_distance = self._stbd_sensor.get_distance()
             _aft_distance = self._aft_sensor.get_distance() * 10 # returned in cm
+       
+            # DIAGNOSTIC
+            self._log.info('AFT SENSOR RAW: {}mm'.format(_aft_distance if _aft_distance else 'None'))
+
             # then set intent vector accordingly
             self._update_intent_vector(_port_distance, _stbd_distance, _aft_distance)
         except Exception as e:
@@ -138,8 +142,9 @@ class Avoid(AsyncBehaviour):
         if aft_distance is not None and aft_distance < self._aft_threshold_mm:
             normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
             aft_scale = self._aft_easing.apply(normalised)
-            vy += aft_scale * self._avoid_speed
-            aft_urgency = aft_scale
+            if aft_scale > 0.05: # ignore weak signals below 5%
+                vy += aft_scale * self._avoid_speed
+                aft_urgency = aft_scale
         # calculate priority from maximum sensor urgency
         # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
         max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
