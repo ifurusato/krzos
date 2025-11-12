@@ -32,12 +32,13 @@ kros:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
         avoid:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                     False              # enable avoid behaviour
+            release:                    False              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
-            default_priority:               0.3            # default behaviour priority
-            dynamic_priority:           False              # if True, alter priority based on distance
+            default_priority:               0.35           # default behaviour priority
+            dynamic_speed:              False              # if True use digital pot for default speed
+            use_dynamic_priority:       False              # if True, alter priority based on distance
             side_threshold_mm:              250            # ignore side obstacles further than this
             aft_threshold_mm:               150            # ignore aft obstacles further than this
             avoid_speed:                    0.5            # speed to avoid obstacles
@@ -49,10 +50,10 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
-            default_priority:               0.4            # default behaviour priority
+            default_priority:               0.5            # default behaviour priority
             default_speed:                  0.4            # cruising speed
             dynamic_speed:              False              # if True use digital pot for default speed
             smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
@@ -63,6 +64,7 @@ kros:
             release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # cruising speed
+            default_priority:               0.62           # default behaviour priority
             use_dynamic_speed:           True              # if True use digital pot for default speed
             deadband_threshold:             0.07
             obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
@@ -73,9 +75,11 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                     False              # enable scout behaviour
-            release:                    False              # release scout behaviour on startup
+            enable:                      True              # enable scout behaviour
+            release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
+            use_dynamic_priority:        True              # if True, alter priority based on distance
+            default_priority:               0.32           # default behaviour priority
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             rotation_speed:                 0.5            # motor speed when rotating in place
             rotation_tolerance:             1.0            # used to calculate omega
@@ -264,9 +268,10 @@ kros:
             max_distance:                  1000            # maximum distance in mm of VL53L0X (actual range is 1m)
             pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
             stale_timeout_ms:               250            # value cannot be older than this
-        aft_sensor:
+        fore_sensor:
             i2c_address:                   0x18            # I²C address for the IO Expander
             sensor_pin:                      14            # pin on the IO Expander for the analog distance sensor
+            trim_cm:                         -2            # ± cm trim to adjust output
             smoothing:                     True            # enable smoothing
             smoothing_window:                 5            # window size for moving average
         roam_sensor:

@@ -36,7 +36,9 @@
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 import math
-from colorama import Fore, Style
+from colorama import init, Fore, Style
+init()
+
 from core.logger import Logger, Level
 from core.component import Component
 
@@ -126,6 +128,7 @@ class Odometer(Component):
         timestamp:    floating-point time in seconds (e.g. from time.monotonic())
         '''
         if not self.enabled:
+            self._log.warning('disabled.')
             return
         if self.last_steps is not None and self.last_time is not None:
             dt = timestamp - self.last_time
@@ -159,6 +162,14 @@ class Odometer(Component):
         # save per-tick state
         self.last_steps = dict(step_counts)
         self.last_time = timestamp
+
+    def print_info(self):
+        '''
+        Prints the current intent vector and pose.
+        '''
+        xy, xy, omega = self.get_velocity()
+        x, y, theta = self.get_pose()
+        self._log.info(Fore.MAGENTA + 'intent: ({:.2f}, {:.2f}, {:.2f}); pose: ({:.2f}, {:.2f}, {:.2f})'.format(xy, xy, omega, x, y, theta))
 
     def get_velocity(self):
         '''

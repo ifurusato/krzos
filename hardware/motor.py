@@ -83,6 +83,21 @@ class Motor(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def velocity(self):
+        '''
+        Returns the current velocity of this motor.
+        '''
+        return self._pid_controller.velocity
+
+    def get_velocity(self):
+        '''
+        DEPRECATED: Returns the current velocity of this motor.
+        '''
+        self._log.warning('get_velocity is DEPRECATED.')
+        return self._pid_controller.velocity
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_callback(self, callback):
         '''
         Used by the Velocity class to obtain a callback on the motor loop.

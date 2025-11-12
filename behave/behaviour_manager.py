@@ -7,8 +7,9 @@
 #
 # author:   Murray Altheim
 # created:  2021-02-16
-# modified: 2025-11-09
+# modified: 2025-11-11
 
+import sys
 import traceback
 import os, inspect, importlib.util # to locate Behaviours
 from datetime import datetime as dt
@@ -313,13 +314,27 @@ class BehaviourManager(Subscriber):
                 _event_list = Util.ellipsis(_behaviour.print_events(), self._clip_length)
             else:
                 _event_list = _behaviour.print_events()
-            self._log.info(Fore.YELLOW + '\t{}'.format(_behaviour.name)
-                    + Fore.CYAN + ' {}enabled: '.format((' ' * max(0, (10 - len(_behaviour.name)))))
-                    + Fore.YELLOW + '{}\t'.format(_behaviour.enabled)
-                    + Fore.CYAN + 'suppressed: '
-                    + Fore.YELLOW + '{}\t'.format(_behaviour.suppressed)
-                    + Fore.CYAN + 'listening for: '
-                    + Fore.YELLOW + '{}'.format(_event_list))
+            enabled_text    = Style.NORMAL + "enabled" \
+                    if _behaviour.enabled \
+                    else Style.DIM + "disabled"
+            suppressed_text = Style.DIM + "suppressed" \
+                    if _behaviour.suppressed \
+                    else Style.NORMAL + "released"
+            priority_text   = "dynamic ({:3.1f})".format(_behaviour.priority) \
+                    if _behaviour.using_dynamic_priority \
+                    else 'fixed ({:3.1f})'.format(_behaviour.priority)
+            self._log.info("{:<12}".format(_behaviour.name)
+                + Style.DIM   + " | " + Style.NORMAL
+                + Fore.YELLOW + "{:<9}".format(enabled_text)
+                + Fore.CYAN + Style.DIM  + " | " + Style.NORMAL
+                + Fore.YELLOW + "{:<9}".format(suppressed_text)
+                + Fore.CYAN  + Style.DIM + " | "
+                + Style.NORMAL + " priority: "
+                + Fore.YELLOW + "{:<9}".format(priority_text)
+                + Fore.CYAN  + Style.DIM + " | "
+                + Style.NORMAL + "listening for: "
+                + Fore.YELLOW + "{}".format(_event_list)
+            )
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
@@ -332,6 +347,7 @@ class BehaviourManager(Subscriber):
         if self._release_on_startup:
 #           self.release_all_behaviours()
             self.enable_all_behaviours()
+        self.print_info()
         Subscriber.enable(self)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

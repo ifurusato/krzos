@@ -57,10 +57,10 @@ class Avoid(AsyncBehaviour):
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = SideSensor(config, Orientation.PORT)
         self._stbd_sensor = SideSensor(config, Orientation.STBD)
-        self._boost_when_squeezed = _cfg.get('boost_when_squeezed', True)
-        self._dynamic_priority    = _cfg.get('dynamic_priority', True) 
-        self._default_priority    = _cfg.get('default_priority', 0.3) 
-        self._priority            = self._default_priority
+        self._boost_when_squeezed  = _cfg.get('boost_when_squeezed', True)
+        self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True) 
+        self._default_priority     = _cfg.get('default_priority', 0.3) 
+        self._priority             = self._default_priority
         self._verbose     = _cfg.get('verbose', False)
         # variables
         self._last_vx = 0.0
@@ -84,7 +84,7 @@ class Avoid(AsyncBehaviour):
         Returns the current priority, dynamically modified by distance if
         the dynamic priority flag is true, otherwise the default value.
         '''
-        if self._dynamic_priority:
+        if self._use_dynamic_priority:
             return self._priority
         else:
             return self._default_priority

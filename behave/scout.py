@@ -81,7 +81,7 @@ class Scout(AsyncBehaviour):
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
-        self.add_event(Event.AVOID)
+        self.add_event(Event.SCOUT)
         # configuration
         _cfg = config['kros'].get('behaviour').get('scout')
         self._counter = itertools.count()
@@ -91,6 +91,8 @@ class Scout(AsyncBehaviour):
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
         self._damping_window         = _cfg.get('damping_window', 10.0) # reduce target_omega when error is small to prevent overshoot
         self._smoothing_factor       = _cfg.get('smoothing_factor', 0.3) # low pass filter on transition towards target
+        self._use_dynamic_priority   = _cfg.get('use_dynamic_priority', True) 
+        self._default_priority       = _cfg.get('default_priority', 0.3) 
         # heading control
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
@@ -152,8 +154,11 @@ class Scout(AsyncBehaviour):
         Returns dynamic priority based on environmental constraint.
         Calculated fresh each time based on current sensor data.
         '''
-        _, max_open_distance = self._scout_sensor.get_heading_offset()
-        return self._calculate_priority(max_open_distance)
+        if self._use_dynamic_priority:
+            _, max_open_distance = self._scout_sensor.get_heading_offset()
+            return self._calculate_priority(max_open_distance)
+        else:
+            return self._default_priority
 
     def callback(self):
         raise NotImplementedError('callback unsupported in Scout.')

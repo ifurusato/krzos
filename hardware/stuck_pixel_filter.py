@@ -18,20 +18,19 @@ from core.component import Component
 from core.logger import Logger, Level
 
 class StuckPixelFilter(Component):
+    NAME = 'stuck-pixel'
     '''
     Detects and filters VL53L5CX pixels that remain constant despite robot motion.
-    
+
     Tracks pixel values over time and marks pixels as "stuck" if they don't
     change at all across multiple sensor polls, this only occurring when the
     robot is moving. Automatically clears history when the robot stops to avoid
     false positives.
-    
+
     Args:
         config: Application configuration dict
         level: Logging level
     '''
-    NAME = 'stuck-pixel-filter'
-    
     def __init__(self, config, level=Level.INFO):
         self._log = Logger(StuckPixelFilter.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
@@ -43,20 +42,20 @@ class StuckPixelFilter(Component):
         self._pixel_history = {}  # {(row, col): [val1, val2, ...]}
         self._stuck_pixels = set()  # {(row, col), ...}
         self._log.info('ready [threshold={}]'.format(self._threshold))
-    
+
     @property
     def stuck_pixels(self):
         '''
         Returns set of (row, col) tuples currently marked as stuck.
         '''
         return self._stuck_pixels.copy()
-    
+
     def is_stuck(self, row, col):
         '''
         Check if a specific pixel is currently stuck.
         '''
         return (row, col) in self._stuck_pixels
-    
+
     def clear(self):
         '''
         Clear all history and stuck pixel markers.
@@ -64,11 +63,11 @@ class StuckPixelFilter(Component):
         self._pixel_history.clear()
         self._stuck_pixels.clear()
         self._log.debug('cleared all stuck pixel history')
-    
+
     def update(self, grid, rows_to_check=None, cols_to_check=None):
         '''
         Update stuck pixel detection with new sensor grid data.
-        
+
         Args:
             grid: numpy array of shape (rows, cols) with distance readings
             rows_to_check: Optional list of row indices to check (default: all)
@@ -109,18 +108,18 @@ class StuckPixelFilter(Component):
                         if key in self._stuck_pixels:
                             self._stuck_pixels.remove(key)
                             self._log.debug('pixel recovered: row={}, col={}'.format(row, col))
-    
+
     def filter_values(self, values_with_coords):
         '''
         Filter out stuck pixels from a list of (value, row, col) tuples.
-        
+
         Args:
             values_with_coords: List of (value, row, col) tuples
-            
+
         Returns:
             List of (value, row, col) tuples with stuck pixels removed
         '''
-        return [(val, row, col) for val, row, col in values_with_coords 
+        return [(val, row, col) for val, row, col in values_with_coords
                 if (row, col) not in self._stuck_pixels]
 
 #EOF

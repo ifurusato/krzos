@@ -7,14 +7,13 @@
 #
 # author:   Murray Altheim
 # created:  2020-04-20
-# modified: 2025-09-22
+# modified: 2025-11-11
 #
 
-import sys
 import time
 from datetime import datetime as dt
 import itertools # TEMP
-from math import isclose
+from math import isclose, pi
 from collections import deque as Deque
 from colorama import init, Fore, Style
 init()
@@ -66,11 +65,20 @@ class PIDController(Component):
         if self._use_velocity_class:
             self._log.warning('using Velocity class for feedback')
         else:
-            # direct calculation
+            # direct velocity calculation geometry
+            geom_cfg = config['kros'].get('geometry')
+            self._steps_per_rotation = geom_cfg.get('steps_per_rotation')
+            self._wheel_diameter_mm = geom_cfg.get('wheel_diameter')
+            self._wheel_circumference_cm = (self._wheel_diameter_mm * pi) / 10.0  # mm to cm
+            self._cm_per_step = self._wheel_circumference_cm / self._steps_per_rotation
+            self._log.debug('direct velocity: wheel_diameter_mm={}; steps_per_rotation={}; wheel_circumference_cm={:.4f}; cm_per_step={:.6f}'.format(
+                self._wheel_diameter_mm, self._steps_per_rotation, self._wheel_circumference_cm, self._cm_per_step
+            ))
             self._last_steps = None
             self._last_time = None
+            self._last_time_perf = None
             self._last_velocity = 0.0
-            self._log.info(Fore.GREEN + 'calculating velocity directly in PID')
+            self._log.info('calculating velocity directly in PID')
         self._log.info('sample frequency: {:d}Hz; period: {:5.2f} sec.'.format(_freq_hz, _period_sec))
         self._pid = PID(self._orientation, _kp, _ki, _kd, _min_output, _max_output, period=_period_sec, level=level)
         # used for hysteresis, if queue too small will zero-out motor power too quickly
@@ -81,6 +89,7 @@ class PIDController(Component):
         self._last_power   = 0.0
         self._last_time = dt.now() # for calculating elapsed time
         self._check_near_zero = True # use isclose block for zero checking
+        self._velocity     = 0.0
         self._verbose      = False
         self._log.info('ready.')
 
@@ -91,6 +100,11 @@ class PIDController(Component):
         Return the underlying PID controller.
         '''
         return self._pid
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def velocity(self):
+        return self._velocity
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
@@ -177,111 +191,38 @@ class PIDController(Component):
             return 0.0
         self._pid.setpoint = target_speed
         if self._use_velocity_class:
-            # get velocity from Velocity class
-            _velocity = self._motor.velocity
+            # get velocity from Velocity class property (it should be kept in sync through callbacks)
+            self._velocity = self._motor.velocity
         else:
-            # calculate velocity directly from encoder steps
+            # calculate velocity directly from encoder steps using local geometry math
             _current_steps = self._motor.steps
             _current_time = time.perf_counter()
             if self._last_steps is not None:
                 _elapsed = _current_time - self._last_time_perf
                 if _elapsed > 0.01:  # 10ms minimum - calculate new velocity
                     _diff_steps = _current_steps - self._last_steps
+                    # convert steps/sec to cm/sec using pre-calculated cm/step (no Velocity dependency)
                     _steps_per_sec = _diff_steps / _elapsed
-                    _velocity = self._motor.get_velocity().steps_to_cm(_steps_per_sec)
-                    # update state only when we calculate
+                    self._velocity = _steps_per_sec * self._cm_per_step
                     self._last_steps = _current_steps
                     self._last_time_perf = _current_time
-                    self._last_velocity = _velocity
+                    self._last_velocity = self._velocity
                 else:
                     # too soon - use previous velocity and DON'T update state
-                    _velocity = self._last_velocity
+                    self._velocity = self._last_velocity
             else:
                 # first call - initialize state, velocity is zero
-                _velocity = 0.0
+                self._velocity = 0.0
                 self._last_steps = _current_steps
                 self._last_time_perf = _current_time
                 self._last_velocity = 0.0
         # converts speed to power...
-        self._pid.target = _velocity
+        self._pid.target = self._velocity
         _error = self._pid.setpoint - self._pid.target
         _pid_output = self._pid()
         self._power += _pid_output
         if self._verbose:
-            self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(
-                _pid_output, self._power, _velocity))
-        _motor_power = self._power
-        self._motor.set_motor_power(_motor_power)
-        if self._verbose:
-            if _count % 20 == 0:
-                self._log.info(
-                    Fore.YELLOW + 'target speed: {:5.2f}; current speed: {:5.2f};'.format(
-                        target_speed, self._motor.target_speed) +
-                    Fore.GREEN + Style.NORMAL +
-                    ' pid.setpoint: {:5.2f}; pid output: {:5.2f};'.format(self._pid.setpoint, _pid_output) +
-                    Fore.MAGENTA + ' error: {:<5.2f};'.format(_error) +
-                    Fore.WHITE + ' motor power: {:<5.2f};'.format(_motor_power) +
-                    Fore.CYAN + Style.NORMAL + ' elapsed: {:d}ms'.format(_elapsed_ms)
-                )
-        self._last_power = self._power
-        self._last_time = dt.now()
-        return _motor_power
-
-    def x_set_speed(self, target_speed):
-        _changed = target_speed != self._target_speed
-        if _changed:
-            self._target_speed = target_speed 
-        if not self.enabled:
-            self._log.info(Fore.RED + 'pid controller disabled.')
-            return 0.0
-        _elapsed_ms = round(( dt.now() - self._last_time ).total_seconds() * 1000.0)
-        _count = next(self._counter)
-        self._pid.setpoint = target_speed
-        if self._use_velocity_class:
-            # get velocity from Velocity class
-            _velocity = self._motor.velocity
-        else:
-            # calculate velocity directly from encoder steps
-            _current_steps = self._motor.steps
-            _current_time = time.perf_counter()
-            if self._last_steps is not None:
-                _elapsed = _current_time - self._last_time_perf
-                if _elapsed > 0.01:  # 10ms minimum - calculate new velocity
-                    _diff_steps = _current_steps - self._last_steps
-                    _steps_per_sec = _diff_steps / _elapsed
-                    _velocity = self._motor.get_velocity().steps_to_cm(_steps_per_sec)
-
-#                   # DIAGNOSTIC
-#                   if abs(_velocity) < -1.0: 
-#                       self._log.warning('⚠️  NEGATIVE VEL: steps {} → {}, diff={}, elapsed={:.4f}s, vel={:.3f}, power={:.3f}'.format(
-#                           self._last_steps, _current_steps, _diff_steps, _elapsed, _velocity, self._motor.get_current_power()))
-#                   # DIAGNOSTIC - log when steps go backwards
-#                   if _diff_steps < 0:
-#                       self._log.error('⚠️  STEPS BACKWARDS: {} → {}, diff={}, elapsed={:.4f}s, power={:.3f}'.format(
-#                           self._last_steps, _current_steps, _diff_steps, _elapsed, self._motor.get_current_power()))
-
-                    # update state only when we calculate
-                    self._last_steps = _current_steps
-                    self._last_time_perf = _current_time
-                    self._last_velocity = _velocity
-                else:
-                    # too soon - use previous velocity and DON'T update state
-                    _velocity = self._last_velocity
-            else:
-                # first call - initialize state, velocity is zero
-                _velocity = 0.0
-                self._last_steps = _current_steps
-                self._last_time_perf = _current_time
-                self._last_velocity = 0.0
-        # converts speed to power...
-        self._pid.target = _velocity
-        _error = self._pid.setpoint - self._pid.target
-        _pid_output = self._pid()
-        self._power += _pid_output
-#       self._power = max(-1.0, min(1.0, self._power + _pid_output))  # accumulate but clamp
-#       self._power = max(-1.0, min(1.0, _pid_output))  # direct
-        if self._verbose:
-            self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, _velocity))
+            self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, self._velocity))
         _motor_power = self._power
         self._motor.set_motor_power(_motor_power)
         if self._verbose:
@@ -291,115 +232,6 @@ class PIDController(Component):
                         + Fore.MAGENTA + ' error: {:<5.2f};'.format(_error)
                         + Fore.WHITE + ' motor power: {:<5.2f};'.format(_motor_power)
                         + Fore.CYAN + Style.NORMAL + ' elapsed: {:d}ms'.format(_elapsed_ms))
-        self._last_power = self._power
-        self._last_time = dt.now()
-        return _motor_power
-
-    def z_set_speed(self, target_speed):
-        _changed = target_speed != self._target_speed
-        if _changed:
-            self._target_speed = target_speed 
-        if not self.enabled:
-            self._log.info(Fore.RED + 'pid controller disabled.')
-            return 0.0
-        _elapsed_ms = round(( dt.now() - self._last_time ).total_seconds() * 1000.0)
-        _count = next(self._counter)
-        if self._check_near_zero and isclose(target_speed, 0.0, abs_tol=1e-2):
-            self._pid.setpoint = 0.0
-            self._pid.target   = 0.0
-            self._power        = 0.0
-            self._pid.reset() # to avoid accumulating state over time
-            self._motor.set_motor_power(0.0)
-            if self._verbose:
-                if _count % 20 == 0:
-                    self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(
-                            target_speed, self._power, 0.0))
-                pass
-            _motor_power = 0.0
-        else:
-            self._pid.setpoint = target_speed
-            if self._use_velocity_class:
-                # get velocity from Velocity class
-                _velocity = self._motor.velocity
-            else:
-                # or calculate velocity directly from encoder steps
-                _current_steps = self._motor.steps
-                _current_time = time.perf_counter()
-                if self._last_steps is not None:
-                    _elapsed = _current_time - self._last_time_perf
-                    if _elapsed > 0.01:  # 10ms minimum
-                        _diff_steps = _current_steps - self._last_steps
-                        _steps_per_sec = _diff_steps / _elapsed
-                        _velocity = self._motor.get_velocity().steps_to_cm(_steps_per_sec)
-                    else:
-                        _velocity = self._last_velocity
-                else:
-                    _velocity = 0.0
-                self._last_steps = _current_steps
-                self._last_time_perf = _current_time
-                self._last_velocity = _velocity
-            # converts speed to power...
-            self._pid.target = _velocity
-            _error = self._pid.setpoint - self._pid.target
-            _pid_output = self._pid()
-
-#           self._power += _pid_output
-            self._power = max(-1.0, min(1.0, self._power + _pid_output))  # accumulate but clamp
-
-            if self._verbose:
-                self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, _velocity))
-            _motor_power = self._power
-            self._motor.set_motor_power(_motor_power)
-            if self._verbose:
-                if _count % 20 == 0:
-                    self._log.info(Fore.YELLOW + 'target speed: {:5.2f}; current speed: {:5.2f};'.format(target_speed, self._motor.target_speed)
-                            + Fore.GREEN + Style.NORMAL + ' pid.setpoint: {:5.2f}; pid output: {:5.2f};'.format(self._pid.setpoint, _pid_output)
-                            + Fore.MAGENTA + ' error: {:<5.2f};'.format(_error)
-                            + Fore.WHITE + ' motor power: {:<5.2f};'.format(_motor_power)
-                            + Fore.CYAN + Style.NORMAL + ' elapsed: {:d}ms'.format(_elapsed_ms))
-        self._last_power = self._power
-        self._last_time = dt.now()
-        return _motor_power
-
-    def x_set_speed(self, target_speed):
-        _changed = target_speed != self._target_speed
-        if _changed:
-            self._target_speed = target_speed 
-        if not self.enabled:
-            self._log.info(Fore.RED + 'pid controller disabled.')
-            return 0.0
-        _elapsed_ms = round(( dt.now() - self._last_time ).total_seconds() * 1000.0)
-        _count = next(self._counter)
-        if self._check_near_zero and isclose(target_speed, 0.0, abs_tol=1e-2):
-            self._pid.setpoint = 0.0
-            self._pid.target   = 0.0
-            self._power        = 0.0
-            self._pid.reset() # to avoid accumulating state over time
-            self._motor.set_motor_power(0.0)
-            if self._verbose:
-                if _count % 20 == 0:
-                    self._log.info(Fore.WHITE + Style.DIM + 'target speed: {:5.2f}; stopped; power: {:4.2f};\tvelocity: {:4.2f}'.format(
-                            target_speed, self._power, self._motor.velocity))
-                pass
-            _motor_power = 0.0
-        else:
-            self._pid.setpoint = target_speed
-            # converts speed to power...
-            self._pid.target = self._motor.velocity
-            _error = self._pid.setpoint - self._pid.target
-            _pid_output = self._pid()
-            self._power += _pid_output
-            if self._verbose:
-                self._log.info(Fore.YELLOW + '_pid_output: {:4.2f};\t_power: {:4.2f};\tvelocity: {:4.2f}'.format(_pid_output, self._power, self._motor.velocity))
-            _motor_power = self._power
-            self._motor.set_motor_power(_motor_power)
-            if self._verbose:
-                if _count % 20 == 0:
-                    self._log.info(Fore.YELLOW + 'target speed: {:5.2f}; current speed: {:5.2f};'.format(target_speed, self._motor.target_speed)
-                            + Fore.GREEN + Style.NORMAL + ' pid.setpoint: {:5.2f}; pid output: {:5.2f};'.format(self._pid.setpoint, _pid_output)
-                            + Fore.MAGENTA + ' error: {:<5.2f};'.format(_error)
-                            + Fore.WHITE + ' motor power: {:<5.2f};'.format(_motor_power)
-                            + Fore.CYAN + Style.NORMAL + ' elapsed: {:d}ms'.format(_elapsed_ms))
         self._last_power = self._power
         self._last_time = dt.now()
         return _motor_power

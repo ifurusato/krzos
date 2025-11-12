@@ -120,7 +120,8 @@ class MotorController(Component):
             self._log.info('using external clock.')
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._all_motors     = []
+        self._closed_loop = None
+        self._all_motors  = []
         _motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
         self._pfwd_motor     = _motor_configurer.get_motor(Orientation.PFWD)
         self._sfwd_motor     = _motor_configurer.get_motor(Orientation.SFWD)
@@ -175,6 +176,12 @@ class MotorController(Component):
         self._log.info(Fore.GREEN + 'ready with {} motors.'.format(len(self._all_motors)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def get_odometer(self):
+        '''
+        Return the Odometer used by this MotorController.
+        '''
+        self._odometer = Odometer(config)
 
     @property
     def base_priority(self):
@@ -279,6 +286,9 @@ class MotorController(Component):
         '''
         Set the motor controller to open or closed loop.
         '''
+        if self._closed_loop == closed_loop:
+            self._log.debug('motor controller already set for closed loop.')
+            return
         self._closed_loop = closed_loop
         if self._closed_loop:
             for _motor in self._all_motors:
@@ -563,6 +573,9 @@ class MotorController(Component):
         _count = next(self._event_counter)
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
+        else:
+            if _count % 10 == 0:
+                self._odometer.print_info()
         self._state_change_check()
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()

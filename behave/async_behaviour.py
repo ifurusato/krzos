@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-29
-# modified: 2025-11-09
+# modified: 2025-11-11
 
 import time
 import asyncio
@@ -40,6 +40,7 @@ class AsyncBehaviour(Behaviour):
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
         self._log.info("poll delay: {}ms".format(self._poll_delay_ms))
         self._intent_vector   = (0.0, 0.0, 0.0)
+        self._use_dynamic_priority = False
         self._priority        = 0.3  # default priority
         self._intent_vector_registered = False
         self._loop_instance   = None
@@ -53,11 +54,11 @@ class AsyncBehaviour(Behaviour):
             self._motor_paft = self._motor_controller.get_motor(Orientation.PAFT)
             self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
             # geometry configuration
-            velocity = self._motor_pfwd.get_velocity()
-            self._steps_per_rotation = velocity.steps_per_rotation
-            self._wheel_diameter_mm = velocity._wheel_diameter
-            self._wheel_track_mm = config['kros']['geometry']['wheel_track']
-            wheel_circumference_cm = np.pi * self._wheel_diameter_mm / 10.0
+            _cfg = config['kros']['geometry']
+            self._steps_per_rotation = _cfg.get('steps_per_rotation') 
+            self._wheel_diameter     = _cfg.get('wheel_diameter')
+            self._wheel_track_mm     = _cfg.get('wheel_track')
+            wheel_circumference_cm = np.pi * self._wheel_diameter / 10.0
             rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
             steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
             self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
@@ -71,6 +72,13 @@ class AsyncBehaviour(Behaviour):
         Subclasses can override to provide dynamic priority.
         '''
         return self._priority
+
+    @property
+    def using_dynamic_priority(self):
+        '''
+        Returns True if this behaviour is using dynamic priority.
+        '''
+        return self._use_dynamic_priority
 
     def _register_intent_vector(self):
         '''

@@ -53,7 +53,8 @@ class Scan(AsyncBehaviour):
         # rotation controller
         self._rotation_controller = _component_registry.get(RotationController.NAME)
         if self._rotation_controller is None:
-            raise MissingComponentError('rotation controller not available for Scan.')
+            self._log.info('creating rotation controller…')
+            self._rotation_controller = RotationController(config, _motor_controller, level=level)
         # IMU (available but currently unused)
         self._imu = _component_registry.get(Usfs.NAME)
         if self._imu is None:
@@ -353,8 +354,6 @@ class Scan(AsyncBehaviour):
         self._rotation_controller.enable()
         self._log.info('enabling scan...')
         AsyncBehaviour.enable(self)
-        if self._eyeballs:
-            self._eyeballs.enable()
         self._log.info('scan enabled.')
 
     def disable(self):
@@ -366,8 +365,6 @@ class Scan(AsyncBehaviour):
         self._scan_active = False
         self._data_collection_active = False
         AsyncBehaviour.disable(self)
-        if self._eyeballs:
-            self._eyeballs.disable()
         if self._use_matrix:
             self._matrix11x7.clear()
             self._matrix11x7.show()

@@ -138,7 +138,6 @@ class Event(Enum):
     REMOTE_X               = ( 73, "remote X",                 10,   Group.REMOTE )
     REMOTE_D               = ( 74, "remote D",                 10,   Group.REMOTE )
     REMOTE_R               = ( 75, "remote R",                 10,   Group.REMOTE )
-    REMOTE_U               = ( 76, "remote U",                 10,   Group.REMOTE )
     REMOTE_L               = ( 77, "remote L",                 10,   Group.REMOTE )
 
     # bumper ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -220,19 +219,20 @@ class Event(Enum):
     FULL_AHEAD             = ( 416, "full ahead",             100,   Group.CHADBURN, Directive.AHEAD, Speed.FULL )
 
     # high level behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    AVOID                  = ( 500, "avoid",                  150,   Group.BEHAVIOUR )
-    ROAM                   = ( 501, "roam",                   151,   Group.BEHAVIOUR )
-    MOTH                   = ( 502, "moth",                   152,   Group.BEHAVIOUR )
-    SCAN                   = ( 503, "scan",                   153,   Group.BEHAVIOUR )
-    SWERVE                 = ( 504, "swerve",                 154,   Group.BEHAVIOUR )
-
-    MOTION_DETECT          = ( 505, "motion detect",          155,   Group.BEHAVIOUR )
-    SNIFF                  = ( 506, "sniff",                  156,   Group.BEHAVIOUR ) # A Button
-    EVENT_L2               = ( 507, "L2",                     157,   Group.BEHAVIOUR ) # L2 Button
-    EVENT_R1               = ( 508, "cruise",                 158,   Group.BEHAVIOUR ) # R1 Button
-    LIGHTS                 = ( 509, "lights",                 159,   Group.BEHAVIOUR ) # R2 Button
-    VIDEO                  = ( 510, "video",                  160,   Group.BEHAVIOUR ) # L1 Button
-    STUCK                  = ( 511, "stuck",                  161,   Group.BEHAVIOUR )
+    AVOID                  = ( 500, "avoid",                   80,   Group.BEHAVIOUR )
+    MOTH                   = ( 501, "moth",                    80,   Group.BEHAVIOUR )
+    RADIOZOA               = ( 502, "radiozoa",                80,   Group.BEHAVIOUR )
+    ROAM                   = ( 503, "roam",                    80,   Group.BEHAVIOUR )
+    SCAN                   = ( 504, "scan",                    80,   Group.BEHAVIOUR )
+    SCOUT                  = ( 505, "scout",                   80,   Group.BEHAVIOUR )
+    SWERVE                 = ( 506, "swerve",                  80,   Group.BEHAVIOUR )
+    STUCK                  = ( 507, "stuck",                    5,   Group.BEHAVIOUR )
+#   MOTION_DETECT          = ( 508, "motion detect",          150,   Group.BEHAVIOUR )
+#   SNIFF                  = ( 509, "sniff",                  150,   Group.BEHAVIOUR ) # A Button
+#   EVENT_L2               = ( 510, "L2",                     150,   Group.BEHAVIOUR ) # L2 Button
+#   EVENT_R1               = ( 511, "cruise",                 150,   Group.BEHAVIOUR ) # R1 Button
+#   LIGHTS                 = ( 512, "lights",                 150,   Group.BEHAVIOUR ) # R2 Button
+#   VIDEO                  = ( 513, "video",                  150,   Group.BEHAVIOUR ) # L1 Button
 
     # idle ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     IDLE                   = ( 600, "idle",                   100,   Group.IDLE )

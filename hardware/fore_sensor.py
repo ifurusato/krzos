@@ -7,7 +7,7 @@
 #
 # author:   altheim
 # created:  2025-11-01
-# modified: 2025-11-11
+# modified: 2025-11-12
 
 import numpy as np
 from collections import deque
@@ -21,7 +21,8 @@ from core.convert import Convert
 from hardware.i2c_scanner import I2CScanner
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class AftSensor(Component):
+class ForeSensor(Component):
+    NAME = 'fore-sensor'
     '''
     Wraps an IO Expander board as input for a single Pololu analog distance sensor.
     
@@ -29,18 +30,19 @@ class AftSensor(Component):
     :param level:             the log level
     '''
     def __init__(self, config, level=Level.INFO):
-        self._log = Logger('aft-sensor', level)
+        self._log = Logger(ForeSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None:
             raise ValueError('no configuration provided.')
-        _cfg = config['kros'].get('hardware').get('aft_sensor')
-        self._i2c_address = _cfg.get('i2c_address')
-        self._sensor_pin  = _cfg.get('sensor_pin')
+        _cfg = config['kros'].get('hardware').get('fore_sensor')
+        self._i2c_address  = _cfg.get('i2c_address')
+        self._sensor_pin   = _cfg.get('sensor_pin')
+        self._trim_cm      = _cfg.get('trim_cm')
         # smoothing configuration
-        self._smoothing      = _cfg.get('smoothing', True)
-        _smoothing_window    = _cfg.get('smoothing_window', 5)
-        self._window         = deque(maxlen=_smoothing_window) if self._smoothing else None
-        self._log.info('aft sensor pin assignment: {:d}; smoothing: {}; window: {}'.format(
+        self._smoothing    = _cfg.get('smoothing', True)
+        _smoothing_window  = _cfg.get('smoothing_window', 5)
+        self._window       = deque(maxlen=_smoothing_window) if self._smoothing else None
+        self._log.info('fore sensor pin assignment: {:d}; smoothing: {}; window: {}'.format(
             self._sensor_pin, self._smoothing, _smoothing_window if self._smoothing else 'N/A'))
         self._ioe = None
         # confirm availability of IO Expander, set ADC reference and configure pin
@@ -54,7 +56,7 @@ class AftSensor(Component):
                 self._ioe = io.IOE(i2c_addr=self._i2c_address)
                 self._ioe.set_mode(self._sensor_pin, io.ADC)
                 self._ioe.set_adc_vref(3.3)
-                self._log.info('aft sensor ready on pin: ' + Fore.GREEN + '{:d}'.format(self._sensor_pin))
+                self._log.info('fore sensor ready on pin: ' + Fore.GREEN + '{:d}'.format(self._sensor_pin))
             else:
                 raise Exception('no IO Expander found at address 0x{:02X}.'.format(self._i2c_address))
         except ImportError:
@@ -91,12 +93,13 @@ class AftSensor(Component):
         return smoothed
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def get_distance(self):
+    def get_distance_cm(self):
         '''
-        Return the current (live) distance in centimeters with optional smoothing.
+        Return the current (live) distance in centimeters with optional smoothing,
+        adding any configured trim value.
         '''
         _value = self.get_value()
-        _distance_cm = int(Convert.convert_to_distance(_value))
+        _distance_cm = int(Convert.convert_to_distance(_value)) + self._trim_cm
         return int(self._smooth(_distance_cm)) if self._smoothing else _distance_cm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -106,7 +109,7 @@ class AftSensor(Component):
         '''
         if not self.enabled:
             Component.enable(self)
-            self._log.info('aft sensor enabled.')
+            self._log.info('enabled.')
         else:
             self._log.info('already enabled.')
 
@@ -117,7 +120,7 @@ class AftSensor(Component):
         '''
         if self.enabled:
             Component.disable(self)
-            self._log.info('aft sensor disabled.')
+            self._log.info('disabled.')
         else:
             self._log.info('already disabled.')
 
@@ -129,7 +132,7 @@ class AftSensor(Component):
         self.disable()
         if not self.closed:
             Component.close(self)
-            self._log.info('aft sensor closed.')
+            self._log.info('closed.')
         else:
             self._log.info('already closed.')
 

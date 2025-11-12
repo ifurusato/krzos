@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-10
-# modified: 2025-11-10
+# modified: 2025-11-11
 
 import time
 import numpy as np
@@ -37,12 +37,13 @@ class Radiozoa(AsyncBehaviour):
         if _motor_controller is None:
             raise MissingComponentError('motor controller not available.')
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
-        self.add_event(Event.AVOID)
+        self.add_event(Event.RADIOZOA)
         # configuration
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._counter    = itertools.count()
         self._default_speed     = _cfg.get('default_speed', 0.4)
-        self._use_dynamic_speed = _cfg.get('dynamic_speed')
+        self._use_dynamic_priority = True
+        self._use_dynamic_speed = _cfg.get('dynamic_speed', False)
         self._priority          = _cfg.get('default_priority', 0.4)
         self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
@@ -60,7 +61,7 @@ class Radiozoa(AsyncBehaviour):
         Tracks maximum imbalance: Uses the worst-case pair imbalance to determine if robot
         should settle.
         '''
-        # directional vectors
+        # directienal vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
             (Cardinal.NORTHWEST, Cardinal.SOUTHEAST),
@@ -92,7 +93,7 @@ class Radiozoa(AsyncBehaviour):
             self._log.info(Fore.WHITE + 'creating Radiozoa sensor…')
             self._radiozoa_sensor = RadiozoaSensor(config, level=Level.INFO)
         else:
-            self._log.info(Fore.WHITE + 'using existing Radiozoa sensor.')
+            self._log.info('using existing Radiozoa sensor.')
         self._log.info('ready.')
 
     @property
