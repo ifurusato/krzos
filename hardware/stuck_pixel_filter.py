@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -8,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-08
-# modified: 2025-11-08
+# modified: 2025-11-13
 
 import numpy as np
 from colorama import init, Fore, Style
@@ -20,12 +19,13 @@ from core.logger import Logger, Level
 class StuckPixelFilter(Component):
     NAME = 'stuck-pixel'
     '''
-    Detects and filters VL53L5CX pixels that remain constant despite robot motion.
+    Detects and filters VL53L5CX pixels that are unreliable. This includes:
 
-    Tracks pixel values over time and marks pixels as "stuck" if they don't
-    change at all across multiple sensor polls, this only occurring when the
-    robot is moving. Automatically clears history when the robot stops to avoid
-    false positives.
+    1. Real-time Zero Interpolation: On a per-frame basis, replaces sporadic
+       zero-value pixels with the median of their valid neighbors. This handles
+       transient dropouts.
+    2. Stuck Pixel Detection: Over time, tracks pixels that remain constant
+       despite robot motion and marks them as "stuck".
 
     Args:
         config: Application configuration dict
@@ -64,9 +64,60 @@ class StuckPixelFilter(Component):
         self._stuck_pixels.clear()
         self._log.debug('cleared all stuck pixel history')
 
+    def interpolate_zeros(self, grid):
+        '''
+        Performs real-time spatial filtering to replace zero-value pixels.
+
+        For each pixel with a value of 0, its value is replaced by the median
+        of its valid (non-zero) cardinal neighbors (up, down, left, right).
+        This is a stateless operation performed on a single frame.
+
+        Args:
+            grid: A 2D numpy array representing the sensor data frame.
+
+        Returns:
+            A tuple containing:
+            - A new 2D numpy array with zero-values interpolated.
+            - The number of pixels that were corrected.
+        '''
+        if not self.enabled:
+            return grid, 0
+
+        rows, cols = grid.shape
+        corrected_grid = np.copy(grid)
+        corrected_count = 0
+        
+        # identify all zero-pixels first
+        zero_pixels = np.argwhere(grid == 0)
+
+        for row, col in zero_pixels:
+            neighbors = []
+            # check cardinal neighbors (up, down, left, right)
+            if row > 0 and grid[row - 1, col] > 0:
+                neighbors.append(grid[row - 1, col])
+            if row < rows - 1 and grid[row + 1, col] > 0:
+                neighbors.append(grid[row + 1, col])
+            if col > 0 and grid[row, col - 1] > 0:
+                neighbors.append(grid[row, col - 1])
+            if col < cols - 1 and grid[row, col + 1] > 0:
+                neighbors.append(grid[row, col + 1])
+
+            if neighbors:
+                # replace the zero value with the median of its neighbors
+                median_value = int(np.median(neighbors))
+                corrected_grid[row, col] = median_value
+                corrected_count += 1
+                self._log.debug('interpolated pixel ({},{}): replaced 0 with median value {}'.format(row, col, median_value))
+
+        if corrected_count > 0:
+            self._log.info('interpolated {} zero-value pixels.'.format(corrected_count))
+            
+        return corrected_grid, corrected_count
+
     def update(self, grid, rows_to_check=None, cols_to_check=None):
         '''
-        Update stuck pixel detection with new sensor grid data.
+        Update stuck pixel detection with new sensor grid data. This tracks
+        pixels that are stuck at a non-zero value over time.
 
         Args:
             grid: numpy array of shape (rows, cols) with distance readings
@@ -83,7 +134,7 @@ class StuckPixelFilter(Component):
         for row in rows_to_check:
             for col in cols_to_check:
                 val = grid[row, col]
-                if val is None or val == 0:
+                if val is None or val == 0: # ignore zeros, they are handled by interpolation
                     continue
                 key = (row, col)
                 # initialize history for this pixel

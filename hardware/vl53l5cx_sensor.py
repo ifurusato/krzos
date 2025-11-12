@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-02
-# modified: 2025-11-08
+# modified: 2025-11-13
 
 import traceback
 import time
@@ -22,14 +22,19 @@ import hardware.vl53l5cx as vl53l5cx
 from hardware.vl53l5cx import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
+from core.event import Event as KrosEvent
 from core.logger import Logger, Level
 from core.boot_session_marker import BootSessionMarker
+from core.message_factory import MessageFactory
+from core.queue_publisher import QueuePublisher
 
 class Vl53l5cxSensor(Component):
     NAME = 'vl53l5cx-sensor'
     '''
     Wrapper for VL53L5CX sensor, handling sensor initialization, configuration,
-    and data acquisition.
+    and data acquisition. Includes real-time spatial filtering to correct
+    unreliable pixel data and publishes a BLIND event if data quality degrades
+    past a configurable threshold over a sustained period.
 
     Data orientation: Row 0 = bottom/floor, Row 7 = top/far
 
@@ -76,6 +81,9 @@ class Vl53l5cxSensor(Component):
         _i2c_bus_number = _cfg.get('i2c_bus_number')
         self._minimum_free_distance = _cfg.get('minimum_free_distance', 500)
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
+        self._unreliable_pixel_threshold = _cfg.get('unreliable_pixel_threshold', 0.25)
+        self._unreliable_frame_threshold = _cfg.get('unreliable_frame_threshold', 20)
+        self._log.info(f"unreliable pixel threshold: {self._unreliable_pixel_threshold:.2%}; frame threshold: {self._unreliable_frame_threshold}")
         # flip orientation options
         self._flip_horizontal = _cfg.get('flip_horizontal', False)
         self._flip_vertical = _cfg.get('flip_vertical', False)
@@ -88,6 +96,11 @@ class Vl53l5cxSensor(Component):
             from hardware.stuck_pixel_filter import StuckPixelFilter
             self._stuck_pixel_filter = StuckPixelFilter(config, level=level)
             self._log.info('stuck pixel filter enabled.')   
+        # messaging and state
+        self._message_factory = None # lazy loaded
+        self._queue_publisher = None # lazy loaded
+        self._unreliable_frame_counter = 0
+        self._is_blind = False
         # multiprocessing attributes
         self._use_multiprocessing = _cfg.get('use_multiprocessing', True)
         self._last_distance = None       # cache for last known reading
@@ -117,6 +130,22 @@ class Vl53l5cxSensor(Component):
         self._vl53.set_ranging_mode(RANGING_MODE_CONTINUOUS)
         _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
         self._log.info('VL53L5CX device ready: elapsed: {:d}ms'.format(_elapsed_ms))
+
+    def _get_queue_publisher(self):
+        '''Lazy load the QueuePublisher from the component registry.'''
+        if self._queue_publisher is None:
+            self._queue_publisher = Component.get_registry().get(QueuePublisher.NAME)
+            if self._queue_publisher is None:
+                self._log.warning('QueuePublisher not found in registry. BLIND events will not be published.')
+        return self._queue_publisher
+
+    def _get_message_factory(self):
+        '''Lazy load the MessageFactory from the component registry.'''
+        if self._message_factory is None:
+            self._message_factory = Component.get_registry().get(MessageFactory.NAME)
+            if self._message_factory is None:
+                self._log.warning('MessageFactory not found in registry. BLIND events will not be published.')
+        return self._message_factory
 
     @property
     def floor_margin(self):
@@ -237,9 +266,57 @@ class Vl53l5cxSensor(Component):
             self._calibrate_floor_rows()
             self._log.info('VL53L5CX hardware enabled and ranging.')
 
+    def _process_and_health_check(self, arr):
+        '''
+        Applies filters, checks sensor data health, and manages BLIND state.
+
+        Returns:
+            The cleaned/filtered numpy array.
+        '''
+        corrected_count = 0
+        if self._stuck_pixel_filter:
+            # Step 1: Interpolate sporadic zeros
+            arr, corrected_count = self._stuck_pixel_filter.interpolate_zeros(arr)
+            # Step 2: Update long-term stuck pixel detection
+            self._stuck_pixel_filter.update(arr)
+            # Step 3: Filter out any long-term stuck pixels
+            arr = self._apply_stuck_pixel_filter(arr)
+
+        # Health Check based on corrected pixels
+        total_pixels = self._rows * self._cols
+        unreliable_ratio = corrected_count / total_pixels
+        
+        if unreliable_ratio > self._unreliable_pixel_threshold:
+            self._unreliable_frame_counter += 1
+            self._log.warning(f"Unreliable frame detected ({corrected_count} corrected pixels). Unreliable count: {self._unreliable_frame_counter}")
+        else:
+            # Frame is reliable, reset counter and check for recovery
+            if self._is_blind:
+                self._log.info("Sensor has recovered from BLIND state.")
+                queue_publisher = self._get_queue_publisher()
+                message_factory = self._get_message_factory()
+                if queue_publisher and message_factory:
+                    message = message_factory.create_message(KrosEvent.BLIND, False)
+                    queue_publisher.put(message)
+            self._unreliable_frame_counter = 0
+            self._is_blind = False
+
+        # If counter exceeds threshold, enter BLIND state
+        if self._unreliable_frame_counter >= self._unreliable_frame_threshold:
+            if not self._is_blind:
+                self._is_blind = True
+                self._log.error(f"Sensor is BLIND: Unreliable for {self._unreliable_frame_counter} frames, exceeding threshold of {self._unreliable_frame_threshold}.")
+                queue_publisher = self._get_queue_publisher()
+                message_factory = self._get_message_factory()
+                if queue_publisher and message_factory:
+                    message = message_factory.create_message(KrosEvent.BLIND, True)
+                    queue_publisher.put(message)
+        
+        return arr
+
     def _apply_stuck_pixel_filter(self, arr):
         '''
-        Replace stuck pixel values with interpolated values from neighboring pixels.
+        Replace long-term stuck pixel values with interpolated values from neighboring pixels.
         
         Args:
             arr: numpy array of shape (rows, cols)
@@ -247,11 +324,12 @@ class Vl53l5cxSensor(Component):
         Returns:
             numpy array with stuck pixels replaced
         '''
-        # update filter with current grid
-        self._stuck_pixel_filter.update(arr)
+        # This method is now specifically for long-term stuck pixels
+        if not self._stuck_pixel_filter:
+            return arr
+            
         # replace stuck pixels with interpolated values
         for row, col in self._stuck_pixel_filter.stuck_pixels:
-            # collect neighboring valid pixels
             neighbors = []
             for dr in [-1, 0, 1]:
                 for dc in [-1, 0, 1]:
@@ -261,60 +339,67 @@ class Vl53l5cxSensor(Component):
                     if 0 <= nr < self._rows and 0 <= nc < self._cols:
                         if not self._stuck_pixel_filter.is_stuck(nr, nc):
                             neighbors.append(arr[nr, nc])
-            # replace with mean of neighbors, or mark as invalid
             if neighbors:
                 arr[row, col] = int(np.mean(neighbors))
             else:
-                arr[row, col] = 0  # no valid neighbors, mark as invalid
+                arr[row, col] = 0 # should be rare, as it's already been interpolated
         return arr
 
     def get_distance_mm(self):
         '''
-        Returns sensor data with rows properly oriented (row 0 = bottom/floor, row 7 = top/far).
+        Returns sensor data as a flat list, with rows properly oriented.
+        Data is filtered for noise and checked for reliability. Returns None if
+        the sensor is in a BLIND state.
+
         When using multiprocessing, returns the last known value if the queue is empty,
         but only if the data is not too stale (within stale_data_timeout_sec).
         '''
         if not self.enabled:
             self._log.warning('get_distance_mm called while sensor is not enabled.')
             return None
+
+        raw_value = None
         if self._use_multiprocessing:
             try:
-                value = self._queue.get_nowait()
-                if value is not None:
-                    # reshape and flip as necessary
-                    arr = np.array(value).reshape((self._rows, self._cols))
-                    arr = self._apply_orientation(arr)
-                    if self._stuck_pixel_filter:
-                        arr = self._apply_stuck_pixel_filter(arr)
-                    self._last_distance = arr.flatten().tolist()
-                    self._last_distance_time = dt.now()
-                    return self._last_distance
+                raw_value = self._queue.get_nowait()
             except Exception:
-                pass  # Queue empty, fall through to return cached value
-            # return last known value only if it's not too stale
-            if self._last_distance is not None and self._last_distance_time is not None:
-                age_sec = (dt.now() - self._last_distance_time).total_seconds()
-                if age_sec <= self._stale_data_timeout_sec:
-                    return self._last_distance
-                else:
-                    # too stale
-                    return None
-            return None
-        else:
+                # Queue empty, fall through to use cached value if not stale
+                pass
+        else: # Synchronous mode
             start = dt.now()
             while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
                 time.sleep(0.01)
             try:
                 data = self._vl53.get_data()
-                # reshape and flip as necessary
-                arr = np.array(data.distance_mm).reshape((self._rows, self._cols))
-                arr = self._apply_orientation(arr)
-                if self._stuck_pixel_filter:
-                    arr = self._apply_stuck_pixel_filter(arr)
-                return arr.flatten().tolist() # return as flat list, properly oriented
+                raw_value = data.distance_mm
             except Exception as e:
-                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
+                self._log.error(f"{type(e)} raised reading distance_mm: {e}\n{traceback.format_exc()}")
                 return None
+
+        if raw_value is not None:
+            # We have fresh data, process it
+            arr = np.array(raw_value).reshape((self._rows, self._cols))
+            arr = self._apply_orientation(arr)
+            
+            # Apply filters and perform health check
+            filtered_arr = self._process_and_health_check(arr)
+            
+            # Cache the result
+            self._last_distance = filtered_arr.flatten().tolist()
+            self._last_distance_time = dt.now()
+
+        # If we are in a blind state, always return None
+        if self._is_blind:
+            return None
+
+        # If we didn't get new data, check if we can use stale data
+        if raw_value is None:
+            if self._last_distance is not None and self._last_distance_time is not None:
+                age_sec = (dt.now() - self._last_distance_time).total_seconds()
+                if age_sec <= self._stale_data_timeout_sec:
+                    return self._last_distance
+        
+        return self._last_distance
 
     def _calibrate_floor_rows(self):
         '''
@@ -329,7 +414,12 @@ class Vl53l5cxSensor(Component):
         self._floor_row_stddevs = [None for _ in range(self._rows)]
         samples = []
         for i in range(self._calibration_samples):
+            # Temporarily disable blind check for calibration
+            is_blind_backup = self._is_blind
+            self._is_blind = False
             data = self.get_distance_mm()
+            self._is_blind = is_blind_backup
+            
             if data is None:
                 self._log.info("calibration sample {} is None.".format(i))
                 continue

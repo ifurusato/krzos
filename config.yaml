@@ -248,6 +248,8 @@ kros:
             flip_horizontal:               True            # flip sensor data horizontally
             flip_vertical:                 True            # flip sensor data vertically
             enable_stuck_pixel_filter:     True            # filter on pixels that won't change
+            unreliable_pixel_threshold:    0.25            # ratio of bad pixels in a frame to be considered unreliable
+            unreliable_frame_threshold:      20            # number of consecutive unreliable frames before triggering BLIND state
             i2c_bus_number:                   0            # i2c bus 0 or 1
             cols:                             8
             rows:                             8
@@ -303,10 +305,10 @@ kros:
                 - 0.6
                 - 0.3
                 - 0.1
-            visualise:                    False            # use scout visualiser
+            visualise:                     True            # use scout visualiser
             show_grid:                     True            # show colored grid
             show_target_row:               True            # show target row with selected column
-            show_target_info:             False            # show log line with target info
+            show_target_info:              True            # show log line with target info
         usfs:
             declination:                     23.04         # declination at operating location
         icm20948:
