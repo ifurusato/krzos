@@ -126,10 +126,11 @@ class Event(Enum):
     # stopping and halting ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     EMERGENCY_STOP         = ( 60, "emergency-stop",            3,   Group.STOP )
     COLLISION_STOP         = ( 61, "collision-stop",            3,   Group.STOP )
-    STOP                   = ( 62, "stop",                     12,   Group.STOP )
-    HALT                   = ( 63, "halt",                     13,   Group.STOP )
-    BRAKE                  = ( 64, "brake",                    14,   Group.STOP )
-    STANDBY                = ( 65, "standby",                  15,   Group.STOP )
+    COAST                  = ( 62, "coast",                     7,   Group.STOP )
+    BRAKE                  = ( 63, "brake",                     7,   Group.STOP )
+    HALT                   = ( 64, "halt",                      7,   Group.STOP )
+    STOP                   = ( 65, "stop",                      7,   Group.STOP )
+    STANDBY                = ( 66, "standby",                   7,   Group.STOP )
 
     # remote ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     REMOTE_A               = ( 70, "remote A",                 10,   Group.REMOTE )
@@ -227,12 +228,13 @@ class Event(Enum):
     SCOUT                  = ( 505, "scout",                   80,   Group.BEHAVIOUR )
     SWERVE                 = ( 506, "swerve",                  80,   Group.BEHAVIOUR )
     STUCK                  = ( 507, "stuck",                    5,   Group.BEHAVIOUR )
-#   MOTION_DETECT          = ( 508, "motion detect",          150,   Group.BEHAVIOUR )
-#   SNIFF                  = ( 509, "sniff",                  150,   Group.BEHAVIOUR ) # A Button
-#   EVENT_L2               = ( 510, "L2",                     150,   Group.BEHAVIOUR ) # L2 Button
-#   EVENT_R1               = ( 511, "cruise",                 150,   Group.BEHAVIOUR ) # R1 Button
-#   LIGHTS                 = ( 512, "lights",                 150,   Group.BEHAVIOUR ) # R2 Button
-#   VIDEO                  = ( 513, "video",                  150,   Group.BEHAVIOUR ) # L1 Button
+    BLIND                  = ( 508, "blind",                    5,   Group.BEHAVIOUR )
+#   MOTION_DETECT          = ( 509, "motion detect",          150,   Group.BEHAVIOUR )
+#   SNIFF                  = ( 510, "sniff",                  150,   Group.BEHAVIOUR ) # A Button
+#   EVENT_L2               = ( 511, "L2",                     150,   Group.BEHAVIOUR ) # L2 Button
+#   EVENT_R1               = ( 512, "cruise",                 150,   Group.BEHAVIOUR ) # R1 Button
+#   LIGHTS                 = ( 513, "lights",                 150,   Group.BEHAVIOUR ) # R2 Button
+#   VIDEO                  = ( 514, "video",                  150,   Group.BEHAVIOUR ) # L1 Button
 
     # idle ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     IDLE                   = ( 600, "idle",                   100,   Group.IDLE )

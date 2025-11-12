@@ -50,8 +50,8 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.5            # default behaviour priority
             default_speed:                  0.4            # cruising speed
@@ -75,8 +75,8 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
             default_priority:               0.32           # default behaviour priority

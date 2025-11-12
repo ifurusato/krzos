@@ -818,6 +818,15 @@ class MotorController(Component):
         self._log.info('emergency stopped.')
 
     def _brake(self, name, step=0.02, closing=False):
+        '''
+        Brake: register a modifier to progressively reduce speeds, with the rate
+        determined by the step argument.
+        If closing is True this clears all intent vectors as part of shutting down.
+
+        Severity ordering (higher step = more urgent):
+            coast < brake < halt < stop < emergency_stop
+        A more urgent brake request interrupts a less urgent one.
+        '''
         self._log.debug('brake {} with step {}'.format(name, step))
         if self.is_stopped:
             self._log.info('already stopped.')
