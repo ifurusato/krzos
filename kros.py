@@ -464,7 +464,7 @@ class KROS(Component, FiniteStateMachine):
                         self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
                     elif not isinstance(_component, Publisher) and not isinstance(_component, Subscriber) \
                             and _component != self and _component != self._message_bus:
-                        self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                        self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
 #                       self._component_registry.deregister(_component)
                 if self._irq_clock and not self._irq_clock.closed:
@@ -478,7 +478,7 @@ class KROS(Component, FiniteStateMachine):
                         # already gone
                         self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
                     elif _component != self and _component != self._message_bus:
-                        self._log.info('closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                        self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
                         self._component_registry.deregister(_component)
                 _open_count = self._component_registry.count_open_components()

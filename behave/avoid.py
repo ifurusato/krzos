@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-01
-# modified: 2025-11-11
+# modified: 2025-11-13
 
 import time
 import numpy as np
@@ -25,8 +25,7 @@ from core.event import Event
 from behave.async_behaviour import AsyncBehaviour
 from hardware.easing import Easing
 from hardware.motor_controller import MotorController
-from hardware.aft_sensor import AftSensor
-from hardware.side_sensor import SideSensor
+from hardware.avoid_sensor import AvoidSensor
 
 class Avoid(AsyncBehaviour):
     NAME = 'avoid'
@@ -49,17 +48,20 @@ class Avoid(AsyncBehaviour):
         self._avoid_speed = _cfg.get('avoid_speed', 1.0)
         self._log.info('side threshold: {}mm; aft threshold: {}mm; avoid speed: {:4.2f}'.format(
                 self._side_threshold_mm, self._aft_threshold_mm, self._avoid_speed))
-        self._side_easing = Easing.from_string(_cfg.get('easing', 'SQUARE_ROOT'))
+        self._side_easing = Easing.from_string(_cfg.get('side_easing', 'SQUARE_ROOT'))
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
-        self._aft_sensor  = AftSensor(config, level=Level.INFO)
-        self._aft_sensor_enabled = False # TODO config
-        self._log.info('side easing: {}; aft easing: {}'.format(self._side_easing.name, self._aft_easing.name))
+        self._use_aft_sensor = _cfg.get('use_aft_sensor', True)
+        self._log.info('side easing: {}; aft easing: {}; use aft sensor: {}'.format(self._side_easing.name, self._aft_easing.name, self._use_aft_sensor))
         self._max_urgency = _cfg.get('max_urgency', 0.7)
-        self._port_sensor = SideSensor(config, Orientation.PORT)
-        self._stbd_sensor = SideSensor(config, Orientation.STBD)
+        self._port_sensor = AvoidSensor(config, Orientation.PORT, level=level)
+        self._stbd_sensor = AvoidSensor(config, Orientation.STBD, level=level)
+        if self._use_aft_sensor:
+            self._aft_sensor = AvoidSensor(config, Orientation.AFT, level=level)
+        else:
+            self._aft_sensor = None # explicitly set to None if not used
         self._boost_when_squeezed  = _cfg.get('boost_when_squeezed', True)
-        self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True) 
-        self._default_priority     = _cfg.get('default_priority', 0.3) 
+        self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True)
+        self._default_priority     = _cfg.get('default_priority', 0.3)
         self._priority             = self._default_priority
         self._verbose     = _cfg.get('verbose', False)
         # variables
@@ -106,11 +108,7 @@ class Avoid(AsyncBehaviour):
             # poll sensors and set intent vector accordingly
             _port_distance = self._port_sensor.get_distance()
             _stbd_distance = self._stbd_sensor.get_distance()
-            _aft_distance = self._aft_sensor.get_distance() * 10 # returned in cm
-       
-            # DIAGNOSTIC
-            self._log.info('AFT SENSOR RAW: {}mm'.format(_aft_distance if _aft_distance else 'None'))
-
+            _aft_distance = self._aft_sensor.get_distance() if self._use_aft_sensor else None
             # then set intent vector accordingly
             self._update_intent_vector(_port_distance, _stbd_distance, _aft_distance)
         except Exception as e:
@@ -158,7 +156,7 @@ class Avoid(AsyncBehaviour):
         # squeeze detection
         self._squeezed = port_active and stbd_active
         # aft sensor: obstacle closer → push forward (positive vy)
-        if self._aft_sensor_enabled and aft_distance is not None and aft_distance < self._aft_threshold_mm:
+        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
             normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
             aft_scale = self._aft_easing.apply(normalised)
             if aft_scale > 0.05: # ignore weak signals below 5%
@@ -177,9 +175,9 @@ class Avoid(AsyncBehaviour):
                 # boost priority by up to 0.15 based on squeeze tightness
                 squeeze_boost = squeeze_severity * 0.15
                 self._priority = min(1.0, self._priority + squeeze_boost)
-                self._log.info(Fore.YELLOW + 'squeezed; boosted priority: {:4.2f}'.format(self._priority))
+                self._log.info('squeezed; boosted priority: {:4.2f}'.format(self._priority))
             else:
-                self._log.info('squeezed; priority: {:4.2f}'.format(self._priority))
+                self._log.debug('squeezed; priority: {:4.2f}'.format(self._priority))
         self._rate_limiting = True # TODO config
         if self._rate_limiting:
             # rate limit vx and vy changes to prevent sudden motor target swings
@@ -191,7 +189,7 @@ class Avoid(AsyncBehaviour):
                 vy = self._last_vy + (self._max_vy_change if vy_delta > 0 else -self._max_vy_change)
             self._last_vx = vx
             self._last_vy = vy
-        self._log.info('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
+        self._log.debug('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
         self._intent_vector = (vx, vy, omega)
         if True or self._verbose:
             self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
@@ -236,9 +234,10 @@ class Avoid(AsyncBehaviour):
         if self.enabled:
             self._log.debug('already enabled.')
             return
-        self._aft_sensor.enable()
         self._port_sensor.enable()
         self._stbd_sensor.enable()
+        if self._use_aft_sensor and self._aft_sensor:
+            self._aft_sensor.enable()
         AsyncBehaviour.enable(self)
         self._log.info('enabled.')
 
@@ -246,9 +245,10 @@ class Avoid(AsyncBehaviour):
         if not self.enabled:
             self._log.debug('already disabled.')
             return
-        self._aft_sensor.disable()
         self._port_sensor.disable()
         self._stbd_sensor.disable()
+        if self._use_aft_sensor and self._aft_sensor:
+            self._aft_sensor.disable()
         AsyncBehaviour.disable(self)
         self._log.info('disabled.')
 
