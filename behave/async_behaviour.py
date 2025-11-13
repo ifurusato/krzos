@@ -18,6 +18,7 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Level
+from core.event import Event
 from core.orientation import Orientation
 from behave.behaviour import Behaviour
 
@@ -39,14 +40,22 @@ class AsyncBehaviour(Behaviour):
         self._poll_delay_ms   = _cfg.get('poll_delay_ms')
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
         self._log.info("poll delay: {}ms".format(self._poll_delay_ms))
+        _ramp_down_duration_sec = _cfg.get('ramp_down_duration_sec', 1.0)
+        self._ramp_down_step = 1.0 / (_ramp_down_duration_sec / self._poll_delay_sec) if _ramp_down_duration_sec > 0 else 1.0
+        self._log.info("blind mode ramp down step: {:.4f}".format(self._ramp_down_step))
+        # state flags
         self._intent_vector   = (0.0, 0.0, 0.0)
         self._use_dynamic_priority = False
         self._priority        = 0.3  # default priority
         self._intent_vector_registered = False
+        self._hold_at_zero    = False
+        self._intent_multiplier = 1.0
+        # event loop
         self._loop_instance   = None
         self._thread          = None
         self._stop_event      = ThreadEvent()
         self._counter = itertools.count()
+        self.add_event(Event.BLIND)
         if self._motor_controller:
             # get motor objects
             self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -126,6 +135,33 @@ class AsyncBehaviour(Behaviour):
             return
         Behaviour.enable(self)
         self._log.info('enabled (suppressed, waiting for release).')
+
+    async def process_message(self, message):
+        '''
+        Overrides the method in Subscriber to handle BLIND events.
+        '''
+        if message.event == Event.BLIND:
+            is_blind = message.value
+            if is_blind:
+                if not self._hold_at_zero:
+                    self._log.warning("BLIND(True) received. Engaging hold-at-zero and ramping down intent.")
+                    self._hold_at_zero = True
+                    # First responder triggers the brake
+                    if self._motor_controller and not self._motor_controller.braking_active:
+                        self._log.info("First responder: triggering system brake.")
+                        self._motor_controller.brake()
+            else: # is not blind
+                if self._hold_at_zero:
+                    self._log.info("BLIND(False) received. Disengaging hold-at-zero.")
+                    self._hold_at_zero = False
+                    # First responder releases the brake
+                    if self._motor_controller and self._motor_controller.is_braked:
+                        self._log.info("First responder: triggering brake release.")
+                        self._motor_controller.release_brake()
+            message.process(self)
+        else:
+            # pass to original Behaviour handler
+            await super().process_message(message)
 
     def _start_loop(self):
         '''
@@ -210,6 +246,42 @@ class AsyncBehaviour(Behaviour):
         pass
 
     async def _loop_main(self):
+        '''
+        Main async loop that polls the behaviour at regular intervals.
+        This loop only runs when the behaviour is released (not suppressed).
+        It now includes logic to ramp down and hold the intent vector to zero
+        when in a blind state.
+        '''
+        self._log.info("async loop started with {}ms delay…".format(self._poll_delay_ms))
+        try:
+            self.start_loop_action()
+            while not self._stop_event.is_set():
+                # let the subclass's poll method run to determine its desired intent
+                await self._poll()
+                # now, apply the safety override based on the hold_at_zero state
+                if self._hold_at_zero:
+                    # if we are in blind mode, ramp down the multiplier
+                    if self._intent_multiplier > 0.0:
+                        self._intent_multiplier = max(0.0, self._intent_multiplier - self._ramp_down_step)
+                else:
+                    # if we are not in blind mode, ensure multiplier is at 1.0
+                    self._intent_multiplier = 1.0
+                # apply the multiplier to the current intent vector
+                vx, vy, omega = self._intent_vector
+                self._intent_vector = (vx * self._intent_multiplier, vy * self._intent_multiplier, omega * self._intent_multiplier)
+                await asyncio.sleep(self._poll_delay_sec)
+                if not self.enabled:
+                    break
+        except asyncio.CancelledError:
+            self._log.info("async loop cancelled.")
+        except Exception as e:
+            self._log.error('{} encountered in async loop: {}'.format(type(e), e))
+            self.disable()
+        finally:
+            self.stop_loop_action()
+            self._log.info("async loop stopped.")
+
+    async def x_loop_main(self):
         '''
         Main async loop that polls the behaviour at regular intervals.
         This loop only runs when the behaviour is released (not suppressed).

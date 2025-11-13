@@ -135,6 +135,7 @@ class MotorController(Component):
         self._motor_loop_callback = None
         self._use_graceful_stop  = True # TODO config?
         self._braking_active     = False
+        self._is_braked          = False
         self._braking_event      = Event()
         self._current_brake_step = None
         # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -209,6 +210,14 @@ class MotorController(Component):
         Returns true if braking is currently active.
         '''
         return self._braking_active
+
+    @property
+    def is_braked(self):
+        '''
+        Returns True if the robot is in a fully braked state.
+        This is set True at the end of a brake() sequence and cleared by release_brake().
+        '''
+        return self._is_braked
 
     def clear_intent_vectors(self):
         '''
@@ -574,7 +583,7 @@ class MotorController(Component):
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
         else:
-            if _count % 10 == 0:
+            if _count % 20 == 0:
                 self._odometer.print_info()
         self._state_change_check()
         if self._motor_loop_callback is not None:
@@ -832,6 +841,7 @@ class MotorController(Component):
             self._log.info('already stopped.')
             self._braking_active = False
             self._current_brake_step = None
+            self._is_braked = True
             return
         if self._braking_active:
             if self._current_brake_step is not None and step <= self._current_brake_step:
@@ -840,6 +850,7 @@ class MotorController(Component):
             else:
                 self._log.info('brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
         self._braking_active = True
+        self._is_braked = False
         self._current_brake_step = step
         factor = 1.0
         _step = step
@@ -866,6 +877,7 @@ class MotorController(Component):
                     self.clear_intent_vectors()
                 self._braking_active = False
                 self._current_brake_step = None
+                self._is_braked = True 
                 self._braking_event.set()  # Signal completion
                 return MotorController.BRAKE_LAMBDA_NAME
             return modified
@@ -885,6 +897,34 @@ class MotorController(Component):
                 self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
             self._braking_active = False
             self._current_brake_step = None
+            self._is_braked = True
+
+    def release_brake(self, duration_sec=1.5):
+        '''
+        Gradually restores motor responsiveness after a brake has been applied.
+        This ramps a speed multiplier from 0.0 to 1.0 over the specified duration.
+        '''
+        if not self._is_braked:
+            self._log.info("release_brake called, but robot is not in a braked state. Ignoring.")
+            return
+        self._log.info("releasing brake over {}s...".format(duration_sec))
+        self._is_braked = False
+        factor = 0.0
+        # step per loop iteration
+        step = 1.0 / (duration_sec / self._loop_delay_sec)
+        def _release_modifier(speeds):
+            nonlocal factor, step
+            factor = min(1.0, factor + step)
+            modified = [s * factor for s in speeds]
+            if factor >= 1.0:
+                self._log.info("brake released.")
+                return MotorController.RELEASE_BRAKE_LAMBDA_NAME # request removal
+            return modified
+        # check that no other brake/release modifiers are active
+        self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
+        self.remove_speed_modifier(MotorController.RELEASE_BRAKE_LAMBDA_NAME)
+        self.add_speed_modifier(MotorController.RELEASE_BRAKE_LAMBDA_NAME,
+                (lambda speeds, _fn=_release_modifier: _fn(speeds)), exclusive=True)
 
     def disable(self):
         '''

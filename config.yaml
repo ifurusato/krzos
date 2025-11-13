@@ -31,6 +31,7 @@ kros:
     behaviour:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
+            ramp_down_duration_sec:         1.0            # duration to ramp down intent vector in BLIND mode
         avoid:
             enable:                     False              # enable avoid behaviour
             release:                    False              # release avoid behaviour on startup
