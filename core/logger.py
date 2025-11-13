@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -8,6 +9,7 @@
 # author:   Murray Altheim
 # created:  2020-01-14
 # modified: 2025-11-13
+#
 
 import os, logging, math, traceback, threading
 from logging.handlers import RotatingFileHandler
@@ -56,15 +58,31 @@ class Level(Enum):
             raise NotImplementedError
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+class DataOnlyFilter(logging.Filter):
+    '''
+    A logging filter that allows only records explicitly marked as data messages.
+    '''
+    def filter(self, record):
+        return getattr(record, 'is_data_message', False)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+class ExcludeDataFilter(logging.Filter):
+    '''
+    A logging filter that blocks any records explicitly marked as data messages.
+    '''
+    def filter(self, record):
+        return not getattr(record, 'is_data_message', False)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Logger(object):
     _log_stats = LogStats() # singleton
     _fh        = None # optional file handler
 
     # static members for shared data logger
-    INCLUDE_METADATA = True
     _data_fh = None
     _data_logger_owner_id = None
     _data_logger_lock = threading.Lock()
+    INCLUDE_METADATA = True # include timestamp and name on data logger
 
     __suppress       = False
     __color_debug    = Fore.BLUE   + Style.DIM
@@ -81,14 +99,12 @@ class Logger(object):
         console (stream) handler unless 'log_to_file' is True, in which
         case only write to file, not to the console.
 
-        :param name:           the name identified with the log output
-        :param log_to_console: if True will log to console
-        :param log_to_file:    if True will log to file (only for this instance)
-        :param data_logger:    if True, this logger will participate in shared data logging
-        :param level:          the log level
+        :param name:                  the name identified with the log output
+        :param log_to_console:        if True will log to console
+        :param log_to_file:           if True will log to file (only for this instance)
+        :param data_logger:           if True, this logger will participate in shared data logging
+        :param level:                 the log level
         '''
-        # configuration preliminaries ............
-
         # configuration ..........................
         _strip_ansi_codes       = True # used only with file output, to strip ANSI characters from log data
         self._include_timestamp = True
@@ -109,11 +125,12 @@ class Logger(object):
         self.__log.propagate = False
         self._name   = name
         self._sh     = None # optional stream handler
-        self.__data_log = None # dedicated logger for data file
 
         if not self.__log.handlers:
             if log_to_console: # log to console ................................
                 self._sh = logging.StreamHandler()
+                # filter out data messages from the console
+                self._sh.addFilter(ExcludeDataFilter())
                 fmt = ''
                 if self._include_timestamp:
                     fmt += Logger.timestamp_format()  # timestamp portion
@@ -139,6 +156,9 @@ class Logger(object):
                         Logger._fh = AnsiFilteringRotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
                     else: # using rotating file handler
                         Logger._fh = RotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
+
+                    # filter out data messages from the standard log file
+                    Logger._fh.addFilter(ExcludeDataFilter())
                     
                     # build file format to match console format, but without ANSI codes
                     fmt = ''
@@ -165,19 +185,18 @@ class Logger(object):
                     self.info("shared data log file: {}".format(_filename))
                     # Data logger does not need ANSI filtering, use standard RotatingFileHandler
                     Logger._data_fh = RotatingFileHandler(filename=_filename, mode='w', maxBytes=1048576, backupCount=5)
-                    # data files have no special formatting unless we include metadata
+                    # Add filter to ensure only data messages are handled
+                    Logger._data_fh.addFilter(DataOnlyFilter())
+                    # set format based on metadata flag
                     if Logger.INCLUDE_METADATA:
-                        fmt = '%(asctime)s.%(msecs)03d,%(name)s,%(message)s'
+                        fmt = '%(asctime)s.%(msecs)03dZ,%(name)s,%(message)s'
                         Logger._data_fh.setFormatter(logging.Formatter(fmt, datefmt=self._date_format))
                     else:
                         Logger._data_fh.setFormatter(logging.Formatter('%(message)s'))
                     Logger._data_logger_owner_id = id(self)
                     self.info('this logger instance is now the owner of the shared data logger.')
-            # set up a dedicated logger for data to keep it separate from console output
-            self.__data_log = logging.getLogger(name)
-            self.__data_log.propagate = False
-            self.__data_log.addHandler(Logger._data_fh)
-            self.__data_log.setLevel(Level.INFO.value)
+            # add the shared handler to this logger instance
+            self.__log.addHandler(Logger._data_fh)
 
         self.level = level
 
@@ -232,7 +251,7 @@ class Logger(object):
         This should be called at application exit.
         '''
         if Logger._data_fh is not None and id(self) == Logger._data_logger_owner_id:
-#           self.debug('closing shared data logger.')
+            self.info('this instance is the owner, closing shared data logger.')
             try:
                 if Logger._data_fh:
                     Logger._data_fh.close()
@@ -311,19 +330,18 @@ class Logger(object):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def data(self, message):
         '''
-        Prints an unformatted data message to the shared data log file,
-        if one has been configured. This ignores console suppression.
+        Logs an unformatted data message to the shared data log file.
+        This call is ignored if the logger was not created with data_logger=True.
         '''
-        if self.__data_log:
-            Logger._log_stats.data_count()
-            self.__data_log.info('{}'.format(message))
+        # a data() call will only work if the logger was created with data_logger=True,
+        # which adds the shared data handler to this logger instance.
+        Logger._log_stats.data_count()
+        self.__log.info(message, extra={'is_data_message': True})
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def debug(self, message):
         '''
         Prints a debug message.
-
-        The optional 'end' argument is for special circumstances where a different end-of-line is desired.
         '''
         if not self.suppressed:
             Logger._log_stats.debug_count()
@@ -334,8 +352,6 @@ class Logger(object):
     def info(self, message):
         '''
         Prints an informational message.
-
-        The optional 'end' argument is for special circumstances where a different end-of-line is desired.
         '''
         if not self.suppressed:
             Logger._log_stats.info_count()
@@ -346,8 +362,6 @@ class Logger(object):
     def notice(self, message):
         '''
         Functionally identical to info() except it prints the message brighter.
-
-        The optional 'end' argument is for special circumstances where a different end-of-line is desired.
         '''
         if not self.suppressed:
             Logger._log_stats.info_count()
@@ -358,8 +372,6 @@ class Logger(object):
     def warning(self, message):
         '''
         Prints a warning message.
-
-        The optional 'end' argument is for special circumstances where a different end-of-line is desired.
         '''
         if not self.suppressed:
             Logger._log_stats.warn_count()
@@ -370,8 +382,6 @@ class Logger(object):
     def error(self, message):
         '''
         Prints an error message.
-
-        The optional 'end' argument is for special circumstances where a different end-of-line is desired.
         '''
         if not self.suppressed:
             Logger._log_stats.error_count()
