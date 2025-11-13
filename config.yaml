@@ -13,6 +13,7 @@ krosd:
 kros:
     application:                                           # application-level configuration
         await_pushbutton:                 False            # await pushbutton on startup
+        data_logging:                      True            # enable data logging
     arguments:                                             # CLI arguments are copied here (required section)
         nada:                             False            # placeholder
     component:
@@ -33,8 +34,8 @@ kros:
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
             ramp_down_duration_sec:         1.0            # duration to ramp down intent vector in BLIND mode
         avoid:
-            enable:                      True              # enable avoid behaviour
-            release:                     True              # release avoid behaviour on startup
+            enable:                     False              # enable avoid behaviour
+            release:                    False              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.35           # default behaviour priority
@@ -43,10 +44,10 @@ kros:
             side_threshold_mm:              400            # ignore side obstacles further than this
             aft_threshold_mm:               200            # ignore aft obstacles further than this
             use_aft_sensor:              True              # enable/disable use of the aft sensor
-            avoid_speed:                    0.7            # speed to avoid obstacles
+            avoid_speed:                    0.5            # speed to avoid obstacles
             side_easing:         'LOGARITHMIC'             # relationship between distance and force/speed for side sensors
             aft_easing:          'SQUARE_ROOT'             # relationship between distance and force/speed for aft sensor
-            max_urgency:                    0.7            # clamp at this level
+            max_urgency:                    0.667          # clamp at this level
         idle:
             enable:                     False              # enable idle behaviour
             release:                    False              # release idle behaviour on startup

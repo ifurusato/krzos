@@ -30,7 +30,7 @@ from behave.behaviour import Behaviour
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class BehaviourManager(Subscriber):
-    CLASS_NAME='behave-mgr'
+    NAME='behave-mgr'
     '''
     Extends Subscriber as a manager of high-level, low-priority behaviours.
     This subscribes to all events grouped as an Event.BEHAVIOUR.
@@ -44,7 +44,7 @@ class BehaviourManager(Subscriber):
     :param level:        the logging level
     '''
     def __init__(self, config, message_bus=None, message_factory=None, level=Level.INFO):
-        Subscriber.__init__(self, BehaviourManager.CLASS_NAME, config, message_bus=message_bus, suppressed=False, enabled=True, level=Level.INFO)
+        Subscriber.__init__(self, BehaviourManager.NAME, config, message_bus=message_bus, suppressed=False, enabled=True, level=Level.INFO)
         self._config = config
         if not isinstance(message_factory, MessageFactory):
             raise ValueError('wrong type for message factory argument: {}'.format(type(message_factory)))
@@ -53,6 +53,13 @@ class BehaviourManager(Subscriber):
             raise ValueError('wrong type for log level argument: {}'.format(type(level)))
         self._level            = level
         self._was_suppressed   = None
+        # data logger?
+        self._data_log = None
+        _data_logging  = _cfg.get('data_logging', False)
+        if self._data_logging:
+            self._log.info(Fore.GREEN + 'data logging is active.')
+            self._data_log = Logger('{}'.format(self.NAME, log_to_file=True, data_logger=True, level=Level.INFO)
+        # configuration
         _cfg = config['kros'].get('behaviour_manager')
         self._clip_event_list  = True #_cfg.get('clip_event_list') # used for printing only
         self._clip_length      = 42   #_cfg.get('clip_length')

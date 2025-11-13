@@ -20,7 +20,7 @@ from core.subscriber import Subscriber
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class OmniSubscriber(Subscriber):
-    CLASS_NAME = 'omni'
+    NAME = 'omni'
     '''
     A subscriber to all events.
 
@@ -29,7 +29,7 @@ class OmniSubscriber(Subscriber):
     :param level:        the logging level
     '''
     def __init__(self, config, message_bus, level=Level.INFO):
-        Subscriber.__init__(self, OmniSubscriber.CLASS_NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
+        Subscriber.__init__(self, OmniSubscriber.NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
 #       self.add_event(Event.RGB)
         self.add_events([ Group.SYSTEM,
                 Group.MACRO,

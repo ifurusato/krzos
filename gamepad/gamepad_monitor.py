@@ -23,7 +23,7 @@ from core.logger import Logger, Level
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadMonitor(Component):
-    CLASS_NAME = 'GamepadMonitor'
+    NAME = 'gamepad-mon'
     '''
     A simple callback on the IRQ clock that monitors the device path used by
     the Gamepad, executing a callback if the device disappears. You must call
@@ -35,7 +35,7 @@ class GamepadMonitor(Component):
     :param level:         the logging Level
     '''
     def __init__(self, config=None, gamepad=None, callback=None, level=Level.INFO):
-        self._log = Logger("gamepad-mon", level)
+        self._log = Logger(GamepadMonitor.NAME, level)
         self._config = config
         Component.__init__(self, self._log, False, False)
         _component_registry = Component.get_registry()

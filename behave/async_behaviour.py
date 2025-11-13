@@ -36,6 +36,12 @@ class AsyncBehaviour(Behaviour):
     def __init__(self, log_or_name=None, config=None, message_bus=None, message_factory=None, motor_controller=None, level=Level.INFO):
         Behaviour.__init__(self, log_or_name, config, message_bus, message_factory, suppressed=True, enabled=False, level=level)
         self._motor_controller = motor_controller
+        # data logger?
+        self._data_log = None
+        _data_logging  = _cfg.get('data_logging', False)
+        if self._data_logging:
+            self._log.info(Fore.GREEN + 'data logging is active.')
+            self._data_log = Logger('{}'.format(self.NAME, log_to_file=True, data_logger=True, level=Level.INFO)
         _cfg = config['kros'].get('behaviour').get(AsyncBehaviour.NAME)
         self._poll_delay_ms   = _cfg.get('poll_delay_ms')
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
@@ -88,6 +94,10 @@ class AsyncBehaviour(Behaviour):
         Returns True if this behaviour is using dynamic priority.
         '''
         return self._use_dynamic_priority
+
+    def log_data(self, data):
+        if self._data_log:
+            self._data_log.data(data)
 
     def _register_intent_vector(self):
         '''
@@ -347,6 +357,8 @@ class AsyncBehaviour(Behaviour):
         Permanently close the behaviour.
         '''
         if not self.closed:
+            if self._data_log:
+                self._data_log.close()
             self.disable()
             Behaviour.close(self)
             self._log.info('closed.')

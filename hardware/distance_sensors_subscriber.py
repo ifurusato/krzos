@@ -19,7 +19,7 @@ from core.subscriber import Subscriber
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensorsSubscriber(Subscriber):
-    CLASS_NAME = 'distance'
+    NAME = 'distance'
     '''
     A subscriber to distance sensor events.
 
@@ -28,7 +28,7 @@ class DistanceSensorsSubscriber(Subscriber):
     :param level:        the logging level
     '''
     def __init__(self, config, message_bus, level=Level.INFO):
-        Subscriber.__init__(self, DistanceSensorsSubscriber.CLASS_NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
+        Subscriber.__init__(self, DistanceSensorsSubscriber.NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
         self.add_events(Event.by_groups([Group.BUMPER, Group.INFRARED]))
         _cfg = config['krzos'].get('subscriber').get('distance_sensors')
         self._verbose = _cfg.get('verbose')

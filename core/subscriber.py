@@ -370,7 +370,7 @@ class Subscriber(Component, FiniteStateMachine):
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GarbageCollector(Subscriber):
-    CLASS_NAME = 'gc'
+    NAME = 'gc'
     '''
     Extends subscriber as a garbage collector that eliminates messages after
     they've passed the publish cycle. This subscriber accepts ANY event type.
@@ -381,7 +381,7 @@ class GarbageCollector(Subscriber):
     :param level:        the logging level
     '''
     def __init__(self, config, message_bus, level=Level.INFO):
-        Subscriber.__init__(self, GarbageCollector.CLASS_NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
+        Subscriber.__init__(self, GarbageCollector.NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=level)
         self.add_event(Event.ANY)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
