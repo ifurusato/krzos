@@ -232,9 +232,9 @@ kros:
         lux_sensor:
             lux_threshold:                200.0            # threshold of light/dark
         distance_sensor:
-            pin-fwd:                         18            # the input pin for the forward sensor
             pin-port:                        14            # the input pin for the port side sensor
             pin-stbd:                        15            # the input pin for the starboard side sensor
+            pin-aft:                         18            # the input pin for the aft sensor
             timeout:                          0.334        # time in seconds to consider sensor as timed out
             smoothing:                     True            # enable smoothing of distance readings
             smoothing_window:                 3            # number of samples to use for smoothing

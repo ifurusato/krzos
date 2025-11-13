@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-11-16
-# modified: 2025-10-18
+# modified: 2025-11-13
 
 import time
 import warnings
@@ -33,19 +33,19 @@ class DistanceSensor(Component):
         Initializes the DistanceSensor.
 
         :param config:        the application configuration
-        :param orientation:   the orientation of the sensor (PSID, SSID or FWD)
+        :param orientation:   the orientation of the sensor
         :param level:         the logging Level
         '''
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('hardware').get('distance_sensor')
         match orientation:
-            case Orientation.FWD: # forward
-                self._pin = _cfg.get('pin-fwd') # pin connected to the forward sensor
             case Orientation.PORT: # port side
                 self._pin = _cfg.get('pin-port') # pin connected to the port side sensor
             case Orientation.STBD: # starboard side
                 self._pin = _cfg.get('pin-stbd') # pin connected to the starboard side sensor
+            case Orientation.AFT: # aft
+                self._pin = _cfg.get('pin-aft') # pin connected to the aft sensor
             case _:
                 raise ValueError('unsupported orientation: {}'.format(orientation.label))
         self._orientation     = orientation
