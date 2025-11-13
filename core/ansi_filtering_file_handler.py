@@ -7,31 +7,36 @@
 #
 # author:   Murray Altheim
 # created:  2021-09-03
-# modified: 2021-09-04
-#
+# modified: 2025-11-13
 
 import sys, re
 import logging
 from logging.handlers import RotatingFileHandler
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class AnsiFilteringRotatingFileHandler(RotatingFileHandler):
     '''
     Extends RotatingFileHandler to filter out ANSI character sequences from
     the emitted output.
     '''
-    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None):
-        RotatingFileHandler.__init__(self, filename=filename, mode='a', maxBytes=maxBytes, backupCount=backupCount, encoding=encoding, delay=False)
+    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
+        RotatingFileHandler.__init__(self, filename=filename, mode=mode, maxBytes=maxBytes, backupCount=backupCount, encoding=encoding, delay=delay)
         # ready.
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def emit(self, record):
-        self._filter(record)
-        RotatingFileHandler.emit(self, record)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _filter(self, record):
-        record.msg = self._escape_ansi(record.msg)
+        try:
+            if self.stream is None:
+                self.stream = self._open()
+            # format the record as usual
+            msg = self.format(record)
+            # filter ANSI codes from the final formatted message
+            filtered_msg = self._escape_ansi(msg)
+            # write the filtered message
+            self.stream.write(filtered_msg + self.terminator)
+            self.flush()
+        except Exception:
+            self.handleError(record)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _escape_ansi(self, line):

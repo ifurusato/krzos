@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-14
-# modified: 2025-08-31
-#
+# modified: 2025-11-13
 
 import os, logging, math, traceback, threading
 from logging.handlers import RotatingFileHandler
@@ -21,7 +20,7 @@ from core.log_stats import LogStats
 from core.util import Util
 from core.ansi_filtering_file_handler import AnsiFilteringRotatingFileHandler
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Level(Enum):
     DEBUG    = ( logging.DEBUG,    'DEBUG'    ) # 10
     INFO     = ( logging.INFO,     'INFO'     ) # 20
@@ -56,10 +55,16 @@ class Level(Enum):
         else:
             raise NotImplementedError
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Logger(object):
     _log_stats = LogStats() # singleton
     _fh        = None # optional file handler
+
+    # static members for shared data logger
+    INCLUDE_METADATA = True
+    _data_fh = None
+    _data_logger_owner_id = None
+    _data_logger_lock = threading.Lock()
 
     __suppress       = False
     __color_debug    = Fore.BLUE   + Style.DIM
@@ -77,8 +82,9 @@ class Logger(object):
         case only write to file, not to the console.
 
         :param name:           the name identified with the log output
-        :param log_to_console:  if True will log to console
+        :param log_to_console: if True will log to console
         :param log_to_file:    if True will log to file (only for this instance)
+        :param data_logger:    if True, this logger will participate in shared data logging
         :param level:          the log level
         '''
         # configuration preliminaries ............
@@ -103,6 +109,8 @@ class Logger(object):
         self.__log.propagate = False
         self._name   = name
         self._sh     = None # optional stream handler
+        self.__data_log = None # dedicated logger for data file
+
         if not self.__log.handlers:
             if log_to_console: # log to console ................................
                 self._sh = logging.StreamHandler()
@@ -114,7 +122,8 @@ class Logger(object):
                 fmt += '{reset} {name} : %(message)s'.format(reset=Fore.RESET, name=padded_name)
                 self._sh.setFormatter(logging.Formatter(fmt, datefmt=self._date_format))
                 self.__log.addHandler(self._sh)
-            if log_to_file: # ..........................................
+
+            if log_to_file and not data_logger: # non-shared, instance-specific file logging
                 if Logger._fh is None:
                     # if we don't have a file handler, create one
                     # if ./log/ directory doesn't exist, create it
@@ -124,21 +133,52 @@ class Logger(object):
                         except OSError as e:
                             raise Exception('could not create ./log directory: {}'.format(e))
                     _ts = dt.utcfromtimestamp(dt.utcnow().timestamp()).isoformat().replace(':','_').replace('-','_').replace('.','_')
-                    _filename = './log/kros-{}.csv'.format(_ts)
+                    _filename = './log/kros-{}.log'.format(_ts)
                     self.info("logging to file: {}".format(_filename))
                     if _strip_ansi_codes: # using ANSI filtering file handler
                         Logger._fh = AnsiFilteringRotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
                     else: # using rotating file handler
                         Logger._fh = RotatingFileHandler(filename=_filename, mode='w', maxBytes=262144, backupCount=10)
-                    if data_logger:
-                        fmt = '%(message)s'
-                    elif self._include_timestamp:
-                        fmt = '{timestamp}|%(name)s|%(message)s'.format(timestamp=Logger.timestamp_format())
-                    else:
-                        fmt = '%(name)s|%(message)s'
-#                   Logger._fh.setLevel(level.value)
+                    
+                    # build file format to match console format, but without ANSI codes
+                    fmt = ''
+                    if self._include_timestamp:
+                        # uncolored timestamp for file
+                        fmt += '%(asctime)s.%(msecs)03dZ\t:'
+                    padded_name = '{:<16}'.format(self._name)
+                    fmt += ' {name} : %(message)s'.format(name=padded_name)
                     Logger._fh.setFormatter(logging.Formatter(fmt, datefmt=self._date_format))
                     self.__log.addHandler(Logger._fh)
+
+        if data_logger: # shared data logging ......................
+            with Logger._data_logger_lock:
+                if Logger._data_fh is None:
+                    # this instance becomes the owner and creator of the data logger
+                    self.info('creating shared data logger...')
+                    if not os.path.exists('./log'):
+                        try:
+                            os.makedirs('./log')
+                        except OSError as e:
+                            raise Exception('could not create ./log directory: {}'.format(e))
+                    _ts = dt.utcfromtimestamp(dt.utcnow().timestamp()).isoformat().replace(':','_').replace('-','_').replace('.','_')
+                    _filename = './log/kros-data-{}.csv'.format(_ts)
+                    self.info("shared data log file: {}".format(_filename))
+                    # Data logger does not need ANSI filtering, use standard RotatingFileHandler
+                    Logger._data_fh = RotatingFileHandler(filename=_filename, mode='w', maxBytes=1048576, backupCount=5)
+                    # data files have no special formatting unless we include metadata
+                    if Logger.INCLUDE_METADATA:
+                        fmt = '%(asctime)s.%(msecs)03d,%(name)s,%(message)s'
+                        Logger._data_fh.setFormatter(logging.Formatter(fmt, datefmt=self._date_format))
+                    else:
+                        Logger._data_fh.setFormatter(logging.Formatter('%(message)s'))
+                    Logger._data_logger_owner_id = id(self)
+                    self.info('this logger instance is now the owner of the shared data logger.')
+            # set up a dedicated logger for data to keep it separate from console output
+            self.__data_log = logging.getLogger(name)
+            self.__data_log.propagate = False
+            self.__data_log.addHandler(Logger._data_fh)
+            self.__data_log.setLevel(Level.INFO.value)
+
         self.level = level
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -146,7 +186,7 @@ class Logger(object):
         '''
         Returns the File Handler if it has been defined.
         '''
-        return None # TODO
+        return Logger._fh
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def addHandler(self, handler):
@@ -186,12 +226,22 @@ class Logger(object):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
-        Closes down logging, and informs the logging system to perform an
-        orderly shutdown by flushing and closing all handlers. This should
-        be called at application exit and no further use of the logging
-        system should be made after this call.
+        Closes down logging. If this instance is the owner of the shared
+        data logger, it will be closed. Then, informs the logging system
+        to perform an orderly shutdown by flushing and closing all handlers.
+        This should be called at application exit.
         '''
-#       self.suppress()
+        if Logger._data_fh is not None and id(self) == Logger._data_logger_owner_id:
+#           self.debug('closing shared data logger.')
+            try:
+                if Logger._data_fh:
+                    Logger._data_fh.close()
+            except Exception as e:
+                self.error('exception closing data file handler: {}'.format(e))
+            finally:
+                Logger._data_fh = None
+                Logger._data_logger_owner_id = None
+
         logging.shutdown()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -261,12 +311,12 @@ class Logger(object):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def data(self, message):
         '''
-        Prints an unformatted data message with no timestamp.
+        Prints an unformatted data message to the shared data log file,
+        if one has been configured. This ignores console suppression.
         '''
-        if not self.suppressed:
+        if self.__data_log:
             Logger._log_stats.data_count()
-            with self.__mutex:
-                self.__log.info('{}'.format(message))
+            self.__data_log.info('{}'.format(message))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def debug(self, message):
