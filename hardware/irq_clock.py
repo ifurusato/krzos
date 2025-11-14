@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# author:   Murray Altheim
-# created:  2021-10-09
-# modified: 2025-09-14
-#
 # Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
+# author:   Murray Altheim
+# created:  2021-10-09
+# modified: 2025-09-14
 
 import itertools
 from datetime import datetime as dt
@@ -131,7 +130,10 @@ class IrqClock(Component):
                 self._input.close()
             self._log.info('IRQ clock closed.')
         except Exception as e:
-            self._log.error('error closing gpiozero Button: {}'.format(e))
+            if self._log.level == Level.DEBUG:
+                # log but don't raise - we're shutting down anyway
+                self._log.debug('error closing gpiozero Button: {}'.format(e))
+                self._log.debug(traceback.format_exc())
         Component.close(self)
         self._log.info('closed.')
 

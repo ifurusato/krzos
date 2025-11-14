@@ -35,15 +35,16 @@ class Button(Component):
     :param config:        the application configuration
     :param level:         the log level
     '''
-    def __init__(self, config, level=Level.INFO):
+    def __init__(self, config, name=None, level=Level.INFO):
         _cfg = config['kros'].get('hardware').get('button')
         self._pin = _cfg.get('pin')
-        self._log = Logger('btn-{}'.format(self._pin), level)
+        _log_name = 'btn-{}'.format(self._pin) if name is None else name
+        self._log = Logger(_log_name, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._callbacks = []  # list of callback functions
         self._button = None
         self._closed = False
-        
+
         try:
             # Create Button with pull_up=True (assumes button connects pin to ground)
             # bounce_time adds debouncing (default 0.01s may be too short)
@@ -74,7 +75,7 @@ class Button(Component):
         '''
         if self._closed:
             return  # ignore callbacks during/after shutdown
-        
+
         self._log.info(Fore.MAGENTA + "button pressed!")
         for callback in self._callbacks:
             try:
@@ -89,10 +90,8 @@ class Button(Component):
         '''
         if self._button is None:
             return
-        
         try:
             self._log.info("performing gpiozero cleanup…")
-            
             # cancel callback first to prevent new events
             # and suppress the CallbackSetToNone warning
             with warnings.catch_warnings():
@@ -104,12 +103,10 @@ class Button(Component):
             # close the button object
             self._button.close()
             self._log.info("gpiozero cleanup complete.")
-            
         except Exception as e:
-            # Log but don't raise - we're shutting down anyway
-            self._log.error("{} during gpiozero cleanup: {}".format(type(e).__name__, e))
-            # Don't print full traceback unless at DEBUG level
             if self._log.level == Level.DEBUG:
+                # log but don't raise - we're shutting down anyway
+                self._log.debug("{} during gpiozero cleanup: {}".format(type(e).__name__, e))
                 self._log.debug(traceback.format_exc())
         finally:
             self._button = None

@@ -7,20 +7,20 @@
 #
 # author:   Murray Altheim
 # created:  2021-09-03
-# modified: 2025-11-13
+# modified: 2025-11-14
 
 import sys, re
-import logging
-from logging.handlers import RotatingFileHandler
+#import logging
+from logging import FileHandler
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-class AnsiFilteringRotatingFileHandler(RotatingFileHandler):
+class AnsiFilteringFileHandler(FileHandler):
     '''
-    Extends RotatingFileHandler to filter out ANSI character sequences from
+    Extends FileHandler to filter out ANSI character sequences from
     the emitted output.
     '''
-    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
-        RotatingFileHandler.__init__(self, filename=filename, mode=mode, maxBytes=maxBytes, backupCount=backupCount, encoding=encoding, delay=delay)
+    def __init__(self, filename, mode='w', encoding=None, delay=False):
+        FileHandler.__init__(self, filename=filename, mode=mode, encoding=encoding, delay=delay)
         # ready.
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

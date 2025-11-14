@@ -213,7 +213,13 @@ class RadiozoaSensor(Component):
             try:
                 self._polling_loop.run_forever()
             finally:
+                self._log.info(Fore.MAGENTA + 'closing radiozoa polling loop…')
+                pending = asyncio.all_tasks(loop=self._polling_loop)
+                group = asyncio.gather(*pending)
+                self._polling_loop.run_until_complete(group)
                 self._polling_loop.close()
+                self._log.info(Fore.MAGENTA + 'radiozoa polling loop closed.')
+
         self._polling_thread = Thread(target=run_loop, daemon=True)
         self._polling_thread.start()
         self._log.info(Fore.MAGENTA + 'background polling started.')
@@ -354,8 +360,12 @@ class RadiozoaSensor(Component):
 
     # ...
     def disable(self):
+        self._log.info('❌ ❌ ❌ ❌ ❌ ❌ ')
         self._log.info('disabling…')
+        for proximity_sensor in self._proximity_sensors.values():
+                proximity_sensor.disable()
         super().disable()
+        self._log.info('❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ')
 
     def close(self):
         self._log.info('closing…')

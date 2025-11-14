@@ -81,7 +81,7 @@ class KROS(Component, FiniteStateMachine):
         '''
         _name = 'kros'
         self._level = level
-        self._log = Logger(_name, self._level)
+        self._log = Logger(_name, log_to_file=True, level=self._level)
         self._print_banner()
         self._log.info('…')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
@@ -137,8 +137,6 @@ class KROS(Component, FiniteStateMachine):
         # kros application configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _app_cfg = self._config['kros'].get('application')
-        self._await_pushbutton = _app_cfg.get('await_pushbutton')
-        self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
 
         # configuration from command line arguments ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -199,10 +197,16 @@ class KROS(Component, FiniteStateMachine):
         else:
             self._irq_clock = None  
 
+        self._await_pushbutton = _app_cfg.get('await_pushbutton')
+        self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
         _use_pushbutton = _cfg.get('enable_pushbutton')
         if _use_pushbutton:
-            self._button = Button(config=self._config, level=self._level)
-            self._button.add_callback(self._await_start)
+            self._button = Button(config=self._config, name='button', level=self._level)
+            if self._await_pushbutton:
+                self._button.add_callback(self._await_start)
+            else:
+                # even if we don't await the start we still set up kill switch
+                self._button.add_callback(self.shutdown)
 
         self._digital_pot = DigitalPotentiometer(self._config, level=self._level)
         self._digital_pot.set_output_range(-1.0, 1.0) 
@@ -221,7 +225,8 @@ class KROS(Component, FiniteStateMachine):
 #           self._vl53_sensor = Vl53l5cxSensor(self._config, skip=('skip' in sys.argv or True in sys.argv), level=self._level)
 #           self._vl53_sensor.enable()
 
-        _enable_radiozoa = _cfg.get('enable_radiozoa')
+        _radiozoa_cfg = self._config['kros'].get('behaviour').get('radiozoa')
+        _enable_radiozoa = _radiozoa_cfg.get('enable')
         if _enable_radiozoa:
             from hardware.radiozoa_sensor import RadiozoaSensor
             
@@ -406,7 +411,7 @@ class KROS(Component, FiniteStateMachine):
         if self._button:
             self._button.close()
             self._button = None
-        self._log.info(Fore.MAGENTA + 'shutting down…')
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
         self.close()
         # we never get here if we shut down properly
         self._log.error('shutdown error.')
@@ -728,6 +733,7 @@ def main(argv):
     except Exception:
         _log.error('error starting kros: {}'.format(traceback.format_exc()))
     finally:
+        Logger.close_data_handler()
         if _kros and not _kros.closed:
             _kros.close()
 

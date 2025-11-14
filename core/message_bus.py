@@ -46,6 +46,13 @@ from core.publisher import Publisher
 from core.subscriber import Subscriber
 from core.numbers import Numbers
 
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+except Exception as e:
+    print('{} raised importing nest_asyncio: {}'.format(type(e), e))
+    print('install via:\n    sudo pip3 install nest_asyncio --break-system-packages\n')
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MessageBus(Component):
     '''
@@ -484,7 +491,7 @@ class MessageBus(Component):
             self._log.warning("shutdown interrupted by Ctrl-C, continuing…")
         self._log.info('gathered tasks: {}'.format(_gathered_tasks))
         if self.loop.is_running():
-            self._log.info('stopping event loop…')
+            self._log.info('stopping event loop… (shutdown)')
             self.loop.stop()
             self._log.info('event loop stopped.')
         self._log.info('shutting down…')
@@ -500,7 +507,7 @@ class MessageBus(Component):
         try:
             if self.loop:
                 if self.loop.is_running():
-                    self._log.info('stopping event loop…')
+                    self._log.info('stopping event loop… (close)')
                     self.loop.stop()
                     self._log.info('event loop stopped.')
                 if not self.loop.is_running() and not self.loop.is_closed():

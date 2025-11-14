@@ -190,7 +190,7 @@ class Avoid(AsyncBehaviour):
             self._last_vx = vx
             self._last_vy = vy
         self._log.debug('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
-        self._intent_vector = (vx, vy, omega)
+        self.set_intent_vector(vx, vy, omega)
         if True or self._verbose:
             self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
 

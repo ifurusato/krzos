@@ -17,7 +17,7 @@ from threading import Thread, Event as ThreadEvent
 from colorama import init, Fore, Style
 init()
 
-from core.logger import Level
+from core.logger import Logger, Level
 from core.event import Event
 from core.orientation import Orientation
 from behave.behaviour import Behaviour
@@ -38,10 +38,11 @@ class AsyncBehaviour(Behaviour):
         self._motor_controller = motor_controller
         # data logger?
         self._data_log = None
-        _data_logging  = _cfg.get('data_logging', False)
-        if self._data_logging:
-            self._log.info(Fore.GREEN + 'data logging is active.')
-            self._data_log = Logger('{}'.format(self.NAME, log_to_file=True, data_logger=True, level=Level.INFO)
+        _data_logging = config['kros'].get('application').get('data_logging')
+        if _data_logging:
+            self._log.data(Fore.GREEN + 'data logging is active.')
+            self._data_log = Logger('{}'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log.data('START')
         _cfg = config['kros'].get('behaviour').get(AsyncBehaviour.NAME)
         self._poll_delay_ms   = _cfg.get('poll_delay_ms')
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
@@ -95,9 +96,11 @@ class AsyncBehaviour(Behaviour):
         '''
         return self._use_dynamic_priority
 
-    def log_data(self, data):
-        if self._data_log:
-            self._data_log.data(data)
+    def _is_zero(self, vector):
+        return vector == (0.0, 0.0, 0.0)
+
+    def _is_almost_zero(self, vector):
+        return all(math.isclose(v, 0.0, abs_tol=0.001) for v in vector)
 
     def _register_intent_vector(self):
         '''
@@ -129,11 +132,22 @@ class AsyncBehaviour(Behaviour):
         self._intent_vector_registered = False
         self._log.info('intent vector lambda removed from motor controller.')
 
+    def set_intent_vector(self, vx, vy, omega):
+        '''
+        Sets the intent vector.
+        '''
+        self._intent_vector = (vx, vy, omega)
+        if self._data_log:
+            self._data_log.data('{:.3f}'.format(vx), '{:.3f}'.format(vy), '{:.3f}'.format(omega))
+#           self._data_log.data(vx, vy, omega)
+
     def clear_intent_vector(self):
         '''
         Zero the intent vector.
         '''
         self._intent_vector = (0.0, 0.0, 0.0)
+        if self._data_log:
+            self._data_log.data(0.0, 0.0, 0.0)
 
     def enable(self):
         '''
@@ -278,7 +292,7 @@ class AsyncBehaviour(Behaviour):
                     self._intent_multiplier = 1.0
                 # apply the multiplier to the current intent vector
                 vx, vy, omega = self._intent_vector
-                self._intent_vector = (vx * self._intent_multiplier, vy * self._intent_multiplier, omega * self._intent_multiplier)
+                self.set_intent_vector(vx * self._intent_multiplier, vy * self._intent_multiplier, omega * self._intent_multiplier)
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break
@@ -323,14 +337,22 @@ class AsyncBehaviour(Behaviour):
             
         self._log.info("shutting down event loop…")
         try:
-            self._loop_instance.stop()
+            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
+#           self._loop_instance.stop()
             self._loop_instance.call_soon_threadsafe(self._shutdown)
             if self._thread and self._thread.is_alive():
                 self._thread.join(timeout=1.0)
-            self._loop_instance.run_until_complete(self._loop_instance.shutdown_asyncgens())
-            if self._loop_instance.is_running():
-                time.sleep(1)
+#           self._loop_instance.run_until_complete(self._loop_instance.shutdown_asyncgens())
+#           if self._loop_instance.is_running():
+#               time.sleep(1)
+#           self._loop_instance.close()
+            self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
+            pending = asyncio.all_tasks(loop=self._loop_instance)
+            group = asyncio.gather(*pending)
+            self._loop_instance.run_until_complete(group)
             self._loop_instance.close()
+            self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
+
         except Exception as e:
             self._log.error("{} raised stopping loop: {}".format(type(e), e))
         finally:
@@ -341,7 +363,7 @@ class AsyncBehaviour(Behaviour):
         '''
         Cancel all pending tasks in the event loop.
         '''
-        self._log.info("shutting down tasks…")
+        self._log.info(Fore.MAGENTA + "💜 shutting down tasks…")
         try:
             tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
             if len(tasks) > 0:
@@ -350,7 +372,7 @@ class AsyncBehaviour(Behaviour):
                 self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        self._log.info('task shut down complete.')
+        self._log.info(Fore.MAGENTA + '💜 task shutdown complete.')
 
     def close(self):
         '''
@@ -358,7 +380,8 @@ class AsyncBehaviour(Behaviour):
         '''
         if not self.closed:
             if self._data_log:
-                self._data_log.close()
+                self._data_log.data("END")
+                # note: it's not up to us to close the shared data logger
             self.disable()
             Behaviour.close(self)
             self._log.info('closed.')

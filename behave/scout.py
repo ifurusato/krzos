@@ -283,7 +283,7 @@ class Scout(AsyncBehaviour):
         omega = self._calculate_omega(error, max_open_distance)
         vx = 0.0
         vy = 0.0
-        self._intent_vector = (vx, vy, omega)
+        self.set_intent_vector(vx, vy, omega)
         if self._verbose:
             self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, self.priority, omega))
@@ -308,7 +308,7 @@ class Scout(AsyncBehaviour):
         # scout only rotates
         vx = 0.0
         vy = 0.0
-        self._intent_vector = (vx, vy, omega)
+        self.set_intent_vector(vx, vy, omega)
         if self._verbose:
             self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 base_heading, offset, desired_heading, current_heading, error, max_open_distance, self.priority, omega))

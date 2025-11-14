@@ -169,7 +169,7 @@ class Odometer(Component):
         '''
         xy, xy, omega = self.get_velocity()
         x, y, theta = self.get_pose()
-        self._log.info(Fore.MAGENTA + 'intent: ({:.2f}, {:.2f}, {:.2f}); pose: ({:.2f}, {:.2f}, {:.2f})'.format(xy, xy, omega, x, y, theta))
+        self._log.info(Style.DIM + 'intent: ({:.2f}, {:.2f}, {:.2f});\tpose: ({:.2f}, {:.2f}, {:.2f})'.format(xy, xy, omega, x, y, theta))
 
     def get_velocity(self):
         '''

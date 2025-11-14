@@ -264,7 +264,7 @@ class PIDController(Component):
     def reset(self):
         self._pid.reset()
         self._motor.stop()
-        self._log.info(Fore.GREEN + 'reset.')
+        self._log.info(Style.DIM + 'reset.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):

@@ -183,7 +183,7 @@ class Radiozoa(AsyncBehaviour):
                 pair_active = True
         # if no pairs are contributing force, we're settled
         if not pair_active:
-            self._intent_vector = (0.0, 0.0, 0.0)
+            self.clear_intent_vector()
             self._smoothed_vector = np.array([0.0, 0.0])
             self._priority = 0.3  # low priority when settled
             return
@@ -195,7 +195,7 @@ class Radiozoa(AsyncBehaviour):
                                  (1.0 - self._smoothing_factor) * normalized_vec)
         vx, vy = self._smoothed_vector
         amplitude = self._default_speed
-        self._intent_vector = (vx * amplitude, vy * amplitude, 0.0)
+        self.set_intent_vector(vx * amplitude, vy * amplitude, 0.0)
         # calculate priority using analog sensor values
         # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
         if max_imbalance > self._min_sensor_diff:

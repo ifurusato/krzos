@@ -213,7 +213,7 @@ class Swerve(AsyncBehaviour):
             omega: angular velocity (always 0.0 for Swerve)
         '''
         if self._motor_controller.braking_active:
-            self._log.warning('braking active: intent vector suppressed')
+            self._log.debug('braking active: intent vector suppressed')
             self.clear_intent_vector()
             return
         # get current side distances
@@ -249,7 +249,7 @@ class Swerve(AsyncBehaviour):
         else:
             vy = 0.0     # no forward control
             omega = 0.0  # no rotation control
-            self._intent_vector = (vx, vy, omega)
+            self.set_intent_vector(vx, vy, omega)
         # logging
         if self._verbose or (next(self._counter) % 20 == 0):
             if _within_deadband:

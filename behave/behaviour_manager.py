@@ -55,10 +55,11 @@ class BehaviourManager(Subscriber):
         self._was_suppressed   = None
         # data logger?
         self._data_log = None
-        _data_logging  = _cfg.get('data_logging', False)
-        if self._data_logging:
+        _data_logging = config['kros'].get('application').get('data_logging')
+        if _data_logging:
             self._log.info(Fore.GREEN + 'data logging is active.')
-            self._data_log = Logger('{}'.format(self.NAME, log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log = Logger('{}'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log.data('START')
         # configuration
         _cfg = config['kros'].get('behaviour_manager')
         self._clip_event_list  = True #_cfg.get('clip_event_list') # used for printing only
@@ -373,6 +374,9 @@ class BehaviourManager(Subscriber):
         Permanently close and disable the behaviour manager and all behaviours.
         '''
         if not self.closed:
+            if self._data_log:
+                self._data_log.data('END')
+                # note: it's not up to us to close the shared data logger
             self.close_all_behaviours()
             Subscriber.close(self) # will call disable
 

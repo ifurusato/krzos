@@ -22,7 +22,6 @@ kros:
         enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
         enable_gamepad_publisher:         False            # enable gamepad support
         enable_motor_controller:           True            # enable Motor 2040
-        enable_radiozoa:                   True            # if True enable Radiozoa sensor
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
         # publishers .......................................
@@ -34,11 +33,11 @@ kros:
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
             ramp_down_duration_sec:         1.0            # duration to ramp down intent vector in BLIND mode
         avoid:
-            enable:                     False              # enable avoid behaviour
-            release:                    False              # release avoid behaviour on startup
+            enable:                      True              # enable avoid behaviour
+            release:                     True              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
-            default_priority:               0.35           # default behaviour priority
+            default_priority:               0.32           # default behaviour priority
             dynamic_speed:              False              # if True use digital pot for default speed
             use_dynamic_priority:       False              # if True, alter priority based on distance
             side_threshold_mm:              400            # ignore side obstacles further than this
@@ -53,8 +52,8 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.42           # default behaviour priority
             default_speed:                  0.4            # cruising speed

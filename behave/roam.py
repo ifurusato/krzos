@@ -137,7 +137,7 @@ class Roam(AsyncBehaviour):
             omega: angular velocity (always 0.0 for Roam)
         '''
         if self._motor_controller.braking_active:
-            self._log.warning('braking active: intent vector suppressed')
+            self._log.debug('braking active: intent vector suppressed')
             return
         amplitude = self._default_speed
         if self._digital_pot:
@@ -182,7 +182,7 @@ class Roam(AsyncBehaviour):
             vx = 0.0
             vy = amplitude
             omega = 0.0
-            self._intent_vector = (vx, vy, omega)
+            self.set_intent_vector(vx, vy, omega)
         if self._verbose:
             self._display_info('active')
 

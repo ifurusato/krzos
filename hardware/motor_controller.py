@@ -940,6 +940,7 @@ class MotorController(Component):
                     self._brake('stop', step=self._stop_step, closing=True)
                 time.sleep(3)
             if not self.is_stopped_target:
+                self._log.warning('calling emergency stop after failing to stop normally…')
                 self.emergency_stop()
             Component.disable(self)
             [ motor.disable() for motor in self._all_motors ]
