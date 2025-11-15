@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-10
-# modified: 2025-11-11
+# modified: 2025-11-15
 
 import time
 import numpy as np
@@ -131,13 +131,16 @@ class Radiozoa(AsyncBehaviour):
                     self._dynamic_set_default_speed()
             distances = self._radiozoa_sensor.get_distances()
             if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
-                # stop when sensors are unavailable or out of range.
-                self.clear_intent_vector()
+                # stop when sensors are unavailable or out of range
+                self._smoothed_vector = np.array([0.0, 0.0])
+                self._priority = 0.3
+                return (0.0, 0.0, 0.0)
             else:
-                self._update_intent_vector(distances)
+                return self._update_intent_vector(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
+            return (0.0, 0.0, 0.0)
 
     def _update_intent_vector(self, distances):
         '''
@@ -147,11 +150,13 @@ class Radiozoa(AsyncBehaviour):
 
         Priority scales continuously with imbalance severity and obstacle proximity
         using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
+        
+        Returns (vx, vy, omega) tuple.
         '''
         for i, d in enumerate(distances):
             if d is not None and d < 50:
                 self._log.warning('impossibly close reading from {} sensor: {}mm'.format(Cardinal.from_index(i).label, d))
-                return
+                return (0.0, 0.0, 0.0)
         far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
@@ -183,10 +188,9 @@ class Radiozoa(AsyncBehaviour):
                 pair_active = True
         # if no pairs are contributing force, we're settled
         if not pair_active:
-            self.clear_intent_vector()
             self._smoothed_vector = np.array([0.0, 0.0])
             self._priority = 0.3  # low priority when settled
-            return
+            return (0.0, 0.0, 0.0)
         # normalize the raw force vector
         max_abs = np.max(np.abs(force_vec)) if np.max(np.abs(force_vec)) > 1.0 else 1.0
         normalized_vec = force_vec / max_abs
@@ -195,7 +199,6 @@ class Radiozoa(AsyncBehaviour):
                                  (1.0 - self._smoothing_factor) * normalized_vec)
         vx, vy = self._smoothed_vector
         amplitude = self._default_speed
-        self.set_intent_vector(vx * amplitude, vy * amplitude, 0.0)
         # calculate priority using analog sensor values
         # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
         if max_imbalance > self._min_sensor_diff:
@@ -212,11 +215,12 @@ class Radiozoa(AsyncBehaviour):
         # imbalance contributes 0.0-0.2: centering force
         # proximity contributes 0.0-0.4: obstacle urgency
         self._priority = 0.4 + (imbalance_urgency * 0.2) + (proximity_urgency * 0.4)
-        if abs(self._intent_vector[0]) > 0.4 or abs(self._intent_vector[1]) > 0.4:
+        if abs(vx * amplitude) > 0.4 or abs(vy * amplitude) > 0.4:
             self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}, max_imbal={:.1f}mm, min_dist={:.1f}mm'.format(
-                self._intent_vector[0], self._intent_vector[1], self._priority, max_imbalance, min_distance))
+                vx * amplitude, vy * amplitude, self._priority, max_imbalance, min_distance))
         if self._verbose:
-            self._display_info()
+            self._display_info(vx * amplitude, vy * amplitude)
+        return (vx * amplitude, vy * amplitude, 0.0)
 
     def _get_highlight_color(self, value):
         '''
@@ -235,18 +239,15 @@ class Radiozoa(AsyncBehaviour):
         else:  # 0.61 - 0.8
             return Fore.MAGENTA
 
-    def _display_info(self, message=''):
+    def _display_info(self, vx, vy, message=''):
         if self._use_color:
             self._log.info("{} intent vector: {}({:4.2f},{:4.2f}){}".format(
                     message,
-                    self._get_highlight_color(self._intent_vector[0]),
-                    self._intent_vector[0], self._intent_vector[1], Style.RESET_ALL
+                    self._get_highlight_color(vx),
+                    vx, vy, Style.RESET_ALL
                 )
             )
         else:
-            self._log.info("intent vector: ({:.2f},{:.2f})".format(
-                    self._intent_vector[0], self._intent_vector[1]
-                )
-            )
+            self._log.info("intent vector: ({:.2f},{:.2f})".format(vx, vy))
 
 #EOF

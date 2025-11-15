@@ -37,7 +37,7 @@ kros:
             release:                     True              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
-            default_priority:               0.32           # default behaviour priority
+            default_priority:               0.42           # default behaviour priority
             dynamic_speed:              False              # if True use digital pot for default speed
             use_dynamic_priority:       False              # if True, alter priority based on distance
             side_threshold_mm:              400            # ignore side obstacles further than this
@@ -66,13 +66,13 @@ kros:
             release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # cruising speed
-            default_priority:               0.62           # default behaviour priority
+            default_priority:               0.5            # default behaviour priority
             use_dynamic_speed:           True              # if True use digital pot for default speed
             deadband_threshold:             0.07
             obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
         scan:
-            enable:                     False              # enable scan behaviour
-            release:                    False              # release scan behaviour on startup
+            enable:                      True              # enable scan behaviour
+            release:                     True              # release scan behaviour on startup
             verbose:                     True              # verbose messaging
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
@@ -81,7 +81,7 @@ kros:
             release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
-            default_priority:               0.32           # default behaviour priority
+            default_priority:               0.6            # default behaviour priority
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             rotation_speed:                 0.5            # motor speed when rotating in place
             rotation_tolerance:             1.0            # used to calculate omega
@@ -91,8 +91,8 @@ kros:
             damping_window:                10.0            # reduce target_omega when error is small to prevent overshoot
             smoothing_factor:               0.3            # low pass filter on transition towards target
         swerve:
-            enable:                     False              # enable swerve behaviour
-            release:                    False              # release swerve behaviour on startup
+            enable:                      True              # enable swerve behaviour
+            release:                     True              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed
@@ -101,7 +101,7 @@ kros:
             max_lateral_force:            0.4              # maximum vx magnitude
             lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
             min_priority:                 0.2              # priority when obstacles far
-            max_priority:                 0.9              # priority when obstacles very close (bumper)
+            max_priority:                 0.8              # priority when obstacles very close (bumper)
             deadband_threshold:           0.02             # ignore vx below this value
     behaviour_manager:
             release_on_startup:           True             # if True, enable/release on startup as per config
@@ -264,14 +264,8 @@ kros:
             ranging_frequency_hz:            10            # ranging frequency
         stuck_pixel_filter:
             threshold:                        5            # readings before pixel considered stuck
-        side_sensor:
-            use_radiozoa:                 False            # if True use Radiozoa, otherwise just PWM
-            smoothing:                     True            # enable smoothing of fused distance
-            smoothing_window:                 2            # window size for moving average
-            min_distance:                   200            # minimum distance in mm of VL53L0X
-            max_distance:                  1000            # maximum distance in mm of VL53L0X (actual range is 1m)
-            pwm_max_range:                  250            # max sensor range (mm) of PWM sensor
-            stale_timeout_ms:               250            # value cannot be older than this
+        avoid_sensor:
+            data_logging:                 False            # if True use data logging (requires application-level as well)
         fore_sensor:
             i2c_address:                   0x18            # I²C address for the IO Expander
             sensor_pin:                      14            # pin on the IO Expander for the analog distance sensor

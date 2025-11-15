@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-07
-# modified: 2025-11-09
-
+# modified: 2025-11-15
 import sys
 import time
 import itertools
@@ -129,13 +128,14 @@ class Swerve(AsyncBehaviour):
 
     async def _poll(self):
         '''
-        The asynchronous poll, updates the intent vector on each call.
+        The asynchronous poll, returns the intent vector.
         '''
         try:
-            self._update_intent_vector()
+            return self._update_intent_vector()
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
+            return (0.0, 0.0, 0.0)
 
     def _calculate_reaction_distance(self):
         '''
@@ -211,11 +211,12 @@ class Swerve(AsyncBehaviour):
             vx:    lateral velocity (positive = move right/starboard, negative = move left/port)
             vy:    longitudinal velocity (always 0.0 for Swerve)
             omega: angular velocity (always 0.0 for Swerve)
+            
+        Returns (vx, vy, omega) tuple.
         '''
         if self._motor_controller.braking_active:
             self._log.debug('braking active: intent vector suppressed')
-            self.clear_intent_vector()
-            return
+            return (0.0, 0.0, 0.0)
         # get current side distances
         self._port_distance, self._stbd_distance = self._swerve_sensor.get_side_distances()
         # calculate dynamic reaction distance based on forward speed
@@ -244,12 +245,10 @@ class Swerve(AsyncBehaviour):
         # apply deadband
         _within_deadband = abs(vx) < self._deadband_threshold
         if _within_deadband:
-            self.clear_intent_vector()
             self._last_vx = 0.0
-        else:
-            vy = 0.0     # no forward control
-            omega = 0.0  # no rotation control
-            self.set_intent_vector(vx, vy, omega)
+            vx = 0.0
+        vy = 0.0     # no forward control
+        omega = 0.0  # no rotation control
         # logging
         if self._verbose or (next(self._counter) % 20 == 0):
             if _within_deadband:
@@ -263,6 +262,7 @@ class Swerve(AsyncBehaviour):
                     '{:.0f}'.format(self._port_distance) if self._port_distance else 'None',
                     '{:.0f}'.format(self._stbd_distance) if self._stbd_distance else 'None',
                     self._current_reaction_distance, vx, self._current_priority))
+        return (vx, vy, omega)
 
     def enable(self):
         if self.enabled:
@@ -279,7 +279,6 @@ class Swerve(AsyncBehaviour):
             self._log.debug("already disabled.")
             return
         self._log.info("disabling swerve…")
-        self.clear_intent_vector()
         AsyncBehaviour.disable(self)
         self._log.info('disabled.')
 

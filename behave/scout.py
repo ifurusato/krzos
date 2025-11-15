@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-04
-# modified: 2025-11-04
+# modified: 2025-11-15
 
 import sys
 import time
@@ -200,33 +200,36 @@ class Scout(AsyncBehaviour):
 
     async def _poll(self):
         '''
-        the asynchronous poll, updates the intent vector on each call.
+        The asynchronous poll, returns the intent vector.
         '''
         try:
             if next(self._counter) % 5 == 0:
                 if self._use_dynamic_heading:
                     self._dynamic_set_heading()
-            self._update_intent_vector()
+            return self._update_intent_vector()
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self.disable()
+            return (0.0, 0.0, 0.0)
 
     def _update_intent_vector(self):
         '''
-        update the intent vector based on heading mode.
+        Update the intent vector based on heading mode.
 
-        scout only controls rotation. delegates to mode-specific methods.
+        Scout only controls rotation. Delegates to mode-specific methods.
 
-        robot-relative components of the vector:
+        Robot-relative components of the vector:
             vx:    lateral velocity (always 0.0 for Scout)
             vy:    longitudinal velocity (always 0.0 for Scout)
             omega: angular velocity (rotation) - this is what Scout controls
+            
+        Returns (vx, vy, omega) tuple.
         '''
         match self._heading_mode:
             case HeadingMode.RELATIVE:
-                self._update_intent_vector_relative()
+                return self._update_intent_vector_relative()
             case HeadingMode.ABSOLUTE:
-                self._update_intent_vector_absolute()
+                return self._update_intent_vector_absolute()
             case _:
                 raise NotImplementedError("unhandled heading mode: {}".format(self._heading_mode))
 
@@ -234,6 +237,8 @@ class Scout(AsyncBehaviour):
         '''
         RELATIVE mode: sensor-reactive rotation toward most open direction.
         Uses odometry to track actual heading, steers based on ScoutSensor offset.
+        
+        Returns (vx, vy, omega) tuple.
         '''
         # track heading before update
         previous_heading = self._heading_degrees
@@ -283,17 +288,19 @@ class Scout(AsyncBehaviour):
         omega = self._calculate_omega(error, max_open_distance)
         vx = 0.0
         vy = 0.0
-        self.set_intent_vector(vx, vy, omega)
         if self._verbose:
             self._log.info("RELATIVE: target_offset={:+.2f}°; scout_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 self._target_relative_offset, scout_offset, error, actual_rotation, max_open_distance, self.priority, omega))
-            self._display_info('RELATIVE')
+            self._display_info('RELATIVE', vx, vy, omega)
+        return (vx, vy, omega)
 
     def _update_intent_vector_absolute(self):
         '''
         ABSOLUTE mode: absolute compass heading with dynamic offset adjustments.
         Base heading from self._heading_degrees (set by methods or encoder).
         Offset from ScoutSensor for obstacle avoidance.
+        
+        Returns (vx, vy, omega) tuple.
         '''
         # base heading from self._heading_degrees
         base_heading = self._heading_degrees % 360.0
@@ -308,11 +315,11 @@ class Scout(AsyncBehaviour):
         # scout only rotates
         vx = 0.0
         vy = 0.0
-        self.set_intent_vector(vx, vy, omega)
         if self._verbose:
             self._log.info("ABSOLUTE: base={:.2f}°; offset={:+.2f}°; desired={:.2f}°; current={:.2f}°; error={:.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
                 base_heading, offset, desired_heading, current_heading, error, max_open_distance, self.priority, omega))
-            self._display_info('ABSOLUTE')
+            self._display_info('ABSOLUTE', vx, vy, omega)
+        return (vx, vy, omega)
 
     def _calculate_priority(self, max_open_distance):
         '''
@@ -380,9 +387,9 @@ class Scout(AsyncBehaviour):
 
     def _update_heading_from_encoders(self):
         '''
-        update self._heading_degrees based on actual motor encoder deltas.
-        tracks rotation by measuring differential encoder movement.
-        used by RELATIVE mode to maintain awareness of actual robot orientation.
+        Update self._heading_degrees based on actual motor encoder deltas.
+        Tracks rotation by measuring differential encoder movement.
+        Used by RELATIVE mode to maintain awareness of actual robot orientation.
         '''
         # get current encoder positions
         current_pfwd = self._motor_pfwd.decoder.steps
@@ -413,18 +420,16 @@ class Scout(AsyncBehaviour):
         self._last_encoder_paft = current_paft
         self._last_encoder_saft = current_saft
 
-    def _display_info(self, message=''):
+    def _display_info(self, message, vx, vy, omega):
         if self._use_color:
-            if self._intent_vector[2] == 0.0:
+            if omega == 0.0:
                 self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f})".format(
-                    message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
+                    message, vx, vy, omega))
             else:
-                self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(
-                        message, self._intent_vector[0], self._intent_vector[1])
-                    + Fore.CYAN + "{:4.2f}".format(self._intent_vector[2]) + Style.RESET_ALL + ")")
+                self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, ".format(message, vx, vy)
+                    + Fore.CYAN + "{:4.2f}".format(omega) + Style.RESET_ALL + ")")
         else:
-            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
-                self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
+            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(vx, vy, omega))
 
     def enable(self):
         if self.enabled:

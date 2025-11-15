@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-29
-# modified: 2025-11-11
+# modified: 2025-11-15
 
 import time
 import asyncio
@@ -134,12 +134,11 @@ class AsyncBehaviour(Behaviour):
 
     def set_intent_vector(self, vx, vy, omega):
         '''
-        Sets the intent vector.
+        Sets the intent vector directly.
+        Should only be called from _loop_main() after multiplier is applied.
+        Behaviors should return values from _poll() instead.
         '''
         self._intent_vector = (vx, vy, omega)
-        if self._data_log:
-            self._data_log.data('{:.3f}'.format(vx), '{:.3f}'.format(vy), '{:.3f}'.format(omega))
-#           self._data_log.data(vx, vy, omega)
 
     def clear_intent_vector(self):
         '''
@@ -266,55 +265,50 @@ class AsyncBehaviour(Behaviour):
     async def _poll(self):
         '''
         The main loop poll. To be overridden by subclasses.
+        Should return (vx, vy, omega) tuple.
         '''
-        pass
+        return (0.0, 0.0, 0.0)
 
     async def _loop_main(self):
         '''
         Main async loop that polls the behaviour at regular intervals.
-        This loop only runs when the behaviour is released (not suppressed).
-        It now includes logic to ramp down and hold the intent vector to zero
-        when in a blind state.
+        
+        Behaviors return their desired intent vector from _poll().
+        The safety multiplier is always applied (normally 1.0, ramps to 0.0 during BLIND).
+        Intent vector is set only once per iteration, after multiplier application.
+        Data logging occurs after multiplier, before motor controller reads the value.
         '''
         self._log.info("async loop started with {}ms delay…".format(self._poll_delay_ms))
         try:
             self.start_loop_action()
             while not self._stop_event.is_set():
-                # let the subclass's poll method run to determine its desired intent
-                await self._poll()
-                # now, apply the safety override based on the hold_at_zero state
+                # get desired intent vector from behavior
+                vx, vy, omega = await self._poll()
+                
+                # update multiplier based on blind state
                 if self._hold_at_zero:
-                    # if we are in blind mode, ramp down the multiplier
+                    # in blind mode, ramp down the multiplier
                     if self._intent_multiplier > 0.0:
                         self._intent_multiplier = max(0.0, self._intent_multiplier - self._ramp_down_step)
                 else:
-                    # if we are not in blind mode, ensure multiplier is at 1.0
+                    # not in blind mode, ensure multiplier is at 1.0
                     self._intent_multiplier = 1.0
-                # apply the multiplier to the current intent vector
-                vx, vy, omega = self._intent_vector
-                self.set_intent_vector(vx * self._intent_multiplier, vy * self._intent_multiplier, omega * self._intent_multiplier)
-                await asyncio.sleep(self._poll_delay_sec)
-                if not self.enabled:
-                    break
-        except asyncio.CancelledError:
-            self._log.info("async loop cancelled.")
-        except Exception as e:
-            self._log.error('{} encountered in async loop: {}'.format(type(e), e))
-            self.disable()
-        finally:
-            self.stop_loop_action()
-            self._log.info("async loop stopped.")
-
-    async def x_loop_main(self):
-        '''
-        Main async loop that polls the behaviour at regular intervals.
-        This loop only runs when the behaviour is released (not suppressed).
-        '''
-        self._log.info("async loop started with {}ms delay…".format(self._poll_delay_ms))
-        try:
-            self.start_loop_action()
-            while not self._stop_event.is_set():
-                await self._poll()
+                
+                # apply multiplier and set intent vector ONCE
+                self._intent_vector = (
+                    vx * self._intent_multiplier,
+                    vy * self._intent_multiplier,
+                    omega * self._intent_multiplier
+                )
+                
+                # log after multiplier applied, before motor controller reads it
+                if self._data_log:
+                    self._data_log.data(
+                        '{:.3f}'.format(self._intent_vector[0]),
+                        '{:.3f}'.format(self._intent_vector[1]),
+                        '{:.3f}'.format(self._intent_vector[2])
+                    )
+                
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break
@@ -334,18 +328,53 @@ class AsyncBehaviour(Behaviour):
         if not self._loop_instance:
             self._log.debug('no loop instance to stop.')
             return
+        self._log.info("shutting down event loop…")
+        try:
+            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
+            self._loop_instance.call_soon_threadsafe(self._shutdown)
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=1.0)
+            self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
+            # get pending tasks before closing
+            if self._loop_instance and not self._loop_instance.is_closed():
+                try:
+                    pending = asyncio.all_tasks(loop=self._loop_instance)
+                    if pending:
+                        # cancel all pending tasks
+                        for task in pending:
+                            task.cancel()
+                        # wait for cancellation to complete
+                        group = asyncio.gather(*pending, return_exceptions=True)
+                        self._loop_instance.run_until_complete(group)
+                except RuntimeError as e:
+                    # loop may already be closed or in invalid state
+                    self._log.debug('could not gather tasks during shutdown: {}'.format(e))
+                # now close the loop
+                self._loop_instance.close()
+                self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
+            else:
+                self._log.debug('loop already closed')
+
+        except Exception as e:
+            self._log.error("{} raised stopping loop: {}".format(type(e), e))
+        finally:
+            self._loop_instance = None
+            self._log.info('event loop shut down.')
+
+    def x_stop_loop(self):
+        '''
+        Stop the async event loop and clean up resources.
+        '''
+        if not self._loop_instance:
+            self._log.debug('no loop instance to stop.')
+            return
             
         self._log.info("shutting down event loop…")
         try:
             self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
-#           self._loop_instance.stop()
             self._loop_instance.call_soon_threadsafe(self._shutdown)
             if self._thread and self._thread.is_alive():
                 self._thread.join(timeout=1.0)
-#           self._loop_instance.run_until_complete(self._loop_instance.shutdown_asyncgens())
-#           if self._loop_instance.is_running():
-#               time.sleep(1)
-#           self._loop_instance.close()
             self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
             pending = asyncio.all_tasks(loop=self._loop_instance)
             group = asyncio.gather(*pending)

@@ -7,11 +7,12 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-11-10
+# modified: 2025-11-15
 
 import sys
 import time
 import itertools
+import traceback
 import numpy as np
 from math import isclose
 from colorama import init, Fore, Style
@@ -115,15 +116,16 @@ class Roam(AsyncBehaviour):
 
     async def _poll(self):
         '''
-        The asynchronous poll, updates the intent vector on each call.
+        The asynchronous poll, returns the intent vector.
         '''
         try:
             if next(self._counter) % 5 == 0:
                 self._dynamic_set_default_speed()
-            self._update_intent_vector()
+            return self._update_intent_vector()
         except Exception as e:
-            self._log.error("{} thrown while polling: {}".format(type(e), e))
+            self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self.disable()
+            return (0.0, 0.0, 0.0)
 
     def _update_intent_vector(self):
         '''
@@ -135,27 +137,38 @@ class Roam(AsyncBehaviour):
             vx:    lateral velocity (always 0.0 for Roam)
             vy:    longitudinal velocity (forward/backward), scaled by obstacles
             omega: angular velocity (always 0.0 for Roam)
+            
+        Returns (vx, vy, omega) tuple.
         '''
         if self._motor_controller.braking_active:
             self._log.debug('braking active: intent vector suppressed')
-            return
+            return (0.0, 0.0, 0.0)
         amplitude = self._default_speed
         if self._digital_pot:
             amplitude = self._digital_pot.get_scaled_value(False)
         if isclose(amplitude, 0.0, abs_tol=0.01):
-            self.clear_intent_vector()
+            self._front_distance = 0.0
             if self._verbose:
-                self._display_info('stopped')
-            return
+                self._display_info('stopped', 0.0, 0.0, 0.0)
+            return (0.0, 0.0, 0.0)
         # obstacle scaling only for forward motion
         if amplitude > 0.0:
-            self._front_distance = self._roam_sensor.get_distance()
+#           self._front_distance = self._roam_sensor.get_distance()
+#           if self._front_distance is None:
+#               self._front_distance = self._max_distance
+            try:
+                self._front_distance = self._roam_sensor.get_distance()
+                if self._front_distance is None:
+                    self._front_distance = self._max_distance
+            except (TypeError, ValueError) as e:
+                self._log.warning('sensor error: {}, using max distance'.format(e))
+                self._front_distance = self._max_distance
             if self._front_distance >= self._max_distance:
                 obstacle_scale = 1.0  # beyond sensor range, full speed
             elif self._front_distance <= self._min_distance:
                 obstacle_scale = 0.0  # too close, stop
             else:
-                # scale between min_distance and max_distance (the ORIGINAL way)
+                # scale between min_distance and max_distance
                 normalised = (self._front_distance - self._min_distance) / (self._max_distance - self._min_distance)
                 normalised = np.clip(normalised, 0.0, 1.0)
                 # Apply easing function to shape the speed response curve
@@ -177,28 +190,29 @@ class Roam(AsyncBehaviour):
                 self._log.info('{}: amp: {:.3f}; dist: {:.1f}mm'.format(direction, amplitude, self._front_distance))
         # deadband
         if abs(amplitude) < self._deadband_threshold:
-            self.clear_intent_vector()
+            if self._verbose:
+                self._display_info('deadband', 0.0, 0.0, 0.0)
+            return (0.0, 0.0, 0.0)
         else:
             vx = 0.0
             vy = amplitude
             omega = 0.0
-            self.set_intent_vector(vx, vy, omega)
-        if self._verbose:
-            self._display_info('active')
+            if self._verbose:
+                self._display_info('active', vx, vy, omega)
+            return (vx, vy, omega)
 
-    def _display_info(self, message=''):
+    def _display_info(self, message, vx, vy, omega):
         if self._use_color:
-            if self._intent_vector[0] + self._intent_vector[1] == 0.0:
+            if vx + vy == 0.0:
                 self._log.info(Style.DIM + "{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f}); ".format(
-                        message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2])
-                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance))
+                        message, vx, vy, omega)
+                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance if self._front_distance is not None else 0.0))
             else:
                 self._log.info("{} intent vector: ({:4.2f}, {:4.2f}, {:4.2f}); ".format(
-                        message, self._intent_vector[0], self._intent_vector[1], self._intent_vector[2])
-                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance))
+                        message, vx, vy, omega)
+                    + Fore.YELLOW + Style.NORMAL + 'distance: {:3.1f}mm'.format(self._front_distance if self._front_distance is not None else 0.0))
         else:
-            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(
-                    self._intent_vector[0], self._intent_vector[1], self._intent_vector[2]))
+            self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(vx, vy, omega))
 
     def enable(self):
         if self.enabled:

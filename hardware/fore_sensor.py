@@ -97,9 +97,13 @@ class ForeSensor(Component):
         '''
         Return the current (live) distance in centimeters with optional smoothing,
         adding any configured trim value.
+        Returns None if conversion fails.
         '''
         _value = self.get_value()
-        _distance_cm = int(Convert.convert_to_distance(_value)) + self._trim_cm
+        _converted = Convert.convert_to_distance(_value)
+        if _converted is None:
+            return None
+        _distance_cm = int(_converted) + self._trim_cm
         return int(self._smooth(_distance_cm)) if self._smoothing else _distance_cm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-04
-# modified: 2025-11-09
+# modified: 2025-11-15
 
 import sys
 import time
@@ -31,7 +31,7 @@ from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from matrix11x7 import Matrix11x7
 from matrix11x7.fonts import font3x5
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈[...]
 class Scan(AsyncBehaviour):
     NAME = 'scan'
     '''
@@ -190,10 +190,12 @@ class Scan(AsyncBehaviour):
         '''
         Main scan control loop - delegates rotation to RotationController,
         captures VL53L5CX data when data_collection_active is True.
+        
+        Returns (0.0, 0.0, 0.0) because RotationController handles the rotation intent.
         '''
         if not self._scan_active:
-            self._log.warning('poll: scan not active')
-            return
+            self._log.debug('poll: scan not active')
+            return (0.0, 0.0, 0.0)
         try:
             # poll rotation controller
             current_time, elapsed, accumulated_rotation = self._rotation_controller.poll()
@@ -212,11 +214,13 @@ class Scan(AsyncBehaviour):
                 self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(
                     phase.name, accumulated_rotation,
                     self._rotation_controller.intent_vector[2]))
+            return (0.0, 0.0, 0.0)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             self._rotation_controller.cancel_rotation()
             self._scan_active = False
             self.disable()
+            return (0.0, 0.0, 0.0)
 
     def _capture_sensor_data(self, accumulated_rotation, current_time):
         '''

@@ -106,7 +106,7 @@ class SwerveSensor(Component):
             float: Minimum distance in mm, or None if no valid readings
         '''
         if not self._vl53l5cx.enabled:
-            self._log.warning('VL53L5CX not enabled.')
+            self._log.debug('VL53L5CX not enabled.')
             return None
         if self._non_floor_rows is None:
             self._log.warning('non-floor rows not yet computed; call enable() first.')

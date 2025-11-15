@@ -40,9 +40,11 @@ class AvoidSensor(Component):
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._distance_sensor = DistanceSensor(config, orientation, level)
         # data logger?
+        _cfg = config['kros'].get('hardware').get('avoid_sensor')
+        _sensor_data_logging = _cfg.get('data_logging', False)
         self._data_log = None
         _data_logging = config['kros'].get('application').get('data_logging')
-        if _data_logging:
+        if _data_logging and _sensor_data_logging:
             self._log.data(Fore.GREEN + 'data logging is active.')
             self._data_log = Logger('{}'.format(self.name), log_to_file=True, data_logger=True, level=Level.INFO)
             self._data_log.data('START')
@@ -58,7 +60,7 @@ class AvoidSensor(Component):
         '''
         distance = self._distance_sensor.get_distance()
         if self._data_log and distance is not None:
-            self._data_log.data('{}mm'.format(distance))
+            self._data_log.data('{}'.format(distance))
         return distance
 
     def enable(self):
