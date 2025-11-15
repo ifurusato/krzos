@@ -179,6 +179,74 @@ class Avoid(AsyncBehaviour):
                 self._log.info('squeezed; boosted priority: {:4.2f}'.format(self._priority))
             else:
                 self._log.debug('squeezed; priority: {:4.2f}'.format(self._priority))
+        self._log.debug('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
+        self.set_intent_vector(vx, vy, omega)
+        if True or self._verbose:
+            self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
+
+    def x_update_intent_vector(self, port_distance, stbd_distance, aft_distance):
+        '''
+        Compute the robot's movement intent as a single (vx, vy, omega) vector
+        based on the three distance sensors.
+
+        Port sensor pushes robot to starboard (positive vx).
+        Starboard sensor pushes robot to port (negative vx).
+        Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
+
+        Priority scales continuously with obstacle proximity. When squeezed (both
+        port and starboard active), priority is boosted proportionally to ensure
+        lateral balancing isn't overwhelmed by other behaviors' forward motion.
+
+        Uses easing functions to scale avoidance force with distance.
+        '''
+        vx = 0.0
+        vy = 0.0
+        omega = 0.0
+        # track normalized sensor urgencies for priority calculation
+        port_urgency = 0.0
+        stbd_urgency = 0.0
+        aft_urgency  = 0.0
+        port_active  = False
+        stbd_active  = False
+        # port sensor: obstacle closer → push to starboard (positive vx)
+        if port_distance is not None and port_distance < self._side_threshold_mm:
+            normalised = 1.0 - (port_distance / self._side_threshold_mm)
+            port_scale = self._side_easing.apply(normalised)
+            vx += port_scale * self._avoid_speed
+            port_urgency = port_scale
+            port_active = True
+        # starboard sensor: obstacle closer → push to port (negative vx)
+        if stbd_distance is not None and stbd_distance < self._side_threshold_mm:
+            normalised = 1.0 - (stbd_distance / self._side_threshold_mm)
+            stbd_scale = self._side_easing.apply(normalised)
+            vx -= stbd_scale * self._avoid_speed
+            stbd_urgency = stbd_scale
+            stbd_active = True
+        # squeeze detection
+        self._squeezed = port_active and stbd_active
+        # aft sensor: obstacle closer → push forward (positive vy)
+        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
+            normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
+            aft_scale = self._aft_easing.apply(normalised)
+            if aft_scale > 0.05: # ignore weak signals below 5%
+                vy += aft_scale * self._avoid_speed
+                aft_urgency = aft_scale
+        # calculate priority from maximum sensor urgency
+        # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
+        max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
+        self._priority = 0.3 + (max_urgency * 0.7)
+        self._priority = min(self._max_urgency, self._priority) # clamp to maximum
+        # squeeze boost: ensure lateral balancing dominates when threading narrow gaps
+        if self._squeezed:
+            if self._boost_when_squeezed:
+                # squeeze severity based on tightest constraint (minimum of side urgencies)
+                squeeze_severity = min(port_urgency, stbd_urgency)
+                # boost priority by up to 0.15 based on squeeze tightness
+                squeeze_boost = squeeze_severity * 0.15
+                self._priority = min(1.0, self._priority + squeeze_boost)
+                self._log.info('squeezed; boosted priority: {:4.2f}'.format(self._priority))
+            else:
+                self._log.debug('squeezed; priority: {:4.2f}'.format(self._priority))
         self._rate_limiting = True # TODO config
         if self._rate_limiting:
             # rate limit vx and vy changes to prevent sudden motor target swings

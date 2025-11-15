@@ -57,7 +57,7 @@ class AvoidSensor(Component):
         Returns the distance in millimeters from the underlying DistanceSensor.
         '''
         distance = self._distance_sensor.get_distance()
-        if self._data_log:
+        if self._data_log and distance is not None:
             self._data_log.data('{}mm'.format(distance))
         return distance
 

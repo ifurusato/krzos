@@ -107,6 +107,7 @@ class KROS(Component, FiniteStateMachine):
         self._system_publisher    = None
         self._system_subscriber   = None
 
+        self._data_logging        = False
         self._started             = False
         self._closing             = False
         self._log.info('oid: {}'.format(id(self)))
@@ -137,6 +138,7 @@ class KROS(Component, FiniteStateMachine):
         # kros application configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _app_cfg = self._config['kros'].get('application')
+        self._data_logging = _app_cfg.get('data_logging')
 
         # configuration from command line arguments ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -292,6 +294,8 @@ class KROS(Component, FiniteStateMachine):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _await_start(self, arg=None):
+        if self._data_logging:
+            self._data_log.data('STARTED')
         self._log.info('await start callback triggered…')
         self._button.clear_callbacks()
         self._button.add_callback(self.shutdown)
@@ -357,6 +361,10 @@ class KROS(Component, FiniteStateMachine):
         else:
             self._log.warning('motor controller disabled.')
 
+        if self._data_logging:
+            self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log.data('START')
+
         # ════════════════════════════════════════════════════════════════════
         # now in main application loop until quit or Ctrl-C…
         self._started = True
@@ -412,6 +420,8 @@ class KROS(Component, FiniteStateMachine):
             self._button.close()
             self._button = None
         self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
+        if self._data_logging:
+            self._data_log.data('SHUTDOWN')
         self.close()
         # we never get here if we shut down properly
         self._log.error('shutdown error.')
@@ -733,6 +743,8 @@ def main(argv):
     except Exception:
         _log.error('error starting kros: {}'.format(traceback.format_exc()))
     finally:
+        if self._data_logging:
+            self._data_log.data('END')
         Logger.close_data_handler()
         if _kros and not _kros.closed:
             _kros.close()
