@@ -10,6 +10,7 @@
 # modified: 2025-11-13
 
 import time
+import traceback
 import numpy as np
 import itertools
 from math import isclose
@@ -112,7 +113,7 @@ class Avoid(AsyncBehaviour):
             # then set intent vector accordingly
             self._update_intent_vector(_port_distance, _stbd_distance, _aft_distance)
         except Exception as e:
-            self._log.error("{} thrown while polling: {}".format(type(e), e))
+            self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self.disable()
 
     def _update_intent_vector(self, port_distance, stbd_distance, aft_distance):

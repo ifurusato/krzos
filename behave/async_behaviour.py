@@ -349,8 +349,11 @@ class AsyncBehaviour(Behaviour):
             self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
             pending = asyncio.all_tasks(loop=self._loop_instance)
             group = asyncio.gather(*pending)
-            self._loop_instance.run_until_complete(group)
-            self._loop_instance.close()
+            if self._loop_instance:
+                self._loop_instance.run_until_complete(group)
+                self._loop_instance.close()
+            else:
+                self._log.warning('no loop instance .'.format(self.name))
             self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
 
         except Exception as e:
@@ -369,7 +372,10 @@ class AsyncBehaviour(Behaviour):
             if len(tasks) > 0:
                 for task in tasks:
                     task.cancel()
-                self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                if self._loop_instance:
+                    self._loop_instance.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                else:
+                    self._log.warning('no loop instance .'.format(self.name))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
         self._log.info(Fore.MAGENTA + '💜 task shutdown complete.')

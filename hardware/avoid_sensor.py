@@ -11,6 +11,9 @@
 #
 # A simple wrapper for the PWM-based DistanceSensor, used by the Avoid behaviour.
 
+from colorama import init, Fore, Style
+init()
+
 from core.logger import Logger, Level
 from core.component import Component
 from core.orientation import Orientation
@@ -36,6 +39,13 @@ class AvoidSensor(Component):
         self._log = Logger(self._name, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._distance_sensor = DistanceSensor(config, orientation, level)
+        # data logger?
+        self._data_log = None
+        _data_logging = config['kros'].get('application').get('data_logging')
+        if _data_logging:
+            self._log.data(Fore.GREEN + 'data logging is active.')
+            self._data_log = Logger('{}'.format(self.name), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log.data('START')
         self._log.info('ready.')
 
     @property
@@ -46,7 +56,10 @@ class AvoidSensor(Component):
         '''
         Returns the distance in millimeters from the underlying DistanceSensor.
         '''
-        return self._distance_sensor.get_distance()
+        distance = self._distance_sensor.get_distance()
+        if self._data_log:
+            self._data_log.data('{}mm'.format(distance))
+        return distance
 
     def enable(self):
         '''
@@ -77,6 +90,8 @@ class AvoidSensor(Component):
         if not self.closed:
             self.disable()
             self._distance_sensor.close()
+            if self._data_log:
+                self._data_log.data("END")
             Component.close(self)
             self._log.info('closed.')
         else:

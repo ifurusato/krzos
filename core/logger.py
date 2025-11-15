@@ -215,9 +215,9 @@ class Logger(object):
         Closes the shared data file handler, if it is open.
         '''
         if Logger._data_fh:
-            print('🍆 A. close_data_handler: {}'.format(Logger._data_fh.baseFilename))
             _filename = os.path.basename(Logger._data_fh.baseFilename)
-            print('🍆 B. close_data_handler: {}'.format(_filename))
+#           print('close_data_handler: {}'.format(Logger._data_fh.baseFilename))
+#           print('close_data_handler: {}'.format(_filename))
             print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('logger')
                     + Fore.CYAN + Style.NORMAL + 'INFO  : ' + Fore.MAGENTA + 'closing log file: {}'.format(_filename) + Style.RESET_ALL)
             try:
@@ -229,8 +229,6 @@ class Logger(object):
                 Logger._data_logger_owner_id = None
                 print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('logger')
                         + Fore.CYAN + Style.NORMAL + 'INFO  : ' + Fore.MAGENTA + 'data handler file closed.\n' + Style.RESET_ALL)
-        else:
-            print('🍆 B. ELSE close_data_handler')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def getFileHandler(self):
@@ -282,10 +280,8 @@ class Logger(object):
         to perform an orderly shutdown by flushing and closing all handlers.
         This should be called at application exit.
         '''
-        print('LOG CLOSE  🎀 ')
         if Logger._data_fh is not None:
             if id(self) == Logger._data_logger_owner_id:
-                print('DATA LOG CLOSE    🎀 🎀 🎀 🎀 🎀 🎀 🎀 ')
                 self.info('this instance is the owner, closing shared data logger.')
                 try:
                     if Logger._data_fh:
@@ -296,7 +292,7 @@ class Logger(object):
                     Logger._data_fh = None
                     Logger._data_logger_owner_id = None
             else:
-                print('WAS NOT ID: DATA LOG CLOSE self id: {}; owner id: {}   🎀 🎀 🎀 🎀 '.format(id(self), Logger._data_logger_owner_id ))
+                print('WAS NOT ID: DATA LOG CLOSE self id: {}; owner id: {}'.format(id(self), Logger._data_logger_owner_id ))
 
         logging.shutdown()
 
