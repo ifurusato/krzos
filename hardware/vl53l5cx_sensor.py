@@ -83,7 +83,7 @@ class Vl53l5cxSensor(Component):
         self._poll_interval = _cfg.get('poll_interval', 0.05) # new: default 50ms
         self._unreliable_pixel_threshold = _cfg.get('unreliable_pixel_threshold', 0.25)
         self._unreliable_frame_threshold = _cfg.get('unreliable_frame_threshold', 20)
-        self._log.info(f"unreliable pixel threshold: {self._unreliable_pixel_threshold:.2%}; frame threshold: {self._unreliable_frame_threshold}")
+        self._log.info("unreliable pixel threshold: {:.2%}; frame threshold: {}".format(self._unreliable_pixel_threshold, self._unreliable_frame_threshold))
         # flip orientation options
         self._flip_horizontal = _cfg.get('flip_horizontal', False)
         self._flip_vertical = _cfg.get('flip_vertical', False)
@@ -288,11 +288,12 @@ class Vl53l5cxSensor(Component):
         
         if unreliable_ratio > self._unreliable_pixel_threshold:
             self._unreliable_frame_counter += 1
-            self._log.warning(f"Unreliable frame detected ({corrected_count} corrected pixels). Unreliable count: {self._unreliable_frame_counter}")
+            self._log.warning("unreliable frame detected ({} corrected pixels); unreliable count: {}".format(
+                    corrected_count, self._unreliable_frame_counter))
         else:
             # Frame is reliable, reset counter and check for recovery
             if self._is_blind:
-                self._log.info("Sensor has recovered from BLIND state.")
+                self._log.info("sensor has recovered from BLIND state.")
                 queue_publisher = self._get_queue_publisher()
                 message_factory = self._get_message_factory()
                 if queue_publisher and message_factory:
@@ -305,7 +306,8 @@ class Vl53l5cxSensor(Component):
         if self._unreliable_frame_counter >= self._unreliable_frame_threshold:
             if not self._is_blind:
                 self._is_blind = True
-                self._log.error(f"Sensor is BLIND: Unreliable for {self._unreliable_frame_counter} frames, exceeding threshold of {self._unreliable_frame_threshold}.")
+                self._log.error("sensor is BLIND: unreliable for {} frames, exceeding threshold of {}.".format(
+                        self._unreliable_frame_counter, self._unreliable_frame_threshold))
                 queue_publisher = self._get_queue_publisher()
                 message_factory = self._get_message_factory()
                 if queue_publisher and message_factory:
@@ -373,7 +375,7 @@ class Vl53l5cxSensor(Component):
                 data = self._vl53.get_data()
                 raw_value = data.distance_mm
             except Exception as e:
-                self._log.error(f"{type(e)} raised reading distance_mm: {e}\n{traceback.format_exc()}")
+                self._log.error("{} raised reading distance_mm: {}\n{}".format(type(e), e, traceback.format_exc()))
                 return None
 
         if raw_value is not None:

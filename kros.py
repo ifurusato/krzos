@@ -520,6 +520,8 @@ class KROS(Component, FiniteStateMachine):
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
+                if self._data_logging:
+                    self._data_log.data('END')
                 self._log.close()
                 self._closing = False
                 if REPORT_REMAINING_FRAMES:
@@ -743,8 +745,6 @@ def main(argv):
     except Exception:
         _log.error('error starting kros: {}'.format(traceback.format_exc()))
     finally:
-        if self._data_logging:
-            self._data_log.data('END')
         Logger.close_data_handler()
         if _kros and not _kros.closed:
             _kros.close()
