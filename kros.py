@@ -108,6 +108,7 @@ class KROS(Component, FiniteStateMachine):
         self._system_subscriber   = None
 
         self._data_logging        = False
+        self._data_log            = None
         self._started             = False
         self._closing             = False
         self._log.info('oid: {}'.format(id(self)))
@@ -294,7 +295,7 @@ class KROS(Component, FiniteStateMachine):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _await_start(self, arg=None):
-        if self._data_logging:
+        if self._data_log:
             self._data_log.data('STARTED')
         self._log.info('await start callback triggered…')
         self._button.clear_callbacks()
@@ -420,7 +421,7 @@ class KROS(Component, FiniteStateMachine):
             self._button.close()
             self._button = None
         self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
-        if self._data_logging:
+        if self._data_log:
             self._data_log.data('SHUTDOWN')
         self.close()
         # we never get here if we shut down properly
@@ -520,7 +521,7 @@ class KROS(Component, FiniteStateMachine):
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
-                if self._data_logging:
+                if self._data_log:
                     self._data_log.data('END')
                 self._log.close()
                 self._closing = False

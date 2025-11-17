@@ -111,8 +111,47 @@ class DistanceSensor(Component):
         return pulse_width_us
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def _compute_distance(self):
+        '''
+        Compute and update the distance based on the current pulse width,
+        returning the distance or None if out of range or if we do not have
+        enough recent consistent readings. Requires 3 consecutive readings
+        within a tolerance of their median to report a distance.
+        '''
+        if not self.enabled:
+            raise Exception('not enabled.')
+        pulse_us = self._measure_pulse_width()
+        if pulse_us is None:
+            self._log.debug("pulse width reading None.")
+            if self._smoothing:
+                self._window.clear()
+            return None
+        if not (self._min_valid_pulse_us <= pulse_us <= self._max_valid_pulse_us):
+            if self._smoothing:
+                self._window.clear()
+            return None
+        distance_mm = (pulse_us - self._min_valid_pulse_us) * 3 / 4
+        if self._smoothing:
+            required_consistent_count = 3
+            tolerance_fraction = 0.25
+            self._window.append(distance_mm)
+            if len(self._window) < required_consistent_count:
+                return None
+            recent_readings = list(self._window)[-required_consistent_count:]
+            sorted_recent = sorted(recent_readings)
+            median_index = required_consistent_count // 2
+            median_of_recent = sorted_recent[median_index] if required_consistent_count % 2 else \
+                (sorted_recent[median_index - 1] + sorted_recent[median_index]) / 2.0
+            if all(abs(v - median_of_recent) <= max(1.0, median_of_recent * tolerance_fraction) for v in recent_readings):
+                self._last_read_time = time.time()
+                return int(median_of_recent)
+            # clear window when readings are inconsistent
+            self._window.clear()
+            return None
+        self._last_read_time = time.time()
+        return int(distance_mm)
+
+    def x_compute_distance(self):
         '''
         Compute and update the distance based on the current pulse width,
         returning the distance or None if out of range or if we do not have
@@ -138,6 +177,7 @@ class DistanceSensor(Component):
 #           self._log.info('window: {}'.format(list(self._window)))
             if len(self._window) < required_consistent_count:
                 return None
+            print(Fore.BLUE + '{} queue: {:4.2f}, {:4.2f}, {:4.2f}'.format(self._orientation.label, *self._window) + Style.RESET_ALL)
             recent_readings = list(self._window)[-required_consistent_count:]
             sorted_recent = sorted(recent_readings)
             median_index = required_consistent_count // 2

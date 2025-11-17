@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-08
-# modified: 2025-10-09
-#
+# modified: 2025-11-14
 
 import sys
 from datetime import datetime as dt
@@ -152,7 +151,7 @@ class RadiozoaSensor(Component):
     def set_callback(self, callback=None):
         '''
         Registers a callback to be called after every polling cycle.
-        The callback receives the latest distances list and the 
+        The callback receives the latest distances list and the
         elapsed time in milliseconds as its two arguments.
         '''
         self._callback = callback
@@ -322,7 +321,7 @@ class RadiozoaSensor(Component):
         self._log.info('background polling stopped.')
 
     # display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    
+
     def _color_for_distance(self, dist):
         '''
         out of range: >= FAR_THRESH or None/<=0
@@ -340,7 +339,7 @@ class RadiozoaSensor(Component):
                 return Fore.GREEN
             case _:
                 return Fore.BLACK
-                
+
     def print_distances(self, distances, elapsed_ms):
         '''
         Callback to print distance values from all eight sensors, with colorized output
@@ -358,14 +357,11 @@ class RadiozoaSensor(Component):
         msg += Style.DIM + " ] {}ms elapsed.".format(elapsed_ms) + Style.RESET_ALL
         print(msg)
 
-    # ...
     def disable(self):
-        self._log.info('❌ ❌ ❌ ❌ ❌ ❌ ')
         self._log.info('disabling…')
         for proximity_sensor in self._proximity_sensors.values():
                 proximity_sensor.disable()
         super().disable()
-        self._log.info('❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ❌ ')
 
     def close(self):
         self._log.info('closing…')

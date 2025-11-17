@@ -43,6 +43,7 @@ from core.logger import Logger, Level
 from core.component import Component
 
 class Odometer(Component):
+    NAME = 'odometer'
     '''
     Computes robot velocity and pose (odometry) from the step counts of all four drive motors on a Mecanum robot.
 
@@ -53,7 +54,7 @@ class Odometer(Component):
     '''
     def __init__(self, config, level=Level.INFO, suppressed=False, enabled=True):
         self._config = config
-        self._log = Logger("odometer", level)
+        self._log = Logger(Odometer.NAME, level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         # obtain geometry from config (use 'kros.geometry')
         _cfg = config['kros'].get('geometry')

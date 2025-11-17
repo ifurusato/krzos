@@ -1,125 +1,101 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
-# author:   Murray Altheim
-# created:  2025-05-25
-# modified: 2025-09-12
+# author:   Ichiro Furusato
+# created:  2025-11-16
+# modified: 2025-11-16
 #
+# channel 1: tail
+# channel 2: head
+# channel 3: signal
+# channel 4: mast
+# channel 5: stbd
+# channel 6: port
 
-import argparse
-import sys, traceback
+import os, sys
 import time
-import datetime as dt
-from colorama import init, Fore, Style
-init()
+import smbus2
 
-from core.component import Component
-from core.logger import Logger, Level
-from core.config_loader import ConfigLoader
+# add ./tinyfx/ to sys.path
+if os.path.isdir("tinyfx") and "tinyfx" not in sys.path:
+    sys.path.insert(0, "tinyfx")
 
-from hardware.controller import Controller
-from hardware.payload import Payload
-from hardware.tinyfx_controller import TinyFxController
-from tinyfx.response import*
+from tinyfx.message_util import pack_message, unpack_message
 
-class xTinyFxController(Component):
-    NAME = 'tinyfx-ctrl'
-    '''
-    Connects with a Tiny FX over I2C.
-    '''
-    def __init__(self, config=None, level=Level.INFO):
-        self._log = Logger(TinyFxController.NAME, level)
-        self._log.info('instantiating TinyFxController…')
-        Component.__init__(self, self._log, suppressed=False, enabled=False)
-        _cfg = config['kros'].get('hardware').get('tinyfx-controller')
-        self._i2c_address        = _cfg.get('i2c_address')
-        self._bus_number         = _cfg.get('bus_number')
-        self._i2cbus             = None
-        self._config_register    = 1
-        self._max_payload_length = 32
-        self._controller = Controller('tinyfx', i2c_bus=1, i2c_address=0x44)
-        self._last_send_time = None  # timestamp of last send
-        self._min_send_interval = dt.timedelta(milliseconds=100)  # 100ms minimum send interval
-        self._log.info('ready at 0x{:02X} on I2C bus {}.'.format(self._i2c_address, self._bus_number))
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def send_data(self, data):
-        '''
-        Sends a string to the TinyFX.
-        '''
-        start_time = dt.datetime.now()
-        if self._last_send_time:
-            elapsed = start_time - self._last_send_time
-            if elapsed < self._min_send_interval:
-                self._log.warning(
-                    "write_payload skipped: only {:.1f}ms since last send (minimum is {:.1f}ms)".format(
-                        elapsed.total_seconds() * 1000,
-                        self._min_send_interval.total_seconds() * 1000
-                    )   
-                )   
-                return RESPONSE_SKIPPED
-        self._log.info("sending data: '{}'…".format(data))
-        _response = self._controller.send_payload(data)
-        elapsed_ms = (dt.datetime.now() - start_time).total_seconds() * 1000.0
-        if _response is None:
-            raise ValueError('null response.')
-        elif isinstance(_response, Response):
-            if _response == RESPONSE_OKAY:
-                self._log.info("response: "
-                        + Fore.GREEN + "'{}'".format(_response.description)
-                        + Fore.CYAN + "; {:5.2f}ms elapsed.".format(elapsed_ms))
-            else:
-                self._log.warning("response: "
-                        + Fore.RED + "'{}'".format(_response.description)
-                        + Fore.WHITE + "; {:5.2f}ms elapsed.".format(elapsed_ms))
-                self._log.warning(Style.BRIGHT + 'Reset the TinyFX to continue.')
-        elif not isinstance(_response, Response):
-            raise ValueError('expected Response, not {}.'.format(type(_response)))
+__I2C_BUS  = 1      # the I2C bus number; on a Raspberry Pi the default is 1
+__I2C_ADDR = 0x43   # the I2C address used to connect to the TinyFX
+
+def apply_channel_alias(user_msg):
+    channel_aliases = {
+        "tail": "ch1",
+        "head": "ch2",
+        "signal": "ch3",
+        "mast": "ch4",
+        "stbd": "ch5",
+        "port": "ch6"
+    }
+    words = user_msg.strip().split()
+    if not words:
+        return user_msg
+    alias = words[0].lower()
+    if alias in channel_aliases:
+        words[0] = channel_aliases[alias]
+    return ' '.join(words)
+
+def i2c_write_and_read(bus, address, out_msg):
+    bus.write_i2c_block_data(address, 0, list(out_msg))
+    time.sleep(0.002)
+    for _ in range(2):
+        resp_buf = bus.read_i2c_block_data(address, 0, 32)
+        # auto-detect and extract the real message
+        if resp_buf and resp_buf[0] == 0 and len(resp_buf) > 2:
+            # skip first byte, interpret the second as length
+            msg_len = resp_buf[1]
+            if 1 <= msg_len < 32:
+                resp_bytes = bytes(resp_buf[1:1+msg_len+2])
+                return resp_bytes
         else:
-            self._log.error("error response: {}; {:5.2f}ms elapsed.".format(_response.description, elapsed_ms))
+            msg_len = resp_buf[0]
+            if 1 <= msg_len < 32:
+                resp_bytes = bytes(resp_buf[:msg_len+2])
+                return resp_bytes
+        time.sleep(0.003)
+    raise RuntimeError("bad message length or slave not ready.")
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Process command and optional speeds/duration.")
-    # first positional argument: the base command
-    parser.add_argument("command", type=str, help="The command to execute.")
-    # optional positional arguments (zero or more float arguments)
-    parser.add_argument("args", nargs="*", help="Optional arguments for the command (e.g., speeds, duration).")
-    return parser.parse_args()
+def send_and_receive(bus, address, message):
+    out_msg = pack_message(message)
+    try:
+        resp_bytes = i2c_write_and_read(bus, address, out_msg)
+        return unpack_message(resp_bytes)
+    except Exception as e:
+        print('I2C message error: {}'.format(e))
+        return None
 
 def main():
+    print('opening I2C bus {} to address {:#04x}'.format(__I2C_BUS, __I2C_ADDR))
+    with smbus2.SMBus(__I2C_BUS) as bus:
+        try:
+            while True:
+                user_msg = input('Enter command string to send ("quit" to exit): ')
+                if user_msg.strip().lower() == 'quit':
+                    break
+                if len(user_msg) == 0:
+                    continue
+                user_msg = apply_channel_alias(user_msg)
+                response = send_and_receive(bus, __I2C_ADDR, user_msg)
+                print('response: {}'.format(response))
+        except KeyboardInterrupt:
+            print('Ctrl-C caught, exiting…')
+        except Exception as e:
+            print('error: {}'.format(e))
 
-    _log = Logger('main', Level.INFO)
-    _controller = None
-
-    try:
-
-        _log.info('creating TinyFX controller…')
-        _config = ConfigLoader(Level.INFO).configure()
-        _tinyfx = TinyFxController(config=_config, level=Level.INFO)
-
-        # parse the arguments and combine into a single command string
-        _args = parse_args()
-        _command_string = ' '.join([_args.command] + _args.args)
-        _response = _tinyfx.send_data(_command_string)
-
-    except KeyboardInterrupt:
-        print("Program interrupted by user (Ctrl+C). Exiting gracefully.")
-    except ValueError as e:
-        # handle any CLI validation errors
-        _log.error("parsing command line: {}".format(e))
-    except TimeoutError as te:
-        _log.error('transfer timeout: {}'.format(te))
-    except Exception as e:
-        _log.error('{} encountered: {}\n{}'.format(type(e), e, traceback.format_exc()))
-    finally:
-        _log.info('complete.')
-        if _controller:
-            _controller.close()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 
 #EOF

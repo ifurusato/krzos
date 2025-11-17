@@ -502,6 +502,16 @@ class MotorController(Component):
 #               _priority = entry['priority']()
 #               self._log.error('  - {}: vector={}, priority={:.3f}'.format(name, _vector, _priority))
 
+        # CRITICAL: Clamp blended intent vector BEFORE Mecanum kinematics
+        # to prevent wheel speed explosion
+        max_component = max(abs(vx), abs(vy), abs(omega))
+        if max_component > 1.0:
+            scale = 1.0 / max_component
+            vx *= scale
+            vy *= scale
+            omega *= scale
+            self._log.warning('⚠️  normalized blended intent vector: ({:.3f}, {:.3f}, {:.3f})'.format(vx, vy, omega))
+
         # mecanum -> wheel speeds
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
