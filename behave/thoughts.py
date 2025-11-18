@@ -53,6 +53,7 @@ class Thoughts(Behaviour):
         self._verbose  = _cfg.get('verbose', False)
         self._priority = _cfg.get('priority', 0.2)
         # TBD
+        self._max_activity = 0.0
         # components
         _registry = Component.get_registry()
         self._odometer = _registry.get(Odometer.NAME)
@@ -134,14 +135,16 @@ class Thoughts(Behaviour):
                 # check motor controller first - movement = activity
                 if self._odometer:
                     vx, vy, omega = self._odometer.get_velocity()
-                    activity = 0.0
+                    _activity = 0.0
                     if isclose(vx, 0.0, abs_tol=0.001) \
                             and isclose(vy, 0.0, abs_tol=0.001) \
                             and isclose(omega, 0.0, abs_tol=0.001):
-                        self._log.info(Fore.BLUE + Style.DIM + '🐟 [{:05d}] motors idle'.format(_count))
+                        _style = Style.DIM
                     else:
-                        activity = abs(vx) + abs(vy) + abs(omega)
-                        self._log.info(Fore.BLUE + '🐟 [{:05d}] motors active; level: {}'.format(_count, activity))
+                        _activity = abs(vx) + abs(vy) + abs(omega)
+                        _style = Style.NORMAL
+                    self._max_activity = max(self._max_activity, _activity)
+                    self._log.info(Fore.BLUE + _style + '🐟 [{:05d}] motors active; level: {:4.2f}/{:4.2f}'.format(_count, _activity, self._max_activity))
                     self._last_activity_time = dt.now()
                     self._last_idle_publish_time = None
                     await asyncio.sleep(self._idle_loop_delay_sec)
