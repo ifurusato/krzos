@@ -140,7 +140,8 @@ class Radiozoa(AsyncBehaviour):
                 return self._update_intent_vector(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
-            self.disable()
+            # Set stop event to exit the loop gracefully
+            self._stop_event.set()
             return (0.0, 0.0, 0.0)
 
     def _update_intent_vector(self, distances):

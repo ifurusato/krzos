@@ -7,13 +7,13 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-29
-# modified: 2025-11-15
+# modified: 2025-11-20
 
 import time
 import asyncio
 import numpy as np
 import itertools
-from threading import Thread, Event as ThreadEvent
+from threading import current_thread, Thread, Event as ThreadEvent
 from colorama import init, Fore, Style
 init()
 
@@ -328,96 +328,34 @@ class AsyncBehaviour(Behaviour):
         if not self._loop_instance:
             self._log.debug('no loop instance to stop.')
             return
+        
         self._log.info("shutting down event loop…")
         try:
-            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
-            # cancel all pending tasks
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            # wait for thread to finish
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-            # stop the loop if it's running
-            if self._loop_instance and self._loop_instance.is_running():
-                self._loop_instance.call_soon_threadsafe(self._loop_instance.stop)
-                # Give it a moment to actually stop
-                time.sleep(0.1)
+            self._log.debug('closing {} polling loop…'.format(self.name))
+            # check if we're being called from the loop's own thread
+            _is_loop_thread = (self._thread and self._thread == current_thread())
+            if not _is_loop_thread:
+                # safe to use call_soon_threadsafe and join from external thread
+                self._loop_instance.call_soon_threadsafe(self._shutdown)
+                # wait for thread to finish
+                if self._thread and self._thread.is_alive():
+                    self._thread.join(timeout=1.0)
+                # stop the loop if it's running
+                if self._loop_instance and self._loop_instance.is_running():
+                    self._loop_instance.call_soon_threadsafe(self._loop_instance.stop)
+                    time.sleep(0.1)
+            else:
+                # we're being called from within the loop thread itself
+                # cannot join our own thread, just stop the loop
+                self._log.warning('_stop_loop called from loop thread - cannot join self')
+                if self._loop_instance and self._loop_instance.is_running():
+                    self._loop_instance.stop()
             # now safe to close
             if self._loop_instance and not self._loop_instance.is_closed():
-                self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
                 self._loop_instance.close()
-                self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
+                self._log.debug('{} polling loop closed.'.format(self.name))
             else:
                 self._log.debug('loop already closed')
-        except Exception as e:
-            self._log.error("{} raised stopping loop: {}".format(type(e), e))
-        finally:
-            self._loop_instance = None
-            self._log.info('event loop shut down.')
-
-    def x_stop_loop(self):
-        '''
-        Stop the async event loop and clean up resources.
-        '''
-        if not self._loop_instance:
-            self._log.debug('no loop instance to stop.')
-            return
-        self._log.info("shutting down event loop…")
-        try:
-            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-            self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
-            # get pending tasks before closing
-            if self._loop_instance and not self._loop_instance.is_closed():
-                try:
-                    pending = asyncio.all_tasks(loop=self._loop_instance)
-                    if pending:
-                        # cancel all pending tasks
-                        for task in pending:
-                            task.cancel()
-                        # wait for cancellation to complete
-                        group = asyncio.gather(*pending, return_exceptions=True)
-                        self._loop_instance.run_until_complete(group)
-                except RuntimeError as e:
-                    # loop may already be closed or in invalid state
-                    self._log.debug('could not gather tasks during shutdown: {}'.format(e))
-                # now close the loop
-                self._loop_instance.close()
-                self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
-            else:
-                self._log.debug('loop already closed')
-
-        except Exception as e:
-            self._log.error("{} raised stopping loop: {}".format(type(e), e))
-        finally:
-            self._loop_instance = None
-            self._log.info('event loop shut down.')
-
-    def x_stop_loop(self):
-        '''
-        Stop the async event loop and clean up resources.
-        '''
-        if not self._loop_instance:
-            self._log.debug('no loop instance to stop.')
-            return
-            
-        self._log.info("shutting down event loop…")
-        try:
-            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
-            self._loop_instance.call_soon_threadsafe(self._shutdown)
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=1.0)
-            self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
-            pending = asyncio.all_tasks(loop=self._loop_instance)
-            group = asyncio.gather(*pending)
-            if self._loop_instance:
-                self._loop_instance.run_until_complete(group)
-                self._loop_instance.close()
-            else:
-                self._log.warning('no loop instance .'.format(self.name))
-            self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
-
         except Exception as e:
             self._log.error("{} raised stopping loop: {}".format(type(e), e))
         finally:
@@ -428,7 +366,7 @@ class AsyncBehaviour(Behaviour):
         '''
         Cancel all pending tasks in the event loop.
         '''
-        self._log.info(Fore.MAGENTA + "💜 shutting down tasks…")
+        self._log.info("shutting down tasks…")
         try:
             tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
             if len(tasks) > 0:
@@ -440,7 +378,7 @@ class AsyncBehaviour(Behaviour):
                     self._log.warning('no loop instance .'.format(self.name))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        self._log.info(Fore.MAGENTA + '💜 task shutdown complete.')
+        self._log.info('task shutdown complete.')
 
     def close(self):
         '''
