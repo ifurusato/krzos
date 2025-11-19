@@ -42,6 +42,7 @@ class Radiozoa(AsyncBehaviour):
         _cfg = config['kros'].get('behaviour').get('radiozoa')
         self._counter    = itertools.count()
         self._default_speed     = _cfg.get('default_speed', 0.4)
+        self._output_scale      = _cfg.get('output_scale', 1.0) # default 1.0 = no scaling
         self._use_dynamic_priority = True
         self._use_dynamic_speed = _cfg.get('dynamic_speed', False)
         self._priority          = _cfg.get('default_priority', 0.4)
@@ -215,6 +216,11 @@ class Radiozoa(AsyncBehaviour):
         # imbalance contributes 0.0-0.2: centering force
         # proximity contributes 0.0-0.4: obstacle urgency
         self._priority = 0.4 + (imbalance_urgency * 0.2) + (proximity_urgency * 0.4)
+
+        # apply output scaling to prevent overwhelming other behaviors
+        vx_scaled = vx * amplitude * self._output_scale
+        vy_scaled = vy * amplitude * self._output_scale
+
         if abs(vx * amplitude) > 0.4 or abs(vy * amplitude) > 0.4:
             self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}, max_imbal={:.1f}mm, min_dist={:.1f}mm'.format(
                 vx * amplitude, vy * amplitude, self._priority, max_imbalance, min_distance))

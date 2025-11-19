@@ -58,6 +58,7 @@ kros:
             verbose:                    False              # verbose messaging
             default_priority:               0.42           # default behaviour priority
             default_speed:                  0.4            # cruising speed
+            output_scale:                   0.6            # scale output
             dynamic_speed:              False              # if True use digital pot for default speed
             smoothing_factor:               0.4            # 0.3; 0.0=no smoothing, 1.0=no response
             min_sensor_diff_mm:           100              # 50; minimum difference to react
