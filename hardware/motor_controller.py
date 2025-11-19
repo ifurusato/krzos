@@ -285,6 +285,46 @@ class MotorController(Component):
             self._log.info('removed intent vector: {}'.format(name))
 
     def _blend_intent_vectors(self):
+        if not self._intent_vectors:
+            return (0.0, 0.0, 0.0)
+        
+        weighted_sum = [0.0, 0.0, 0.0]
+        total_weight = 0.0
+        
+        # Track largest contributor
+        max_magnitude = 0.0
+        max_contributor = None
+        
+        for name, entry in self._intent_vectors.items():
+            vector = entry['vector']()
+            priority = entry['priority']()
+            
+            magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
+            weighted_magnitude = magnitude * priority
+            
+            if weighted_magnitude > max_magnitude:
+                max_magnitude = weighted_magnitude
+                max_contributor = (name, vector, priority)
+            
+            if len(vector) != 3:
+                raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
+            total_weight += priority
+            for i in range(3):
+                weighted_sum[i] += vector[i] * priority
+        
+        if total_weight == 0.0:
+            return (0.0, 0.0, 0.0)
+        
+        result = tuple(s / total_weight for s in weighted_sum)
+        
+        # DIAGNOSTIC: Log the dominant behavior
+        if max_contributor:
+            name, vec, pri = max_contributor
+            self._log.info('💜 Dominant: {} vec=({:.2f},{:.2f},{:.2f}) pri={:.2f} -> blended=({:.2f},{:.2f},{:.2f})'.format(
+                name, vec[0], vec[1], vec[2], pri, result[0], result[1], result[2]))
+        return result
+
+    def x_blend_intent_vectors(self):
         '''
         Priority-weighted blending of all intent vectors.
         Each behavior's vector is weighted by its dynamic priority value.
@@ -517,17 +557,7 @@ class MotorController(Component):
         vx, vy, omega = intent
         self._blended_intent_vector = intent # for access as property
 
-#       # WARNING: check for excessive intent vector values
-#       if abs(vx) > 1.0 or abs(vy) > 1.0 or abs(omega) > 1.0:
-#           print(Fore.YELLOW + '⚠️  EXCESSIVE INTENT VECTOR: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega) + Style.RESET_ALL)
-#           # list all active intent vectors for debugging
-#           for name, entry in self._intent_vectors.items():
-#               _vector = entry['vector']()
-#               _priority = entry['priority']()
-#               self._log.error('  - {}: vector={}, priority={:.3f}'.format(name, _vector, _priority))
-
-        # CRITICAL: Clamp blended intent vector BEFORE Mecanum kinematics
-        # to prevent wheel speed explosion
+        # clamp blended intent vector BEFORE Mecanum kinematics to prevent wheel speed explosion
         max_component = max(abs(vx), abs(vy), abs(omega))
         if max_component > 1.0:
             scale = 1.0 / max_component
@@ -543,7 +573,7 @@ class MotorController(Component):
         saft = vy + vx - omega
         speeds = [pfwd, sfwd, paft, saft]
 
-        # WARNING: check for excessive wheel speeds before normalization
+        # check for excessive wheel speeds before normalization
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             self._log.warning('⚠️  wheel speeds exceed 1.0 before normalization: max={:.3f}, speeds={}'.format(max_abs, ['{:.3f}'.format(s) for s in speeds]))
@@ -575,20 +605,11 @@ class MotorController(Component):
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
 
-#       # WARNING: final sanity check before setting motor speeds
-#       for i, _speed in enumerate(speeds):
-#           if abs(_speed) > 1.0:
-#               print(Fore.YELLOW + '⚠️  EXCESSIVE MOTOR TARGET SPEED: motor {} speed={:.3f}'.format(['pfwd', 'sfwd', 'paft', 'saft'][i], _speed) + Style.RESET_ALL)
-
 #       self._log.info('B. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         self._pfwd_motor.target_speed = speeds[0]
         self._sfwd_motor.target_speed = speeds[1]
         self._paft_motor.target_speed = speeds[2]
         self._saft_motor.target_speed = speeds[3]
-
-        # DIAGNOSTIC: Capture state before PID update
-#       pre_state = [(m.orientation.label, m.target_speed, m.velocity, m.get_current_power())
-#                    for m in self._all_motors]
 
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
@@ -622,16 +643,6 @@ class MotorController(Component):
             'saft': self._saft_motor.steps,
         }
         self._odometer.update(step_counts, time.monotonic())
-
-#       # DIAGNOSTIC: check for unusual power changes
-#       for i, _motor in enumerate(self._all_motors):
-#           label, target, pre_vel, pre_power = pre_state[i]
-#           post_power = _motor.get_current_power()
-#           power_delta = abs(post_power - pre_power)
-#           # only print if power changed significantly
-#           if power_delta > 0.20:  # threshold for "surge"
-#               self._log.warning('⚠️  SURGE {}: target={:.3f}, vel={:.3f}, power: {:.3f}→{:.3f} (Δ{:.3f})'.format(
-#                   label, target, _motor.velocity, pre_power, post_power, power_delta))
 
         _count = next(self._event_counter)
         if self._verbose:

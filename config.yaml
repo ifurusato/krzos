@@ -206,7 +206,7 @@ kros:
         motor_voltage:                       12            # the voltage rating of the motor
         motor_power_limit:                 0.90            # upper and lower (x -1) limit set on power sent to motor
         scale_factor_open:                  1.5            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
-        scale_factor_closed:                5.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
+        scale_factor_closed:                7.0            # a constant multiplier determines max power sent to motors (7 maxes them out at 0.9)
         enable_jerk_limiter:              False            # initial enabled state for jerk limiter
         reverse_motor_pfwd:               False            # in case you wire up the motors backwards
         reverse_motor_sfwd:                True            # ditto
@@ -227,9 +227,9 @@ kros:
             reverse_encoder_saft:         False            # ditto
         pid_controller:
             use_velocity_class:           False            # if true use separate class otherwise integrated calculation
-            kp:                               0.05000      # proportional gain (was: 0.05000) 
-            ki:                               0.00200      # integral gain (was: 0.00500)
-            kd:                               0.00005      # derivative gain (was: 0.00000)
+            kp:                               0.20000      # proportional gain (was: 0.05000)  was: 0.05000
+            ki:                               0.01000      # integral gain (was: 0.00500)      was: 0.00200
+            kd:                               0.00010      # derivative gain (was: 0.00000)
             minimum_output:                  -1.0          # lower output limit
             maximum_output:                   1.0          # upper output limit
             sample_freq_hz:                  20            # 20Hz equiv to 50ms/0.05s
