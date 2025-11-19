@@ -227,8 +227,8 @@ kros:
             reverse_encoder_saft:         False            # ditto
         pid_controller:
             use_velocity_class:           False            # if true use separate class otherwise integrated calculation
-            kp:                               0.20000      # proportional gain (was: 0.05000)  was: 0.05000
-            ki:                               0.01000      # integral gain (was: 0.00500)      was: 0.00200
+            kp:                               0.12000      # proportional gain (was: 0.05000)  was: 0.05000
+            ki:                               0.00500      # integral gain (was: 0.00500)      was: 0.00200
             kd:                               0.00010      # derivative gain (was: 0.00000)
             minimum_output:                  -1.0          # lower output limit
             maximum_output:                   1.0          # upper output limit
