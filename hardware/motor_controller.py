@@ -84,6 +84,17 @@ class MotorController(Component):
         self._halt_step           = _cfg.get('halt_step', 0.067)   # rate for halting (quickly)
         self._stop_step           = _cfg.get('stop_step', 0.09)    # rate for stopping (abrupt)
         self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
+        self._show_battery        = _cfg.get('show_battery', False) # enable/disable show battery level
+        # data logging
+        self._data_log = None
+        _data_logging = config['kros'].get('application').get('data_logging')
+        if _data_logging:
+            self._log.data(Fore.GREEN + 'data logging is active.')
+            self._data_log = Logger('{}'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._pfwd_data_log = Logger('pfwd'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._sfwd_data_log = Logger('sfwd'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._paft_data_log = Logger('paft'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+            self._saft_data_log = Logger('saft'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
         # odometer
         self._odometer = Odometer(config)
         # eyeballs monitor
@@ -122,12 +133,13 @@ class MotorController(Component):
         # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._closed_loop = None
         self._all_motors  = []
-        _motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
-        self._pfwd_motor     = _motor_configurer.get_motor(Orientation.PFWD)
-        self._sfwd_motor     = _motor_configurer.get_motor(Orientation.SFWD)
-        self._paft_motor     = _motor_configurer.get_motor(Orientation.PAFT)
-        self._saft_motor     = _motor_configurer.get_motor(Orientation.SAFT)
+        self._motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
+        self._pfwd_motor     = self._motor_configurer.get_motor(Orientation.PFWD)
+        self._sfwd_motor     = self._motor_configurer.get_motor(Orientation.SFWD)
+        self._paft_motor     = self._motor_configurer.get_motor(Orientation.PAFT)
+        self._saft_motor     = self._motor_configurer.get_motor(Orientation.SAFT)
         self._all_motors     = self._get_motors()
+        self.set_show_battery(self._show_battery)
         self._is_daemon      = True
         self._loop_thread    = None
         self._loop_enabled   = False
@@ -177,6 +189,12 @@ class MotorController(Component):
         self._log.info(Fore.GREEN + 'ready with {} motors.'.format(len(self._all_motors)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def set_show_battery(self, enable):
+        '''
+        Enable/disable the show battery feature on both ThunderBorg motor controllers.
+        '''
+        self._motor_configurer.set_thunderborg_leds(enable)
 
     def get_odometer(self):
         '''
@@ -379,6 +397,12 @@ class MotorController(Component):
             Component.enable(self)
             if self._eyeballs_monitor:
                 self._eyeballs_monitor.enable()
+            if self._data_log:
+                self._data_log.data('START')
+                self._pfwd_data_log.data('START')
+                self._sfwd_data_log.data('START')
+                self._paft_data_log.data('START')
+                self._saft_data_log.data('START')
             if self._external_clock:
                 self._external_clock.add_callback(self._external_callback_method)
                 for _motor in self._all_motors:
@@ -569,6 +593,26 @@ class MotorController(Component):
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
             _motor.update_target_speed()
+            if self._data_log:
+                self._data_log.data('{:.2f}'.format(vx), '{:.2f}'.format(vy), '{:.2f}'.format(omega))
+
+#               self._pfwd_data_log.data('{:.2f}'.format(self._pfwd_motor.target_speed))
+#               self._sfwd_data_log.data('{:.2f}'.format(self._sfwd_motor.target_speed))
+#               self._paft_data_log.data('{:.2f}'.format(self._paft_motor.target_speed))
+#               self._saft_data_log.data('{:.2f}'.format(self._saft_motor.target_speed))
+
+                _pfwd_power = self._pfwd_motor.current_power
+                if _pfwd_power:
+                    self._pfwd_data_log.data('{:.2f}'.format(_pfwd_power))
+                _sfwd_power = self._sfwd_motor.current_power
+                if _sfwd_power:
+                    self._sfwd_data_log.data('{:.2f}'.format(_sfwd_power))
+                _paft_power = self._paft_motor.current_power
+                if _paft_power:
+                    self._paft_data_log.data('{:.2f}'.format(_paft_power))
+                _saft_power = self._saft_motor.current_power
+                if _saft_power:
+                    self._saft_data_log.data('{:.2f}'.format(_saft_power))
 
         # odometry update
         step_counts = {
@@ -970,6 +1014,12 @@ class MotorController(Component):
         Closes the motor controller.
         '''
         if not self.closed:
+            if self._data_log:
+                self._data_log.data('END')
+                self._pfwd_data_log.data('END')
+                self._sfwd_data_log.data('END')
+                self._paft_data_log.data('END')
+                self._saft_data_log.data('END')
             Component.close(self)
             self._log.info('motor controller closed.')
         else:

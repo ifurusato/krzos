@@ -25,6 +25,7 @@ from hardware.thunderborg import ThunderBorg
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorConfigurer(Component):
+    NAME = 'motor-config'
     '''
     Configures either a ThunderBorg motor controller for a pair of motors.
 
@@ -34,7 +35,7 @@ class MotorConfigurer(Component):
     :param level:           the logging level
     '''
     def __init__(self, config, i2c_scanner, motors_enabled=False, level=Level.INFO):
-        self._log = Logger("motor-config", level)
+        self._log = Logger(MotorConfigurer.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         if config is None:
             raise ValueError('null configuration argument.')

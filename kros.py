@@ -273,7 +273,6 @@ class KROS(Component, FiniteStateMachine):
 
         self._log.info('starting motor controller…')
         self._motor_controller = MotorController(self._config, external_clock=self._irq_clock, level=self._level)
-#       self._motor_controller.enable()
 
         # create behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

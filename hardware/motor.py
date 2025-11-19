@@ -6,7 +6,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-01-18
-# modified: 2025-11-11
+# modified: 2025-11-19
 
 import sys, itertools, time
 from math import isclose
@@ -96,6 +96,14 @@ class Motor(Component):
         '''
         self._log.warning('get_velocity is DEPRECATED.')
         return self._pid_controller.velocity
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def current_power(self):
+        '''
+        Return the current power set on the motor.
+        '''
+        return self.get_current_power(settle_to_zero=False)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_callback(self, callback):

@@ -107,7 +107,7 @@ class Roam(AsyncBehaviour):
         '''
         if self._digital_pot:
             _speed = self._digital_pot.get_scaled_value(False)
-            if isclose(_speed, 0.0, abs_tol=0.08):
+            if isclose(_speed, 0.0, abs_tol=0.10): # was 0.08
                 self._digital_pot.set_black()
                 self._default_speed = 0.0
             else:
