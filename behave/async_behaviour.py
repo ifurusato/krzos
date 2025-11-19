@@ -331,6 +331,39 @@ class AsyncBehaviour(Behaviour):
         self._log.info("shutting down event loop…")
         try:
             self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
+            # cancel all pending tasks
+            self._loop_instance.call_soon_threadsafe(self._shutdown)
+            # wait for thread to finish
+            if self._thread and self._thread.is_alive():
+                self._thread.join(timeout=1.0)
+            # stop the loop if it's running
+            if self._loop_instance and self._loop_instance.is_running():
+                self._loop_instance.call_soon_threadsafe(self._loop_instance.stop)
+                # Give it a moment to actually stop
+                time.sleep(0.1)
+            # now safe to close
+            if self._loop_instance and not self._loop_instance.is_closed():
+                self._log.info(Fore.MAGENTA + '💜 preparing to close {} loop…'.format(self.name))
+                self._loop_instance.close()
+                self._log.info(Fore.MAGENTA + '💜 {} polling loop closed.'.format(self.name))
+            else:
+                self._log.debug('loop already closed')
+        except Exception as e:
+            self._log.error("{} raised stopping loop: {}".format(type(e), e))
+        finally:
+            self._loop_instance = None
+            self._log.info('event loop shut down.')
+
+    def x_stop_loop(self):
+        '''
+        Stop the async event loop and clean up resources.
+        '''
+        if not self._loop_instance:
+            self._log.debug('no loop instance to stop.')
+            return
+        self._log.info("shutting down event loop…")
+        try:
+            self._log.info(Fore.MAGENTA + '💜 closing {} polling loop…'.format(self.name))
             self._loop_instance.call_soon_threadsafe(self._shutdown)
             if self._thread and self._thread.is_alive():
                 self._thread.join(timeout=1.0)
