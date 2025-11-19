@@ -42,12 +42,38 @@ class SlewLimiter(Component):
             self._max_vx_rate, self._max_vy_rate, self._max_omega_rate))
         # state tracking
         self._last_intent = (0.0, 0.0, 0.0)
-        self._last_time = time.perf_counter()
-        self._verbose   = False
+        self._last_time   = time.perf_counter()
+        self._fixed_rate  = True
+        self._verbose     = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def limit(self, target_intent):
+        if self._fixed_rate:
+            return self._fixed_limit(target_intent)
+        else:
+            return self._variable_limit(target_intent)
+
+    def _fixed_limit(self, target_intent):
+        if not self.enabled or self.suppressed:
+            return target_intent
+        curr_vx, curr_vy, curr_omega = self._last_intent
+        tgt_vx, tgt_vy, tgt_omega = target_intent
+        # use fixed per-call limits (assume 20Hz operation)
+        NOMINAL_PERIOD_SEC = 0.05
+        max_vx_change = self._max_vx_rate * NOMINAL_PERIOD_SEC
+        max_vy_change = self._max_vy_rate * NOMINAL_PERIOD_SEC
+        max_omega_change = self._max_omega_rate * NOMINAL_PERIOD_SEC
+        limited_vx = self._clamp_change(curr_vx, tgt_vx, max_vx_change)
+        limited_vy = self._clamp_change(curr_vy, tgt_vy, max_vy_change)
+        limited_omega = self._clamp_change(curr_omega, tgt_omega, max_omega_change)
+        limited_intent = (limited_vx, limited_vy, limited_omega)
+        self._last_intent = limited_intent
+        self._last_time = time.perf_counter() # track for diagnostics
+        return limited_intent
+
+    def _variable_limit(self, target_intent):
         '''
         Limit the rate of change to target_intent based on elapsed time.
         
@@ -79,6 +105,11 @@ class SlewLimiter(Component):
         limited_vy = self._clamp_change(curr_vy, tgt_vy, max_vy_change)
         limited_omega = self._clamp_change(curr_omega, tgt_omega, max_omega_change)
         limited_intent = (limited_vx, limited_vy, limited_omega)
+
+        # DIAGNOSTIC:
+        if limited_intent != target_intent:
+            self._log.info(Fore.BLUE + 'slewed.')
+
         # update internal state
         self._last_intent = limited_intent
         self._last_time = now

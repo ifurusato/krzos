@@ -284,47 +284,38 @@ class MotorController(Component):
             del self._intent_vectors[name]
             self._log.info('removed intent vector: {}'.format(name))
 
-    def _blend_intent_vectors(self):
+    def diag_blend_intent_vectors(self):
         if not self._intent_vectors:
             return (0.0, 0.0, 0.0)
-        
         weighted_sum = [0.0, 0.0, 0.0]
         total_weight = 0.0
-        
-        # Track largest contributor
+        # track largest contributor
         max_magnitude = 0.0
         max_contributor = None
-        
         for name, entry in self._intent_vectors.items():
             vector = entry['vector']()
             priority = entry['priority']()
-            
             magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
             weighted_magnitude = magnitude * priority
-            
             if weighted_magnitude > max_magnitude:
                 max_magnitude = weighted_magnitude
                 max_contributor = (name, vector, priority)
-            
             if len(vector) != 3:
                 raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
             total_weight += priority
             for i in range(3):
                 weighted_sum[i] += vector[i] * priority
-        
         if total_weight == 0.0:
             return (0.0, 0.0, 0.0)
-        
         result = tuple(s / total_weight for s in weighted_sum)
-        
         # DIAGNOSTIC: Log the dominant behavior
         if max_contributor:
             name, vec, pri = max_contributor
-            self._log.info('💜 Dominant: {} vec=({:.2f},{:.2f},{:.2f}) pri={:.2f} -> blended=({:.2f},{:.2f},{:.2f})'.format(
+            self._log.info('dominant: {} vec=({:.2f},{:.2f},{:.2f}) pri={:.2f} -> blended=({:.2f},{:.2f},{:.2f})'.format(
                 name, vec[0], vec[1], vec[2], pri, result[0], result[1], result[2]))
         return result
 
-    def x_blend_intent_vectors(self):
+    def _blend_intent_vectors(self):
         '''
         Priority-weighted blending of all intent vectors.
         Each behavior's vector is weighted by its dynamic priority value.
