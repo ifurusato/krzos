@@ -35,6 +35,7 @@ from hardware.slew_limiter import SlewLimiter
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorController(Component):
     NAME = 'motor-ctrl'
+    BASE_NAME = 'base-intent-vector'
     BRAKE_LAMBDA_NAME = "__brake_lambda"
     '''
     The controller for 4 motors:
@@ -165,19 +166,6 @@ class MotorController(Component):
         # controller-level speed modifiers applied after blending (name -> fn)
         # modifier fn signature: fn(speeds:list[4]) -> list[4] | str (name to remove) | None
         self._speed_modifiers = {}
-        self._include_base_intent_vector = True
-        if self._include_base_intent_vector:
-            # register the base intent vector so it is always included in blending;
-            # returns (vx, vy, omega) derived from the four base motor targets
-            self.add_intent_vector(
-                "base",
-                lambda: (
-                    float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
-                    float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
-                    float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
-                ),
-                lambda: self._base_priority
-            )
         _max_speed           = _cfg.get('max_speed') # max speed of motors (0-1.0)
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
@@ -251,6 +239,41 @@ class MotorController(Component):
         last blended intent vector.
         '''
         return self._blended_intent_vector[1]
+
+    def set_base_intent_vector(self, enable):
+        '''
+        Adds or removes the base intent vector from the motor controller.
+        '''
+        _has_base = self.has_intent_vector(MotorController.BASE_NAME)
+        if enable:
+            if _has_base:
+                self._log.warning('base intent vector already set.')
+                return
+            # register the base intent vector so it is always included in blending;
+            # returns (vx, vy, omega) derived from the four base motor targets
+            self.add_intent_vector(
+                MotorController.BASE_NAME,
+                lambda: (
+                    float((self._base_pfwd_speed - self._base_sfwd_speed - self._base_paft_speed + self._base_saft_speed) / 4.0),
+                    float((self._base_pfwd_speed + self._base_sfwd_speed + self._base_paft_speed + self._base_saft_speed) / 4.0),
+                    float((self._base_pfwd_speed + self._base_paft_speed - self._base_sfwd_speed - self._base_saft_speed) / 4.0)
+                ),
+                lambda: self._base_priority
+            )
+        else:
+            if not _has_base:
+                self._log.warning('base intent vector was not set.')
+                return
+            self.remove_intent_vector(MotorController.BASE_NAME)
+
+    def has_intent_vector(self, name):
+        '''
+        Check if a named intent vector is currently registered.
+        
+        :param name: the name of the intent vector to check
+        :return: True if the intent vector exists, False otherwise
+        '''
+        return name in self._intent_vectors
 
     def add_intent_vector(self, name, vector_lambda, priority_lambda=None, exclusive=False):
         '''
@@ -775,9 +798,12 @@ class MotorController(Component):
         if not self.enabled:
             self._log.error('motor controller not enabled.')
             return
-        if isinstance(target_speed, int):
+        elif not self.has_intent_vector(MotorController.BASE_NAME):
+            self._log.warning('base intent vector not available.')
+            return
+        elif isinstance(target_speed, int):
             raise ValueError('expected target speed as float not int: {:d}'.format(target_speed))
-        if not isinstance(target_speed, float):
+        elif not isinstance(target_speed, float):
             raise ValueError('expected float, not {}'.format(type(target_speed)))
         if self._verbose:
             self._log.info(Fore.MAGENTA + 'set {} motor base target: {:5.2f}'.format(orientation.name, target_speed))
