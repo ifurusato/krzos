@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-10-05
-# modified: 2025-11-10
+# modified: 2025-11-20
 
 import sys, traceback
 import time
@@ -340,9 +340,17 @@ class MotorController(Component):
 
     def _blend_intent_vectors(self):
         '''
-        Priority-weighted blending of all intent vectors.
-        Each behavior's vector is weighted by its dynamic priority value.
-        Higher priority behaviors have proportionally more influence.
+        Priority-weighted blending of all intent vectors, scaled by vector magnitude.
+
+        Each behavior's vector is weighted by its dynamic priority value multiplied
+        by the magnitude of its intent vector. This ensures that inactive or weakly
+        contributing behaviors (small magnitude) don't dilute the blend as much as
+        strongly contributing behaviors.
+        
+        Higher priority behaviors have proportionally more influence, but only when
+        they are actively contributing (non-zero magnitude).
+        
+        Returns a tuple (vx, vy, omega) representing the blended intent vector.
         '''
         if not self._intent_vectors:
             return (0.0, 0.0, 0.0)
@@ -353,9 +361,13 @@ class MotorController(Component):
             priority = entry['priority']()
             if len(vector) != 3:
                 raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
-            total_weight += priority
+            # calculate vector magnitude to determine how actively this behavior is contributing
+            magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
+            # contribution is priority scaled by magnitude: inactive behaviors contribute proportionally less
+            contribution = priority * magnitude
+            total_weight += contribution
             for i in range(3):
-                weighted_sum[i] += vector[i] * priority
+                weighted_sum[i] += vector[i] * contribution
         if total_weight == 0.0:
             return (0.0, 0.0, 0.0)
         return tuple(s / total_weight for s in weighted_sum)
