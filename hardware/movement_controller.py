@@ -231,6 +231,31 @@ class MovementController(Component):
     def rotate(self, degrees, direction=Rotation.CLOCKWISE):
         '''
         Delegate rotation to RotationController if available.
+        Only callable when movement controller is IDLE.
+        
+        Args:
+            degrees: Rotation angle in degrees
+            direction: Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
+        '''
+        if self._rotation_controller is None:
+            raise ValueError('rotation_controller not available')
+        # can only rotate when IDLE (not moving)
+        if self._movement_phase != MovementPhase.IDLE:
+            raise ValueError('cannot rotate - movement controller not idle (phase: {})'.format(
+                self._movement_phase.name))
+        self._log.info('starting rotation: {:.1f}° {}'.format(degrees, direction.label))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ROTATING
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        
+        self._rotation_controller.rotate(degrees, direction)
+        self._log.info('rotation delegated to RotationController.')
+
+    def x_rotate(self, degrees, direction=Rotation.CLOCKWISE):
+        '''
+        TODO: this rotation doesn't check status.
+
+        Delegate rotation to RotationController if available.
         
         Args:
             degrees: Rotation angle in degrees
@@ -247,6 +272,18 @@ class MovementController(Component):
         self._log.info('rotation delegated to RotationController.')
 
     def _get_accumulated_distance(self):
+        '''
+        Calculate accumulated distance in cm from odometer pose changes.
+        Uses Euclidean distance which works regardless of robot heading.
+        '''
+        x, y, theta = self._odometer.get_pose()
+        dx = x - self._baseline_x
+        dy = y - self._baseline_y
+        # Euclidean distance from baseline
+        distance = (dx**2 + dy**2)**0.5
+        return distance
+
+    def x_get_accumulated_distance(self):
         '''
         Calculate accumulated distance in cm from odometer pose changes.
         Distance is calculated relative to baseline pose in the direction of movement.
