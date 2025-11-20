@@ -14,6 +14,7 @@
 import traceback
 import time
 import warnings
+import sys
 from gpiozero import Button as GpioZeroButton
 from gpiozero.exc import CallbackSetToNone
 from colorama import init, Fore, Style
@@ -22,7 +23,7 @@ init()
 from core.logger import Logger, Level
 from core.component import Component
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[...]
 class Button(Component):
     '''
     A simple button configured to use a GPIO pin and the gpiozero library.
@@ -50,6 +51,17 @@ class Button(Component):
             # bounce_time adds debouncing (default 0.01s may be too short)
             self._button = GpioZeroButton(self._pin, pull_up=True, bounce_time=0.05)
             self._button.when_pressed = self._gpiozero_button_pressed
+            
+            # Monkey-patch the __del__ to prevent the "GPIO busy" exception during shutdown
+            # We save the original __del__ and wrap it in a try-except
+            _original_del = self._button.__class__.__del__
+            def _silent_del(self):
+                try:
+                    _original_del(self)
+                except Exception:
+                    pass  # Silently suppress all __del__ exceptions
+            self._button.__class__.__del__ = _silent_del
+            
             self._log.info('ready: pushbutton on GPIO pin {:d} using gpiozero.'.format(self._pin))
         except Exception as e:
             self._log.error('failed to initialize button on pin {}: {}'.format(self._pin, e))
@@ -64,6 +76,7 @@ class Button(Component):
         '''
         Add a callback to be executed when the button is pressed.
         '''
+        print(Fore.YELLOW + '🍌 ADD CALLBACK' + Style.RESET_ALL)
         if not callable(callback_method):
             raise TypeError('provided callback was not callable.')
         self._callbacks.append(callback_method)
@@ -93,44 +106,24 @@ class Button(Component):
         try:
             self._log.info("performing gpiozero cleanup…")
             
-            # Step 1: Clear callbacks first to prevent new events
-            # Suppress the CallbackSetToNone warning
+            # Clear callbacks first to prevent new events
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=CallbackSetToNone)
                 self._button.when_pressed = None
                 self._button.when_released = None
             
-            # Step 2: Small delay to let any pending callbacks complete
+            # Small delay to let any pending callbacks complete
             time.sleep(0.05)
             
-            # Step 3: Get the underlying pin object before closing
-            # This is the key - we need to close the pin ourselves to avoid the double-close
-            _pin = self._button.pin
-            
-            # Step 4: Close the button WITHOUT closing the pin (avoid double-close)
-            # We'll use a try-except to catch the inevitable GPIO error
+            # Close the button - exceptions during __del__ are now suppressed
             try:
                 self._button.close()
             except Exception as e:
-                # Expected error: gpiozero will try to manipulate the closed pin
-                # We can safely ignore this specific error
-                if 'GPIO busy' in str(e) or 'chip' in str(e).lower():
-                    self._log.debug("expected GPIO cleanup conflict (ignored): {}".format(e))
-                else:
-                    # Unexpected error - log it
-                    self._log.warning("unexpected error during button.close(): {}".format(e))
-            
-            # Step 5: Explicitly close the pin if it's still open
-            if _pin and not _pin.is_closed:
-                try:
-                    _pin.close()
-                except Exception as e:
-                    self._log.debug("error closing pin (may already be closed): {}".format(e))
+                self._log.debug("error during button.close(): {}".format(e))
             
             self._log.info("gpiozero cleanup complete.")
             
         except Exception as e:
-            # Catch any other unexpected errors
             self._log.error("{} during gpiozero cleanup: {}".format(type(e).__name__, e))
             if self._log.level == Level.DEBUG:
                 self._log.debug(traceback.format_exc())

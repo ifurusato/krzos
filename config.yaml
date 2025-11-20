@@ -93,8 +93,8 @@ kros:
             damping_window:                10.0            # reduce target_omega when error is small to prevent overshoot
             smoothing_factor:               0.3            # low pass filter on transition towards target
         swerve:
-            enable:                     False              # enable swerve behaviour
-            release:                    False              # release swerve behaviour on startup
+            enable:                      True              # enable swerve behaviour
+            release:                     True              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed

@@ -282,9 +282,11 @@ class AsyncBehaviour(Behaviour):
         try:
             self.start_loop_action()
             while not self._stop_event.is_set():
+                if not self.enabled:
+                    self._log.debug("behaviour disabled during loop, exiting.")
+                    break
                 # get desired intent vector from behavior
                 vx, vy, omega = await self._poll()
-                
                 # update multiplier based on blind state
                 if self._hold_at_zero:
                     # in blind mode, ramp down the multiplier
@@ -293,14 +295,12 @@ class AsyncBehaviour(Behaviour):
                 else:
                     # not in blind mode, ensure multiplier is at 1.0
                     self._intent_multiplier = 1.0
-                
                 # apply multiplier and set intent vector ONCE
                 self._intent_vector = (
                     vx * self._intent_multiplier,
                     vy * self._intent_multiplier,
                     omega * self._intent_multiplier
                 )
-                
                 # log after multiplier applied, before motor controller reads it
                 if self._data_log:
                     self._data_log.data(
@@ -308,7 +308,6 @@ class AsyncBehaviour(Behaviour):
                         '{:.3f}'.format(self._intent_vector[1]),
                         '{:.3f}'.format(self._intent_vector[2])
                     )
-                
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
                     break
