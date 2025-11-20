@@ -31,7 +31,7 @@ from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from matrix11x7 import Matrix11x7
 from matrix11x7.fonts import font3x5
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈[...]
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Scan(AsyncBehaviour):
     NAME = 'scan'
     '''

@@ -188,7 +188,7 @@ class MotorController(Component):
         '''
         Return the Odometer used by this MotorController.
         '''
-        self._odometer = Odometer(config)
+        return self._odometer
 
     @property
     def base_priority(self):

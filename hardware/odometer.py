@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-11
-# modified: 2025-11-11
+# modified: 2025-11-20
 #
 # Odometer for Mecanum-based robot chassis.
 #
@@ -52,7 +52,7 @@ class Odometer(Component):
     - get_pose():      Returns (x, y, theta) where x = forward cm, y = lateral cm, theta = heading in radians.
     - reset():         Resets cumulative pose and previous readings.
     '''
-    def __init__(self, config, level=Level.INFO, suppressed=False, enabled=True):
+    def __init__(self, config, suppressed=False, enabled=True, level=Level.INFO):
         self._config = config
         self._log = Logger(Odometer.NAME, level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
@@ -104,6 +104,22 @@ class Odometer(Component):
         return self._steps_per_cm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def set_pose(self, x, y, theta):
+        '''
+        Set the robot's pose to a specific position and heading.
+        Used for initialization or resetting odometry.
+        
+        :param x:     x position in cm
+        :param y:     y position in cm  
+        :param theta: heading in radians
+        '''
+        self.x = x
+        self.y = y
+        self.theta = theta
+        self._log.info('pose set to: x={:.2f}cm, y={:.2f}cm, theta={:.2f}rad ({:.1f}°)'.format(
+            x, y, theta, math.degrees(theta)))
+
     def steps_to_cm(self, steps):
         return steps / self._steps_per_cm
 

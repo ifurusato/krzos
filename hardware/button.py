@@ -23,7 +23,7 @@ init()
 from core.logger import Logger, Level
 from core.component import Component
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[...]
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Button(Component):
     '''
     A simple button configured to use a GPIO pin and the gpiozero library.

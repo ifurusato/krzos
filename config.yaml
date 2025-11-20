@@ -93,8 +93,8 @@ kros:
             damping_window:                10.0            # reduce target_omega when error is small to prevent overshoot
             smoothing_factor:               0.3            # low pass filter on transition towards target
         swerve:
-            enable:                      True              # enable swerve behaviour
-            release:                     True              # release swerve behaviour on startup
+            enable:                     False              # enable swerve behaviour
+            release:                    False              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed
@@ -105,6 +105,26 @@ kros:
             min_priority:                 0.2              # priority when obstacles far
             max_priority:                 0.8              # priority when obstacles very close (bumper)
             deadband_threshold:           0.02             # ignore vx below this value
+        geofence:
+            enable:                      True              # enable swerve behaviour
+            release:                     True              # release swerve behaviour on startup
+            verbose:                    False              # verbose messaging
+            # boundary definition (in cm)
+            min_x:                          0.0            # west boundary (cm)
+            max_x:                        200.0            # east boundary (cm)
+            min_y:                          0.0            # south boundary (cm)
+            max_y:                        200.0            # north boundary (cm)
+            # initial robot pose (sets odometer origin)
+            initial_x:                      0.0            # starting x position (cm), e.g., 10cm east of west edge
+            initial_y:                      5.0            # starting y position (cm), e.g., 20cm north of south edge
+            initial_theta:                  0.0            # starting heading in degrees (0=east, 90=north, 180=west, 270=south)
+            # behavior parameters
+            margin:                        50.0            # cm - start reacting this far from boundary
+            max_lateral_force:              0.8            # maximum vx magnitude
+            max_rotation_force:             0.5            # maximum omega magnitude
+            easing:              'SQUARE_ROOT'             # force scaling with distance
+            min_priority:                   0.3            # priority when far
+            max_priority:                   0.95           # priority at boundary (very high)
         thoughts:
             enable:                      True              # enable thoughts behaviour
             release:                     True              # release thoughts behaviour on startup

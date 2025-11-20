@@ -30,6 +30,7 @@ from hardware.usfs import Usfs
 from core.orientation import Orientation
 from hardware.scout_sensor import ScoutSensor
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class HeadingMode(Enum):
     '''
     Scout is a behavior that seeks to locate the most open heading for exploration
