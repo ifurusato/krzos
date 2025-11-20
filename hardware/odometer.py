@@ -162,6 +162,64 @@ class Odometer(Component):
             d_paft = ds_paft * self._step_cm
             d_saft = ds_saft * self._step_cm
 
+            # mecanum chassis kinematics - velocities in ROBOT BODY FRAME
+            vx = (d_pfwd - d_sfwd - d_paft + d_saft) / 4.0 / dt   # lateral (right+)
+            vy = (d_pfwd + d_sfwd + d_paft + d_saft) / 4.0 / dt   # longitudinal (forward+)
+            omega = (d_pfwd - d_sfwd + d_paft - d_saft) / (4.0 * ((self._wheelbase_cm + self._track_cm) / 2.0)) / dt
+
+            # store body frame velocities
+            self.vx = vx
+            self.vy = vy
+            self.omega = omega
+            
+            # integrate pose: transform body frame velocities to odometry frame
+            cos_t = math.cos(self.theta)
+            sin_t = math.sin(self.theta)
+            
+            # transform body velocity to odometry frame displacement
+            dx = (vx * cos_t + vy * sin_t) * dt
+            dy = (-vx * sin_t + vy * cos_t) * dt
+            dtheta = omega * dt
+            
+            self.x += dx
+            self.y += dy
+            self.theta += dtheta
+            
+            # normalize theta to [-π, π]
+            while self.theta > math.pi:
+                self.theta -= 2 * math.pi
+            while self.theta < -math.pi:
+                self.theta += 2 * math.pi
+                
+        # save per-tick state
+        self.last_steps = dict(step_counts)
+        self.last_time = timestamp
+
+    def x_update(self, step_counts: dict, timestamp: float):
+        '''
+        Call at regular intervals with latest step counts for all four motors and time (seconds).
+
+        step_counts:  dict with keys: 'pfwd', 'sfwd', 'paft', 'saft'
+        timestamp:    floating-point time in seconds (e.g. from time.monotonic())
+        '''
+        if not self.enabled:
+            self._log.warning('disabled.')
+            return
+        if self.last_steps is not None and self.last_time is not None:
+            dt = timestamp - self.last_time
+            if dt <= 0.0:
+                return  # ignore if no real elapsed time
+            # step deltas
+            ds_pfwd  = step_counts['pfwd']  - self.last_steps['pfwd']
+            ds_sfwd  = step_counts['sfwd']  - self.last_steps['sfwd']
+            ds_paft  = step_counts['paft']  - self.last_steps['paft']
+            ds_saft  = step_counts['saft']  - self.last_steps['saft']
+            # convert to per-wheel distances in cm
+            d_pfwd = ds_pfwd * self._step_cm
+            d_sfwd = ds_sfwd * self._step_cm
+            d_paft = ds_paft * self._step_cm
+            d_saft = ds_saft * self._step_cm
+
             # mecanum chassis kinematics
             vx = (d_pfwd - d_sfwd - d_paft + d_saft) / 4.0 / dt   # FINAL lateral (left/right)
 #           vx = (-d_pfwd + d_sfwd + d_paft - d_saft) / 4.0 / dt  # lateral (left/right)

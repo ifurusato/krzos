@@ -33,8 +33,8 @@ kros:
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
             ramp_down_duration_sec:         1.0            # duration to ramp down intent vector in BLIND mode
         avoid:
-            enable:                      True              # enable avoid behaviour
-            release:                     True              # release avoid behaviour on startup
+            enable:                     False              # enable avoid behaviour
+            release:                    False              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.42           # default behaviour priority
@@ -53,8 +53,8 @@ kros:
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # polling loop frequency
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.42           # default behaviour priority
             default_speed:                  0.4            # cruising speed
@@ -79,8 +79,8 @@ kros:
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
             default_priority:               0.6            # default behaviour priority
@@ -106,8 +106,8 @@ kros:
             max_priority:                 0.8              # priority when obstacles very close (bumper)
             deadband_threshold:           0.02             # ignore vx below this value
         geofence:
-            enable:                      True              # enable swerve behaviour
-            release:                     True              # release swerve behaviour on startup
+            enable:                     False              # enable swerve behaviour
+            release:                    False              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             # boundary definition (in cm)
             min_x:                          0.0            # west boundary (cm)
