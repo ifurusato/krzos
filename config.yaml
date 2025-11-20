@@ -209,6 +209,11 @@ kros:
             max_vx_rate:                      0.2          # max lateral velocity change per second
             max_vy_rate:                      0.2          # max forward velocity change per second
             max_omega_rate:                   0.3          # max rotation velocity change per second
+    movement_controller:
+            default_speed:                   20.0          # cm/sec
+            max_acceleration:                15.0          # cm/sec_2
+            accel_distance_cm:               20.0          # cm
+            decel_distance_cm:               20.0          # cm
     rotation_controller:
         verbose:                            False
         max_acceleration_deg_per_sec_sq:     15.0          # safe acceleration limit
