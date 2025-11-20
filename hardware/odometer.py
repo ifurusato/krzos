@@ -74,7 +74,7 @@ class Odometer(Component):
         self._log.info('example conversion:     ' + Fore.GREEN + ' {:7.4f}cm/rotation'.format(_test_velocity))
         # convert to cm for computation
         self._wheel_diameter_cm  = self._wheel_diameter_mm / 10.0
-        self._steps_per_rev      = float(self._steps_per_rotation)
+        self._steps_per_rev      = float(self._steps_per_rotation) / 4.0
         self._wheelbase_cm       = self._wheel_base_mm / 10.0
         self._track_cm           = self._wheel_track_mm / 10.0
         self._wheel_radius_cm    = self._wheel_diameter_cm / 2.0
@@ -145,10 +145,14 @@ class Odometer(Component):
             d_sfwd = ds_sfwd * self._step_cm
             d_paft = ds_paft * self._step_cm
             d_saft = ds_saft * self._step_cm
+
             # mecanum chassis kinematics
-            vx = (d_pfwd + d_sfwd + d_paft + d_saft) / 4.0 / dt
-            vy = (-d_pfwd + d_sfwd + d_paft - d_saft) / 4.0 / dt
-            omega = (-d_pfwd + d_sfwd - d_paft + d_saft) / (4.0 * ((self._wheelbase_cm + self._track_cm) / 2)) / dt
+            vx = (d_pfwd - d_sfwd - d_paft + d_saft) / 4.0 / dt   # FINAL lateral (left/right)
+#           vx = (-d_pfwd + d_sfwd + d_paft - d_saft) / 4.0 / dt  # lateral (left/right)
+            vy = (d_pfwd + d_sfwd + d_paft + d_saft) / 4.0 / dt   # longitudinal (forward/back)
+#           omega = (-d_pfwd + d_sfwd - d_paft + d_saft) / (4.0 * ((self._wheelbase_cm + self._track_cm) / 2.0)) / dt
+            omega = (d_pfwd - d_sfwd + d_paft - d_saft) / (4.0 * ((self._wheelbase_cm + self._track_cm) / 2.0)) / dt    # FINAL
+
             self.vx = vx
             self.vy = vy
             self.omega = omega
@@ -165,6 +169,14 @@ class Odometer(Component):
         self.last_time = timestamp
 
     def print_info(self):
+        '''
+        Prints the current intent vector and pose.
+        ''' 
+        vx, vy, omega = self.get_velocity()
+        x, y, theta = self.get_pose()
+        self._log.info(Style.DIM + 'intent: ({:.2f}, {:.2f}, {:.2f});\tpose: ({:.2f}cm, {:.2f}cm, {:.2f}rad)'.format(vx, vy, omega, x, y, theta))
+
+    def x_print_info(self):
         '''
         Prints the current intent vector and pose.
         '''

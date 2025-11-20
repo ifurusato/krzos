@@ -563,36 +563,17 @@ class MotorController(Component):
         intent = self._blend_intent_vectors()
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
-
         # apply time-based slew limiting
         if self._slew_limiter:
             intent = self._slew_limiter.limit(intent)
-
         vx, vy, omega = intent
         self._blended_intent_vector = intent # for access as property
-
-        # clamp blended intent vector BEFORE Mecanum kinematics to prevent wheel speed explosion
-        max_component = max(abs(vx), abs(vy), abs(omega))
-        if max_component > 1.0:
-            scale = 1.0 / max_component
-            vx *= scale
-            vy *= scale
-            omega *= scale
-            self._log.warning('⚠️  normalized blended intent vector: ({:.3f}, {:.3f}, {:.3f})'.format(vx, vy, omega))
-
         # mecanum -> wheel speeds
         pfwd = vy + vx + omega
         sfwd = vy - vx - omega
         paft = vy - vx + omega
         saft = vy + vx - omega
         speeds = [pfwd, sfwd, paft, saft]
-
-        # check for excessive wheel speeds before normalization
-        max_abs = max(abs(s) for s in speeds)
-        if max_abs > 1.0:
-            self._log.warning('⚠️  wheel speeds exceed 1.0 before normalization: max={:.3f}, speeds={}'.format(max_abs, ['{:.3f}'.format(s) for s in speeds]))
-            speeds = [s / max_abs for s in speeds]
-
         # normalize if any magnitude > 1.0
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
@@ -618,24 +599,20 @@ class MotorController(Component):
             speeds = [s / max_abs for s in speeds]
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
-
 #       self._log.info('B. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
         self._pfwd_motor.target_speed = speeds[0]
         self._sfwd_motor.target_speed = speeds[1]
         self._paft_motor.target_speed = speeds[2]
         self._saft_motor.target_speed = speeds[3]
-
         # update motors (apply slew/PID/jerk)
         for _motor in self._all_motors:
             _motor.update_target_speed()
             if self._data_log:
                 self._data_log.data('{:.2f}'.format(vx), '{:.2f}'.format(vy), '{:.2f}'.format(omega))
-
 #               self._pfwd_data_log.data('{:.2f}'.format(self._pfwd_motor.target_speed))
 #               self._sfwd_data_log.data('{:.2f}'.format(self._sfwd_motor.target_speed))
 #               self._paft_data_log.data('{:.2f}'.format(self._paft_motor.target_speed))
 #               self._saft_data_log.data('{:.2f}'.format(self._saft_motor.target_speed))
-
                 _pfwd_power = self._pfwd_motor.current_power
                 if _pfwd_power:
                     self._pfwd_data_log.data('{:.2f}'.format(_pfwd_power))
@@ -648,7 +625,6 @@ class MotorController(Component):
                 _saft_power = self._saft_motor.current_power
                 if _saft_power:
                     self._saft_data_log.data('{:.2f}'.format(_saft_power))
-
         # odometry update
         step_counts = {
             'pfwd': self._pfwd_motor.steps,
@@ -657,7 +633,6 @@ class MotorController(Component):
             'saft': self._saft_motor.steps,
         }
         self._odometer.update(step_counts, time.monotonic())
-
         _count = next(self._event_counter)
         if self._verbose:
             self.print_info(_count, vx, vy, omega)

@@ -13,7 +13,6 @@
 # it uses RPi.GPIO or similar under the hood.
 #
 # For installing gpiozero, see:  https://gpiozero.readthedocs.io/en/stable/installing.html
-#
 
 import sys, traceback
 from colorama import init, Fore, Style
@@ -29,7 +28,7 @@ init()
 
 from core.logger import Logger, Level
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Decoder(object):
     '''
     Class to decode mechanical rotary encoder pulses, implemented
@@ -50,8 +49,6 @@ class Decoder(object):
            ----+         +---------+         +---------+  1
 
     '''
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __init__(self, orientation=None, gpio_a=None, gpio_b=None, reverse=False, callback=None, level=Level.INFO):
         '''
         Instantiate the class with the gpios connected to
@@ -79,13 +76,13 @@ class Decoder(object):
         :param callback:     the optional callback method
         :param level:        the log Level
         '''
-        self._log = Logger('enc:{}'.format(orientation.label), level)
+        self._name = orientation.label
+        self._log = Logger('enc:{}'.format(self._name), level)
         self._gpio_a    = gpio_a
         self._gpio_b    = gpio_b
         self._log.debug('pin A: {:d}; pin B: {:d}'.format(self._gpio_a,self._gpio_b))
         self._callback  = callback
         self._reversed = reverse
-
         try:
             # gpiozero RotaryEncoder takes pin_a, pin_b as args.
             self._encoder = RotaryEncoder(self._gpio_a, self._gpio_b, max_steps=0)
@@ -97,14 +94,26 @@ class Decoder(object):
             traceback.print_exc(file=sys.stdout)
             raise Exception('unable to configure decoder.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def name(self):
+        '''
+        Return the name of the orientation for this decoder.
+        '''
+        return self._name
+
+    @property
+    def steps(self):
+        if self._reversed:
+            return self._encoder.steps * -1
+        else:
+            return self._encoder.steps
+
     def set_reversed(self):
         '''
         If called, sets this encoder for reversed operation.
         '''
         self._reversed = True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _rotated(self):
         '''
         Internal handler called by gpiozero when the encoder is rotated.
@@ -116,14 +125,6 @@ class Decoder(object):
         '''
         pass 
 
-    @property
-    def steps(self):
-        if self._reversed:
-            return self._encoder.steps * -1
-        else:
-            return self._encoder.steps
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def cancel(self):
         '''
         Cancel the rotary encoder decoder.
