@@ -231,6 +231,28 @@ class MovementController(Component):
     def rotate(self, degrees, direction=Rotation.CLOCKWISE):
         '''
         Delegate rotation to RotationController if available.
+        Only works when movement is completely stopped (IDLE).
+        '''
+        if self._rotation_controller is None:
+            raise ValueError('rotation_controller not available')
+        # must be IDLE - not just "not moving"
+        if self._movement_phase != MovementPhase.IDLE:
+            raise ValueError('cannot rotate - not in IDLE state (current: {})'.format(
+                self._movement_phase.name))
+        # check that movement intent vector is not registered
+        if self._intent_vector_registered:
+            self._log.warning('movement intent vector still registered, removing before rotation')
+            self._motor_controller.remove_intent_vector(MovementController.NAME)
+            self._intent_vector_registered = False
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ROTATING
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._rotation_controller.rotate(degrees, direction)
+        self._log.info('rotation delegated to RotationController.')
+
+    def z_rotate(self, degrees, direction=Rotation.CLOCKWISE):
+        '''
+        Delegate rotation to RotationController if available.
         Only callable when movement controller is IDLE.
         
         Args:
@@ -247,7 +269,6 @@ class MovementController(Component):
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ROTATING
         self._notify_phase_change(prev_phase, self._movement_phase)
-        
         self._rotation_controller.rotate(degrees, direction)
         self._log.info('rotation delegated to RotationController.')
 

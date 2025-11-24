@@ -40,7 +40,6 @@ class Message(object):
         if event is None:
             raise ValueError('null event argument.')
         if isinstance(value, Payload):
-            print(Fore.GREEN + '🌿 is Payload.' + Style.RESET_ALL)
             self._payload  = value
         else:
             self._payload  = Payload(event, value)

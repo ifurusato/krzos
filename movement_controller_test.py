@@ -9,7 +9,7 @@
 # created:  2025-11-20
 # modified: 2025-11-20
 #
-# Test script for MovementController - drives a 100cm square pattern.
+# Test script for MovementController - drives an 80cm square pattern.
 
 import sys, time, traceback
 from colorama import init, Fore, Style
@@ -22,6 +22,7 @@ from core.rotation import Rotation
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
 from hardware.movement_controller import MovementController, MovementPhase
+from hardware.rotation_controller import RotationPhase
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 _log = Logger('test', Level.INFO)
@@ -33,91 +34,106 @@ _movement_controller = None
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def wait_for_movement_complete(movement_ctrl, poll_rate_hz=20):
     '''
-    Poll movement controller through all linear motion phases.
-    Returns when movement_phase returns to IDLE.
+    Poll movement controller until linear movement completes and returns to IDLE.
+    Does NOT handle rotation phase.
     '''
     poll_delay = 1.0 / poll_rate_hz
+
+    _enable_wait_loop = True
+    def wait_enable():
+        nonlocal _enable_wait_loop
+        print(Fore.MAGENTA + Style.BRIGHT + 'WAIT ENABLED CALLED          zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz ' + Style.RESET_ALL)
+        _enable_wait_loop = False
     
-    _log.info(Style.DIM + '  polling movement phases...')
-    while movement_ctrl.movement_phase not in (MovementPhase.IDLE, MovementPhase.INACTIVE):
+    while movement_ctrl.movement_phase in (MovementPhase.ACCEL, MovementPhase.MOVE, MovementPhase.DECEL):
         current_time, elapsed, accumulated = movement_ctrl.poll()
         phase = movement_ctrl.movement_phase
-        
         if phase == MovementPhase.ACCEL:
+            print(Fore.GREEN + 'ACCEL' + Style.RESET_ALL)
             movement_ctrl.handle_accel_phase(elapsed, accumulated, current_time)
+            _motor_controller.add_state_change_callback(lambda: wait_enable())
         elif phase == MovementPhase.MOVE:
+            print(Fore.YELLOW + 'MOVE' + Style.RESET_ALL)
             movement_ctrl.handle_move_phase(accumulated, current_time)
         elif phase == MovementPhase.DECEL:
+            print(Fore.RED + 'DECEL' + Style.RESET_ALL)
             movement_ctrl.handle_decel_phase(elapsed, accumulated)
-        
         time.sleep(poll_delay)
-    
-    _log.info(Style.DIM + '  movement complete, now IDLE')
+    while _enable_wait_loop:
+        print('waiting to stop... ')
+        time.sleep(0.1)
+    print('END ')
+    time.sleep(5)
 
-def wait_for_rotation_complete(rotation_ctrl, poll_rate_hz=20):
+def wait_for_rotation_complete(movement_ctrl, rotation_ctrl, poll_rate_hz=20):
     '''
-    Poll rotation controller through all rotation phases.
-    Returns when rotation completes.
+    Poll rotation controller until rotation completes.
+    Also monitors movement controller to detect when it returns to IDLE.
     '''
     poll_delay = 1.0 / poll_rate_hz
     
-    _log.info(Style.DIM + '  polling rotation phases...')
     while rotation_ctrl.is_rotating:
         current_time, elapsed, accumulated = rotation_ctrl.poll()
         phase = rotation_ctrl.rotation_phase
         
-        if phase.name == 'accel':
+        if phase == RotationPhase.ACCEL:
             rotation_ctrl.handle_accel_phase(elapsed, accumulated, current_time)
-        elif phase.name == 'rotate':
+        elif phase == RotationPhase.ROTATE:
             rotation_ctrl.handle_rotate_phase(accumulated, current_time)
-        elif phase.name == 'decel':
+        elif phase == RotationPhase.DECEL:
             rotation_ctrl.handle_decel_phase(elapsed, accumulated)
         
         time.sleep(poll_delay)
     
-    _log.info(Style.DIM + '  rotation complete')
+    # Wait for movement controller to transition back to IDLE
+    while movement_ctrl.movement_phase == MovementPhase.ROTATING:
+        movement_ctrl.poll()  # This checks rotation completion and transitions to IDLE
+        time.sleep(poll_delay)
 
-def drive_square(movement_ctrl, side_length_cm=100.0):
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+def drive_square(movement_ctrl, rotation_ctrl, side_length_cm=80.0):
     '''
-    Drive a square: move, stop, rotate, repeat.
+    Drive a square: move, STOP, rotate, STOP, repeat.
     '''
     _log.info(Fore.CYAN + Style.BRIGHT + '━' * 70)
     _log.info(Fore.CYAN + Style.BRIGHT + 'Starting {}cm square pattern'.format(side_length_cm))
     _log.info(Fore.CYAN + Style.BRIGHT + '━' * 70)
     
-    for i in range(4):
+    for i in range(1):
         _log.info(Fore.GREEN + Style.BRIGHT + '\n▶ Side {} of 4'.format(i + 1))
         
-        # Move ahead - will go through ACCEL → MOVE → DECEL → IDLE
+        print('STEP 1      XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  ')
+        # STEP 1: Move ahead
         _log.info(Fore.YELLOW + '  Moving ahead {}cm...'.format(side_length_cm))
         movement_ctrl.move(side_length_cm, Direction.AHEAD)
         wait_for_movement_complete(movement_ctrl)
-        _log.info(Fore.GREEN + '  ✓ Movement complete, robot stopped')
+        _log.info(Fore.GREEN + '  ✓ Movement complete, robot STOPPED')
         
-        # Brief pause
-        time.sleep(0.5)
+        print("WE'RE STOPPED    XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  ")
+        # Verify we're stopped
+        if movement_ctrl.movement_phase != MovementPhase.IDLE:
+            _log.error('  ERROR: Not IDLE after movement! Phase: {}'.format(movement_ctrl.movement_phase.name))
+            sys.exit(0) # TEMP
         
-        # Rotate 90° (if not last side)
+        time.sleep(1.0)  # Full stop pause
+        
+        print('STEP 2      XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  ')
+        # STEP 2: Rotate (if not last side)
         if i < 3:
             _log.info(Fore.YELLOW + '  Rotating 90° clockwise...')
             movement_ctrl.rotate(90.0, Rotation.CLOCKWISE)
             
-            # Now poll rotation controller directly
-            wait_for_rotation_complete(movement_ctrl._rotation_controller)
+            wait_for_rotation_complete(movement_ctrl, rotation_ctrl)
             
-            # Movement controller should auto-transition back to IDLE
-            # Give it a moment
-            time.sleep(0.2)
+            _log.info(Fore.GREEN + '  ✓ Rotation complete, robot STOPPED')
             
+            # Verify we're stopped
             if movement_ctrl.movement_phase != MovementPhase.IDLE:
-                _log.warning('  Movement controller not IDLE after rotation!')
+                _log.error('  ERROR: Not IDLE after rotation! Phase: {}'.format(movement_ctrl.movement_phase.name))
             
-            _log.info(Fore.GREEN + '  ✓ Rotation complete, robot stopped')
-            time.sleep(0.5)
-    
-    _log.info(Fore.CYAN + Style.BRIGHT + '\n━' * 70)
+            time.sleep(1.0)  # Full stop pause
+
     _log.info(Fore.CYAN + Style.BRIGHT + 'Square pattern complete!')
-    _log.info(Fore.CYAN + Style.BRIGHT + '━' * 70)
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def main():
@@ -149,8 +165,8 @@ def main():
         time.sleep(2.0)
         
         # execute square pattern
-        drive_square(_movement_controller, side_length_cm=80.0)
-
+        drive_square(_movement_controller, _rotation_controller, side_length_cm=80.0)
+        
         # wait before shutdown
         _log.info('\nWaiting 2 seconds before shutdown…')
         time.sleep(2.0)

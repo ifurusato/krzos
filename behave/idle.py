@@ -163,12 +163,11 @@ class Idle(Behaviour, Publisher):
         try:
             while f_is_enabled():
                 _count = next(self._counter)
-
-                # Check motor controller first - movement = activity
+                # check motor controller first - movement = activity
                 if self._motor_controller and not self._motor_controller.is_stopped:
                     self._last_activity_time = dt.now()
                     self._last_idle_publish_time = None
-                    # Clear eyeballs if we were idle
+                    # clear eyeballs if we were idle
                     if self._eyeballs_monitor and self._last_idle_publish_time is not None:
                         self._eyeballs_monitor.clear_eyeballs()
                     if _count % 20 == 0:

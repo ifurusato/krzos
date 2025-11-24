@@ -74,7 +74,7 @@ class TinyFxController(Component):
         Turn off all running lights.
         '''
         response = self.send('all off')
-        self._log.info(Style.DIM + 'all off response: {}'.format(response))
+        self._log.debug('all off response: {}'.format(response))
 
     def light(self, orientation, enable):
         '''

@@ -7,9 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-05-22
-# modified: 2025-11-20
-#
-# Simple implementation of Button using gpiozero.
+# modified: 2025-11-23
 
 import traceback
 import time
@@ -26,12 +24,13 @@ from core.component import Component
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Button(Component):
     '''
-    A simple button configured to use a GPIO pin and the gpiozero library.
+    A button configured to use a GPIO pin and the gpiozero library. This is
+    somewhat more complicated than desired to handle the vagaries of gpiozero.
 
-    This introduces a slight delay on returning a value in order
-    to debounce the switch.
+    This introduces a slight delay on returning a value in order to debounce
+    the switch.
 
-      * https://gpiozero.readthedocs.io/en/latest/
+    See: https://gpiozero.readthedocs.io/en/latest/
 
     :param config:        the application configuration
     :param level:         the log level
@@ -47,19 +46,20 @@ class Button(Component):
         self._closed = False
 
         try:
-            # Create Button with pull_up=True (assumes button connects pin to ground)
+            # create Button with pull_up=True (assumes button connects pin to ground)
             # bounce_time adds debouncing (default 0.01s may be too short)
             self._button = GpioZeroButton(self._pin, pull_up=True, bounce_time=0.05)
-            self._button.when_pressed = self._gpiozero_button_pressed
+            self._button.when_released = self._released
+            self._button.when_pressed  = lambda: print("released.")
             
-            # Monkey-patch the __del__ to prevent the "GPIO busy" exception during shutdown
-            # We save the original __del__ and wrap it in a try-except
+            # patch __del__ to prevent the "GPIO busy" exception during shutdown
             _original_del = self._button.__class__.__del__
             def _silent_del(self):
                 try:
                     _original_del(self)
                 except Exception:
-                    pass  # Silently suppress all __del__ exceptions
+                    print('{} raised in _silent_del: {}'.format(type(e), e))
+                    pass
             self._button.__class__.__del__ = _silent_del
             
             self._log.info('ready: pushbutton on GPIO pin {:d} using gpiozero.'.format(self._pin))
@@ -76,19 +76,17 @@ class Button(Component):
         '''
         Add a callback to be executed when the button is pressed.
         '''
-        print(Fore.YELLOW + '🍌 ADD CALLBACK' + Style.RESET_ALL)
         if not callable(callback_method):
             raise TypeError('provided callback was not callable.')
         self._callbacks.append(callback_method)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _gpiozero_button_pressed(self):
+    def _released(self):
         '''
-        Internal method called when the button is pressed.
+        Internal method called when the button is released.
         '''
         if self._closed:
-            return  # ignore callbacks during/after shutdown
-
+            return # ignore callbacks during/after shutdown
         self._log.info(Fore.MAGENTA + "button pressed!")
         for callback in self._callbacks:
             try:
@@ -105,24 +103,18 @@ class Button(Component):
             return
         try:
             self._log.info("performing gpiozero cleanup…")
-            
-            # Clear callbacks first to prevent new events
+            # clear callbacks first to prevent new events
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=CallbackSetToNone)
                 self._button.when_pressed = None
                 self._button.when_released = None
-            
-            # Small delay to let any pending callbacks complete
+            # delay to let pending callbacks complete
             time.sleep(0.05)
-            
-            # Close the button - exceptions during __del__ are now suppressed
             try:
                 self._button.close()
             except Exception as e:
                 self._log.debug("error during button.close(): {}".format(e))
-            
             self._log.info("gpiozero cleanup complete.")
-            
         except Exception as e:
             self._log.error("{} during gpiozero cleanup: {}".format(type(e).__name__, e))
             if self._log.level == Level.DEBUG:

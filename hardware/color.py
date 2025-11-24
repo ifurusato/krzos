@@ -60,6 +60,7 @@ class Color(Enum):
     DARK_PINK       = ( 40, 131.0, 63.0, 81.0)
     CANDLELIGHT     = ( 41, 226.0, 122.0, 70.0)
     DIM_RED         = ( 42, 42.0, 0.0, 0.0)
+    GREY_ORANGE     = ( 43, 171.0, 96.0, 48.0)
 
     # ignore the first param since it's already set by __new__
     def __init__(self, num, red, green, blue):

@@ -24,6 +24,8 @@ from core.event import Event, Group
 from core.rate_limited import rate_limited
 from behave.behaviour import Behaviour
 from hardware.odometer import Odometer
+from hardware.eyeball import Eyeball
+from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.tinyfx_controller import TinyFxController
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -69,6 +71,9 @@ class Thoughts(Behaviour):
             len(self._sounds), self._max_activity, self._activity_scale, self._jitter_factor, self._max_frequency, self._rate_delay_ms))
         # components
         _registry = Component.get_registry()
+        self._eyeballs_monitor = _registry.get(EyeballsMonitor.NAME)
+        if self._eyeballs_monitor is None:
+            self._log.warning('eyeballs monitor not available.')
         self._odometer = _registry.get(Odometer.NAME)
         if self._odometer is None:
             self._log.info('odometer not available; relying on message activity alone.')
@@ -193,6 +198,9 @@ class Thoughts(Behaviour):
 
                     if self._idle_count == 0: # activity ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._maybe_play_sound(_activity)
+                        _eyeballs = self._eyeballs_monitor.get_eyeballs()
+                        if _eyeballs == Eyeball.BORED or _eyeballs == Eyeball.SLEEPY:
+                            self._eyeballs_monitor.clear_eyeballs()
 
                     elif self._sleeping: # sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         if _count % self._snore_rate == 0: # every n seconds, snore
@@ -206,6 +214,7 @@ class Thoughts(Behaviour):
                         self._sleep_count = randint(21, 31) # reset to different threshold
 #                       self._log.info(Fore.BLUE + 'sleeping at: {}.'.format(self._sleep_count))
                         self._play_sound(self._sleeping_sound)
+                        self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
 
                     elif not self._bored and self._idle_count % self._bored_count == 0: # bored ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._log.info(Fore.BLUE + 'bored…')
@@ -213,6 +222,7 @@ class Thoughts(Behaviour):
                         self._bored_count = randint(11, 17)
 #                       self._log.info(Fore.BLUE 'bored at: {}.'.format(self._bored_count))
                         self._play_sound(self._bored_sound)
+                        self._eyeballs_monitor.set_eyeballs(Eyeball.BORED)
 
                     else:
 #                       self._log.info(Fore.BLUE + 'something else…')

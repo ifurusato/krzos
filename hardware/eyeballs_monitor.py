@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-08
-# modified: 2025-11-08
-#
+# modified: 2025-11-23
 
 from math import isclose
 from colorama import init, Fore, Style
@@ -62,6 +61,12 @@ class EyeballsMonitor(Component):
     @property
     def name(self):
         return EyeballsMonitor.NAME
+
+    def get_eyeballs(self):
+        '''
+        Returns the manually-set eyeball expression, None if not set.
+        '''
+        return self._manual_eyeball
 
     def set_eyeballs(self, eyeball):
         '''

@@ -73,7 +73,7 @@ class MotorController(Component):
         _cfg = config['kros'].get('motor_controller')
         _i2c_scanner = I2CScanner(config=config, i2c_bus_number=1, i2c_bus=None, level=level)
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        self._verbose        = _cfg.get('verbose')
+        self._verbose        = True #_cfg.get('verbose')
         self._loop_freq_hz   = _cfg.get('loop_freq_hz') # main loop frequency
         self._loop_delay_sec = 1 / self._loop_freq_hz
         self._accel_step     = _cfg.get('accel_step', 0.02)
@@ -713,6 +713,7 @@ class MotorController(Component):
         '''
         for _motor in self._all_motors:
             if not _motor.is_stopped:
+                print(Fore.BLUE + '🐟 {} IS NOT STOPPED: {} '.format(_motor.orientation.label, _motor.velocity) + Style.RESET_ALL)
                 return False
         return True
 

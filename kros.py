@@ -202,8 +202,8 @@ class KROS(Component, FiniteStateMachine):
 
         self._await_pushbutton = _app_cfg.get('await_pushbutton')
         self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
-        _use_pushbutton = _cfg.get('enable_pushbutton')
-        if _use_pushbutton:
+        _enable_pushbutton = _cfg.get('enable_pushbutton')
+        if _enable_pushbutton:
             self._button = Button(config=self._config, name='button', level=self._level)
             if self._await_pushbutton:
                 self._button.add_callback(self._await_start)
