@@ -50,7 +50,7 @@ class Button(Component):
             # bounce_time adds debouncing (default 0.01s may be too short)
             self._button = GpioZeroButton(self._pin, pull_up=True, bounce_time=0.05)
             self._button.when_released = self._released
-            self._button.when_pressed  = lambda: print("released.")
+#           self._button.when_pressed  = lambda: print("released.")
             
             # patch __del__ to prevent the "GPIO busy" exception during shutdown
             _original_del = self._button.__class__.__del__

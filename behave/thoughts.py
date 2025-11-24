@@ -26,15 +26,15 @@ from behave.behaviour import Behaviour
 from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
-from hardware.tinyfx_controller import TinyFxController
+from hardware.player import Player
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Thoughts(Behaviour):
     NAME = 'thoughts'
     _LISTENER_LOOP_NAME = '__thoughts_listener_loop'
     '''
-    Monitors robot activity and plays sounds ("random thoughts") via the
-    TinyFX at roughly a frequency corresponding to the message traffic
+    Monitors robot activity and plays sounds ("random thoughts") via the TinyFX
+    (using Player) at roughly a frequency corresponding to the message traffic
     and motor speed, monitored via the Odometer.
 
     :param config:          the application configuration
@@ -79,8 +79,6 @@ class Thoughts(Behaviour):
             self._log.info('odometer not available; relying on message activity alone.')
         else:
             self._log.info('odometer available; will monitor for movement.')
-        self._tinyfx_controller = TinyFxController(config, level=level)
-        self._log.info('TinyFX controller instantiated.')
         # state tracking
         self._counter = itertools.count()
         self._last_activity_time = None
@@ -92,6 +90,7 @@ class Thoughts(Behaviour):
         self._loop_running = False
         self.add_events([member for member in Group
                         if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
+#       Player.play('silence')
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -127,8 +126,6 @@ class Thoughts(Behaviour):
             return
         self._log.info('enabling random thoughts…')
         Behaviour.enable(self)
-        # enable TinyFX controller
-        self._tinyfx_controller.enable()
         # initialize activity timer
         self._last_activity_time = dt.now()
         self._last_idle_publish_time = None
@@ -197,7 +194,7 @@ class Thoughts(Behaviour):
                         )
 
                     if self._idle_count == 0: # activity ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                        self._maybe_play_sound(_activity)
+                        self._maybe_play_random_sound(_activity)
                         _eyeballs = self._eyeballs_monitor.get_eyeballs()
                         if _eyeballs == Eyeball.BORED or _eyeballs == Eyeball.SLEEPY:
                             self._eyeballs_monitor.clear_eyeballs()
@@ -205,7 +202,7 @@ class Thoughts(Behaviour):
                     elif self._sleeping: # sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         if _count % self._snore_rate == 0: # every n seconds, snore
                             self._log.info(Fore.BLUE + Style.DIM + 'still sleeping…')
-                            self._play_sound('snore')
+                            Player.play('snore')
                             self._snore_rate = randint(8, 11) # change snore rate
 
                     elif self._idle_count % self._sleep_count == 0: # start sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -213,7 +210,7 @@ class Thoughts(Behaviour):
                         self._sleeping    = True
                         self._sleep_count = randint(21, 31) # reset to different threshold
 #                       self._log.info(Fore.BLUE + 'sleeping at: {}.'.format(self._sleep_count))
-                        self._play_sound(self._sleeping_sound)
+                        Player.play(self._sleeping_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
 
                     elif not self._bored and self._idle_count % self._bored_count == 0: # bored ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -221,7 +218,7 @@ class Thoughts(Behaviour):
                         self._bored = True
                         self._bored_count = randint(11, 17)
 #                       self._log.info(Fore.BLUE 'bored at: {}.'.format(self._bored_count))
-                        self._play_sound(self._bored_sound)
+                        Player.play(self._bored_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.BORED)
 
                     else:
@@ -249,9 +246,9 @@ class Thoughts(Behaviour):
         finally:
             self._log.info('thoughts listener loop complete.')
 
-    def _maybe_play_sound(self, activity):
+    def _maybe_play_random_sound(self, activity):
         '''
-        Determine if it's time to play a sound based on activity level.
+        Determine if it's time to play a random sound based on activity level.
 
         :param activity: normalized activity level (0.0-1.0)
         '''
@@ -261,23 +258,10 @@ class Thoughts(Behaviour):
             if now >= self._next_play_time:
                 name = choice([n for n in self._sounds if n != self._last_name])
                 self._log.info(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
-                self._play_sound(name)
+                Player.play(name)
                 self._last_name = name
                 interval = expovariate(frequency / self._jitter_factor)
                 self._next_play_time = now + interval
-
-    @rate_limited(3000)
-    def _play_sound(self, name):
-        '''
-        Play the specified sound via TinyFX controller.
-        Rate-limited to prevent sounds from overlapping.
-
-        :param name: the sound name to play
-        '''
-        self._log.info('play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
-        response = self._tinyfx_controller.send('play {}'.format(name))
-        if self._verbose:
-            self._log.info('response: {}'.format(response))
 
     async def process_message(self, message):
         '''
@@ -311,8 +295,6 @@ class Thoughts(Behaviour):
             self._log.debug('cancelling thoughts listener loop task…')
             self._thoughts_task.cancel()
         self._loop_running = False
-        # disable TinyFX controller
-        self._tinyfx_controller.disable()
         Behaviour.disable(self)
         self._log.info('disabled.')
 
@@ -323,7 +305,6 @@ class Thoughts(Behaviour):
         if not self.closed:
             self._log.info('closing thoughts…')
             self.disable()
-            self._tinyfx_controller.close()
             Behaviour.close(self)
             self._log.info('closed.')
 

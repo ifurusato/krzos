@@ -25,7 +25,7 @@ class TinyFxController(Component):
     I2C_BUS  = 1      # the I2C bus number; on a Raspberry Pi the default is 1
     I2C_ADDR = 0x43   # the I2C address used to connect to the TinyFX
 
-    def __init__(self, config=None, level=Level.INFO):
+    def __init__(self, level=Level.INFO):
         self._log = Logger(TinyFxController.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._i2c_bus     = TinyFxController.I2C_BUS

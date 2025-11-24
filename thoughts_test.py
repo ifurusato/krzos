@@ -44,9 +44,9 @@ def main():
         _level = Level.INFO
         _loader = ConfigLoader(_level)
         filename = 'config.yaml'
-        _config = _loader.configure(filename)
-        _controller = TinyFxController(_config, level=Level.INFO)
+        _controller = TinyFxController(level=Level.INFO)
         _controller.enable()
+        _config = _loader.configure(filename)
         _pot = DigitalPotentiometer(_config, i2c_address=None, level=_level)
         _pot.set_output_range(-1.0, 1.0)
         _last_scaled_value = 0.0

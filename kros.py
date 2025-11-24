@@ -50,6 +50,7 @@ from hardware.compass_encoder import CompassEncoder
 from hardware.usfs import Usfs
 from hardware.motor_controller import MotorController
 from behave.behaviour_manager import BehaviourManager
+from hardware.player import Player
 
 from core.publisher import Publisher
 #from hardware.system_publisher import SystemPublisher
@@ -249,7 +250,7 @@ class KROS(Component, FiniteStateMachine):
             from hardware.tinyfx_controller import TinyFxController
         
             self._log.info('configure tinyfx controller…')
-            self._tinyfx = TinyFxController(self._config)
+            self._tinyfx = TinyFxController()
             self._tinyfx.enable()
 
         # create subscribers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -416,6 +417,8 @@ class KROS(Component, FiniteStateMachine):
         This halts any motor activity, demands a sudden halt of all tasks,
         then shuts down the OS.
         '''
+        Player.play('woow')
+        time.sleep(0.5)
         if self._button:
             self._button.close()
             self._button = None
