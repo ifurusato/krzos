@@ -410,7 +410,7 @@ kros:
         ina260:
             i2c_address:                   0x40            # I²C address (default 0x40)
         tinyfx-controller:
-            i2c_address:                   0x44
+            i2c_address:                   0x43
             bus_number:                       1
             pin_1:                           14            # pin on the IO Expander (SCL blue)
             pin_2:                           12            # pin on the IO Expander (SDA yellow)
