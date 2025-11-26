@@ -265,12 +265,14 @@ class Nudge(AsyncBehaviour):
         poll_ms = float(self._poll_delay_ms)
         now = time.monotonic()
 
-        # compute per-tick max changes (linear)
-        # lateral & omega per-tick rate (toward a non-zero target) uses ramp_up_ms; ramp to zero uses ramp_down_ms
         def per_tick_rate(current, target, ramp_ms):
+            '''
+            Compute per-tick max changes (linear). Lateral & omega per-tick rate 
+            (toward a non-zero target) uses ramp_up_ms; ramp to zero uses ramp_down_ms.
+            '''
             if ramp_ms <= 0:
                 return abs(target - current)
-            return abs(target - current) * (poll_ms / float(ramp_ms))
+            return abs(target) * (poll_ms / float(ramp_ms))
 
         # HANDLE SPEED MULTIPLIER RAMPING
         if abs(self._current_speed_multiplier - self._target_speed_multiplier) > self._eps:
