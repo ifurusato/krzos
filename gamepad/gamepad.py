@@ -217,22 +217,23 @@ class Gamepad(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _gamepad_loop(self, callback, f_is_enabled):
-        self._log.info('starting event loop…')
+        self._log.info('🌸 starting event loop…')
         __enabled = True
         while __enabled and f_is_enabled():
-            self._log.info('gamepad enabled.')
+            self._log.info('🌸 gamepad enabled.')
             try:
                 if self._gamepad is None:
                     raise Exception(Gamepad._NOT_AVAILABLE_ERROR + ' [gamepad no longer available]')
                 # loop and filter by event code and print the mapped label
                 async for _event in self._gamepad.async_read_loop():
+                    self._log.info('🌸 in gamepad loop.')
                     _message = self._handleEvent(_event)
                     if callback and _message:
                         await callback(_message)
                     if not f_is_enabled():
                         self._log.debug('breaking from event loop.')
                         break
-                self._log.info('exit gamepad loop.')
+                self._log.info('🌸 exit gamepad loop.')
             except KeyboardInterrupt:
                 self._log.info('caught Ctrl-C, exiting…')
                 __enabled = False
@@ -269,6 +270,7 @@ class Gamepad(Component):
         There's possibly a more elegant way of doing this but for now this
         works just fine.
         '''
+        self._log.info(Fore.WHITE + '_handle_event: {}'.format(event))
         _message = None
         _control = None
         if event.type == ecodes.EV_KEY:

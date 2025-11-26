@@ -51,6 +51,7 @@ class IrqClock(Component):
         self.__lf_callbacks = []
         self._freq_divider  = _cfg.get('freq_divider')
         self._pin           = _cfg.get('pin')
+        self._verbose       = False
         self._input         = None
         self._log.info('IRQ clock pin:\t{}'.format(self._pin))
         self._log.info('ready.')
@@ -117,6 +118,8 @@ class IrqClock(Component):
 
     def _callback_method(self):
         if self.enabled:
+#           if self._verbose:
+#               self._log.info(Style.DIM + 'tick.')
             for callback in self.__callbacks:
                 callback()
             if next(self._counter) % self._freq_divider == 0:

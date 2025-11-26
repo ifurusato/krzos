@@ -43,10 +43,10 @@ class GamepadController(Controller):
     def name(self):
         return 'gp-controller'
 
-#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#   def enable(self):
-#       self._enabled = True
-#       self._log.info('enabled.')
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def enable(self):
+        self._enabled = True
+        self._log.info('🌺 enabled.')
 
 #   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   def disable(self):
@@ -67,7 +67,7 @@ class GamepadController(Controller):
         '''
         Responds to the Event contained within the Payload.
         '''
-#       self._log.debug('callback with payload {}'.format(payload.event.name))
+        self._log.info('🌺 callback with payload {}'.format(payload.event.name))
         if not self._enabled:
             self._log.debug('action ignored: controller disabled.')
             return

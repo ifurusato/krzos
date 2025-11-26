@@ -313,7 +313,7 @@ kros:
         vl53l5cx_sensor:
             use_multiprocessing:           True            # handle sensor inside external multiprocessing process
             flip_horizontal:               True            # flip sensor data horizontally
-            flip_vertical:                 True            # flip sensor data vertically
+            flip_vertical:                False            # flip sensor data vertically
             enable_stuck_pixel_filter:     True            # filter on pixels that won't change
             unreliable_pixel_threshold:    0.25            # ratio of bad pixels in a frame to be considered unreliable
             unreliable_frame_threshold:      20            # number of consecutive unreliable frames before triggering BLIND state
@@ -359,14 +359,14 @@ kros:
             exclude_rows:                   [7]            # exclude if empirical data suggests row(s) unreliable
         scout_sensor:
             distance_threshold:            1000            # pay no attention to anything beyond 1000mm
-            flip_horizontal:               True            # flip sensor data horizontally
+            flip_horizontal:              False            # flip sensor data horizontally
             flip_vertical:                 True            # flip sensor data vertically
             loop_freq_hz:                     5            # control loop frequency (Hz)
             weights:
                 - 0.6
                 - 0.3
                 - 0.1
-            visualise:                    False            # use scout visualiser
+            visualise:                     True            # use scout visualiser
             show_grid:                     True            # show colored grid
             show_target_row:               True            # show target row with selected column
             show_target_info:              True            # show log line with target info
@@ -529,7 +529,7 @@ kros:
           - address:                       0x40
             name:         "INA260 Power Monitor"
             required:                     False # TEMP
-          - address:                       0x44
+          - address:                       0x43
             name:                       "TinyFX"
             required:                      True
           - address:                       0x48

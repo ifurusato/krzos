@@ -11,7 +11,6 @@
 #
 # This class interprets the signals arriving from the 8BitDo N30 Pro Gamepad,
 # a paired Bluetooth device.
-#
 
 import itertools, traceback
 from threading import Timer
@@ -53,6 +52,7 @@ class GamepadPublisher(Publisher):
         _cfg = self._config['kros'].get('publisher').get('gamepad')
         self._publish_delay_sec = _cfg.get('publish_delay_sec')
         self._gamepad           = None
+        self._gamepad_task      = None
         self._monitor           = None
         self._log.info('ready.')
 
@@ -111,16 +111,19 @@ class GamepadPublisher(Publisher):
                 if self._gamepad:
                     self._gamepad.enable()
                     if self.enabled:
-                        self._log.debug('creating gamepad loop.')
-                        self._message_bus.loop.create_task(self._gamepad._gamepad_loop(self.__gamepad_publish_loop,
-                                lambda: self.enabled), name=GamepadPublisher._PUBLISH_LOOP_NAME)
-                        self._log.info('enabled')
+                        self._log.info('🌼 creating gamepad loop.')
+                        self._gamepad_task = self._message_bus.loop.create_task(
+                                self._gamepad._gamepad_loop(self.__gamepad_publish_loop, lambda: self.enabled),
+                                name=GamepadPublisher._PUBLISH_LOOP_NAME)
+                        self._log.info('🌼 loop enabled')
                     else:
                         raise Exception('gamepad not enabled: lost connection?')
                 else:
                     Publisher.disable(self)
                     self._log.info('disabled: no gamepad.')
                 self._monitor.enable()
+            else:
+                self._log.info('🌼 no gamepad connection.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _disappearance_callback(self):
@@ -145,15 +148,19 @@ class GamepadPublisher(Publisher):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
+        self._log.info('🌼 a. enable.')
         Publisher.enable(self)
         if self.enabled:
             if self._message_bus.get_task_by_name(GamepadPublisher._PUBLISH_LOOP_NAME):
+                self._log.info('🌼 b. already enabled.')
                 self._log.warning('already enabled.')
                 return
             self._log.info('waiting to connect to gamepad…')
             _connect_delay_sec = 1.0
+            self._log.info('🌼 c. starting timer…')
             _timer = Timer(_connect_delay_sec, self._connect_gamepad)
             _timer.start()
+            self._log.info('🌼 d. timer started.')
 
         else:
             Publisher.disable(self)
@@ -161,6 +168,7 @@ class GamepadPublisher(Publisher):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def __gamepad_publish_loop(self, message):
+        self._log.info('🌼 gp loop.')
         await Publisher.publish(self, message)
         await asyncio.sleep(self._publish_delay_sec)
 
