@@ -20,7 +20,7 @@ kros:
         enable_external_clock:             True            # if True use external clock, ignoring loop delay value
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
         enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
-        enable_gamepad_publisher:         False            # enable gamepad support
+        enable_gamepad_publisher:          True            # enable gamepad support
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -52,6 +52,18 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # polling loop frequency
+        nudge:
+            enable:                      True              # enable nudge behaviour
+            release:                     True              # release nudge behaviour on startup
+            verbose:                    False              # verbose messaging
+            priority:                   0.3                # fixed behaviour priority
+            lateral_max:                0.5
+            omega_max:                  0.5
+            speed_multiplier_max:       2.0
+            enable_negative_speed:      False
+            hold_ms_default:            2000
+            ramp_up_ms:                 1500
+            ramp_down_ms:               1500
         radiozoa:
             enable:                     False              # enable radiozoa behaviour
             release:                    False              # release radiozoa behaviour on startup
@@ -126,8 +138,8 @@ kros:
             min_priority:                   0.3            # priority when far
             max_priority:                   0.95           # priority at boundary (very high)
         thoughts:
-            enable:                      True              # enable thoughts behaviour
-            release:                     True              # release thoughts behaviour on startup
+            enable:                     False              # enable thoughts behaviour
+            release:                    False              # release thoughts behaviour on startup
             verbose:                    False              # verbose messaging
             priority:                       0.2            # default behaviour priority
             max_activity:                   4.0            # maximum expected activity level

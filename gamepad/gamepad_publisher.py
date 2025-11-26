@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -7,7 +8,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-05-19
-# modified: 2024-10-31
+# modified: 2025-11-26
 #
 # This class interprets the signals arriving from the 8BitDo N30 Pro Gamepad,
 # a paired Bluetooth device.
@@ -30,7 +31,6 @@ from hardware.tinyfx_controller import TinyFxController
 from gamepad.gamepad import Gamepad
 from gamepad.gamepad_monitor import GamepadMonitor
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadPublisher(Publisher):
     _PUBLISH_LOOP_NAME = '__gamepad_publish_loop'
     '''
@@ -56,30 +56,21 @@ class GamepadPublisher(Publisher):
         self._monitor           = None
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _connect_gamepad(self):
+    async def _connect_gamepad_async(self):
         if not self.enabled:
             self._log.warning('gamepad disabled.')
             return
         if self._gamepad is None:
             try:
-                self._log.info('connecting to gamepad…')
-                self._gamepad = Gamepad(self._config, self._message_bus, self._message_factory, level=self._level)
-            except ConnectionError as e:
-                self._log.error('unable to connect to gamepad: {}'.format(e))
-                self._gamepad = None
-            except ModuleNotFoundError as e:
-                self._log.error('missing software module while establishing gamepad: {}\n{}'.format(e, traceback.format_exc()))
-                self._gamepad = None
+                self._log.info('creating Gamepad instance (off-loop)…')
+                self._gamepad = await asyncio.to_thread(
+                    lambda: Gamepad(self._config, self._message_bus, self._message_factory, level=self._level))
             except Exception as e:
-                self._log.error('{} thrown establishing gamepad: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                self._log.error('unable to create gamepad object: {}'.format(e))
                 self._gamepad = None
-
         if self._gamepad:
-            self._log.info('enabling gamepad…')
+            self._log.info('enabling gamepad (async)…')
             try:
-                # attempt connection ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                self._gamepad.enable()
                 _count = 0
                 while not self._gamepad.has_connection():
                     _count += 1
@@ -87,96 +78,101 @@ class GamepadPublisher(Publisher):
                         self._log.info('connecting to gamepad…')
                     else:
                         self._log.warning('gamepad not connected; re-trying… [{:d}]'.format(_count))
-                    self._gamepad.connect()
-                    time.sleep(0.5)
+                    try:
+                        await asyncio.to_thread(self._gamepad.connect)
+                    except Exception as e:
+                        self._log.debug('connect attempt raised: {}'.format(e))
+                    await asyncio.sleep(0.5)
                     if self._gamepad.has_connection() or _count > 5:
-                        if self._play_sound:
-                            self._tinyfx.play(Sound.SKADOODLE)
-#                           Player.instance().play(Sound.SKADOODLE)
+                        if self._play_sound and self._tinyfx:
+                            await asyncio.to_thread(lambda: self._tinyfx.play(Sound.SKADOODLE))
                         break
             except ConnectionError as e:
                 self._log.warning('unable to connect to gamepad: {}'.format(e))
                 self._gamepad = None
             except Exception as e:
-                self._log.error('{} thrown connecting to gamepad: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                self._log.error('{} thrown connecting to gamepad: {}'.format(type(e), e))
                 self._gamepad = None
         else:
             self._log.info('no gamepad available.')
+
         self._monitor = GamepadMonitor(self._config, self._gamepad, self._disappearance_callback, self._level)
         if self._gamepad is None:
             self._monitor.no_connection()
         else:
             if self._gamepad.has_connection():
-                # now set up task loop
                 if self._gamepad:
-                    self._gamepad.enable()
-                    if self.enabled:
-                        self._log.info('🌼 creating gamepad loop.')
-                        self._gamepad_task = self._message_bus.loop.create_task(
+                    try:
+                        self._gamepad.enable()
+                        if self.enabled:
+                            self._gamepad_task = self._message_bus.loop.create_task(
                                 self._gamepad._gamepad_loop(self.__gamepad_publish_loop, lambda: self.enabled),
                                 name=GamepadPublisher._PUBLISH_LOOP_NAME)
-                        self._log.info('🌼 loop enabled')
-                    else:
-                        raise Exception('gamepad not enabled: lost connection?')
+                        else:
+                            raise Exception('gamepad not enabled: lost connection?')
+                    except Exception as e:
+                        self._log.error('failed to start gamepad loop: {}'.format(e))
+                        Publisher.disable(self)
+                        self._log.info('disabled: no gamepad.')
+                    self._monitor.enable()
                 else:
                     Publisher.disable(self)
                     self._log.info('disabled: no gamepad.')
-                self._monitor.enable()
             else:
-                self._log.info('🌼 no gamepad connection.')
+                self._log.warning('no gamepad connection.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _disappearance_callback(self):
         self._log.warning('gamepad has disappeared.')
-        self._monitor.disable() # no longer needed
+        self._monitor.disable()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def gamepad(self):
         return self._gamepad
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_connected_gamepad(self):
         return self._gamepad is not None and self._gamepad.has_connection()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def toggle(self):
         if self.suppressed:
             self.release()
         else:
             self.suppress()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
-        self._log.info('🌼 a. enable.')
         Publisher.enable(self)
         if self.enabled:
             if self._message_bus.get_task_by_name(GamepadPublisher._PUBLISH_LOOP_NAME):
-                self._log.info('🌼 b. already enabled.')
                 self._log.warning('already enabled.')
                 return
             self._log.info('waiting to connect to gamepad…')
             _connect_delay_sec = 1.0
-            self._log.info('🌼 c. starting timer…')
-            _timer = Timer(_connect_delay_sec, self._connect_gamepad)
-            _timer.start()
-            self._log.info('🌼 d. timer started.')
-
+            self._log.info('scheduling async connect in {:.3f}s'.format(_connect_delay_sec))
+            def _schedule_connect():
+                try:
+                    self._message_bus.loop.create_task(self._connect_gamepad_async())
+                except Exception:
+                    try:
+                        self._message_bus.loop.call_soon_threadsafe(
+                            lambda: self._message_bus.loop.create_task(self._connect_gamepad_async()))
+                    except Exception as e2:
+                        self._log.error('failed to schedule _connect_gamepad_async: {}'.format(e2))
+            try:
+                self._message_bus.loop.call_later(_connect_delay_sec, _schedule_connect)
+            except Exception:
+                try:
+                    self._message_bus.loop.call_soon_threadsafe(
+                        lambda: self._message_bus.loop.call_later(_connect_delay_sec, _schedule_connect))
+                except Exception as e:
+                    self._log.error('failed to schedule delayed connect: {}'.format(e))
         else:
             Publisher.disable(self)
             raise Exception('unable to enable.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def __gamepad_publish_loop(self, message):
-        self._log.info('🌼 gp loop.')
         await Publisher.publish(self, message)
         await asyncio.sleep(self._publish_delay_sec)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
-        '''
-        Disable this publisher.
-        '''
         if self._monitor:
             self._monitor.disable()
         if self._gamepad:
@@ -184,16 +180,10 @@ class GamepadPublisher(Publisher):
         Publisher.disable(self)
         self._log.info('disabled gamepad publisher.')
 
-    # message handling ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _print_event(self, color, event, value):
         self._log.info('event:\t' + color + Style.BRIGHT + '{}; value: {}'.format(event.name, value))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_keymap(self):
-#        1         2         3         4         5         6         7         8         9         C         1         2
-#23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
         self._log.info('''button map:
 
      ┏━━━━━━━━┳━━━━━━┓                                             ┏━━━━━━┳━━━━━━━━┓
@@ -213,7 +203,7 @@ class GamepadPublisher(Publisher):
          ┃                   ┃        ┃          ┃        ┃                    ┃
          ┃                   ┗━━━━━━━━┛          ┗━━━━━━━━┛                    ┃
          ┃                                                                     ┃
-         ┗━━━━━━━━━┻━━━━━━━━━┻━━┳━━━━━━┻━┳━━━━━┳━┻━━━━━━┳━━┻━━━━━━━━━┻━━━━━━━━━┛
+         ┗━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┛
                                 ┃   B1   ┃  P  ┃   B2   ┃
                                 ┗━━━━━━━━┻━━━━━┻━━━━━━━━┛
      L1: video                                                                 R1: lights on

@@ -104,7 +104,9 @@ class Scan(AsyncBehaviour):
 
     @property
     def is_ballistic(self):
-        '''ballistic when actively scanning'''
+        '''
+        Ballistic when actively scanning.
+        '''
         return self._scan_active
 
     @property

@@ -65,7 +65,7 @@ class Avoid(AsyncBehaviour):
         self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True)
         self._default_priority     = _cfg.get('default_priority', 0.3)
         self._priority             = self._default_priority
-        self._verbose     = _cfg.get('verbose', False)
+        self._verbose              = _cfg.get('verbose', False)
         # variables
         self._squeezed    = False
         self._log.info('ready.')

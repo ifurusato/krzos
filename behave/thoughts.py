@@ -22,6 +22,7 @@ from core.logger import Logger, Level
 from core.component import Component
 from core.event import Event, Group
 from core.rate_limited import rate_limited
+from core.subscriber import Subscriber
 from behave.behaviour import Behaviour
 from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball

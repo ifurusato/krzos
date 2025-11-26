@@ -36,7 +36,7 @@ _log = Logger('test', Level.INFO)
 @rate_limited(1500) # ms
 def play(controller, name):
     _log.info('play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
-    response = controller.send('play {}'.format(name))
+    response = controller.send_request('play {}'.format(name))
     _log.info('response: {}'.format(response))
 
 def main():
