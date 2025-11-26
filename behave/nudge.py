@@ -46,17 +46,30 @@ class Nudge(AsyncBehaviour):
         self._omega_max             = _cfg.get('omega_max', 0.5)
         self._speed_multiplier_max  = _cfg.get('speed_multiplier_max', 2.0)
         self._enable_negative_speed = _cfg.get('enable_negative_speed', False)
-        self._hold_ms_default       = _cfg.get('hold_ms_default', 2000)
+        self._use_vy_for_fwd_aft    = _cfg.get('use_vy_for_fwd_aft', False)
         self._ramp_up_ms            = _cfg.get('ramp_up_ms', 1500)
         self._ramp_down_ms          = _cfg.get('ramp_down_ms', 1500)
         self._priority              = _cfg.get('priority', 0.3)
+        self._hold_vx_ms_default    = _cfg.get('hold_vx_ms_default', 2000)
+        self._hold_vy_ms_default    = _cfg.get('hold_vy_ms_default', 3000)
         # internal state
         self._current_vx            = 0.0
+        self._current_vy            = 0.0
         self._current_omega         = 0.0
         self._target_vx             = 0.0
+        self._target_vy             = 0.0
         self._target_omega          = 0.0
         self._current_speed_multiplier = 1.0
         self._target_speed_multiplier  = 1.0
+        # ramp state tracking
+        self._ramp_start_time       = None
+        self._ramp_start_vx         = 0.0
+        self._ramp_start_vy         = 0.0
+        self._ramp_start_omega      = 0.0
+        self._prev_target_vx        = 0.0
+        self._prev_target_vy        = 0.0
+        self._prev_target_omega     = 0.0
+        # hold timing
         self._hold_start_time       = None
         self._hold_end_time         = None
         self._pending_hold_ms       = 0
@@ -79,7 +92,7 @@ class Nudge(AsyncBehaviour):
     def priority(self):
         return self._priority
 
-    # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def nudge(self, orientation, time_ms):
         '''
@@ -91,34 +104,49 @@ class Nudge(AsyncBehaviour):
         if time_ms == 0:
             self.cancel()
             return
-
-        hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_ms_default
-
         if orientation is Orientation.PORT or orientation is Orientation.STBD:
-            # determine sign: PORT -> -1, STBD -> +1
-            sign = -1.0 if orientation is Orientation.PORT else 1.0
-            # target lateral and rotation (omega). omega sign chosen to provide heading change complementary to lateral move.
-            self._target_vx = sign * self._lateral_max
-            self._target_omega = -sign * self._omega_max
-            # set pending hold; actual hold timer starts when peak reached
+            hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vx_ms_default
+            self._nudge_lateral(orientation, hold_ms)
+        elif orientation is Orientation.FWD or orientation is Orientation.AFT:
+            hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vy_ms_default
+            self._nudge_longitudinal(orientation, hold_ms)
+        else:
+            raise ValueError('unsupported orientation for nudge: {}'.format(orientation))
+
+    def _nudge_lateral(self, orientation, hold_ms):
+        '''
+        Handle PORT/STBD nudges by setting vx and omega targets.
+        '''
+        sign = -1.0 if orientation is Orientation.PORT else 1.0
+        self._target_vx = sign * self._lateral_max
+        self._target_omega = -sign * self._omega_max
+        self._pending_hold_ms = hold_ms
+        self._hold_start_time = None
+        self._hold_end_time = None
+        self._active = True
+        self._log.info('nudge requested: {} for {}ms -> target vx={:.3f}, omega={:.3f}'.format(
+            orientation.name, hold_ms, self._target_vx, self._target_omega))
+
+    def _nudge_longitudinal(self, orientation, hold_ms):
+        '''
+        Handle FWD/AFT nudges either via vy intent vector or speed multiplier.
+        '''
+        if self._use_vy_for_fwd_aft:
+            sign = 1.0 if orientation is Orientation.FWD else -1.0
+            self._target_vy = sign * self._lateral_max
             self._pending_hold_ms = hold_ms
-            # reset hold markers so we ramp up then hold
             self._hold_start_time = None
             self._hold_end_time = None
             self._active = True
-            self._log.info('nudge requested: {} for {}ms -> target vx={:.3f}, omega={:.3f}'.format(
-                orientation.name, hold_ms, self._target_vx, self._target_omega))
-
-        elif orientation is Orientation.FWD or orientation is Orientation.AFT:
-            # speed multiplier nudges: FWD -> boost up to max; AFT -> stop or reverse (if enabled)
+            self._log.info('nudge requested: {} for {}ms -> target vy={:.3f}'.format(
+                orientation.name, hold_ms, self._target_vy))
+        else:
             if orientation is Orientation.FWD:
                 self._target_speed_multiplier = float(self._speed_multiplier_max)
-            else: # AFT
+            else:
                 if self._enable_negative_speed:
-                    # full reverse
                     self._target_speed_multiplier = -1.0
                 else:
-                    # reduce to zero (stop)
                     self._target_speed_multiplier = 0.0
             self._pending_hold_ms = hold_ms
             self._hold_start_time = None
@@ -126,20 +154,11 @@ class Nudge(AsyncBehaviour):
             self._active = True
             self._log.info('nudge requested: {} for {}ms -> speed multiplier target={:.3f}'.format(
                 orientation.name, hold_ms, self._target_speed_multiplier))
-            # ensure speed modifier present
             if not self._speed_modifier_registered:
-                try:
-                    # lambda must be a <lambda> per MotorController enforcement; closure reads current multiplier
-                    modifier = (lambda speeds, _self=self: _self._nudge_speed_modifier(speeds))
-                    self._motor_controller.add_speed_modifier(self._speed_modifier_name, modifier, exclusive=False)
-                    self._speed_modifier_registered = True
-                    self._log.info('speed modifier registered: {}'.format(self._speed_modifier_name))
-                except Exception as e:
-                    # fail fast per your preference
-                    raise
-
-        else:
-            raise ValueError('unsupported orientation for nudge: {}'.format(orientation))
+                modifier = (lambda speeds, _self=self: _self._nudge_speed_modifier(speeds))
+                self._motor_controller.add_speed_modifier(self._speed_modifier_name, modifier, exclusive=False)
+                self._speed_modifier_registered = True
+                self._log.info('speed modifier registered: {}'.format(self._speed_modifier_name))
 
     def cancel(self):
         '''
@@ -148,6 +167,7 @@ class Nudge(AsyncBehaviour):
         self._log.info('cancel called: clearing targets and scheduling ramp down.')
         # set targets to zero so poll ramps down
         self._target_vx = 0.0
+        self._target_vy = 0.0
         self._target_omega = 0.0
         self._target_speed_multiplier = 1.0
         # clear hold timers so we immediately enter ramp-down
@@ -163,7 +183,7 @@ class Nudge(AsyncBehaviour):
             finally:
                 self._speed_modifier_registered = False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     async def process_message(self, message):
         '''
@@ -218,18 +238,20 @@ class Nudge(AsyncBehaviour):
                 self._log.info(Style.DIM + '🌸 DPAD_HORIZONTAL.')
             case Event.DPAD_LEFT:
                 self._log.info(Style.DIM + '🌸 DPAD_LEFT.')
-                self.nudge(Orientation.PORT, self._hold_ms_default)
+                # nudge the opposite way
+                self.nudge(Orientation.STBD, self._hold_vx_ms_default)
             case Event.DPAD_RIGHT:
                 self._log.info(Style.DIM + '🌸 DPAD_RIGHT.')
-                self.nudge(Orientation.STBD, self._hold_ms_default)
+                # nudge the opposite way
+                self.nudge(Orientation.PORT, self._hold_vx_ms_default)
             case Event.DPAD_VERTICAL:
                 self._log.info(Style.DIM + '🌸 DPAD_VERTICAL.')
             case Event.DPAD_UP:
                 self._log.info(Style.DIM + '🌸 DPAD_UP.')
-                self.nudge(Orientation.FWD, self._hold_ms_default)
+                self.nudge(Orientation.FWD, self._hold_vy_ms_default)
             case Event.DPAD_DOWN:
                 self._log.info(Style.DIM + '🌸 DPAD_DOWN.')
-                self.nudge(Orientation.AFT, self._hold_ms_default)
+                self.nudge(Orientation.AFT, self._hold_vy_ms_default)
             case Event.L3_VERTICAL:
                 self._log.info(Style.DIM + '🌸 L3_VERTICAL.')
             case Event.L3_HORIZONTAL:
@@ -240,7 +262,6 @@ class Nudge(AsyncBehaviour):
                 self._log.info(Style.DIM + '🌸 R3_HORIZONTAL.')
             case _:
                 self._log.info(Style.DIM + 'UNRECOGNISED.')
-
 
     def _nudge_speed_modifier(self, speeds):
         '''
@@ -261,105 +282,60 @@ class Nudge(AsyncBehaviour):
         Called by AsyncBehaviour loop. Returns the current intent vector (vx, vy, omega).
         This method drives ramping logic and the transient hold timing.
         '''
-        # quick aliases
-        poll_ms = float(self._poll_delay_ms)
         now = time.monotonic()
 
-        def per_tick_rate(current, target, ramp_ms):
-            '''
-            Compute per-tick max changes (linear). Lateral & omega per-tick rate 
-            (toward a non-zero target) uses ramp_up_ms; ramp to zero uses ramp_down_ms.
-            '''
-            if ramp_ms <= 0:
-                return abs(target - current)
-            return abs(target) * (poll_ms / float(ramp_ms))
+        # If targets changed, start new ramp
+        if self._target_vx != self._prev_target_vx or self._target_vy != self._prev_target_vy or self._target_omega != self._prev_target_omega:
+            self._ramp_start_time = now
+            self._ramp_start_vx = self._current_vx
+            self._ramp_start_vy = self._current_vy
+            self._ramp_start_omega = self._current_omega
+            self._prev_target_vx = self._target_vx
+            self._prev_target_vy = self._target_vy
+            self._prev_target_omega = self._target_omega
 
-        # HANDLE SPEED MULTIPLIER RAMPING
-        if abs(self._current_speed_multiplier - self._target_speed_multiplier) > self._eps:
-            # determine whether ramping up (toward non-1.0) or down (toward 1.0/zero)
-            ramp_ms = self._ramp_up_ms if abs(self._target_speed_multiplier - self._current_speed_multiplier) > 0 else self._ramp_down_ms
-            step = per_tick_rate(self._current_speed_multiplier, self._target_speed_multiplier, self._ramp_up_ms)
-            delta = self._target_speed_multiplier - self._current_speed_multiplier
-            if abs(delta) <= step:
-                self._current_speed_multiplier = self._target_speed_multiplier
-            else:
-                self._current_speed_multiplier += (step if delta > 0 else -step)
-        # If active and we have reached the target speed multiplier and no hold started, start hold timer
-        if self._active and abs(self._current_speed_multiplier - self._target_speed_multiplier) <= self._eps:
-            if self._pending_hold_ms > 0 and self._hold_start_time is None:
-                # start hold when peak reached
-                self._hold_start_time = now
-                self._hold_end_time = now + (self._pending_hold_ms / 1000.0)
-                self._log.info('speed hold started; will end at {:.3f}'.format(self._hold_end_time))
-        # After hold ends, set target back to 1.0 (neutral)
-        if self._hold_end_time is not None and now >= self._hold_end_time:
-            # clear hold and set ramp-down target
-            self._log.info('speed hold ended; ramping down to neutral')
-            self._hold_start_time = None
-            self._hold_end_time = None
-            self._pending_hold_ms = 0
-            self._target_speed_multiplier = 1.0
-            # mark no longer active for speed if vx/omega also zero
-            if abs(self._current_vx) <= self._eps and abs(self._current_omega) <= self._eps:
-                self._active = True  # keep active until speed ramps down in this same tick
+        # Linear interpolation during ramp
+        if self._ramp_start_time is not None:
+            elapsed_ms = (now - self._ramp_start_time) * 1000.0
+            is_ramping_down = (self._target_vx == 0.0 and self._target_vy == 0.0 and self._target_omega == 0.0)
+            ramp_duration = self._ramp_down_ms if is_ramping_down else self._ramp_up_ms
 
-        # HANDLE LATERAL / OMEGA RAMPING
-        # If currently moving toward a non-zero target
-        if abs(self._current_vx - self._target_vx) > self._eps:
-            step_vx = per_tick_rate(self._current_vx, self._target_vx, self._ramp_up_ms)
-            delta_vx = self._target_vx - self._current_vx
-            if abs(delta_vx) <= step_vx:
+            if elapsed_ms >= ramp_duration:
                 self._current_vx = self._target_vx
-            else:
-                self._current_vx += (step_vx if delta_vx > 0 else -step_vx)
-        if abs(self._current_omega - self._target_omega) > self._eps:
-            step_om = per_tick_rate(self._current_omega, self._target_omega, self._ramp_up_ms)
-            delta_om = self._target_omega - self._current_omega
-            if abs(delta_om) <= step_om:
+                self._current_vy = self._target_vy
                 self._current_omega = self._target_omega
+                self._ramp_start_time = None
             else:
-                self._current_omega += (step_om if delta_om > 0 else -step_om)
+                frac = elapsed_ms / ramp_duration
+                self._current_vx = self._ramp_start_vx + frac * (self._target_vx - self._ramp_start_vx)
+                self._current_vy = self._ramp_start_vy + frac * (self._target_vy - self._ramp_start_vy)
+                self._current_omega = self._ramp_start_omega + frac * (self._target_omega - self._ramp_start_omega)
 
-        # If we have reached lateral/omega peak and no hold started, start hold
-        if self._active and abs(self._current_vx - self._target_vx) <= self._eps and abs(self._current_omega - self._target_omega) <= self._eps:
+        # If reached target and no hold started, start hold
+        if self._active and abs(self._current_vx - self._target_vx) <= self._eps and abs(self._current_vy - self._target_vy) <= self._eps and abs(self._current_omega - self._target_omega) <= self._eps:
             if self._pending_hold_ms > 0 and self._hold_start_time is None:
                 self._hold_start_time = now
                 self._hold_end_time = now + (self._pending_hold_ms / 1000.0)
-                self._log.info('lateral/omega hold started; will end at {:.3f}'.format(self._hold_end_time))
+                self._log.info('hold started; will end at {:.3f}'.format(self._hold_end_time))
 
-        # After hold ends for lateral/omega, set targets back to zero
+        # After hold ends, set targets to zero
         if self._hold_end_time is not None and now >= self._hold_end_time:
-            self._log.info('lateral/omega hold ended; ramping down to neutral')
+            self._log.info('hold ended; ramping down')
             self._hold_start_time = None
             self._hold_end_time = None
             self._pending_hold_ms = 0
             self._target_vx = 0.0
+            self._target_vy = 0.0
             self._target_omega = 0.0
 
-        # If both lateral/omega and speed multiplier are at neutral/1.0, and no pending hold, mark inactive and remove speed modifier if present
-        lateral_zero = abs(self._current_vx) <= self._eps and abs(self._current_omega) <= self._eps
-        speed_neutral = abs(self._current_speed_multiplier - 1.0) <= self._eps
-        if lateral_zero and speed_neutral and self._pending_hold_ms == 0:
-            # ensure variables exactly neutral
+        # If at neutral, mark inactive
+        if abs(self._current_vx) <= self._eps and abs(self._current_vy) <= self._eps and abs(self._current_omega) <= self._eps and self._pending_hold_ms == 0:
             self._current_vx = 0.0
+            self._current_vy = 0.0
             self._current_omega = 0.0
-            self._current_speed_multiplier = 1.0
-            self._target_vx = 0.0
-            self._target_omega = 0.0
-            self._target_speed_multiplier = 1.0
-            if self._speed_modifier_registered:
-                try:
-                    self._motor_controller.remove_speed_modifier(self._speed_modifier_name)
-                finally:
-                    self._speed_modifier_registered = False
             self._active = False
 
-        # ensure we never return NaNs
-        vx = float(self._current_vx)
-        vy = 0.0
-        omega = float(self._current_omega)
-
-        return (vx, vy, omega)
+        return (float(self._current_vx), float(self._current_vy), float(self._current_omega))
 
     def stop_loop_action(self):
         # ensure any registered speed modifier removed on loop stop
@@ -370,11 +346,20 @@ class Nudge(AsyncBehaviour):
                 self._speed_modifier_registered = False
         # reset internals
         self._current_vx = 0.0
+        self._current_vy = 0.0
         self._current_omega = 0.0
         self._current_speed_multiplier = 1.0
         self._target_vx = 0.0
+        self._target_vy = 0.0
         self._target_omega = 0.0
         self._target_speed_multiplier = 1.0
+        self._ramp_start_time = None
+        self._ramp_start_vx = 0.0
+        self._ramp_start_vy = 0.0
+        self._ramp_start_omega = 0.0
+        self._prev_target_vx = 0.0
+        self._prev_target_vy = 0.0
+        self._prev_target_omega = 0.0
         self._hold_start_time = None
         self._hold_end_time = None
         self._pending_hold_ms = 0

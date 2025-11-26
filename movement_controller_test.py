@@ -113,7 +113,7 @@ def drive_square(movement_ctrl, rotation_ctrl, side_length_cm=80.0):
         # Verify we're stopped
         if movement_ctrl.movement_phase != MovementPhase.IDLE:
             _log.error('  ERROR: Not IDLE after movement! Phase: {}'.format(movement_ctrl.movement_phase.name))
-            sys.exit(0) # TEMP
+#           sys.exit(0) # TEMP
         
         time.sleep(1.0)  # Full stop pause
         

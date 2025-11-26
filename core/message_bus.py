@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-03-10
-# modified: 2025-08-31
+# modified: 2025-11-26
 #
 # An asyncio-based publish/subscribe-style message bus guaranteeing exactly-once
 # delivery for each message. This is done by populating each message with the
@@ -359,10 +359,8 @@ class MessageBus(Component):
                 _callback()
             self._log.info('callbacks started.')
         try:
-            while self.enabled and len(_subscribers) > 0:
-                for _subscriber in _subscribers:
-#                   if _subscriber.enabled: ?
-                    await _subscriber.consume()
+            while self.enabled:
+                await asyncio.sleep(0.1)
             self._log.info('completed consume loop.')
         finally:
             self._log.info('finally: completed consume loop.')
@@ -457,7 +455,7 @@ class MessageBus(Component):
 
     def handle_exception(self, loop, context):
         self._log.error('handle exception on loop: {}'.format(loop))
-#       print('stack trace; {}'.format(traceback.format_exc()))
+        print('stack trace; {}'.format(traceback.format_exc()))
         # context["message"] will always be there; but context["exception"] may not
         _exception = context.get('exception', context['message'])
         if _exception != None:
@@ -467,7 +465,7 @@ class MessageBus(Component):
         if loop.is_running() and not loop.is_closed():
             asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
         else:
-            self._log.warning("loop already shut down.")
+            self._log.debug("loop already shut down.")
 
     # shutdown ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -594,21 +592,38 @@ class MessageBus(Component):
             self._log.warning('already disabled.')
         else:
             Component.disable(self)
+            time.sleep(0.1) # let subscribers exist their loops
             self._log.info('disabling…')
             if self.publisher_count > 0:
-                self._log.info('closing {:d} publishers…'.format(self.publisher_count))
-                [_publisher.close() for _publisher in self.publishers]
+                self._log. info('closing {:d} publishers…'.format(self.publisher_count))
+                [_publisher.close() for _publisher in self.publishers if not _publisher.closed]
             if self.subscriber_count > 0:
                 self._log.info('closing {:d} subscribers…'.format(self.subscriber_count))
-                [_subscriber.close() for _subscriber in self.subscribers]
+                [_subscriber.close() for _subscriber in self.subscribers if not _subscriber.closed]
             self.clear_tasks()
             self.clear_queue()
-            if self.loop and self.loop.is_running():
-                fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
-                fut.result()
+            try:
+                current_loop = asyncio.get_running_loop()
+                on_loop_thread = (self._loop == current_loop)
+                if on_loop_thread:
+                    print('💮 A. disable() closing down from gamepad button.'.format(on_loop_thread))
+                else:
+                    print('💮 B. disable() NOT on loop thread.')
+                print('💮 C. disable() calling loop stop...')
+                self._loop.stop()
+                time.sleep(0.2)
+
+            except RuntimeError as e:
+                print('🌸 D. disable() closing from kill button…')
+                # no running loop, so we're not on the loop thread
+                on_loop_thread = False
+                if self.loop and self.loop.is_running():
+                    fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
+                    fut.result()
             _nil = self._close_message_bus()
             time.sleep(0.1)
             self._log.info('disabled.')
+            print('💮 Z. disabled.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property

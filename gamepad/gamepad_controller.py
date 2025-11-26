@@ -23,13 +23,14 @@ from core.controller import Controller
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadController(Controller):
+    NAME = 'gamepad-ctrl'
     '''
     A controller class for a Gamepad.
     '''
     def __init__(self, message_bus, level):
         Controller.__init__(self, message_bus, level)
         # override controller's log:
-        self._log = Logger('gamepad-cntl', level)
+        self._log = Logger(GamepadController.NAME, level)
         self._previous_event       = None # Event.NOOP
 #       self._enabled              = True
 #       self._event_counter        = itertools.count()
@@ -46,7 +47,7 @@ class GamepadController(Controller):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         self._enabled = True
-        self._log.info('🌺 enabled.')
+        self._log.info('enabled.')
 
 #   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   def disable(self):
@@ -67,7 +68,7 @@ class GamepadController(Controller):
         '''
         Responds to the Event contained within the Payload.
         '''
-        self._log.info('🌺 callback with payload {}'.format(payload.event.name))
+        self._log.info('callback with payload {}'.format(payload.event.name))
         if not self._enabled:
             self._log.debug('action ignored: controller disabled.')
             return

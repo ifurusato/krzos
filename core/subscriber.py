@@ -404,29 +404,35 @@ class GarbageCollector(Subscriber):
         (expired and/or fully acknowledged), then consume and explicitly garbage
         collect the message.
         '''
-        _peeked_message = await self._message_bus.peek_message()
-        if not _peeked_message:
-            raise QueueEmptyOnPeekError('peek returned none.')
-        elif _peeked_message.gcd:
-            self._log.warning('message has already been garbage collected. [1]'.format(self.name))
-#       if self._message_bus.verbose:
-#           self._log.debug('gc-consume() message:' + Fore.WHITE + ' {}; event: {}'.format(_peeked_message.name, _peeked_message.event.name))
+#       _peeked_message = await self._message_bus.peek_message()
+        try:
+            _peeked_message = await self._message_bus.peek_message()
+            if not _peeked_message:
+                raise QueueEmptyOnPeekError('peek returned none.')
+            elif _peeked_message.gcd:
+                self._log.warning('message has already been garbage collected. [1]'.format(self.name))
+    #       if self._message_bus.verbose:
+    #           self._log.debug('gc-consume() message:' + Fore.WHITE + ' {}; event: {}'.format(_peeked_message.name, _peeked_message.event.name))
 
-        # garbage collect (consume) if filter accepts the peeked message
-        if self.acceptable(_peeked_message):
-            _message = await self._message_bus.consume_message()
-            self._message_bus.consumed()
-            _message.gc() # mark as garbage collected and don't republish
-            if not _message.sent:
-                self._log.warning('garbage collected undelivered message: {}; event: {}; value: {}'.format(_message.name, _message.event.name, _message.value))
-#           elif self._message_bus.verbose:
-#           self._log.info('garbage collected message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
-        else:
-            # acknowledge we've seen the message
-            _peeked_message.acknowledge(self)
-#           self._log.info('acknowledged unacceptable message:' \
-#                   + Fore.WHITE + ' {}; event: {} (queue: {:d} elements)'.format(
-#                   _peeked_message.name, _peeked_message.event.name, self._message_bus.queue_size))
+            # garbage collect (consume) if filter accepts the peeked message
+            if self.acceptable(_peeked_message):
+                _message = await self._message_bus.consume_message()
+                self._message_bus.consumed()
+                _message.gc() # mark as garbage collected and don't republish
+                if not _message.sent:
+                    self._log.warning('garbage collected undelivered message: {}; event: {}; value: {}'.format(_message.name, _message.event.name, _message.value))
+    #           elif self._message_bus.verbose:
+    #           self._log.info('garbage collected message:' + Fore.WHITE + ' {}; event: {}'.format(_message.name, _message.event.name))
+            else:
+                # acknowledge we've seen the message
+                _peeked_message.acknowledge(self)
+    #           self._log.info('acknowledged unacceptable message:' \
+    #                   + Fore.WHITE + ' {}; event: {} (queue: {:d} elements)'.format(
+    #                   _peeked_message.name, _peeked_message.event.name, self._message_bus.queue_size))
+        except (asyncio.CancelledError, RuntimeError):
+            # loop is shutting down, exit gracefully
+            self._log.info('🐥 loop is shutting down…')
+            pass
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GarbageCollectedError(Exception):

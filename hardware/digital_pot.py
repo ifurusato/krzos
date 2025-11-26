@@ -79,7 +79,7 @@ class DigitalPotentiometer(Component):
                 self._i2c_addr = 0x0a # new I2C address
                 self._ioe.set_i2c_addr(self._i2c_addr)
                 self._log.info('changed I2C address of digital potentiometer to 0x{:02X}…'.format(self._i2c_addr))
-                sys.exit(0)
+#               sys.exit(0)
             self._ioe.set_mode(self._pot_enc_a, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_b, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_c, io.ADC)

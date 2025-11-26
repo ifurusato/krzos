@@ -145,7 +145,7 @@ class RgbMatrix:
             else:
                 self._log.warning('cannot enable: process already running.')
         else:
-            self._log.warning('cannot enable: already closed.')
+            self._log.debug('cannot enable: already closed.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enabled(self):
@@ -206,7 +206,7 @@ class RgbMatrix:
                 print('\n')
                 self._clear(rgbmatrix5x5)
                 self._log.info('cpu ended.')
-                sys.exit(0)
+#               sys.exit(0)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _set_graph(self, rgbmatrix5x5, values, low=None, high=None, x=0, y=0):

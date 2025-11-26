@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2019-12-23
-# modified: 2025-08-30
+# modified: 2025-11-26
 #
 # The KRZ04 Robot Operating System (KROS), including its command line
 # interface (CLI).
@@ -38,30 +38,34 @@ from core.message_bus import MessageBus
 from core.message_factory import MessageFactory
 from core.config_loader import ConfigLoader
 from core.config_error import ConfigurationError
-from hardware.system import System
-from hardware.button import Button
+from core.subscriber import Subscriber, GarbageCollector
 from core.controller import Controller
-from core.queue_publisher import QueuePublisher
-from hardware.irq_clock import IrqClock
-
-from hardware.vl53l5cx_sensor import Vl53l5cxSensor
-from hardware.digital_pot import DigitalPotentiometer
-from hardware.compass_encoder import CompassEncoder
-from hardware.usfs import Usfs
-from hardware.motor_controller import MotorController
-from behave.behaviour_manager import BehaviourManager
-from hardware.player import Player
-
 from core.publisher import Publisher
+from core.queue_publisher import QueuePublisher
+
+from gamepad.gamepad import Gamepad
+from gamepad.gamepad_publisher import GamepadPublisher
+from gamepad.gamepad_controller import GamepadController
+
+from hardware.button import Button
+from hardware.i2c_scanner import I2CScanner
+from hardware.irq_clock import IrqClock
+from hardware.compass_encoder import CompassEncoder
+from hardware.digital_pot import DigitalPotentiometer
+from hardware.motor_controller import MotorController
+from hardware.player import Player
+from hardware.system import System
+from hardware.usfs import Usfs
+from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 #from hardware.system_publisher import SystemPublisher
 #from hardware.sound import Sound
-
-from core.subscriber import Subscriber, GarbageCollector
 #from hardware.system_subscriber import SystemSubscriber
-from hardware.i2c_scanner import I2CScanner
+
+from behave.behaviour_manager import BehaviourManager
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class KROS(Component, FiniteStateMachine):
+    NAME = 'kros'
     '''
     Extends Component and Finite State Machine (FSM) as a basis of a K-Series
     Robot Operating System (KROS) or behaviour-based system (BBS), including
@@ -80,13 +84,12 @@ class KROS(Component, FiniteStateMachine):
         '''
         This initialises KROS and calls the YAML configurer.
         '''
-        _name = 'kros'
         self._level = level
-        self._log = Logger(_name, log_to_file=True, level=self._level)
+        self._log = Logger(KROS.NAME, log_to_file=True, level=self._level)
         self._print_banner()
         self._log.info('…')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        FiniteStateMachine.__init__(self, self._log, _name)
+        FiniteStateMachine.__init__(self, self._log, KROS.NAME)
         # configuration…
         self._config              = None
         self._component_registry  = None
@@ -260,9 +263,6 @@ class KROS(Component, FiniteStateMachine):
         # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher'): # or 'g' in _pubs:
-            from gamepad.gamepad_publisher import GamepadPublisher
-            from gamepad.gamepad_controller import GamepadController
-
             self._gamepad_publisher = GamepadPublisher(self._config, self._message_bus, self._message_factory, exit_on_complete=True, level=self._level)
 #           self._gamepad_controller = GamepadController(self._message_bus, self._level)
 
@@ -417,17 +417,26 @@ class KROS(Component, FiniteStateMachine):
         This halts any motor activity, demands a sudden halt of all tasks,
         then shuts down the OS.
         '''
-        Player.play('woow')
-        time.sleep(0.5)
-        if self._button:
-            self._button.close()
-            self._button = None
-        self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
-        if self._data_log:
-            self._data_log.data('SHUTDOWN')
-        self.close()
-        # we never get here if we shut down properly
-        self._log.error('shutdown error.')
+        try:
+            Player.play('woow')
+            time.sleep(0.5)
+            if self._button:
+                self._button.close()
+                self._button = None
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
+            if self._data_log:
+                self._data_log.data('SHUTDOWN')
+            self.close()
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'closed.')
+            # we never get here if we shut down properly
+            self._log.error('shutdown error…')
+            raise Exception('shutdown error.')
+        except Exception as e:
+            print(Fore.RED + 'ERROR: {} raised shutting down: {}'.format(type(e), e) + Style.RESET_ALL)
+#           sys.exit(1)
+        finally:
+#           sys.exit(0)
+            pass
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
@@ -467,8 +476,14 @@ class KROS(Component, FiniteStateMachine):
             self._log.warning('already closing.')
         else:
             try:
-                self._log.info('closing…')
+                self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing…')
                 self._closing = True
+                _gamepad = self._component_registry.get(Gamepad.NAME)
+                if _gamepad:
+                    self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing gamepad {}…'.format(type(_gamepad)))
+                    _gamepad.close()
+                else:
+                    self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad!')
                 if self._tinyfx:
                     self._tinyfx.off()
                 if self._motor_controller:
@@ -513,19 +528,20 @@ class KROS(Component, FiniteStateMachine):
                 FiniteStateMachine.close(self)
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
-                    self._log.info('closing message bus from kros…')
+                    self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
                     self._message_bus.close()
-                    self._log.info('message bus closed.')
-                # stop using logger here and print final message using the Logger formatting
-                print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('kros')
-                        + Fore.CYAN + Style.NORMAL + 'INFO  : ' + Fore.MAGENTA + 'application closed.\n' + Style.RESET_ALL)
+                    self._log.info(Fore.MAGENTA + 'message bus closed.')
+                else:
+                    self._log.warning('message bus not closed.')
+
+                # close all logging now
+                if self._data_log:
+                    self._data_log.data('END')
+                self._log.close()
 
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
-                if self._data_log:
-                    self._data_log.data('END')
-                self._log.close()
                 self._closing = False
                 if REPORT_REMAINING_FRAMES:
                     _threads = sys._current_frames().items()
@@ -541,7 +557,10 @@ class KROS(Component, FiniteStateMachine):
                             print('\n')
                     else:
                         print(Fore.WHITE + 'no threads remain upon closing.' + Style.RESET_ALL)
-                sys.exit(0)
+
+                # stop using logger here and print final message using the Logger formatting
+                print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('kros')
+                        + Fore.CYAN + Style.NORMAL + 'INFO  : ' + Fore.MAGENTA + 'application closed.\n' + Style.RESET_ALL)
 
     def wait_for_components_to_close(self, check_interval=0.1, timeout=3.0):
         """
@@ -672,11 +691,11 @@ def parse_args(passed_args=None):
     except NotImplementedError as nie:
         _log.error('unrecognised log level \'{}\': {}'.format(args.level, nie))
         _log.error('exit on error.')
-        sys.exit(1)
+#       sys.exit(1)
     except Exception as e:
         _log.error('error parsing command line arguments: {}\n{}'.format(e, traceback.format_exc()))
         _log.error('exit on error.')
-        sys.exit(1)
+#       sys.exit(1)
 
 # main ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -744,7 +763,7 @@ def main(argv):
     except subprocess.CalledProcessError as e:
         _log.error("pre-startup diagnostics failed with error: {}".format(e))
         _log.error("aborting KROS startup.")
-        sys.exit(1)
+#       sys.exit(1)
     except Exception:
         _log.error('error starting kros: {}'.format(traceback.format_exc()))
     finally:

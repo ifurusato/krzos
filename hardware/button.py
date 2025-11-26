@@ -44,14 +44,12 @@ class Button(Component):
         self._callbacks = []  # list of callback functions
         self._button = None
         self._closed = False
-
         try:
             # create Button with pull_up=True (assumes button connects pin to ground)
             # bounce_time adds debouncing (default 0.01s may be too short)
             self._button = GpioZeroButton(self._pin, pull_up=True, bounce_time=0.05)
             self._button.when_released = self._released
 #           self._button.when_pressed  = lambda: print("released.")
-            
             # patch __del__ to prevent the "GPIO busy" exception during shutdown
             _original_del = self._button.__class__.__del__
             def _silent_del(self):
@@ -61,11 +59,11 @@ class Button(Component):
                     print('{} raised in _silent_del: {}'.format(type(e), e))
                     pass
             self._button.__class__.__del__ = _silent_del
-            
             self._log.info('ready: pushbutton on GPIO pin {:d} using gpiozero.'.format(self._pin))
         except Exception as e:
             self._log.error('failed to initialize button on pin {}: {}'.format(self._pin, e))
             raise
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_callbacks(self):
@@ -81,6 +79,17 @@ class Button(Component):
         self._callbacks.append(callback_method)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def execute_callbacks(self):
+        '''
+        Execute any callbacks attached to this Button.
+        '''
+        for callback in self._callbacks:
+            try:
+                callback()
+            except Exception as e:
+                self._log.error('error in button callback: {}'.format(e))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _released(self):
         '''
         Internal method called when the button is released.
@@ -88,11 +97,7 @@ class Button(Component):
         if self._closed:
             return # ignore callbacks during/after shutdown
         self._log.info(Fore.MAGENTA + "button pressed!")
-        for callback in self._callbacks:
-            try:
-                callback()
-            except Exception as e:
-                self._log.error('error in button callback: {}'.format(e))
+        self.execute_callbacks()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _close_gpiozero(self):

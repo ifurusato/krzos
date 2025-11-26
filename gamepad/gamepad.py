@@ -7,13 +7,12 @@
 #
 # author:   Murray Altheim
 # created:  2020-08-05
-# modified: 2024-12-03
+# modified: 2025-11-26
 #
 # This class interprets the signals arriving from the 8BitDo N30 Pro gamepad,
 # a paired Bluetooth device.
 #
 # GamepadScan at bottom.
-#
 
 import os, sys
 from pathlib import Path
@@ -31,93 +30,94 @@ from core.event import Event
 from core.rate import Rate
 from gamepad.gamepad_mapping import GamepadMapping
 
-'''
-    Pairing and using a bluetooth gamepad device:
-
-    1. prior to pairing your gamepad, list the current devices using:
-
-       % ls /dev/input
-
-    2. connect and pair the gamepad, then repeat the previous command. You'll
-       notice a new device, e.g., "/dev/input/event6". This is likely your
-       gamepad. You may need to check which of the devices was most recently
-       changed to determine this, it isn't always the highest number.
-    3. set the value of gamepad:device_path in the config.yaml file to the
-       value of your gamepad device.
-    4. be sure your gamepad is paired prior to starting kros.
-
-    If everything seems all wired up but you're not getting a response from
-    your gamepad, you may have configured a connection to the wrong device.
-
-    How to Pair with a Raspberry Pi
-
-    The first thing we need to do is connect our Bluetooth device to the Pi.
-    Whilst you can do this using the Bluetooth GUI found on the taskbar, I
-    find it’s easier to work in the terminal as everything will be easier to
-    see, and it will help to understand what’s going on.
-
-    First, let’s launch the Bluetooth control application, and make sure that
-    it’s enabled (it may already be enabled, but just in case):
-
-        sudo bluetoothctl
-
-        power on
-
-        agent on
-
-        default-agent
-
-    This by default does a scan for available devices. Now, let’s run a scan of
-    available devices with the gamepad turned off:
-
-        scan on
-
-    Now, turn your gamepad on, and re scan. If your Pi is still scanning, it’ll
-    let you know and start a new scan when the previous one is finished. Now you
-    can find the new device which should be your gamepad. Make a note of the
-    device address which is formatted in pairs of alphanumeric digits.
-
-    Now that you’ve got the device ID, pair with it using the following formatting:
-
-        pair XX:XX:XX:XX:XX:XX
-
-    e.g.,
-
-        pair E4:17:D8:37:32:77
-
-    Wait for pairing to complete, then click ‘Ok’ on the dialogue box, then close
-    the terminal.
-
-    If the SystemSubscriber configuration has 'exit_on_dire_event' set True, this
-    will shut down KRZOS if the Gamepad is not available or disconnected. This is
-    so that the robot will stop moving if somehow communications with the Gamepad
-    are cut off.
-
-    This class based on information found at:
-
-        https://core-electronics.com.au/tutorials/using-usb-and-bluetooth-controllers-with-python.html
-
-'''
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Gamepad(Component):
+    NAME = 'gamepad'
+    __EXIT_ON_Y_BUTTON = True
+    __NOT_AVAILABLE_ERROR = 'gamepad device not found (not configured, paired, powered or otherwise available)'
+    '''
+        This is an implementation of a Bluetooth gamepad.
 
-    _exit_on_y_btn = True
-    _NOT_AVAILABLE_ERROR = 'gamepad device not found (not configured, paired, powered or otherwise available)'
+        NOTES
 
+        Pairing and using a bluetooth gamepad device:
+
+        1. prior to pairing your gamepad, list the current devices using:
+
+           % ls /dev/input
+
+        2. connect and pair the gamepad, then repeat the previous command. You'll
+           notice a new device, e.g., "/dev/input/event6". This is likely your
+           gamepad. You may need to check which of the devices was most recently
+           changed to determine this, it isn't always the highest number.
+        3. set the value of gamepad:device_path in the config.yaml file to the
+           value of your gamepad device.
+        4. be sure your gamepad is paired prior to starting kros.
+
+        If everything seems all wired up but you're not getting a response from
+        your gamepad, you may have configured a connection to the wrong device.
+
+        How to Pair with a Raspberry Pi
+
+        The first thing we need to do is connect our Bluetooth device to the Pi.
+        Whilst you can do this using the Bluetooth GUI found on the taskbar, I
+        find it’s easier to work in the terminal as everything will be easier to
+        see, and it will help to understand what’s going on.
+
+        First, let’s launch the Bluetooth control application, and make sure that
+        it’s enabled (it may already be enabled, but just in case):
+
+            sudo bluetoothctl
+
+            power on
+
+            agent on
+
+            default-agent
+
+        This by default does a scan for available devices. Now, let’s run a scan of
+        available devices with the gamepad turned off:
+
+            scan on
+
+        Now, turn your gamepad on, and re scan. If your Pi is still scanning, it’ll
+        let you know and start a new scan when the previous one is finished. Now you
+        can find the new device which should be your gamepad. Make a note of the
+        device address which is formatted in pairs of alphanumeric digits.
+
+        Now that you’ve got the device ID, pair with it using the following formatting:
+
+            pair XX:XX:XX:XX:XX:XX
+
+        e.g.,
+
+            pair E4:17:D8:37:32:77
+
+        Wait for pairing to complete, then click ‘Ok’ on the dialogue box, then close
+        the terminal.
+
+        If the SystemSubscriber configuration has 'exit_on_dire_event' set True, this
+        will shut down KRZOS if the Gamepad is not available or disconnected. This is
+        so that the robot will stop moving if somehow communications with the Gamepad
+        are cut off.
+
+        This class based on information found at:
+
+            https://core-electronics.com.au/tutorials/using-usb-and-bluetooth-controllers-with-python.html
+
+    '''
     def __init__(self, config, message_bus, message_factory, suppressed=False, enabled=True, level=Level.INFO):
-        if not isinstance(suppressed, bool):
-            raise ValueError('wrong type for suppressed argument: {}'.format(type(suppressed)))
-        if not isinstance(enabled, bool):
-            raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
         '''
-        Parameters:
+        Args:
 
            message_bus:      the message bus to receive messages from this task
            message_factory:  the factory for creating messages
         '''
+        if not isinstance(suppressed, bool):
+            raise ValueError('wrong type for suppressed argument: {}'.format(type(suppressed)))
+        if not isinstance(enabled, bool):
+            raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
         self._level = level
-        self._log = Logger("gamepad", level)
+        self._log = Logger(Gamepad.NAME, level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         if config is None:
             raise ValueError('no configuration provided.')
@@ -131,7 +131,6 @@ class Gamepad(Component):
         elif not isinstance(message_factory, MessageFactory):
             raise ValueError('unrecognised message factory argument: {}'.format(type(message_bus)))
         self._message_factory = message_factory
-        self._log.info('initialising…')
         _cfg = config['kros'].get('hardware').get('gamepad')
         _loop_freq_hz         = _cfg.get('loop_freq_hz')
         self._rate = Rate(_loop_freq_hz)
@@ -141,9 +140,11 @@ class Gamepad(Component):
         self._log.info('suppress horizontal events: {}'.format(self._device_path))
         self._gamepad_closed = False
         self._thread         = None
-        self._gamepad        = None
+        self._gamepad_device        = None
+        self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def connect(self):
         '''
         Scan for likely gamepad device, and if found, connect.
@@ -156,12 +157,10 @@ class Gamepad(Component):
             raise ConnectionError('no gamepad device found.')
         self._connect()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def set_exit_on_Y_BUTTON():
-        Gamepad._exit_on_y_btn = True
+        Gamepad.__EXIT_ON_Y_BUTTON = True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def device_exists(self):
         '''
         Returns True if the gamepad device exists.
@@ -169,62 +168,63 @@ class Gamepad(Component):
         _device = Path(self._device_path)
         return _device.exists()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_connection(self):
-        return self._gamepad != None and self.device_exists()
+        return self._gamepad_device != None and self.device_exists()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _connect(self):
         self._log.info('connecting gamepad…')
         try:
             if not self.device_exists():
                 raise Exception("gamepad device '{}' does not exist.".format(self._device_path))
-            self._gamepad = InputDevice(self._device_path)
+            self._gamepad_device = InputDevice(self._device_path)
             # display device info
-            self._log.info(Fore.YELLOW + 'gamepad: {} at path: {}'.format(self._gamepad, self._device_path))
+            self._log.info(Fore.YELLOW + 'gamepad: {} at path: {}'.format(self._gamepad_device, self._device_path))
             self._log.info('connected.')
         except Exception as e:
             Component.disable(self)
-            self._gamepad = None
+            self._gamepad_device = None
             raise ConnectionError('unable to connect to input device path {}: {}'.format(self._device_path, e))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
-#       if not self.enabled and not self.closed:
         if not self.enabled:
             if not self.in_loop():
-                if self._gamepad == None:
+                if self._gamepad_device == None:
                     self.connect()
                     Component.enable(self)
                     self._log.info('enabled gamepad.')
             else:
                 self._log.warning('already started gamepad.')
-        elif self.closed:
-            self._log.warning('cannot enable gamepad: already closed.')
-            Component.disable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def disable(self):
+        if not self.disabled:
+            Component.disable(self)
+        else:
+            self._log.warning('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            Component.close(self)
+        else:
+            self._log.warning('already closed.')
+
     def in_loop(self):
         '''
         Returns true if the main loop is active (the thread is alive).
         '''
         return self._thread != None and self._thread.is_alive()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def convert_range(value):
         return ( (value - 127.0) / 255.0 ) * -2.0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _gamepad_loop(self, callback, f_is_enabled):
         self._log.info('starting event loop…')
-        __enabled = True
-        while __enabled and f_is_enabled():
+        while self.enabled and f_is_enabled():
             try:
-                if self._gamepad is None:
-                    raise Exception(Gamepad._NOT_AVAILABLE_ERROR + ' [gamepad no longer available]')
+                if self._gamepad_device is None:
+                    raise Exception(Gamepad.__NOT_AVAILABLE_ERROR + ' [gamepad no longer available]')
                 # loop and filter by event code and print the mapped label
-                async for _event in self._gamepad.async_read_loop():
+                async for _event in self._gamepad_device.async_read_loop():
                     _message = self._handleEvent(_event)
                     if callback and _message:
                         await callback(_message)
@@ -238,7 +238,7 @@ class Gamepad(Component):
                 self._log.error('gamepad device error: {}'.format(e))
                 __enabled = False
             except OSError as e:
-                self._log.error(Gamepad._NOT_AVAILABLE_ERROR + ' [lost connection to gamepad]')
+                self._log.error(Gamepad.__NOT_AVAILABLE_ERROR + ' [lost connection to gamepad]')
                 __enabled = False
             finally:
                 '''
@@ -247,9 +247,13 @@ class Gamepad(Component):
                 a gamepad event loop being closed suddenly this is not an issue.
                 '''
                 try:
-                    self._log.info('closing gamepad device…')
-                    self._gamepad.close()
-                    self._log.info(Fore.YELLOW + 'gamepad device closed.')
+                    if self._gamepad_device.fd > -1:
+                        self._log.info('closing gamepad device…')
+                        self._gamepad_device.close()
+                        self._log.info('gamepad device closed.')
+                    else:
+                        self._log.debug('gamepad device already closed.')
+
                 except Exception as e:
                     self._log.info('error closing gamepad device: {}'.format(e))
                 finally:
@@ -260,7 +264,15 @@ class Gamepad(Component):
             self._rate.wait()
         self._log.info('exited event loop.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def _kill(self):
+        self._log.info(Style.BRIGHT + 'exit on Y Button…')
+        _component_registry = Component.get_registry()
+        _button = _component_registry.get('button')
+        if _button:
+            _button.execute_callbacks()
+        else:
+            self._log.warning('abnormal exit on Y Button…')
+
     def _handleEvent(self, event):
         '''
         Handles the incoming event by filtering on event type and code.
@@ -299,11 +311,10 @@ class Gamepad(Component):
                     self._log.info(Fore.RED + "X Button")
                     _control = GamepadMapping.X_BUTTON
                 elif event.code == GamepadMapping.Y_BUTTON.code:
-                    self._log.info(Fore.RED + "Y Button: exit? {}".format(Gamepad._exit_on_y_btn))
+                    self._log.info(Fore.RED + "Y Button: exit? {}".format(Gamepad.__EXIT_ON_Y_BUTTON))
                     _control = GamepadMapping.Y_BUTTON
-                    if Gamepad._exit_on_y_btn:
-                        self._log.info(Style.BRIGHT + 'exit on Y Button…')
-                        sys.exit(0)
+                    if Gamepad.__EXIT_ON_Y_BUTTON:
+                        self._kill()
                 elif event.code == GamepadMapping.L1_BUTTON.code:
                     self._log.info(Fore.YELLOW + "L1 Button")
                     _control = GamepadMapping.L1_BUTTON
@@ -357,11 +368,9 @@ class Gamepad(Component):
                 if self._suppress_horiz_events:
                     _control = None
             elif event.code == GamepadMapping.R3_HORIZONTAL.code:
-#               self._log.info(Fore.RED + "R3 Horizontal {}".format(event.value))
+                self._log.info(Fore.RED + "R3 Horizontal {}".format(event.value))
                 if self._suppress_horiz_events:
                     _control = None
-
-                pass
             else:
                 pass
         else:
@@ -383,7 +392,6 @@ class GamepadScan:
         self._device_path = device_path
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_ctime(self, path):
         try:
             _device_stat = os.stat(path)
@@ -391,7 +399,6 @@ class GamepadScan:
         except OSError:
             return -1.0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_latest_device(self):
         '''
         Build a dictionary of available devices, return the one with the
@@ -417,7 +424,6 @@ class GamepadScan:
         self._log.debug('most recent device: ' + Fore.YELLOW + '{}'.format(_latest_device))
         return _latest_device
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_gamepad_device(self):
         '''
         Checks that the configured device matches the device with the most
@@ -434,4 +440,4 @@ class GamepadScan:
             self._log.warning('does not match:     {}'.format(_latest_device))
             return False
 
-# EOF
+#EOF

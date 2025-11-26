@@ -103,6 +103,6 @@ class GamepadMonitor(Component):
             Component.disable(self)
             self._log.debug('successfully disabled.')
         else:
-            self._log.warning('already disabled.')
+            self._log.debug('already disabled.')
 
 #EOF

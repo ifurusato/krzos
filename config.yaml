@@ -13,7 +13,7 @@ krosd:
 kros:
     application:                                           # application-level configuration
         await_pushbutton:                 False            # await pushbutton on startup
-        data_logging:                      True            # enable data logging
+        data_logging:                     False            # enable data logging
     arguments:                                             # CLI arguments are copied here (required section)
         nada:                             False            # placeholder
     component:
@@ -61,7 +61,9 @@ kros:
             omega_max:                  0.5
             speed_multiplier_max:       2.0
             enable_negative_speed:      False
-            hold_ms_default:            2000
+            use_vy_for_fwd_aft:         True               # use vy rather than multiplier when true
+            hold_vx_ms_default:         1500               # lateral movement delay time
+            hold_vy_ms_default:         3000               # longitudinal movement delay time
             ramp_up_ms:                 1500
             ramp_down_ms:               1500
         radiozoa:

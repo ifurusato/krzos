@@ -713,7 +713,6 @@ class MotorController(Component):
         '''
         for _motor in self._all_motors:
             if not _motor.is_stopped:
-                print(Fore.BLUE + '🐟 {} IS NOT STOPPED: {} '.format(_motor.orientation.label, _motor.velocity) + Style.RESET_ALL)
                 return False
         return True
 

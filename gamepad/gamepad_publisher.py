@@ -32,6 +32,7 @@ from gamepad.gamepad import Gamepad
 from gamepad.gamepad_monitor import GamepadMonitor
 
 class GamepadPublisher(Publisher):
+    NAME = 'pub:gamepad'
     _PUBLISH_LOOP_NAME = '__gamepad_publish_loop'
     '''
     A Publisher that connects with a Bluetooth-based gamepad.
@@ -43,7 +44,8 @@ class GamepadPublisher(Publisher):
     :param level:             the logging level
     '''
     def __init__(self, config, message_bus, message_factory, exit_on_complete=True, level=Level.INFO):
-        Publisher.__init__(self, 'gamepad', config, message_bus, message_factory, suppressed=False, level=level)
+        self._log = Logger(GamepadPublisher.NAME, level)
+        Publisher.__init__(self, self._log, config, message_bus, message_factory, suppressed=False, level=level)
         self._config            = config
         self._level             = level
         self._play_sound        = self._config['kros'].get('play_sound')

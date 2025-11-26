@@ -291,7 +291,6 @@ class Motor(Component):
         _current_power = self.get_current_power(settle_to_zero=False)
         if _current_power:
             value = isclose(_current_power, 0.0, abs_tol=1e-2)
-            print('current: {:4.2f}; value: {}'.format(_current_power, value))
             return value
 #           return isclose(_current_power, 0.0, abs_tol=1e-2)
         else:
