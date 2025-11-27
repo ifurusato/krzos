@@ -22,6 +22,7 @@ import time
 import traceback
 import argparse
 import itertools
+import atexit
 from pathlib import Path
 from colorama import init, Fore, Style
 init()
@@ -112,6 +113,7 @@ class KROS(Component, FiniteStateMachine):
 
         self._data_logging        = False
         self._data_log            = None
+        self._gamepad_enabled     = False
         self._started             = False
         self._closing             = False
         self._log.info('oid: {}'.format(id(self)))
@@ -162,7 +164,8 @@ class KROS(Component, FiniteStateMachine):
 
 #       self._log.info('argument gamepad:     {}'.format(arguments.gamepad))
         _args['gamepad_enabled'] = arguments.gamepad and self._is_raspberry_pi
-        self._log.info('gamepad enabled:      {}'.format(_args['gamepad_enabled']))
+        self._gamepad_enabled = _args['gamepad_enabled']
+        self._log.info('gamepad enabled:      {}'.format(self._gamepad_enabled))
 
         # print remaining arguments
         self._log.info('argument config-file: {}'.format(arguments.config_file))
@@ -377,7 +380,17 @@ class KROS(Component, FiniteStateMachine):
         self._log.info(Fore.MAGENTA + 'kros started.')
         # print registry of components
         self._component_registry.print_registry()
-        Player.play('wow')
+        Player.play('yaay')
+        atexit.register(lambda: self._post_cleanup())
+
+    def _post_cleanup(self):
+        '''
+        Called by atexit upon close of the application.
+        '''
+        self._log.info(Fore.MAGENTA + 'kros cleanup.')
+        self._report_remaining_frames()
+        # print final message using the Logger formatting
+        self._fake_logger_info(Fore.MAGENTA + 'application closed.')
 
     def get_config(self):
         '''
@@ -432,7 +445,6 @@ class KROS(Component, FiniteStateMachine):
         '''
         This permanently disables the KROS.
         '''
-        self._log.warning(Fore.MAGENTA + 'disabling KROS ...............................................')
         if self.closed:
             self._log.warning('already closed.')
         if self.enabled:
@@ -458,7 +470,7 @@ class KROS(Component, FiniteStateMachine):
         This closes KROS and sets the robot to a passive, stable state
         following a session.
         '''
-        self._log.warning(Fore.MAGENTA + 'closing KROS ...............................................')
+        self._log.info(Fore.MAGENTA + 'closing KROS ...............................................')
         if self.closed:
             self._log.warning('already closed.')
         elif self.closing:
@@ -467,22 +479,18 @@ class KROS(Component, FiniteStateMachine):
             try:
                 self._closing = True
                 self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing…')
-
-                self._component_registry.print_registry() # TEMP
-
-                _gamepad_monitor = self._component_registry.get(GamepadMonitor.NAME)
-                if _gamepad_monitor:
-                    self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing gamepad monitor {}…'.format(type(_gamepad_monitor)))
-                    _gamepad_monitor.close()
-                else:
-                    self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad monitor! ({}) in registry.'.format(GamepadMonitor.NAME))
-
+                if self._gamepad_enabled:
+                    _gamepad_monitor = self._component_registry.get(GamepadMonitor.NAME)
+                    if _gamepad_monitor:
+                        _gamepad_monitor.close()
+                    else:
+                        self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad monitor! ({}) in registry.'.format(GamepadMonitor.NAME))
                 if self._tinyfx:
                     self._tinyfx.off()
                 if self._motor_controller:
                     self._motor_controller.close()
                 self._log.info('closing subscribers and publishers…')
-                # closes all components that are not a publisher, subscriber, the message bus or kros itself…
+                # closes all remaining components that are not a publisher, subscriber, the message bus or kros itself…
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
@@ -492,7 +500,6 @@ class KROS(Component, FiniteStateMachine):
                             and _component != self and _component != self._message_bus:
                         self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
-#                       self._component_registry.deregister(_component)
                 if self._irq_clock and not self._irq_clock.closed:
                     self._irq_clock.close()
                 time.sleep(0.1)
@@ -501,24 +508,31 @@ class KROS(Component, FiniteStateMachine):
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
-                        # already gone
-                        self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
+                        # already gone (e.g., behaviours)
+                        self._log.debug('component \'{}\' not found in registry.'.format(_name))
                     elif _component != self and _component != self._message_bus:
                         self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                         _component.close()
                         self._component_registry.deregister(_component)
                 _open_count = self._component_registry.count_open_components()
                 if _open_count > 2: # we expect kros and the message bus to still be open
-                    self._log.info('waiting for components to close…; {} are still open.'.format(_open_count))
+                    self._log.warning('waiting for components to close…; {} are still open.'.format(_open_count))
                     self.wait_for_components_to_close()
                     _open_count = self._component_registry.count_open_components()
                     if _open_count > 2:
                         self._log.info('finished waiting for components to close; {} remain open:'.format(_open_count))
                         for _name in self._component_registry.names:
                             self._log.info('    {}'.format(_name))
-                self._log.info('closing kros…')
+                # close all logging now
+                if self._data_log:
+                    self._data_log.data('END')
+                self._log.close()
+                self._log.info(Fore.MAGENTA + 'closing kros…')
+                print(Fore.WHITE + '🍊 1/5. kros close.' + Style.RESET_ALL)
                 Component.close(self) # will call disable()
+                print(Fore.WHITE + '🍊 2/5. kros close.' + Style.RESET_ALL)
                 FiniteStateMachine.close(self)
+                print(Fore.WHITE + '🍊 3/5. kros close.' + Style.RESET_ALL)
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
@@ -526,44 +540,47 @@ class KROS(Component, FiniteStateMachine):
                     self._log.info(Fore.MAGENTA + 'message bus closed.')
                 else:
                     self._log.warning('message bus not closed.')
-
-                # close all logging now
-                if self._data_log:
-                    self._data_log.data('END')
-                self._log.close()
-
+                print(Fore.WHITE + '🍊 4/5. kros close.' + Style.RESET_ALL)
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
+                print(Fore.WHITE + '🍊 5/5. kros close.' + Style.RESET_ALL)
                 self._closing = False
-                if REPORT_REMAINING_FRAMES:
-                    _threads = sys._current_frames().items()
-                    if len(_threads) > 1:
-                        try:
-                            print(Fore.WHITE + '{} threads remain upon closing.'.format(len(_threads)) + Style.RESET_ALL)
-                            frames = sys._current_frames()
-                            for thread_id, frame in frames.items():
-                                print(Fore.WHITE + '    remaining frame: ' + Fore.YELLOW + "Thread ID: {}, Frame: {}".format(thread_id, frame) + Style.RESET_ALL)
-                        except Exception as e:
-                            print('error showing frames: {}\n{}'.format(e, traceback.format_exc()))
-                        finally:
-                            print('\n')
-                    else:
-                        print(Fore.WHITE + 'no threads remain upon closing.' + Style.RESET_ALL)
 
-                # stop using logger here and print final message using the Logger formatting
-                print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('kros')
-                        + Fore.CYAN + Style.NORMAL + 'INFO  : ' + Fore.MAGENTA + 'application closed.\n' + Style.RESET_ALL)
+    def _report_remaining_frames(self):
+        if REPORT_REMAINING_FRAMES:
+            _threads = sys._current_frames().items()
+            _thread_count = len(_threads) # not likely Egyptian
+            if _thread_count > 1:
+                try:
+                    self._fake_logger_info(Fore.WHITE + '{} thread{} remain{} upon closing:'.format(
+                            _thread_count, 's' if _thread_count > 1 else '', '' if _thread_count > 1 else 's'))
+                    frames = sys._current_frames()
+                    for thread_id, frame in frames.items():
+                        print(Fore.WHITE + '  remaining frame: ' + Fore.YELLOW + "Thread ID: {}, Frame: {}".format(thread_id, frame) + Style.RESET_ALL)
+                except Exception as e:
+                    print('error showing frames: {}\n{}'.format(e, traceback.format_exc()))
+                finally:
+                    print('')
+            else:
+                self._fake_logger_info(Fore.WHITE + 'no threads remain upon closing.')
+
+    def _fake_logger_info(self, message):
+        '''
+        Used when logger is no longer available, print message using the Logger formatting.
+        '''
+        print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('kros')
+                + Fore.CYAN + Style.NORMAL + 'INFO  : {}\n'.format(message) + Style.RESET_ALL)
 
     def wait_for_components_to_close(self, check_interval=0.1, timeout=3.0):
-        """
+        '''
         Waits until all non-Publisher, non-Subscriber components (excluding
         the application and the message bus) report that they are closed.
 
         :param check_interval:     Seconds between checks.
         :param timeout:            Optional timeout in seconds. None means wait indefinitely.
         :raises TimeoutError:      If timeout is exceeded before all components close.
-        """
+        '''
         start_time = time.time()
         while True:
             remaining = [
@@ -690,7 +707,7 @@ def parse_args(passed_args=None):
 
 # main ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REPORT_REMAINING_FRAMES = False # debugging
+REPORT_REMAINING_FRAMES = True # debugging
 
 def main(argv):
 
@@ -732,7 +749,6 @@ def main(argv):
                     while _kros.should_await_pushbutton():
                         if next(_counter) % 20 == 0:
                             _log.info(Fore.YELLOW + 'waiting for pushbutton…')
-#                           _log.info(Fore.YELLOW + 'waiting for pushbutton on pin {}…'.format(_kros._button.pin))
                         time.sleep(0.1)
                     match _kros.state:
                         case State.INITIAL: # expected state
@@ -744,7 +760,6 @@ def main(argv):
                             _log.warning('closed with invalid state: {}'.format(_kros.state))
                 else:
                     _kros.start()
-#               _log.info(Fore.WHITE + 'returned from main loop.')
                     # kros is now running…
     except KeyboardInterrupt:
         print('\n')

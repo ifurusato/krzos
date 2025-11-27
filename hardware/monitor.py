@@ -9,6 +9,8 @@
 # created:  2024-07-04
 # modified: 2024-09-04
 #
+# Displays multiple lines of system monitoring data on an OLED display.
+#
 # Derived in part from the sys_info_extended.py example file, part of
 # Luna OLED library, Copyright (c) 2023, Richard Hull and contributors
 #
@@ -56,7 +58,6 @@ from core.component import Component
 from hardware.irq_clock import IrqClock
 from hardware.ina260_sensor import Ina260
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Monitor(Component):
     '''
     Displays multiple lines of system monitoring data on an OLED display.
@@ -68,7 +69,7 @@ class Monitor(Component):
     class will log an error but not otherwise function differently, i.e.,
     the callback on the IRQ clock won't be set and update() will therefore
     not be called.
-    
+
     :param: config            the application configuration
     :param: external_clock    optional external clock for callbacks to update()
     :param: use_thread        if True, override configuration and use a thread,
@@ -168,17 +169,16 @@ class Monitor(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _update_loop(self):
         while self.enabled:
             self.update()
             self._rate.wait()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def permit_callback(self):
         return self._permit_callback
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_callback(self, callback):
         '''
         Set a callback for a substitution on the last line, which should
@@ -188,8 +188,6 @@ class Monitor(Component):
 
     def get_callback_value(self):
         return self.__callback()
-
-    # data ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def get_temp(self):
         temp = float(subprocess.getoutput("vcgencmd measure_temp").split("=")[1].split("'")[0])
@@ -261,8 +259,6 @@ class Monitor(Component):
     def get_current(self):
         return self._ina260.current
 
-    # drawing ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def _draw_text(self, draw, margin_x, line_num, text):
         draw.text((margin_x, self._margin_y_line[line_num]), text, font=self._font_default, fill="white")
 
@@ -279,15 +275,13 @@ class Monitor(Component):
         draw.rectangle((self._margin_x_bar, top_left_y, self._margin_x_bar + self._bar_width_full, top_left_y + self._bar_height), fill="white")
         draw.text((65, top_left_y - 2), "100 %", font=self._font_full, fill="black")
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear(self):
         if self._device:
             self._device.clear()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_message(self, message):
         self._message = message
-    
+
     def _display_message(self, draw):
         _nlines = self._message.count('\n')
         if _nlines < 2:
@@ -298,7 +292,6 @@ class Monitor(Component):
                 _line = _lines[n]
                 self._draw_message(draw, 0, n+2, _line)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def update(self):
         if self._device and self.enabled:
             if self._counter:
@@ -313,7 +306,7 @@ class Monitor(Component):
                 _temp = self.get_temp()
                 self._draw_text(draw, 0, 0, "Temp")
                 self._draw_text(draw, self._margin_x_figure, 0, " {:5.1f}C".format(_temp))
-    
+
                 # line 1 : cpu ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _cpu = self.get_cpu()
                 self._draw_text(draw, 0, 1, "CPU")
@@ -322,7 +315,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 1, _cpu)
                 else:
                     self._draw_bar_full(draw, 1)
-    
+
                 # line 2 : memory ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _mem = self.get_mem()
                 self._draw_text(draw, 0, 2, "Mem")
@@ -331,7 +324,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 2, _mem)
                 else:
                     self._draw_bar_full(draw, 2)
-    
+
                 # line 3 : disk usage ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _disk = self.get_disk_usage()
                 self._draw_text(draw, 0, 3, "Disk")
@@ -340,7 +333,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 3, _disk)
                 else:
                     self._draw_bar_full(draw, 3)
-    
+
                 # line 4 : battery ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _battery = self.get_battery()
                 self._draw_text(draw, 0, 4, "Batt")
@@ -349,7 +342,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 4, ( _battery / self._batt_max * 100.0) )
                 else:
                     self._draw_bar_full(draw, 4)
-    
+
                 # line 5 : 5V regulator ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _5v_reg = self.get_5v_regulator()
                 self._draw_text(draw, 0, 5, "5vRg")
@@ -358,7 +351,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 5, ( _5v_reg / self._pi_max * 100.0) )
                 else:
                     self._draw_bar_full(draw, 5)
-    
+
                 # line 6 : 3V3 logic ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _3v3_reg = self.get_3v3()
                 self._draw_text(draw, 0, 6, "3v3")
@@ -367,7 +360,7 @@ class Monitor(Component):
                     self._draw_bar(draw, 6, ( _3v3_reg / self._logic_max * 100.0) )
                 else:
                     self._draw_bar_full(draw, 6)
-    
+
                 # line 7 : current ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 _current = self.get_current()
                 self._draw_text(draw, 0, 7, "Curr")
@@ -385,17 +378,16 @@ class Monitor(Component):
 
                 # line 8 : IP address  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 self._draw_text(draw, 0, 8, self.get_ip(self._network_interface_name))
-    
+
                 # line 9 : uptime ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 self._draw_text(draw, 0, 9, self.get_uptime())
-    
+
 #               # line 9 : timestamp or callback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #               if self._permit_callback and self.__callback is not None:
 #                   self._draw_text(draw, 0, 9, self.get_callback_value())
 #               else:
 #                   self._draw_text(draw, 0, 9, self.get_timestamp())
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.enabled:
             Component.enable(self)
@@ -407,7 +399,6 @@ class Monitor(Component):
             self._log.warning('cannot enable monitor: already closed.')
             Component.disable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         Component.disable(self)
         self.clear()

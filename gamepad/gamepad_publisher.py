@@ -183,18 +183,13 @@ class GamepadPublisher(Publisher):
         except asyncio.CancelledError:
             self._log.info('gamepad publishing loop cancelled.')
             raise
-        finally:
-            self._log.info('completed gamepad publishing loop.')
 
     def disable(self):
         if not self.disabled:
             if self._gamepad_task and not self._gamepad_task.done():
-                self._log.info(Fore.MAGENTA + 'cancelling gamepad publishing task...             MMMMMMMMMMMMMMMMMMMMMMM ')
+                self._log.debug('cancelling gamepad publishing task…')
                 self._gamepad_task.cancel()
                 self._gamepad_task = None
-            else:
-                self._log.info(Fore.MAGENTA + 'task was None? {} and task not done? {}    mmmmmmmmmmmmmmmm'.format( self._gamepad_task is None,  not self._gamepad_task.done()   ))
-
             Publisher.disable(self)
             self._log.info('disabled.')
         else:

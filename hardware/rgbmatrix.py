@@ -7,10 +7,9 @@
 #
 # author:   Murray Altheim
 # created:  2020-03-16
-# modified: 2024-10-31
+# modified: 2025-11-27
 #
-# DisplayType at bottom.
-#
+# DisplayType and WipeDirection at bottom.
 
 import sys, time, colorsys
 from threading import Thread
@@ -37,8 +36,8 @@ from core.orientation import Orientation
 from core.ranger import Ranger
 from hardware.color import Color
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class RgbMatrix:
+    NAME = 'rgbmatrix'
     '''
     This class provides access to a pair of Pimoroni 5x5 RGB LED Matrix displays,
     labeled port and starboard. It also includes several canned demonstrations,
@@ -53,7 +52,7 @@ class RgbMatrix:
     :param level:         the log level
     '''
     def __init__(self, enable_port=True, enable_stbd=True, level=Level.INFO):
-        self._log = Logger("rgbmatrix", level)
+        self._log = Logger(RgbMatrix.NAME, level)
         self._has_port_rgbmatrix = False
         self._has_stbd_rgbmatrix = False
         self._port_rgbmatrix = None
@@ -75,6 +74,7 @@ class RgbMatrix:
         else:
             self._log.debug('no starboard rgbmatrix found.')
         self._log.info('rgbmatrix width,height: {},{}'.format(5, 5))
+        self._enable_threading = False
         self._thread_PORT = None
         self._thread_STBD = None
         self._color = Color.RED # used by _solid
@@ -95,10 +95,15 @@ class RgbMatrix:
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def name(self):
-        return 'RgbMatrix'
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def enabled(self):
+        return self._enabled
+
+    @property
+    def name(self):
+        return RgbMatrix.NAME
+
     def _get_target(self):
         if self._display_type is DisplayType.BLINKY:
             return [ RgbMatrix._blinky, None ]
@@ -125,33 +130,30 @@ class RgbMatrix:
         elif self._display_type is DisplayType.WIPE_RIGHT:
             return [ RgbMatrix._wipe, WipeDirection.RIGHT ]
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
         Enables/starts a thread for the target process. This does not need to
         be called if just using the matrix directly.
         '''
         if not self._closed and not self._closing:
-            if self._thread_PORT is None and self._thread_STBD is None:
-                self._enabled = True
-                _target = self._get_target()
-                if self._port_rgbmatrix:
-                    self._thread_PORT = Thread(name='rgb-port', target=_target[0], args=[self, self._port_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
-                    self._thread_PORT.start()
-                if self._stbd_rgbmatrix:
-                    self._thread_STBD = Thread(name='rgb-stbd', target=_target[0], args=[self, self._stbd_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
-                    self._thread_STBD.start()
-                self._log.debug('enabled.')
+            if self._enable_threading:
+                if self._thread_PORT is None and self._thread_STBD is None:
+                    self._enabled = True
+                    _target = self._get_target()
+                    if self._port_rgbmatrix:
+                        self._thread_PORT = Thread(name='rgb-port', target=_target[0], args=[self, self._port_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
+                        self._thread_PORT.start()
+                    if self._stbd_rgbmatrix:
+                        self._thread_STBD = Thread(name='rgb-stbd', target=_target[0], args=[self, self._stbd_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
+                        self._thread_STBD.start()
+                    self._log.debug('enabled.')
+                else:
+                    self._log.warning('cannot enable: process already running.')
             else:
-                self._log.warning('cannot enable: process already running.')
+                self._log.warning('cannot enable: threading disabled.')
         else:
             self._log.debug('cannot enable: already closed.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def enabled(self):
-        return self._enabled
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         self._log.info('disabling…')
         self._enabled = False
@@ -178,7 +180,6 @@ class RgbMatrix:
         self._log.info('disabled.')
         return self._enabled
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _cpu(self, rgbmatrix5x5, arg, is_enabled):
         '''
         A port of the CPU example from the Matrix 11x7.
@@ -208,7 +209,6 @@ class RgbMatrix:
                 self._log.info('cpu ended.')
 #               sys.exit(0)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _set_graph(self, rgbmatrix5x5, values, low=None, high=None, x=0, y=0):
         '''
         Plot a series of values into the display buffer.
@@ -252,7 +252,6 @@ class RgbMatrix:
             except IndexError:
                 return
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _grow_buffer(self, x, y):
         '''
         Grows a copy of the buffer until the new shape fits inside it.
@@ -264,7 +263,6 @@ class RgbMatrix:
         y_pad = max(0, y - self._buf.shape[1])
         return numpy.pad(self._buf, ((0, x_pad), (0, y_pad)), 'constant')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _rainbow(self, rgbmatrix5x5, arg, is_enabled):
         '''
         Display a rainbow pattern.
@@ -290,7 +288,6 @@ class RgbMatrix:
         self._clear(rgbmatrix5x5)
         self._log.info('rainbow ended.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _sworl(self, rgbmatrix5x5, arg, is_enabled):
         '''
         Display a sworl pattern, whatever that is.
@@ -323,7 +320,6 @@ class RgbMatrix:
         finally:
             self.set_color(Color.BLACK)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _wipe(self, rgbmatrix5x5, direction):
         '''
         Display a wipe in the specified direction.
@@ -333,18 +329,15 @@ class RgbMatrix:
         if direction is WipeDirection.UP or direction is WipeDirection.DOWN:
             self._wipe_vertical(rgbmatrix5x5, direction)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _wipe_horizontal(self, rgbmatrix5x5, direction, is_enabled):
         '''
         Note: not implemented yet.
         '''
         raise NotImplementedError()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_wipe_color(self, color):
         self._wipe_color = color
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _wipe_vertical(self, rgbmatrix, direction, is_enabled):
         '''
         Wipe the display up or down.
@@ -388,18 +381,15 @@ class RgbMatrix:
         finally:
             self.set_color(Color.BLACK)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_solid_color(self, color):
         self._color = color
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def show(self, orientation=None):
         if orientation is None or orientation is Orientation.PORT or orientation is Orientation.CNTR and self._port_rgbmatrix:
             self._port_rgbmatrix.show()
         if orientation is None or orientation is Orientation.STBD or orientation is Orientation.CNTR:
             self._stbd_rgbmatrix.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def show_color(self, color, orientation):
         self.set_solid_color(color)
         if orientation is Orientation.PORT or orientation is Orientation.CNTR and self._port_rgbmatrix:
@@ -407,7 +397,6 @@ class RgbMatrix:
         if orientation is Orientation.STBD or orientation is Orientation.CNTR:
             self._set_color(self._stbd_rgbmatrix, self._color)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_rgbmatrix(self, orientation):
         '''
         Return the port or starboard RGB matrix.
@@ -419,7 +408,6 @@ class RgbMatrix:
         else:
             return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def show_hue(self, hue, orientation):
         '''
         Set the color of the display to the hue specified as a value from 0.0 - 1.0.
@@ -437,7 +425,6 @@ class RgbMatrix:
             self._stbd_rgbmatrix.set_all(r, g, b)
             self._stbd_rgbmatrix.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _solid(self, rgbmatrix5x5, arg, is_enabled):
         '''
         Display a specified static, solid color on the available display(s).
@@ -451,7 +438,6 @@ class RgbMatrix:
         while is_enabled:
             time.sleep(0.2)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _dark(self, rgbmatrix5x5, arg, is_enabled):
         '''
         Display a dark static color.
@@ -461,7 +447,6 @@ class RgbMatrix:
         while is_enabled:
             time.sleep(0.2)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def percent(self, value):
         '''
         Displays a vertical bar expressing a percentage between the pair of
@@ -469,7 +454,6 @@ class RgbMatrix:
         '''
         self.column(self._percent_to_column.convert(value))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def column(self, col):
         '''
         Turn on a single column of the LEDs at maximum brightness. Because
@@ -498,7 +482,6 @@ class RgbMatrix:
         if self._port_rgbmatrix:
             self._port_rgbmatrix.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _column(self, orientation, col, blank=True):
         '''
         Turn on a single column of the LEDs at maximum brightness.
@@ -523,7 +506,6 @@ class RgbMatrix:
             _rgbmatrix.set_pixel(y, x, _color.red, _color.green, _color.blue)
         _rgbmatrix.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def make_gaussian(fwhm):
         x = numpy.arange(0, 5, 1, float)
@@ -533,7 +515,6 @@ class RgbMatrix:
         gauss = numpy.exp(-4 * numpy.log(2) * ((x - x0) ** 2 + (y - y0) ** 2) / fwhm ** 2)
         return gauss
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _blinky(self, rgbmatrix5x5, arg, is_enabled):
         '''
         Display a pair of blinky spots.
@@ -567,7 +548,6 @@ class RgbMatrix:
         self._clear(rgbmatrix5x5)
         self._log.info('blinky ended.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _scan(self, rgbmatrix5x5, arg, is_enabled):
         '''
         KITT- or Cylon-like eyeball scanning.
@@ -599,7 +579,6 @@ class RgbMatrix:
         self._clear(rgbmatrix5x5)
         self._log.debug('scan ended.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def random_update(self):
         rand_hue = numpy.random.uniform(0.1, 0.9)
         rand_mat = numpy.random.rand(5, 5)
@@ -618,8 +597,6 @@ class RgbMatrix:
 #       self._port_rgbmatrix.show()
         self._stbd_rgbmatrix.show()
         pass
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def set_random_delay_sec(self, delay_sec):
         if delay_sec > 0.0:
@@ -652,7 +629,6 @@ class RgbMatrix:
         self._clear(rgbmatrix5x5)
         self._log.info('random ended.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_color(self, color, show=True):
         '''
         Set the color of both RGB Matrix displays.
@@ -662,7 +638,6 @@ class RgbMatrix:
         if self._stbd_rgbmatrix:
             self._set_color(self._stbd_rgbmatrix, color, show)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def set_column(rgbmatrix5x5, column, color, brightness, blank=True):
         '''
@@ -677,7 +652,6 @@ class RgbMatrix:
             rgbmatrix5x5.set_pixel(y, column, color.red, color.green, color.blue, brightness)
         rgbmatrix5x5.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def set_all(rgbmatrix5x5, red, green, blue, show=True):
         '''
@@ -690,7 +664,6 @@ class RgbMatrix:
         if show:
             rgbmatrix5x5.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_rgb_color(self, rgbmatrix5x5, red, green, blue, show=True):
         '''
         Set the color of the RGB Matrix using discrete RGB values.
@@ -699,7 +672,6 @@ class RgbMatrix:
         if show:
             rgbmatrix5x5.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _set_color(self, rgbmatrix5x5, color, show=True):
         '''
         Set the color of the RGB Matrix.
@@ -708,29 +680,24 @@ class RgbMatrix:
         if show:
             rgbmatrix5x5.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_all(self):
         self.clear(Orientation.CNTR)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear(self, orientation, show=True):
         if self._port_rgbmatrix and orientation is Orientation.PORT or orientation is Orientation.CNTR:
             self._clear(self._port_rgbmatrix, show)
         if self._stbd_rgbmatrix and orientation is Orientation.STBD or orientation is Orientation.CNTR:
             self._clear(self._stbd_rgbmatrix, show)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _clear(self, rgbmatrix5x5, show=True):
         '''
         Clears the RGB Matrix by setting its color to black.
         '''
         self._set_color(rgbmatrix5x5, Color.BLACK, show)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_display_type(self, display_type):
         self._display_type = display_type
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         if self._closing:
             self._log.warning('already closing.')

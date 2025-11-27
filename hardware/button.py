@@ -63,7 +63,7 @@ class Button(Component):
         except Exception as e:
             self._log.error('failed to initialize button on pin {}: {}'.format(self._pin, e))
             raise
-        self._log.info(Fore.WHITE + Style.BRIGHT + 'ready.')
+        self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_callbacks(self):
@@ -117,15 +117,14 @@ class Button(Component):
             time.sleep(0.05)
             try:
                 self._button.close()
+                self._button = None
             except Exception as e:
-                self._log.debug("error during button.close(): {}".format(e))
+                self._log.info("{} raised closing gpiozero button: {}".format(type(e), e))
             self._log.info("gpiozero cleanup complete.")
         except Exception as e:
-            self._log.error("{} during gpiozero cleanup: {}".format(type(e).__name__, e))
+            self._log.error("{} raised during gpiozero cleanup: {}".format(type(e).__name__, e))
             if self._log.level == Level.DEBUG:
                 self._log.debug(traceback.format_exc())
-        finally:
-            self._button = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property

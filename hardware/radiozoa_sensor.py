@@ -7,14 +7,14 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-08
-# modified: 2025-11-14
+# modified: 2025-11-28
 
 import sys
 from datetime import datetime as dt
 import asyncio
 import time
 from threading import Thread, Lock, Event
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
 init()
 
@@ -38,6 +38,7 @@ from core.component import Component, MissingComponentError
 from core.cardinal import Cardinal
 from hardware.i2c_scanner import I2CScanner
 from hardware.proximity_sensor import ProximitySensor
+#from hardware.toggle_config import ToggleConfig
 
 class RadiozoaSensor(Component):
     NAME = 'radiozoa-sensor'
@@ -68,8 +69,8 @@ class RadiozoaSensor(Component):
         self._config = config
         _cfg_radiozoa        = config.get('kros').get('hardware').get('radiozoa')
         self._cfg_devices    = _cfg_radiozoa.get('devices')
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
+#       GPIO.setwarnings(False)
+#       GPIO.setmode(GPIO.BCM)
         self._i2c_bus_number = _cfg_radiozoa.get('i2c_bus_number')
         if not isinstance(self._i2c_bus_number, int):
             raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
@@ -89,17 +90,25 @@ class RadiozoaSensor(Component):
         self._callback       = None
         # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._ioe = None
-#       _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
-        _ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
-        if self._i2c_scanner.has_hex_address([_ioe_i2c_address]):
-            try:
-                self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
-                self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
-            except Exception as e:
-                self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
-                raise
+        # try to get the existing IOE from ToggleConfig, otherwise create our own
+        _component_registry = Component.get_registry()
+        _toggle_config = _component_registry.get('toggle-config')
+        if _toggle_config:
+            self._log.info(Fore.MAGENTA + 'obtaining IOExpander from ToggleConfig…')
+            self._ioe = _toggle_config.ioe
         else:
-            raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+            self._log.info(Fore.MAGENTA + 'creating IOExpander…')
+#           _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
+            _ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
+            if self._i2c_scanner.has_hex_address([_ioe_i2c_address]):
+                try:
+                    self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
+                    self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                except Exception as e:
+                    self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
+                    raise
+            else:
+                raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
         # create all sensors, raise exception if any are missing
         self._proximity_sensors = {}
         self._create_sensors()
@@ -111,6 +120,13 @@ class RadiozoaSensor(Component):
         if missing:
             raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
         self._log.info('ready.')
+
+    @property
+    def ioe(self):
+        '''
+        Return the instance of the IOExpander.
+        '''
+        return self._ioe
 
     def _get_poll_interval(self):
         '''
@@ -381,7 +397,8 @@ class RadiozoaSensor(Component):
                 if not self.closed:
                     self._log.warning('did not close properly, left in ambiguous state.')
                 if not self._ioe:
-                    GPIO.cleanup()
+#                   GPIO.cleanup()
+                    pass
         self._log.info('closed.')
 
 #EOF

@@ -13,7 +13,6 @@ import time
 import numpy as np
 import itertools
 from math import isclose
-from threading import Thread, Event as ThreadEvent
 import asyncio
 from colorama import init, Fore, Style
 init()

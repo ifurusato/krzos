@@ -112,7 +112,7 @@ class GamepadMonitor(Component):
                 from gamepad.gamepad_controller import GamepadController
                 from gamepad.gamepad_publisher import GamepadPublisher
 
-                self._log.info(Fore.MAGENTA + 'closing all gamepad components…')
+                self._log.info('closing all gamepad components…')
                 _components = []
                 _gamepad_controller = self._component_registry.get(GamepadController.NAME)
                 if _gamepad_controller:
@@ -124,10 +124,10 @@ class GamepadMonitor(Component):
                 if _gamepad:
                     _components.append(_gamepad)
                 for _component in _components:
-                    self._log.info(Fore.MAGENTA + "closing & disabling: '{}'…".format(_component.name))
+                    self._log.debug("closing & disabling: '{}'…".format(_component.name))
                     _component.close()
                 Component.close(self)
-                self._log.info(Fore.MAGENTA + 'all gamepad components closed.')
+                self._log.info('all gamepad components closed.')
             except Exception as e:
                 self._log.error('{} raised closing gamepad components: {}'.format(type(e), e))
 

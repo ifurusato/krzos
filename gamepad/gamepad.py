@@ -198,9 +198,9 @@ class Gamepad(Component):
                 self._log.warning('already started gamepad.')
 
     def disable(self):
-        self._log.info(Fore.MAGENTA + 'disable gamepad...     xxxxxxxxxxxxxxxxxxxxxxxxx ')
         if not self.disabled:
             Component.disable(self)
+            self._close_gamepad_device()
             self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
@@ -230,45 +230,47 @@ class Gamepad(Component):
                         break
             except KeyboardInterrupt:
                 self._log.info('caught Ctrl-C, exiting…')
-                __enabled = False
             except Exception as e:
                 self._log.error('gamepad device error: {}'.format(e))
-                __enabled = False
             except OSError as e:
                 self._log.error(Gamepad.__NOT_AVAILABLE_ERROR + ' [lost connection to gamepad]')
-                __enabled = False
             finally:
-                '''
-                Note that closing the InputDevice is a bit tricky, and we're currently
-                masking tn exception that's always thrown. As there is no data loss on
-                a gamepad event loop being closed suddenly this is not an issue.
-                '''
-                try:
-                    if self._gamepad_device.fd > -1:
-                        self._log.info('closing gamepad device…')
-                        self._gamepad_device.close()
-                        self._log.info('gamepad device closed.')
-                    else:
-                        self._log.debug('gamepad device already closed.')
-
-                except Exception as e:
-                    self._log.info('error closing gamepad device: {}'.format(e))
-                finally:
-                    __enabled = False
-                    self.disable()
-                    self._gamepad_closed = True
+                self._close_gamepad_device()
 
             self._rate.wait()
         self._log.info('exited event loop.')
 
+    def _close_gamepad_device(self):
+        '''
+        Note that closing the InputDevice is a bit tricky, and we're currently
+        masking tn exception that's always thrown. As there is no data loss on
+        a gamepad event loop being closed suddenly this is not an issue.
+        '''
+        try:
+            if self._gamepad_device.fd > -1:
+                self._log.info('closing gamepad device…')
+                self._gamepad_device.close()
+                self._log.info('gamepad device closed.')
+            else:
+                self._log.debug('gamepad device already closed.')
+        except Exception as e:
+            self._log.info('error closing gamepad device: {}'.format(e))
+        finally:
+            self._gamepad_closed = True
+
     def _kill(self):
         self._log.info(Style.BRIGHT + 'exit on Y Button…')
         _component_registry = Component.get_registry()
-        _button = _component_registry.get('button')
-        if _button:
-            _button.execute_callbacks()
-        else:
-            self._log.warning('abnormal exit on Y Button…')
+
+        _kros = _component_registry.get('kros')
+        if _kros:
+            _kros.shutdown()
+
+#       _button = _component_registry.get('button')
+#       if _button:
+#           _button.execute_callbacks()
+#       else:
+#           self._log.warning('abnormal exit on Y Button…')
 
     def _handleEvent(self, event):
         '''

@@ -42,6 +42,13 @@ class RadiozoaConfig(object):
         self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
         self._log.info('ready.')
 
+    @property
+    def ioe(self):
+        '''
+        Return the instance of the IOExpander.
+        '''
+        return self._ioe
+
     def _setup_i2c(self):
         import pkg_resources
         SMBUS = 'smbus2'
