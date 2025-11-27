@@ -10,7 +10,6 @@
 # modified: 2024-12-03
 #
 # currently unused.
-#
 
 import time, itertools
 import datetime as dt
@@ -21,7 +20,6 @@ from core.event import Event
 from core.logger import Logger, Level
 from core.controller import Controller
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadController(Controller):
     NAME = 'gamepad-ctrl'
     '''
@@ -40,30 +38,26 @@ class GamepadController(Controller):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def name(self):
-        return 'gp-controller'
+        return GamepadController.NAME
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         self._enabled = True
         self._log.info('enabled.')
 
-#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   def disable(self):
 #       self._enabled = False
 #       self._log.info('disabled.')
 
-#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   def get_current_message(self):
 #       return self._current_message
 
-#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #   def _clear_current_message(self):
 #       self._log.debug('clear current message  {}.'.format(self._current_message))
 #       self._current_message = None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def callback(self, payload):
         '''
         Responds to the Event contained within the Payload.
@@ -91,7 +85,7 @@ class GamepadController(Controller):
         elif _event is Event.SHUTDOWN:
            self._log.info('event: SHUTDOWN.')
 
-        # unrecognised event ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # unrecognised event ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         else:
             self._log.error('unprocessed event: {}'.format(_event))
 
@@ -100,4 +94,4 @@ class GamepadController(Controller):
         _elapsed_ms = int(_delta.total_seconds() * 1000)
         self._log.debug(Fore.MAGENTA + Style.DIM + 'elapsed: {}ms'.format(_elapsed_ms) + Style.DIM)
 
-# EOF
+#EOF

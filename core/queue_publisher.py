@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-10-11
-# modified: 2021-10-11
-#
+# modified: 2025-11-27
 
 import itertools
 import asyncio
@@ -55,6 +54,7 @@ class QueuePublisher(Publisher):
             self._log.warning('message {} ignored: queue publisher inactive.'.format(message.name))
         else:
             self._queue.put(message)
+#           self._queue.put_nowait(message) # for synchronous calls
             self._log.info('put message \'{}\' ({}) into queue ({:d} {})'.format(
                     message.event.name, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
 
@@ -74,18 +74,24 @@ class QueuePublisher(Publisher):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _publisher_loop(self, f_is_enabled):
         self._log.info('starting queue publisher loop: ' + Fore.YELLOW + ( '(suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
-        while f_is_enabled():
-            _count = next(self._counter)
-            self._log.debug('[{:03d}] begin publisher loop…'.format(_count))
-            if not self.suppressed:
-                while not self._queue.empty():
-                    _message = self._queue.poll()
-                    await Publisher.publish(self, _message)
-                    self._log.info('[{:03d}] published message '.format(_count)
-                            + Fore.WHITE + '{} '.format(_message.name)
-                            + Fore.CYAN + 'for event \'{}\' with value: '.format(_message.event.label)
-                            + Fore.YELLOW + '{}'.format(_message.payload.value))
-            await asyncio.sleep(self._publish_delay_sec)
-        self._log.info('publisher loop complete.')
+        try:
+            while f_is_enabled():
+                _count = next(self._counter)
+                self._log.debug('[{:03d}] begin publisher loop…'.format(_count))
+                if not self.suppressed:
+                    while not self._queue.empty():
+                        await asyncio.sleep(0)
+                        _message = self._queue.poll()
+                        await Publisher.publish(self, _message)
+                        self._log.info('[{:03d}] published message '.format(_count)
+                                + Fore.WHITE + '{} '.format(_message.name)
+                                + Fore.CYAN + 'for event \'{}\' with value: '.format(_message.event.label)
+                                + Fore.YELLOW + '{}'.format(_message.payload.value))
+                await asyncio.sleep(self._publish_delay_sec)
+        except asyncio.CancelledError:
+            self._log.info("publisher loop cancelled.")
+            raise
+        finally:
+            self._log.info('publisher loop complete.')
 
 #EOF

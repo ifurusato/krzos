@@ -20,7 +20,7 @@ from hardware.eyeball import Eyeball
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class EyeballsMonitor(Component):
-    NAME = 'eyeballs-monitor'
+    NAME = 'eyeballs-mon'
     '''
     Monitors the robot's motion direction and displays corresponding eye expressions.
     

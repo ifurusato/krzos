@@ -362,8 +362,10 @@ class MessageBus(Component):
             while self.enabled:
                 await asyncio.sleep(0.1)
             self._log.info('completed consume loop.')
+        except asyncio.CancelledError:
+            self._log.info('🎀 consume loop cancelled.')
         finally:
-            self._log.info('finally: completed consume loop.')
+            self._log.info('🎀 finally: completed consume loop.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _enable_publishers(self):
@@ -434,7 +436,8 @@ class MessageBus(Component):
 
         NOTE: calls to this function should be await'd.
         '''
-        _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
+#       _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
+        await self._queue.put(message)
         # the first time the message is published we update the 'last_message_timestamp'
         self.update_last_message_timestamp()
         await asyncio.sleep(self._publish_delay_sec)
@@ -447,7 +450,9 @@ class MessageBus(Component):
 
         NOTE: calls to this function should be await'd.
         '''
-        asyncio.create_task(self._queue.put(message), name='republish-message-{}'.format(message.name))
+        self._log.info('republishing message: {}'.format(message))
+#       asyncio.create_task(self._queue.put(message), name='republish-message-{}'.format(message.name))
+        await self._queue.put(message)
         # when the message is republished we also update the 'last_message_timestamp'
         self.update_last_message_timestamp()
 
@@ -592,7 +597,7 @@ class MessageBus(Component):
             self._log.warning('already disabled.')
         else:
             Component.disable(self)
-            time.sleep(0.1) # let subscribers exist their loops
+            time.sleep(0.2) # let subscribers exist their loops
             self._log.info('disabling…')
             if self.publisher_count > 0:
                 self._log. info('closing {:d} publishers…'.format(self.publisher_count))
@@ -601,7 +606,20 @@ class MessageBus(Component):
                 self._log.info('closing {:d} subscribers…'.format(self.subscriber_count))
                 [_subscriber.close() for _subscriber in self.subscribers if not _subscriber.closed]
             self.clear_tasks()
+
+            # cancel all tasks before stopping the loop
+            if self._loop: # and self._loop.is_running():
+                self._log.info('cancelling tasks…')
+                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
+                for _task in _tasks:
+                    _task.cancel()
+                # give tasks a moment to handle cancellation
+                time.sleep(0.1)
+
+            time.sleep(0.8)
+            print('💮 A. disable() clear queue...')
             self.clear_queue()
+            print('💮 B. disable() queue cleared.')
             try:
                 current_loop = asyncio.get_running_loop()
                 on_loop_thread = (self._loop == current_loop)
@@ -609,7 +627,11 @@ class MessageBus(Component):
                     print('💮 A. disable() closing down from gamepad button.'.format(on_loop_thread))
                 else:
                     print('💮 B. disable() NOT on loop thread.')
-                print('💮 C. disable() calling loop stop...')
+                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
+                for _task in _tasks:
+                    print('💮 C. disable() task: {}'.format(_task))
+                    _task.cancel()
+                print('💮 D. disable() calling loop stop...')
                 self._loop.stop()
                 time.sleep(0.2)
 
@@ -618,6 +640,7 @@ class MessageBus(Component):
                 # no running loop, so we're not on the loop thread
                 on_loop_thread = False
                 if self.loop and self.loop.is_running():
+                    print('🌸 E. disable() calling shutdown…')
                     fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
                     fut.result()
             _nil = self._close_message_bus()

@@ -7,14 +7,13 @@
 #
 # author:   Murray Altheim
 # created:  2019-12-23
-# modified: 2025-11-26
+# modified: 2025-11-27
 #
 # The KRZ04 Robot Operating System (KROS), including its command line
 # interface (CLI).
 #
 #        1         2         3         4         5         6         7         8         9         C
 #234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-#
 
 import os, sys
 import signal
@@ -43,7 +42,7 @@ from core.controller import Controller
 from core.publisher import Publisher
 from core.queue_publisher import QueuePublisher
 
-from gamepad.gamepad import Gamepad
+from gamepad.gamepad_monitor import GamepadMonitor
 from gamepad.gamepad_publisher import GamepadPublisher
 from gamepad.gamepad_controller import GamepadController
 
@@ -119,6 +118,7 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('initialised.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def configure(self, arguments):
         '''
         Provided with a set of configuration arguments, configures KROS based on
@@ -130,7 +130,8 @@ class KROS(Component, FiniteStateMachine):
             '[1/2]' if arguments.start else '[1/1]')
         self._log.info('application log level: {}'.format(self._log.level.name))
 
-        # read YAML configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # read YAML configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
         _loader = ConfigLoader(self._level)
         _config_filename = arguments.config_file
         _filename = _config_filename if _config_filename is not None else 'config.yaml'
@@ -140,12 +141,12 @@ class KROS(Component, FiniteStateMachine):
 
         _i2c_scanner = I2CScanner(self._config, level=Level.INFO)
 
-        # kros application configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # kros application configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _app_cfg = self._config['kros'].get('application')
         self._data_logging = _app_cfg.get('data_logging')
 
-        # configuration from command line arguments ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration from command line arguments ┈┈┈┈┈┈┈┈
 
         _args = self._config['kros'].get('arguments')
         # copy argument-based configuration over to _config (changing the names!)
@@ -167,7 +168,7 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('argument config-file: {}'.format(arguments.config_file))
         self._log.info('argument level:       {}'.format(arguments.level))
 
-        # establish basic subsumption components ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # establish basic subsumption components ┈┈┈┈┈┈┈┈┈┈┈
 
         self._log.info('configure subsumption components…')
 
@@ -175,12 +176,12 @@ class KROS(Component, FiniteStateMachine):
         self._message_factory = MessageFactory(self._message_bus, self._level)
         self._controller = Controller(self._message_bus, self._level)
 
-        # JSON configuration dump ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # JSON configuration dump ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         if _args['json_dump_enabled']:
             print('exporting JSON configuration.')
             # TODO
 
-        # create components ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create components ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._component_registry = Component.get_registry()
         if self._component_registry is None:
@@ -190,7 +191,7 @@ class KROS(Component, FiniteStateMachine):
         if _cfg.get('enable_queue_publisher'): # or 'q' in _pubs:
             self._queue_publisher = QueuePublisher(self._config, self._message_bus, self._message_factory, self._level)
 
-        # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # basic hardware ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         # create system monitor
         self._system = System(config=self._config, kros=self, level=self._level)
@@ -202,7 +203,7 @@ class KROS(Component, FiniteStateMachine):
             self._log.info('creating external clock…')
             self._irq_clock = IrqClock(self._config, level=self._level)
         else:
-            self._irq_clock = None  
+            self._irq_clock = None
 
         self._await_pushbutton = _app_cfg.get('await_pushbutton')
         self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
@@ -216,7 +217,7 @@ class KROS(Component, FiniteStateMachine):
                 self._button.add_callback(self.shutdown)
 
         self._digital_pot = DigitalPotentiometer(self._config, level=self._level)
-        self._digital_pot.set_output_range(-1.0, 1.0) 
+        self._digital_pot.set_output_range(-1.0, 1.0)
 
         self._compass_encoder = CompassEncoder(self._config)
 
@@ -236,7 +237,7 @@ class KROS(Component, FiniteStateMachine):
         _enable_radiozoa = _radiozoa_cfg.get('enable')
         if _enable_radiozoa:
             from hardware.radiozoa_sensor import RadiozoaSensor
-            
+
             self._radiozoa_sensor = RadiozoaSensor(self._config)
             self._radiozoa_sensor.enable()
             timeout_seconds = 5
@@ -251,49 +252,47 @@ class KROS(Component, FiniteStateMachine):
         _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
         if _enable_tinyfx_controller:
             from hardware.tinyfx_controller import TinyFxController
-        
+
             self._log.info('configure tinyfx controller…')
             self._tinyfx = TinyFxController()
             self._tinyfx.enable()
 
-        # create subscribers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create subscribers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-        # create publishers  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create publishers  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-        # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # gamepad support  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher'): # or 'g' in _pubs:
             self._gamepad_publisher = GamepadPublisher(self._config, self._message_bus, self._message_factory, exit_on_complete=True, level=self._level)
 #           self._gamepad_controller = GamepadController(self._message_bus, self._level)
 
-        # add garbage collector ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # add garbage collector ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._garbage_collector = GarbageCollector(self._config, self._message_bus, level=self._level)
 
-        # create motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._log.info('starting motor controller…')
         self._motor_controller = MotorController(self._config, external_clock=self._irq_clock, level=self._level)
 
-        # create behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _enable_behaviours = _cfg.get('enable_behaviours')
         if _enable_behaviours:
             self._log.info('creating behaviour manager…')
             self._behaviour_mgr = BehaviourManager(self._config, self._message_bus, self._message_factory, self._level)
 
-        # finish up ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # finish up ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._export_config = False
         if self._export_config:
             self.export_config()
         self._log.info('configured.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def should_await_pushbutton(self):
         return self._await_pushbutton and self._button != None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _await_start(self, arg=None):
         if self._data_log:
             self._data_log.data('STARTED')
@@ -303,7 +302,6 @@ class KROS(Component, FiniteStateMachine):
 #       self._button.close()
         self._button = None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def start(self, dummy=None):
         '''
         This first disables the Pi's status LEDs, establishes the message bus,
@@ -338,8 +336,6 @@ class KROS(Component, FiniteStateMachine):
                 time.sleep(0.1)
                 self._tinyfx.channel_on(Orientation.STBD)
 
-#       PigpiodUtility.ensure_pigpiod_is_running()
-
         # begin main loop ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         self._log.notice('Press Ctrl-C to exit.')
@@ -348,9 +344,6 @@ class KROS(Component, FiniteStateMachine):
         # we enable ourself if we get this far successfully
         Component.enable(self)
         FiniteStateMachine.enable(self)
-
-        # print registry of components
-        self._component_registry.print_registry()
 
         if self._tinyfx:
             self._tinyfx.play('beep')
@@ -368,50 +361,54 @@ class KROS(Component, FiniteStateMachine):
 
         # ════════════════════════════════════════════════════════════════════
         # now in main application loop until quit or Ctrl-C…
+        self._message_bus.add_callback_on_start(self.started)
         self._started = True
         self._log.info('enabling message bus…')
         self._message_bus.enable()
         # that blocks so we never get here until the end…
-#       self._log.info('main loop closed.')
+        self._log.info('main loop closed.')
 
         # end main loop ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    def started(self):
+        '''
+        A callback executed upon starting the MessageBus.
+        '''
+        self._log.info(Fore.MAGENTA + 'kros started.')
+        # print registry of components
+        self._component_registry.print_registry()
+        Player.play('wow')
+
     def get_config(self):
         '''
         Returns the application configuration.
         '''
         return self._config
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_logger(self):
         '''
         Returns the application-level logger.
         '''
         return self._log
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_level(self):
         '''
         Returns the log level of the application.
         '''
         return self._level
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_message_bus(self):
         '''
         Returns the MessageBus.
         '''
         return self._message_bus
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_message_factory(self):
         '''
         Returns the MessageFactory.
         '''
         return self._message_factory
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def shutdown(self, arg=None):
         '''
         This halts any motor activity, demands a sudden halt of all tasks,
@@ -427,22 +424,15 @@ class KROS(Component, FiniteStateMachine):
             if self._data_log:
                 self._data_log.data('SHUTDOWN')
             self.close()
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'closed.')
-            # we never get here if we shut down properly
-            self._log.error('shutdown error…')
-            raise Exception('shutdown error.')
+            self._log.info(Fore.WHITE + Style.BRIGHT + 'shutdown complete.')
         except Exception as e:
             print(Fore.RED + 'ERROR: {} raised shutting down: {}'.format(type(e), e) + Style.RESET_ALL)
-#           sys.exit(1)
-        finally:
-#           sys.exit(0)
-            pass
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         This permanently disables the KROS.
         '''
+        self._log.warning(Fore.MAGENTA + 'disabling KROS ...............................................')
         if self.closed:
             self._log.warning('already closed.')
         if self.enabled:
@@ -459,31 +449,34 @@ class KROS(Component, FiniteStateMachine):
             self._log.warning('already disabled.')
         return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def closing(self):
         return self._closing
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         This closes KROS and sets the robot to a passive, stable state
         following a session.
         '''
+        self._log.warning(Fore.MAGENTA + 'closing KROS ...............................................')
         if self.closed:
             self._log.warning('already closed.')
         elif self.closing:
             self._log.warning('already closing.')
         else:
             try:
-                self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing…')
                 self._closing = True
-                _gamepad = self._component_registry.get(Gamepad.NAME)
-                if _gamepad:
-                    self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing gamepad {}…'.format(type(_gamepad)))
-                    _gamepad.close()
+                self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing…')
+
+                self._component_registry.print_registry() # TEMP
+
+                _gamepad_monitor = self._component_registry.get(GamepadMonitor.NAME)
+                if _gamepad_monitor:
+                    self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing gamepad monitor {}…'.format(type(_gamepad_monitor)))
+                    _gamepad_monitor.close()
                 else:
-                    self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad!')
+                    self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad monitor! ({}) in registry.'.format(GamepadMonitor.NAME))
+
                 if self._tinyfx:
                     self._tinyfx.off()
                 if self._motor_controller:
@@ -590,6 +583,7 @@ class KROS(Component, FiniteStateMachine):
             time.sleep(check_interval)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def export_config(self):
         '''
         Exports the current configuration to a YAML file named ".config.yaml".
@@ -623,8 +617,6 @@ class KROS(Component, FiniteStateMachine):
 
     # end of KROS class  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def print_documentation(console=True):
     '''
     Print the extended documentation as imported from the help.txt file. If
@@ -644,7 +636,6 @@ def print_documentation(console=True):
         else:
             print('{} not found.'.format(_help_file))
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 def parse_args(passed_args=None):
     '''
     Parses the command line arguments and return the resulting args object.
@@ -771,7 +762,6 @@ def main(argv):
         if _kros and not _kros.closed:
             _kros.close()
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 if __name__== "__main__":
     main(sys.argv[1:])
 

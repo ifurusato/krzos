@@ -58,6 +58,16 @@ class GamepadPublisher(Publisher):
         self._monitor           = None
         self._log.info('ready.')
 
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def name(self):
+        return GamepadPublisher.NAME
+
+    @property
+    def gamepad(self):
+        return self._gamepad
+
     async def _connect_gamepad_async(self):
         if not self.enabled:
             self._log.warning('gamepad disabled.')
@@ -108,7 +118,7 @@ class GamepadPublisher(Publisher):
                         self._gamepad.enable()
                         if self.enabled:
                             self._gamepad_task = self._message_bus.loop.create_task(
-                                self._gamepad._gamepad_loop(self.__gamepad_publish_loop, lambda: self.enabled),
+                                self._gamepad.gamepad_loop(self.__gamepad_publish_loop, lambda: self.enabled),
                                 name=GamepadPublisher._PUBLISH_LOOP_NAME)
                         else:
                             raise Exception('gamepad not enabled: lost connection?')
@@ -126,10 +136,6 @@ class GamepadPublisher(Publisher):
     def _disappearance_callback(self):
         self._log.warning('gamepad has disappeared.')
         self._monitor.disable()
-
-    @property
-    def gamepad(self):
-        return self._gamepad
 
     def has_connected_gamepad(self):
         return self._gamepad is not None and self._gamepad.has_connection()
@@ -171,16 +177,28 @@ class GamepadPublisher(Publisher):
             raise Exception('unable to enable.')
 
     async def __gamepad_publish_loop(self, message):
-        await Publisher.publish(self, message)
-        await asyncio.sleep(self._publish_delay_sec)
+        try:
+            await Publisher.publish(self, message)
+            await asyncio.sleep(self._publish_delay_sec)
+        except asyncio.CancelledError:
+            self._log.info('gamepad publishing loop cancelled.')
+            raise
+        finally:
+            self._log.info('completed gamepad publishing loop.')
 
     def disable(self):
-        if self._monitor:
-            self._monitor.disable()
-        if self._gamepad:
-            self._gamepad.disable()
-        Publisher.disable(self)
-        self._log.info('disabled gamepad publisher.')
+        if not self.disabled:
+            if self._gamepad_task and not self._gamepad_task.done():
+                self._log.info(Fore.MAGENTA + 'cancelling gamepad publishing task...             MMMMMMMMMMMMMMMMMMMMMMM ')
+                self._gamepad_task.cancel()
+                self._gamepad_task = None
+            else:
+                self._log.info(Fore.MAGENTA + 'task was None? {} and task not done? {}    mmmmmmmmmmmmmmmm'.format( self._gamepad_task is None,  not self._gamepad_task.done()   ))
+
+            Publisher.disable(self)
+            self._log.info('disabled.')
+        else:
+            self._log.debug('already disabled.')
 
     def _print_event(self, color, event, value):
         self._log.info('event:\t' + color + Style.BRIGHT + '{}; value: {}'.format(event.name, value))

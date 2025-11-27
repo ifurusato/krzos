@@ -78,7 +78,7 @@ class Arbitrator(Component):
         else:
             _start_time = dt.datetime.now()
             self._count = next(self._counter)
-#           self._log.debug('[{:03d}] putting payload: \'{}\' onto queue...'.format(self._count, payload.event.label))
+#           self._log.info('[{:03d}] putting payload: \'{}\' onto queue...'.format(self._count, payload.event.label))
             if len(self._controllers) > 0:
                 await self._queue.put((payload.priority, payload))
 #               self._log.debug('payload \'{}\' put onto queue: {} element{}.'.format(

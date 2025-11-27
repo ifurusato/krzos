@@ -139,11 +139,14 @@ class Gamepad(Component):
         self._suppress_horiz_events = _cfg.get('suppress_horiz_events')
         self._log.info('suppress horizontal events: {}'.format(self._device_path))
         self._gamepad_closed = False
-        self._thread         = None
-        self._gamepad_device        = None
+        self._gamepad_device = None
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def name(self):
+        return Gamepad.NAME
 
     def connect(self):
         '''
@@ -187,17 +190,18 @@ class Gamepad(Component):
 
     def enable(self):
         if not self.enabled:
-            if not self.in_loop():
-                if self._gamepad_device == None:
-                    self.connect()
-                    Component.enable(self)
-                    self._log.info('enabled gamepad.')
+            if not self._gamepad_device:
+                self.connect()
+                Component.enable(self)
+                self._log.info('enabled gamepad.')
             else:
                 self._log.warning('already started gamepad.')
 
     def disable(self):
+        self._log.info(Fore.MAGENTA + 'disable gamepad...     xxxxxxxxxxxxxxxxxxxxxxxxx ')
         if not self.disabled:
             Component.disable(self)
+            self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
 
@@ -207,17 +211,10 @@ class Gamepad(Component):
         else:
             self._log.warning('already closed.')
 
-    def in_loop(self):
+    async def gamepad_loop(self, callback, f_is_enabled):
         '''
-        Returns true if the main loop is active (the thread is alive).
+        Called from the GamepadPublisher as the asyncio task to query the gamepad.
         '''
-        return self._thread != None and self._thread.is_alive()
-
-    @staticmethod
-    def convert_range(value):
-        return ( (value - 127.0) / 255.0 ) * -2.0
-
-    async def _gamepad_loop(self, callback, f_is_enabled):
         self._log.info('starting event loop…')
         while self.enabled and f_is_enabled():
             try:
