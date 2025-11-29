@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-03-10
-# modified: 2025-11-26
+# modified: 2025-08-31
 #
 # An asyncio-based publish/subscribe-style message bus guaranteeing exactly-once
 # delivery for each message. This is done by populating each message with the
@@ -45,13 +45,6 @@ from core.controller import Controller
 from core.publisher import Publisher
 from core.subscriber import Subscriber
 from core.numbers import Numbers
-
-try:
-    import nest_asyncio
-    nest_asyncio.apply()
-except Exception as e:
-    print('{} raised importing nest_asyncio: {}'.format(type(e), e))
-    print('install via:\n    sudo pip3 install nest_asyncio --break-system-packages\n')
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MessageBus(Component):
@@ -344,28 +337,26 @@ class MessageBus(Component):
         '''
         self._enable_publishers()
         _subscribers = self.subscribers
-        self._log.info('starting consume loop with {:d} subscriber{}…'.format(
-                len(_subscribers), '' if len(_subscribers) == 1 else 's'))
+        self._log.info(Fore.MAGENTA + 'starting {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         for _subscriber in _subscribers:
             if isinstance(_subscriber, Subscriber):
-                if _subscriber.enabled and not _subscriber.suppressed:
-                    self._log.info("starting {} subscriber…".format(_subscriber.name))
-                    _subscriber.start()
+                self._log.info(Fore.MAGENTA + "starting subscriber '{}'…".format(_subscriber.name))
+                _subscriber.start()
             else:
                 self._log.warning('unable to start non-subscriber: {}; value: {}'.format(type(_subscriber), _subscriber))
-        if len(self._start_callbacks) > 0:
-            self._log.info('start callbacks…')
-            for _callback in self._start_callbacks:
-                _callback()
-            self._log.info('callbacks started.')
+        self._log.info(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(
+                len(_subscribers), '' if len(_subscribers) == 1 else 's'))
+        self._log.info('start callbacks…')
+        for _callback in self._start_callbacks:
+            _callback()
+        self._log.info('callbacks started.')
         try:
-            while self.enabled:
-                await asyncio.sleep(0.1)
+            while self.enabled and len(_subscribers) > 0:
+                for _subscriber in _subscribers:
+                    await _subscriber.consume()
             self._log.info('completed consume loop.')
-        except asyncio.CancelledError:
-            self._log.info('consume loop cancelled.')
         finally:
-            self._log.info('completed consume loop.')
+            self._log.info('finally: completed consume loop.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _enable_publishers(self):
@@ -436,8 +427,7 @@ class MessageBus(Component):
 
         NOTE: calls to this function should be await'd.
         '''
-#       _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
-        await self._queue.put(message)
+        _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
         # the first time the message is published we update the 'last_message_timestamp'
         self.update_last_message_timestamp()
         await asyncio.sleep(self._publish_delay_sec)
@@ -450,9 +440,7 @@ class MessageBus(Component):
 
         NOTE: calls to this function should be await'd.
         '''
-        self._log.info('republishing message: {}'.format(message))
-#       asyncio.create_task(self._queue.put(message), name='republish-message-{}'.format(message.name))
-        await self._queue.put(message)
+        asyncio.create_task(self._queue.put(message), name='republish-message-{}'.format(message.name))
         # when the message is republished we also update the 'last_message_timestamp'
         self.update_last_message_timestamp()
 
@@ -460,7 +448,7 @@ class MessageBus(Component):
 
     def handle_exception(self, loop, context):
         self._log.error('handle exception on loop: {}'.format(loop))
-        print('stack trace; {}'.format(traceback.format_exc()))
+#       print('stack trace; {}'.format(traceback.format_exc()))
         # context["message"] will always be there; but context["exception"] may not
         _exception = context.get('exception', context['message'])
         if _exception != None:
@@ -470,7 +458,7 @@ class MessageBus(Component):
         if loop.is_running() and not loop.is_closed():
             asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
         else:
-            self._log.debug("loop already shut down.")
+            self._log.warning("loop already shut down.")
 
     # shutdown ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -480,6 +468,7 @@ class MessageBus(Component):
         '''
         if self._closing:
             self._log.warning('shutdown procedure already underway.')
+        print('') # on Ctrl-C
         self._log.info('starting shutdown procedure…')
         if signal:
             self._log.info('received exit signal {}…'.format(signal))
@@ -493,7 +482,7 @@ class MessageBus(Component):
             self._log.warning("shutdown interrupted by Ctrl-C, continuing…")
         self._log.info('gathered tasks: {}'.format(_gathered_tasks))
         if self.loop.is_running():
-            self._log.info('stopping event loop… (shutdown)')
+            self._log.info('stopping event loop…')
             self.loop.stop()
             self._log.info('event loop stopped.')
         self._log.info('shutting down…')
@@ -509,13 +498,13 @@ class MessageBus(Component):
         try:
             if self.loop:
                 if self.loop.is_running():
-                    self._log.info('stopping event loop… (close)')
+                    self._log.info(Fore.YELLOW + 'stopping event loop…')
                     self.loop.stop()
-                    self._log.info('event loop stopped.')
+                    self._log.info(Fore.YELLOW + 'event loop stopped.')
                 if not self.loop.is_running() and not self.loop.is_closed():
-                    self._log.info('closing event loop…')
+                    self._log.info(Fore.YELLOW + 'closing event loop…')
                     self.loop.close()
-                    self._log.info('event loop closed.')
+                    self._log.info(Fore.YELLOW + 'event loop closed.')
             else:
                 self._log.warning('no message bus event loop!')
         except Exception as e:
@@ -592,40 +581,21 @@ class MessageBus(Component):
         '''
         if self.closed:
             self._log.warning('already closed.')
+        elif self._closing:
+            self._log.warning('already closing.')
         elif not self.enabled:
             self._log.warning('already disabled.')
         else:
             Component.disable(self)
-            time.sleep(0.2) # let subscribers exist their loops
             self._log.info('disabling…')
             if self.publisher_count > 0:
-                self._log. info('closing {:d} publishers…'.format(self.publisher_count))
-                [_publisher.close() for _publisher in self.publishers if not _publisher.closed]
+                self._log.info('closing {:d} publishers…'.format(self.publisher_count))
+                [_publisher.close() for _publisher in self.publishers]
             if self.subscriber_count > 0:
                 self._log.info('closing {:d} subscribers…'.format(self.subscriber_count))
-                [_subscriber.close() for _subscriber in self.subscribers if not _subscriber.closed]
+                [_subscriber.close() for _subscriber in self.subscribers]
             self.clear_tasks()
-            # cancel all tasks before stopping the loop
-            if self._loop: # and self._loop.is_running():
-                self._log.info('cancelling tasks…')
-                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
-                for _task in _tasks:
-                    _task.cancel()
-                # give tasks a moment to handle cancellation
-                time.sleep(0.1)
-            time.sleep(0.2)
             self.clear_queue()
-            try:
-                current_loop = asyncio.get_running_loop()
-                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
-                for _task in _tasks:
-                    _task.cancel()
-                self._loop.stop()
-                time.sleep(0.2)
-            except RuntimeError as e:
-                if self.loop and self.loop.is_running():
-                    fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
-                    fut.result()
             _nil = self._close_message_bus()
             time.sleep(0.1)
             self._log.info('disabled.')
@@ -646,7 +616,7 @@ class MessageBus(Component):
             self._log.warning('already closing.')
         else:
             self._log.info('closing…')
-            Component.close(self) # will set self._closing True and call disable()
+            Component.close(self) # will call disable()
             self._closing = False
             self._log.info('closed.')
 

@@ -8,13 +8,6 @@
 # author:   Murray Altheim
 # created:  2025-11-26
 # modified: 2025-11-26
-#
-# Nudge: temporary lateral/rotational nudges (port/starboard) and
-# speed multiplier nudges (fore/aft).
-#
-# Public API:
-#   nudge(self, orientation, time_ms)   # synchronous
-#   cancel(self)                        # synchronous
 
 import time
 import asyncio
@@ -31,7 +24,14 @@ from hardware.motor_controller import MotorController
 
 class Nudge(AsyncBehaviour):
     NAME = 'nudge'
+    '''
+    Nudge: temporary lateral/rotational nudges (port/starboard) and
+    speed multiplier nudges (fore/aft).
 
+    Public API:
+      nudge(self, orientation, time_ms)   # synchronous
+      cancel(self)                        # synchronous
+    '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Nudge.NAME, level)
         _component_registry = Component.get_registry()
@@ -80,9 +80,7 @@ class Nudge(AsyncBehaviour):
         self.add_events(Event.by_groups([Group.GAMEPAD]))
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Nudge.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -91,8 +89,6 @@ class Nudge(AsyncBehaviour):
     @property
     def priority(self):
         return self._priority
-
-    # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def nudge(self, orientation, time_ms):
         '''
@@ -183,8 +179,6 @@ class Nudge(AsyncBehaviour):
             finally:
                 self._speed_modifier_registered = False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     async def process_message(self, message):
         '''
         Process the message.
@@ -193,23 +187,16 @@ class Nudge(AsyncBehaviour):
         '''
         if message.gcd:
             raise GarbageCollectedError('cannot process message: message has been garbage collected. [3]')
-        _event = message.event
-        self._log.info(Fore.MAGENTA + '💜 pre-processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(_event.label))
-        if _event.group is Group.GAMEPAD:
-            self._log.info(Fore.MAGENTA + '💜 processing system message {}'.format(message.name))
+        if message.event.group is Group.GAMEPAD:
             self.execute(message)
         else:
             self._log.warning('unrecognised event on message {}'.format(message.name) + ''.format(message.event.label))
-        await Subscriber.process_message(self, message)
-        self._log.info(Fore.MAGENTA + '💜 post-processing message {}'.format(message.name))
+        await super().process_message(message)
 
     def execute(self, message):
         '''
-        Behaviour.execute() - not used by Nudge.
-
         Nudge operates via process_message() as a Subscriber.
         '''
-        self._log.info(Fore.MAGENTA + '💜 processing system message {}'.format(message.name))
         event = message.event
         match(event):
             case Event.A_BUTTON:
@@ -283,8 +270,7 @@ class Nudge(AsyncBehaviour):
         This method drives ramping logic and the transient hold timing.
         '''
         now = time.monotonic()
-
-        # If targets changed, start new ramp
+        # if targets changed, start new ramp
         if self._target_vx != self._prev_target_vx or self._target_vy != self._prev_target_vy or self._target_omega != self._prev_target_omega:
             self._ramp_start_time = now
             self._ramp_start_vx = self._current_vx
@@ -294,7 +280,7 @@ class Nudge(AsyncBehaviour):
             self._prev_target_vy = self._target_vy
             self._prev_target_omega = self._target_omega
 
-        # Linear interpolation during ramp
+        # linear interpolation during ramp
         if self._ramp_start_time is not None:
             elapsed_ms = (now - self._ramp_start_time) * 1000.0
             is_ramping_down = (self._target_vx == 0.0 and self._target_vy == 0.0 and self._target_omega == 0.0)
@@ -311,14 +297,14 @@ class Nudge(AsyncBehaviour):
                 self._current_vy = self._ramp_start_vy + frac * (self._target_vy - self._ramp_start_vy)
                 self._current_omega = self._ramp_start_omega + frac * (self._target_omega - self._ramp_start_omega)
 
-        # If reached target and no hold started, start hold
+        # if reached target and no hold started, start hold
         if self._active and abs(self._current_vx - self._target_vx) <= self._eps and abs(self._current_vy - self._target_vy) <= self._eps and abs(self._current_omega - self._target_omega) <= self._eps:
             if self._pending_hold_ms > 0 and self._hold_start_time is None:
                 self._hold_start_time = now
                 self._hold_end_time = now + (self._pending_hold_ms / 1000.0)
                 self._log.info('hold started; will end at {:.3f}'.format(self._hold_end_time))
 
-        # After hold ends, set targets to zero
+        # after hold ends, set targets to zero
         if self._hold_end_time is not None and now >= self._hold_end_time:
             self._log.info('hold ended; ramping down')
             self._hold_start_time = None
@@ -328,7 +314,7 @@ class Nudge(AsyncBehaviour):
             self._target_vy = 0.0
             self._target_omega = 0.0
 
-        # If at neutral, mark inactive
+        # if at neutral, mark inactive
         if abs(self._current_vx) <= self._eps and abs(self._current_vy) <= self._eps and abs(self._current_omega) <= self._eps and self._pending_hold_ms == 0:
             self._current_vx = 0.0
             self._current_vy = 0.0

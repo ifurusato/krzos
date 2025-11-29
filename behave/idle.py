@@ -24,7 +24,6 @@ from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.eyeball import Eyeball
 from hardware.motor_controller import MotorController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Idle(Behaviour, Publisher):
     NAME = 'idle'
     _LISTENER_LOOP_NAME = '__idle_listener_loop'
@@ -98,10 +97,6 @@ class Idle(Behaviour, Publisher):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    @property
-    def name(self):
-        return Idle.NAME
 
     @property
     def using_dynamic_priority(self):
@@ -221,7 +216,7 @@ class Idle(Behaviour, Publisher):
         Publish IDLE message with elapsed time as payload.
         Sets eyeballs to SLEEPY on first publish.
         '''
-        self._log.info('🔔 publishing IDLE message ({:.1f}s elapsed)'.format(elapsed_sec))
+        self._log.info('publishing IDLE message ({:.1f}s elapsed)'.format(elapsed_sec))
         # set eyeballs to sleepy (only on first idle detection)
         if self._last_idle_publish_time is None and self._eyeballs_monitor:
             self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
@@ -254,7 +249,7 @@ class Idle(Behaviour, Publisher):
                 if self._eyeballs_monitor:
                     self._eyeballs_monitor.clear_eyeballs()
                     self._log.debug('eyeballs override cleared')
-                self._log.info('☀️  activity resumed after {:.1f}s idle'.format(
+                self._log.info('activity resumed after {:.1f}s idle'.format(
                     self.elapsed_seconds))
         await Subscriber.process_message(self, message)
 

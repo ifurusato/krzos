@@ -20,7 +20,7 @@ kros:
         enable_external_clock:             True            # if True use external clock, ignoring loop delay value
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
         enable_tinyfx_controller:         False            # enable Tiny FX for sounds and lighting fx
-        enable_gamepad_publisher:         False            # enable gamepad support
+        enable_gamepad_publisher:          True            # enable gamepad support
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -28,6 +28,8 @@ kros:
         enable_queue_publisher:            True            # publishes from globally-available queue
         # subscribers ......................................
         # ...
+    behaviour_manager:
+            release_on_startup:           True             # if True, enable/release on startup as per config
     behaviour:
         async_behaviour:                                   # abstract superclass
             poll_delay_ms:                200              # asyncio poll delay in milliseconds
@@ -53,8 +55,8 @@ kros:
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # polling loop frequency
         nudge:
-            enable:                     False              # enable nudge behaviour
-            release:                    False              # release nudge behaviour on startup
+            enable:                      True              # enable nudge behaviour
+            release:                     True              # release nudge behaviour on startup
             verbose:                    False              # verbose messaging
             priority:                   0.3                # fixed behaviour priority
             lateral_max:                0.5
@@ -67,8 +69,8 @@ kros:
             ramp_up_ms:                 1500
             ramp_down_ms:               1500
         radiozoa:
-            enable:                     False              # enable radiozoa behaviour
-            release:                    False              # release radiozoa behaviour on startup
+            enable:                      True              # enable radiozoa behaviour
+            release:                     True              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.42           # default behaviour priority
             default_speed:                  0.4            # cruising speed
@@ -78,8 +80,8 @@ kros:
             min_sensor_diff_mm:           100              # 50; minimum difference to react
             settling_threshold_mm:         30              # 30; all pairs within this is considered settled
         roam:
-            enable:                     False              # enable roam behaviour
-            release:                    False              # release roam behaviour on startup
+            enable:                      True              # enable roam behaviour
+            release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # cruising speed
             default_priority:               0.5            # default behaviour priority
@@ -87,14 +89,14 @@ kros:
             deadband_threshold:             0.07
             obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
         scan:
-            enable:                     False              # enable scan behaviour
-            release:                    False              # release scan behaviour on startup
+            enable:                      True              # enable scan behaviour
+            release:                     True              # release scan behaviour on startup
             verbose:                     True              # verbose messaging
             accel_time:                     2.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                     False              # enable scout behaviour
-            release:                    False              # release scout behaviour on startup
+            enable:                      True              # enable scout behaviour
+            release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
             default_priority:               0.6            # default behaviour priority
@@ -107,8 +109,8 @@ kros:
             damping_window:                10.0            # reduce target_omega when error is small to prevent overshoot
             smoothing_factor:               0.3            # low pass filter on transition towards target
         swerve:
-            enable:                     False              # enable swerve behaviour
-            release:                    False              # release swerve behaviour on startup
+            enable:                      True              # enable swerve behaviour
+            release:                     True              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed
@@ -140,8 +142,8 @@ kros:
             min_priority:                   0.3            # priority when far
             max_priority:                   0.95           # priority at boundary (very high)
         thoughts:
-            enable:                     False              # enable thoughts behaviour
-            release:                    False              # release thoughts behaviour on startup
+            enable:                      True              # enable thoughts behaviour
+            release:                     True              # release thoughts behaviour on startup
             verbose:                    False              # verbose messaging
             priority:                       0.2            # default behaviour priority
             max_activity:                   4.0            # maximum expected activity level
@@ -151,7 +153,7 @@ kros:
             rate_limit_ms:                1500             # minimum milliseconds between sound plays
             bored_sound:             'hunhhhhh'            # sound to make when bored ('sigh' or 'hunhhhhh')
             sleeping_sound:             'snore'            # sound to make when sleeping
-            sounds:
+            active_sounds:
                 - 'blat'
                 - 'blip'
                 - 'borah'
@@ -176,8 +178,6 @@ kros:
                 - 'twit'
                 - 'whistle'
                 - 'zzt'
-    behaviour_manager:
-            release_on_startup:           True             # if True, enable/release on startup as per config
     message_bus:
         max_age_ms:                        20.0            # maximum age of a message before expiry
         publish_delay_sec:                 0.05            # publishing delay loop
@@ -294,6 +294,15 @@ kros:
             amber_threshold:                 10.29         # amber/3 bars on battery
             orange_threshold:                10.15         # orange/2 bars on battery
             red_threshold:                    9.85         # red/1 bar on battery
+        toggle_config:
+            pin1:                             2            # toggle 1 pin
+            pin2:                             4            # toggle 2 pin
+            pin3:                             3            # toggle 3 pin
+            pin4:                             1            # toggle 4 pin
+            toggle1:                  'radiozoa'           # behaviour assignment(s) to toggle 1
+            toggle2:                      'roam'           # behaviour assignment(s) to toggle 2
+            toggle3:              'avoid swerve'           # behaviour assignment(s) to toggle 3
+            toggle4:                'scan scout'           # behaviour assignment(s) to toggle 4
         depth_camera:
             preset_mode:              'ROBOTICS'           # preset depth camera mode
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)
@@ -380,7 +389,7 @@ kros:
                 - 0.6
                 - 0.3
                 - 0.1
-            visualise:                     True            # use scout visualiser
+            visualise:                    False            # use scout visualiser
             show_grid:                     True            # show colored grid
             show_target_row:               True            # show target row with selected column
             show_target_info:              True            # show log line with target info

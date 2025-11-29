@@ -124,7 +124,7 @@ class EyeballsMonitor(Component):
             isclose(vy, 0.0, abs_tol=self._motion_threshold)):
             return Eyeball.BLANK
         if self._motor_controller.is_stopped:
-            return Eyeball.SLEEPY
+            return Eyeball.NEUTRAL
         # determine primary forward/aft direction
         is_forward = vy > self._motion_threshold
         is_aft     = vy < -self._motion_threshold

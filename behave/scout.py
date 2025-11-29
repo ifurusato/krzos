@@ -30,7 +30,6 @@ from hardware.usfs import Usfs
 from core.orientation import Orientation
 from hardware.scout_sensor import ScoutSensor
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class HeadingMode(Enum):
     '''
     Scout is a behavior that seeks to locate the most open heading for exploration
@@ -92,8 +91,8 @@ class Scout(AsyncBehaviour):
         self._use_dynamic_heading = _cfg.get('use_dynamic_heading', True)
         self._damping_window         = _cfg.get('damping_window', 10.0) # reduce target_omega when error is small to prevent overshoot
         self._smoothing_factor       = _cfg.get('smoothing_factor', 0.3) # low pass filter on transition towards target
-        self._use_dynamic_priority   = _cfg.get('use_dynamic_priority', True) 
-        self._default_priority       = _cfg.get('default_priority', 0.3) 
+        self._use_dynamic_priority   = _cfg.get('use_dynamic_priority', True)
+        self._default_priority       = _cfg.get('default_priority', 0.3)
         # heading control
         self._heading_degrees        = 0.0
         self._target_relative_offset = 0.0
@@ -141,9 +140,7 @@ class Scout(AsyncBehaviour):
     def set_heading_cardinal(self, cardinal):
         self.set_heading_degrees(cardinal.degrees)
 
-    @property
-    def name(self):
-        return Scout.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -223,7 +220,7 @@ class Scout(AsyncBehaviour):
             vx:    lateral velocity (always 0.0 for Scout)
             vy:    longitudinal velocity (always 0.0 for Scout)
             omega: angular velocity (rotation) - this is what Scout controls
-            
+
         Returns (vx, vy, omega) tuple.
         '''
         match self._heading_mode:
@@ -238,7 +235,7 @@ class Scout(AsyncBehaviour):
         '''
         RELATIVE mode: sensor-reactive rotation toward most open direction.
         Uses odometry to track actual heading, steers based on ScoutSensor offset.
-        
+
         Returns (vx, vy, omega) tuple.
         '''
         # track heading before update
@@ -300,7 +297,7 @@ class Scout(AsyncBehaviour):
         ABSOLUTE mode: absolute compass heading with dynamic offset adjustments.
         Base heading from self._heading_degrees (set by methods or encoder).
         Offset from ScoutSensor for obstacle avoidance.
-        
+
         Returns (vx, vy, omega) tuple.
         '''
         # base heading from self._heading_degrees
@@ -360,7 +357,7 @@ class Scout(AsyncBehaviour):
             damping_factor = abs_error / self._damping_window # 0.0 to 1.0
             target_omega *= damping_factor
         # smooth transition toward target (simple low-pass filter)
-        alpha = self._smoothing_factor 
+        alpha = self._smoothing_factor
         omega = self._last_omega + alpha * (target_omega - self._last_omega)
         self._last_omega = omega
         return omega

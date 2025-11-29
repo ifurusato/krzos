@@ -228,16 +228,16 @@ class RadiozoaSensor(Component):
             try:
                 self._polling_loop.run_forever()
             finally:
-                self._log.info(Fore.MAGENTA + 'closing radiozoa polling loop…')
+                self._log.info('closing radiozoa polling loop…')
                 pending = asyncio.all_tasks(loop=self._polling_loop)
                 group = asyncio.gather(*pending)
                 self._polling_loop.run_until_complete(group)
                 self._polling_loop.close()
-                self._log.info(Fore.MAGENTA + 'radiozoa polling loop closed.')
+                self._log.info('radiozoa polling loop closed.')
 
         self._polling_thread = Thread(target=run_loop, daemon=True)
         self._polling_thread.start()
-        self._log.info(Fore.MAGENTA + 'background polling started.')
+        self._log.info('background polling started.')
 
     async def _poll_sensors(self):
         '''
@@ -269,7 +269,7 @@ class RadiozoaSensor(Component):
                 except Exception as e:
                     self._log.warning("Callback raised {}: {}".format(type(e).__name__, e))
             await asyncio.sleep(self._poll_interval)
-        self._log.info(Fore.WHITE + 'polling sensors stopped.')
+        self._log.info('polling sensors stopped.')
 
     def get_distances(self, cardinals=None):
         '''

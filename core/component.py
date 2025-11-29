@@ -115,6 +115,14 @@ class Component:
         '''
         return self._suppressed
 
+    @property
+    def released(self):
+        '''
+        Return True if this Component is released.
+        A convenience method, just returns the opposite of suppressed.
+        '''
+        return not self._suppressed
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_active(self):

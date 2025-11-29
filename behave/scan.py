@@ -31,7 +31,6 @@ from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from matrix11x7 import Matrix11x7
 from matrix11x7.fonts import font3x5
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Scan(AsyncBehaviour):
     NAME = 'scan'
     '''
@@ -98,9 +97,7 @@ class Scan(AsyncBehaviour):
         self.add_event(Event.STUCK)
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Scan.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -192,7 +189,7 @@ class Scan(AsyncBehaviour):
         '''
         Main scan control loop - delegates rotation to RotationController,
         captures VL53L5CX data when data_collection_active is True.
-        
+
         Returns (0.0, 0.0, 0.0) because RotationController handles the rotation intent.
         '''
         if not self._scan_active:

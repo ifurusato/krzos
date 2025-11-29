@@ -124,6 +124,22 @@ class TinyFxController(Component):
             self._log.warning('disabled.')
             return None
 
+    def pir(self):
+        '''
+        Return the number of seconds since the PIR sensor was triggered.
+        This returns -1 if it has never been triggered, -2 if an error
+        occurs and the value is therefore unavailable.
+        '''
+        try:
+            response = self.send_data_request('pir')
+            self._log.info('pir response: {}'.format(response))
+            elapsed_sec = int(response)
+            self._log.info('pir response as int: {}sec'.format(elapsed_sec))
+            return elapsed_sec
+        except Exception as e:
+            self._log.error('{} raised getting pir response: {}'.format(type(e), e))
+            return -2
+
     def off(self):
         '''
         Turn off all running lights.

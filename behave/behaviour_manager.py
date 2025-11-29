@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-02-16
-# modified: 2025-11-11
+# modified: 2025-11-28
 
 import sys
 import traceback
@@ -27,8 +27,8 @@ from core.util import Util
 from behave.async_behaviour import AsyncBehaviour
 from behave.idle import Idle
 from behave.behaviour import Behaviour
+from hardware.toggle_config import ToggleConfig
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class BehaviourManager(Subscriber):
     NAME='behave-mgr'
     '''
@@ -68,40 +68,58 @@ class BehaviourManager(Subscriber):
         self.add_event(Event.IDLE)
         self._log.info('subscribed to IDLE events.')
         self._configured_behaviour_names = list(self._config['kros']['behaviour'].keys())
-        self._find_behaviours()
+        # toggle configuration
+        self._released_by_toggle = {}
+        _component_registry = Component.get_registry()
+        self._toggle_config = _component_registry.get(ToggleConfig.NAME)
+        self._find_behaviours(_component_registry)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def is_released_by_toggle(self, name):
+        '''
+        Returns True if the named Behaviour has been configured to be released
+        via a toggle switch, and the toggle switch is set on.
+        '''
+        _released = self._released_by_toggle[name]
+        _enabled  = self._toggle_config.is_enabled(name)
+        return _released and _enabled
+
+    def has_toggle_assignment(self, name):
+        '''
+        Returns True if the name has a toggle assignment.
+        '''
+        return self._toggle_config.has_assignment(name)
+
     def get_configured_behaviour_names(self):
         '''
         Returns the list of behaviour names configured at startup.
         '''
         return self._configured_behaviour_names
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_behaviours(self):
         '''
         Returns a list of all Behaviour instances registered in the ComponentRegistry.
         '''
         return Component.get_registry().filter_by_type(Behaviour)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def _find_behaviours(self):
+    def _find_behaviours(self, component_registry):
         '''
         Instantiates all Behaviour subclasses defined in the configuration if they
         are not already present in the ComponentRegistry. Uses convention-based
         dynamic import: each behaviour key should correspond to a module named
         '{key}_behaviour' containing a class '{Key}Behaviour'.
         '''
-        _component_registry = Component.get_registry()
         for behaviour_key in self._configured_behaviour_names:
             if behaviour_key == AsyncBehaviour.NAME: # skip abstract class
                 continue
             enable = self._config['kros']['behaviour'][behaviour_key.lower()]['enable']
             if not enable:
                 self._log.info('skipping disabled behaviour: {}'.format(behaviour_key))
+                self._released_by_toggle[behaviour_key] = False
                 continue
-            if _component_registry.has(behaviour_key):
+            if component_registry.has(behaviour_key):
                 self._log.info("behaviour '{}' already registered; skipping instantiation.".format(behaviour_key))
                 continue
             try:
@@ -123,6 +141,8 @@ class BehaviourManager(Subscriber):
                     self._message_factory,
                     self._level
                 )
+                # set released-by-toggle lambda
+                self._released_by_toggle[behaviour_key] = lambda _behaviour: self._toggle_config.is_enabled(_behaviour.name)
                 self._log.info("instantiated behaviour '{}' as '{}'.".format(behaviour_key, _behaviour.name))
             except ImportError as e:
                 self._log.warning("Could not import module '{}' for behaviour '{}': {}".format(module_name, behaviour_key, e))
@@ -135,7 +155,6 @@ class BehaviourManager(Subscriber):
             for _behaviour in behaviours:
                 self._log.info('   behaviour: ' + Fore.GREEN + '{}'.format(_behaviour.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def start(self):
         '''
         The necessary state machine call to start the publisher, which performs
@@ -150,7 +169,6 @@ class BehaviourManager(Subscriber):
                 self._log.info(Style.DIM + 'behaviour {} not started (enabled={}, suppressed={})'.format(_behaviour.name, _behaviour.enabled, _behaviour.suppressed))
         Subscriber.start(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable_all_behaviours(self):
         '''
         Enable all registered behaviours using the new YAML config structure.
@@ -174,7 +192,6 @@ class BehaviourManager(Subscriber):
                     _behaviour.suppress()
                     self._log.info(Style.DIM + "{} behaviour suppressed.".format(_behaviour.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable_all_behaviours(self):
         '''
         Disable all registered behaviours.
@@ -185,7 +202,6 @@ class BehaviourManager(Subscriber):
             self._log.info('{} behaviour disabled.'.format(_behaviour.name))
         self._was_suppressed = None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def suppress(self):
         '''
         Suppresses the Behaviour Manager as well as any registered Behaviours.
@@ -194,7 +210,6 @@ class BehaviourManager(Subscriber):
         self.suppress_all_behaviours()
         self._log.info('suppressed.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def suppress_all_behaviours(self, store_states=True):
         '''
         Suppresses all registered behaviours. This stores the suppressed state
@@ -219,7 +234,6 @@ class BehaviourManager(Subscriber):
         if not store_states:
             self._was_suppressed = None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def release(self):
         '''
         Releases (un-suppresses) the BehaviourManager and releases all
@@ -229,7 +243,6 @@ class BehaviourManager(Subscriber):
         self.release_all_behaviours()
         self._log.info('released.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def release_all_behaviours(self):
         '''
         Release (un-suppress) all registered behaviours.
@@ -237,13 +250,14 @@ class BehaviourManager(Subscriber):
         If the suppressed state of each Behaviour has been stored this will
         determine whether a given Behaviour is released.
         '''
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'A. release all behaviours…  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
         if self.closed:
             self._log.warning('cannot release behaviours: behaviour manager is closed.')
             return
         elif not self.enabled:
             self._log.warning('cannot release behaviours: behaviour manager is disabled.')
             return
-        self._log.info('release all behaviours…')
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'B. release all behaviours…  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
         _idle_behaviour = None
         for _behaviour in self.get_behaviours():
             # special handling for Idle - reset its timer instead of releasing
@@ -254,6 +268,9 @@ class BehaviourManager(Subscriber):
             # only process enabled behaviours
             if not _behaviour.enabled:
                 self._log.debug('skipping disabled behaviour: {}'.format(_behaviour.name))
+                continue
+            elif not self.is_released_by_toggle(_behaviour.name):
+                self._log.info('skipping toggle-disabled behaviour: {}'.format(_behaviour.name))
                 continue
             # if we have stored suppression states, restore them
             if self._was_suppressed is not None:
@@ -276,7 +293,6 @@ class BehaviourManager(Subscriber):
         # clear stored states
         self._was_suppressed = None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close_all_behaviours(self):
         '''
         Permanently close all registered behaviours. They cannot be reopened
@@ -286,7 +302,6 @@ class BehaviourManager(Subscriber):
             _behaviour.close()
             self._log.info('{} behaviour closed.'.format(_behaviour.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
         '''
         Process the message.
@@ -309,7 +324,6 @@ class BehaviourManager(Subscriber):
         await Subscriber.process_message(self, message)
         self._log.info('🔔 f. complete: awaited subscriber process_message {}.'.format(_event.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_info(self):
         '''
         Print information about the currently registered Behaviours.
@@ -327,7 +341,7 @@ class BehaviourManager(Subscriber):
                     else Style.DIM + "disabled"
             suppressed_text = Style.DIM + "suppressed" \
                     if _behaviour.suppressed \
-                    else Style.NORMAL + "released"
+                    else Style.NORMAL   + "released  "
             priority_text   = "dynamic ({:3.1f})".format(_behaviour.priority) \
                     if _behaviour.using_dynamic_priority \
                     else 'fixed ({:3.1f})'.format(_behaviour.priority)
@@ -335,7 +349,7 @@ class BehaviourManager(Subscriber):
                 + Style.DIM   + " | " + Style.NORMAL
                 + Fore.YELLOW + "{:<9}".format(enabled_text)
                 + Fore.CYAN + Style.DIM  + " | " + Style.NORMAL
-                + Fore.YELLOW + "{:<9}".format(suppressed_text)
+                + Fore.YELLOW + "{:<11}".format(suppressed_text)
                 + Fore.CYAN  + Style.DIM + " | "
                 + Style.NORMAL + " priority: "
                 + Fore.YELLOW + "{:<9}".format(priority_text)
@@ -344,7 +358,6 @@ class BehaviourManager(Subscriber):
                 + Fore.YELLOW + "{}".format(_event_list)
             )
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
         Enable the behaviour manager. If the release on startup flag is
@@ -358,7 +371,6 @@ class BehaviourManager(Subscriber):
         self.print_info()
         Subscriber.enable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disable the behaviour manager and all behaviours.
@@ -368,7 +380,6 @@ class BehaviourManager(Subscriber):
         self.disable_all_behaviours()
         Subscriber.disable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         Permanently close and disable the behaviour manager and all behaviours.

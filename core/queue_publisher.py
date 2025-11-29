@@ -18,7 +18,6 @@ from core.dequeue import DeQueue
 from core.logger import Logger, Level
 from core.publisher import Publisher
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class QueuePublisher(Publisher):
     NAME = 'pub:queue'
     _PUBLISHER_LOOP = '__queue_publisher_loop'
@@ -44,11 +43,11 @@ class QueuePublisher(Publisher):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def name(self):
         return QueuePublisher.NAME
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def put(self, message):
         if not self.is_active:
             self._log.warning('message {} ignored: queue publisher inactive.'.format(message.name))
@@ -58,7 +57,6 @@ class QueuePublisher(Publisher):
             self._log.info('put message \'{}\' ({}) into queue ({:d} {})'.format(
                     message.event.name, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.enabled:
             Publisher.enable(self)
@@ -71,7 +69,6 @@ class QueuePublisher(Publisher):
         else:
             self._log.warning('failed to enable publisher loop.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _publisher_loop(self, f_is_enabled):
         self._log.info('starting queue publisher loop: ' + Fore.YELLOW + ( '(suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
         try:

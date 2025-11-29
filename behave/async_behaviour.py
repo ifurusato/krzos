@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-10-29
-# modified: 2025-11-20
+# modified: 2025-11-29
 
 import time
 import asyncio
@@ -19,15 +19,15 @@ init()
 
 from core.logger import Logger, Level
 from core.event import Event
+from core.component import Component
 from core.orientation import Orientation
 from behave.behaviour import Behaviour
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class AsyncBehaviour(Behaviour):
     NAME = 'async_behaviour'
     '''
     Provides a looping asyncio basis for a Behaviour.
-    
+
     Lifecycle:
     - enable()   makes the behaviour available but does not start the loop
     - release()  starts the async loop and registers the intent vector
@@ -72,7 +72,7 @@ class AsyncBehaviour(Behaviour):
             self._motor_saft = self._motor_controller.get_motor(Orientation.SAFT)
             # geometry configuration
             _cfg = config['kros']['geometry']
-            self._steps_per_rotation = _cfg.get('steps_per_rotation') 
+            self._steps_per_rotation = _cfg.get('steps_per_rotation')
             self._wheel_diameter     = _cfg.get('wheel_diameter')
             self._wheel_track_mm     = _cfg.get('wheel_track')
             wheel_circumference_cm = np.pi * self._wheel_diameter / 10.0
@@ -80,6 +80,8 @@ class AsyncBehaviour(Behaviour):
             steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
             self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
             self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def priority(self):
@@ -121,7 +123,7 @@ class AsyncBehaviour(Behaviour):
 
     def _remove_intent_vector(self):
         '''
-        Unregister this behaviour's intent vector from the motor controller.
+        Unregister this Behaviour's intent vector from the motor controller.
         '''
         if not self._motor_controller:
             return
@@ -150,19 +152,20 @@ class AsyncBehaviour(Behaviour):
 
     def enable(self):
         '''
-        Enable the behaviour, making it available for use.
+        Enable the Behaviour, making it available for use.
         Does not start the async loop - that happens on release().
         '''
-        if self.enabled:
+        if not self.enabled:
+            Behaviour.enable(self)
+            self._log.info('enabled.')
+        else:
             self._log.debug("already enabled.")
-            return
-        Behaviour.enable(self)
-        self._log.info('enabled (suppressed, waiting for release).')
 
     async def process_message(self, message):
         '''
         Overrides the method in Subscriber to handle BLIND events.
         '''
+#       self._log.debug('processing message {}; '.format(message.name) + Fore.YELLOW + ' event: {}'.format(message.event.label))
         if message.event == Event.BLIND:
             is_blind = message.value
             if is_blind:
@@ -189,7 +192,7 @@ class AsyncBehaviour(Behaviour):
     def _start_loop(self):
         '''
         Start the async event loop and register intent vector.
-        Called by release() when the behaviour is activated.
+        Called by release() when the Behaviour is activated.
         '''
         if self._loop_instance and self._loop_instance.is_running():
             self._log.warning('loop already running.')
@@ -207,48 +210,53 @@ class AsyncBehaviour(Behaviour):
 
     def suppress(self):
         '''
-        Suppresses the behaviour, stopping the loop and removing the intent vector.
+        Suppresses the Behaviour. Note that this does not stop the loop but
+        instead relies on the flags inside the loop to handle correct polling.
         '''
-        if self.suppressed:
+        self._log.info(Fore.WHITE + Style.BRIGHT + "suppress.")
+        if not self.enabled:
+            self._log.warning('cannot suppress: behaviour is disabled.')
+        elif not self.suppressed:
+            Behaviour.suppress(self)
+#           self._remove_intent_vector()
+            # stop the loop when suppressed
+#           if self._loop_instance:
+#               self._stop_loop()
+            self._log.info('suppressed.')
+        else:
             self._log.debug("already suppressed.")
-            return
-        Behaviour.suppress(self)
-        self._remove_intent_vector()
-        # stop the loop when suppressed
-        if self._loop_instance:
-            self._stop_loop()
-        self._log.info('suppressed.')
 
     def release(self):
         '''
-        Releases suppression of the behaviour, starting the loop and registering intent vector.
+        Releases the Behaviour. Note that this does not stop the loop but
+        instead relies on the flags inside the loop to handle correct polling.
         '''
-        if not self.suppressed:
-            self._log.debug("already released.")
-            return
         if not self.enabled:
             self._log.warning('cannot release: behaviour is disabled.')
-            return
-        Behaviour.release(self)
-        # Start the loop when released
-        self._start_loop()
-        self._log.info("released.")
+        elif not self.released:
+            Behaviour.release(self)
+            # start the loop when released for the first time
+            if not self._loop_instance:
+                self._start_loop()
+            self._log.info("released.")
+        else:
+            self._log.debug("already released.")
 
     def disable(self):
         '''
-        Permanently disable the behaviour, stopping the loop.
+        Permanently disable the Behaviour, stopping the loop.
         '''
-        if not self.enabled:
+        if self.enabled:
+            self._log.debug("disabling…")
+            self.clear_intent_vector()
+            self._stop_event.set()
+            # stop the loop if it's running
+            if self._loop_instance:
+                self._stop_loop()
+            Behaviour.disable(self)
+            self._log.info('disabled.')
+        else:
             self._log.debug("already disabled.")
-            return
-        self._log.info("disabling…")
-        self.clear_intent_vector()
-        self._stop_event.set()
-        # stop the loop if it's running
-        if self._loop_instance:
-            self._stop_loop()
-        Behaviour.disable(self)
-        self._log.info('disabled.')
 
     def start_loop_action(self):
         '''
@@ -271,9 +279,13 @@ class AsyncBehaviour(Behaviour):
 
     async def _loop_main(self):
         '''
-        Main async loop that polls the behaviour at regular intervals.
-        
+        Main async loop that polls the Behaviour at regular intervals.
+
+        The loop runs continuously, but reacts to the suppressed/released
+        state of the Behaviour. Disabling the Behaviour will exit the loop.
+
         Behaviors return their desired intent vector from _poll().
+
         The safety multiplier is always applied (normally 1.0, ramps to 0.0 during BLIND).
         Intent vector is set only once per iteration, after multiplier application.
         Data logging occurs after multiplier, before motor controller reads the value.
@@ -282,35 +294,48 @@ class AsyncBehaviour(Behaviour):
         try:
             self.start_loop_action()
             while not self._stop_event.is_set():
+
                 if not self.enabled:
-                    self._log.debug("behaviour disabled during loop, exiting.")
+                    self._log.info(Style.DIM + "behaviour disabled during loop, exiting… [BEFORE]")
                     break
-                # get desired intent vector from behavior
-                vx, vy, omega = await self._poll()
-                # update multiplier based on blind state
-                if self._hold_at_zero:
-                    # in blind mode, ramp down the multiplier
-                    if self._intent_multiplier > 0.0:
-                        self._intent_multiplier = max(0.0, self._intent_multiplier - self._ramp_down_step)
+                if self.has_toggle_assignment():
+                    if self.suppressed and self.is_released_by_toggle():
+                        self._log.info(Fore.WHITE + Style.BRIGHT + 'releasing…')
+                        self.release()
+                    elif self.released and not self.is_released_by_toggle():
+                        self._log.info(Fore.WHITE + Style.BRIGHT + 'suppressing…')
+                        self.suppress()
+                if self.suppressed:
+                    self.clear_intent_vector()
                 else:
-                    # not in blind mode, ensure multiplier is at 1.0
-                    self._intent_multiplier = 1.0
-                # apply multiplier and set intent vector ONCE
-                self._intent_vector = (
-                    vx * self._intent_multiplier,
-                    vy * self._intent_multiplier,
-                    omega * self._intent_multiplier
-                )
-                # log after multiplier applied, before motor controller reads it
-                if self._data_log:
-                    self._data_log.data(
-                        '{:.3f}'.format(self._intent_vector[0]),
-                        '{:.3f}'.format(self._intent_vector[1]),
-                        '{:.3f}'.format(self._intent_vector[2])
+                    # get desired intent vector from behavior
+                    vx, vy, omega = await self._poll()
+                    # update multiplier based on blind state
+                    if self._hold_at_zero:
+                        # in blind mode, ramp down the multiplier
+                        if self._intent_multiplier > 0.0:
+                            self._intent_multiplier = max(0.0, self._intent_multiplier - self._ramp_down_step)
+                    else:
+                        # not in blind mode, ensure multiplier is at 1.0
+                        self._intent_multiplier = 1.0
+                    # apply multiplier and set intent vector ONCE
+                    self._intent_vector = (
+                        vx * self._intent_multiplier,
+                        vy * self._intent_multiplier,
+                        omega * self._intent_multiplier
                     )
+                    # log after multiplier applied, before motor controller reads it
+                    if self._data_log:
+                        self._data_log.data(
+                            '{:.3f}'.format(self._intent_vector[0]),
+                            '{:.3f}'.format(self._intent_vector[1]),
+                            '{:.3f}'.format(self._intent_vector[2])
+                        )
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
+                    self._log.info(Style.DIM + "behaviour disabled during loop, exiting… [AFTER]")
                     break
+
         except asyncio.CancelledError:
             self._log.info("async loop cancelled.")
         except Exception as e:
@@ -327,7 +352,7 @@ class AsyncBehaviour(Behaviour):
         if not self._loop_instance:
             self._log.debug('no loop instance to stop.')
             return
-        
+
         self._log.info("shutting down event loop…")
         try:
             self._log.debug('closing {} polling loop…'.format(self.name))
@@ -381,7 +406,7 @@ class AsyncBehaviour(Behaviour):
 
     def close(self):
         '''
-        Permanently close the behaviour.
+        Permanently close the Behaviour.
         '''
         if not self.closed:
             if self._data_log:

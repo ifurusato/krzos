@@ -27,7 +27,6 @@ from hardware.easing import Easing
 from hardware.motor_controller import MotorController
 from hardware.avoid_sensor import AvoidSensor
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Avoid(AsyncBehaviour):
     NAME = 'avoid'
     '''
@@ -65,13 +64,10 @@ class Avoid(AsyncBehaviour):
         self._default_priority     = _cfg.get('default_priority', 0.3)
         self._priority             = self._default_priority
         self._verbose              = _cfg.get('verbose', False)
-        # variables
-        self._squeezed    = False
+        self._squeezed = False
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Avoid.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -127,7 +123,7 @@ class Avoid(AsyncBehaviour):
         lateral balancing isn't overwhelmed by other behaviors' forward motion.
 
         Uses easing functions to scale avoidance force with distance.
-        
+
         Returns (vx, vy, omega) tuple.
         '''
         vx = 0.0

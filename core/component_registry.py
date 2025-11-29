@@ -7,8 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2021-06-29
-# modified: 2025-08-31
-#
+# modified: 2025-11-28
 
 from threading import Lock
 from collections import OrderedDict
@@ -19,7 +18,6 @@ from core.util import Util
 from core.logger import Logger, Level
 from core.config_error import ConfigurationError
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ComponentRegistry:
     '''
     Maintains a registry of all Components, in the order in which they were created.
@@ -28,7 +26,7 @@ class ComponentRegistry:
         self._log = Logger("comp-registry", level)
         self._dict = OrderedDict()
 
-    # filtering ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def filter_by_type(self, cls):
         '''
@@ -43,7 +41,6 @@ class ComponentRegistry:
         '''
         return len(self.filter_by_type(cls))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def names(self):
         '''
@@ -51,21 +48,18 @@ class ComponentRegistry:
         '''
         return list(self._dict.keys())
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def length(self):
         '''
         Return the number of entries in the dictionary.
         '''
         return len(self._dict)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def empty(self):
         '''
         Return True if the dictionary is empty.
         '''
         return len(self._dict) == 0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @staticmethod
     def is_publisher(component):
@@ -93,7 +87,7 @@ class ComponentRegistry:
     def add(self, component):
         '''
         Add a component to the registry using its name, generating either a
-        warning or raising a ConfigurationError if a like-named component 
+        warning or raising a ConfigurationError if a like-named component
         already exists in the registry.
         '''
         if component.name in self._dict:
@@ -110,14 +104,12 @@ class ComponentRegistry:
             self._dict[component.name] = component
             self._log.info(Style.DIM + 'added component \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has(self, name):
         '''
         Returns True if the name is found in the registry.
         '''
         return name in self._dict
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def remove(self, name):
         '''
         Remove a component from the registry by name. Logs a warning if the
@@ -132,7 +124,6 @@ class ComponentRegistry:
             self._log.warning("cannot remove '{}'; not found in registry.".format(name))
             return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def deregister(self, component):
         for name, obj in list(self._dict.items()):
             if obj is component:
@@ -140,49 +131,56 @@ class ComponentRegistry:
                 return True
         return False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get(self, name):
         '''
         Return the component by name.
         '''
         return self._dict.get(name)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_registry(self):
         '''
         Print the registry to the log.
         '''
-        _mutex = Lock()
-        with _mutex:
+        with Lock():
             self._log.info('component list:')
-            self._log.info(Style.DIM + '  id               class                        enabled')
+            self._log.info(
+                Style.DIM +
+                '{:<20}{:<28}{:<10}{:<10}'.format(
+                    'id', 'class', 'enabled', 'released'
+                )
+            )
             for _name, _component in self._dict.items():
-                self._log.info('  {} {}'.format(_name, Util.repeat(' ', 16 - len(_name)))
-                        + Fore.YELLOW + '{}'.format(_component.classname)
-                        + Fore.CYAN + '{} {}'.format(Util.repeat(' ', 28 - len(_component.classname)), _component.enabled))
+                self._log.info(
+                    '{:<20}{}{:<28}{}{}{:<10}{}{:<10}'.format(
+                        _name,
+                        Fore.YELLOW,
+                        _component.classname,
+                        Fore.CYAN,
+                        Style.NORMAL if _component.enabled else Style.DIM,
+                        str(_component.enabled),
+                        Style.NORMAL if _component.released else Style.DIM,
+                        str(_component.released)
+                    )
+                )
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def count_open_components(self):
         """
         Returns the number of components in the registry that are not closed.
         """
         return sum(1 for c in self._dict.values() if not c.closed)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def all(self):
         '''
         Return the backing registry as a dict.
         '''
         return self._dict
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def items(self):
         '''
         Return the items contained in the registry.
         '''
         return self._dict.items()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __iter__(self):
         '''
         Return an iterator over the values in the registry.

@@ -21,7 +21,7 @@ class Color(Enum):
     LIGHT_GREY      = (  2, 192.0, 192.0, 192.0)
     GREY            = (  3, 96.0, 96.0, 96.0)
     DARK_GREY       = (  4, 64.0, 64.0, 64.0)
-    VERY_DARK_GREY  = (  5, 37.0, 37.0, 37.0)
+    VERY_DARK_GREY  = (  5, 38.0, 38.0, 38.0)
     PITCH           = (  5, 1.0, 1.0, 1.0)
     BLACK           = (  6, 0.0, 0.0, 0.0)
     LIGHT_RED       = (  7, 255.0, 128.0, 128.0)

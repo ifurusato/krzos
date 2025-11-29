@@ -650,7 +650,6 @@ class MotorController(Component):
         _count = next(self._event_counter)
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
-        else:
             if _count % 20 == 0:
                 self._odometer.print_info()
         self._state_change_check()

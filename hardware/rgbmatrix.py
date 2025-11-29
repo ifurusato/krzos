@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-03-16
-# modified: 2025-11-27
+# modified: 2025-11-29
 #
 # DisplayType and WipeDirection at bottom.
 
@@ -36,7 +36,7 @@ from core.orientation import Orientation
 from core.ranger import Ranger
 from hardware.color import Color
 
-class RgbMatrix:
+class RgbMatrix(Component):
     NAME = 'rgbmatrix'
     '''
     This class provides access to a pair of Pimoroni 5x5 RGB LED Matrix displays,
@@ -53,6 +53,7 @@ class RgbMatrix:
     '''
     def __init__(self, enable_port=True, enable_stbd=True, level=Level.INFO):
         self._log = Logger(RgbMatrix.NAME, level)
+        Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._has_port_rgbmatrix = False
         self._has_stbd_rgbmatrix = False
         self._port_rgbmatrix = None
@@ -78,9 +79,6 @@ class RgbMatrix:
         self._thread_PORT = None
         self._thread_STBD = None
         self._color = Color.RED # used by _solid
-        self._enabled = False
-        self._closing = False
-        self._closed = False
         self._display_type = DisplayType.DARK # default
         # define percentage to column converter
         self._percent_to_column = Ranger(0, 100, 0, 9)
@@ -95,10 +93,6 @@ class RgbMatrix:
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    @property
-    def enabled(self):
-        return self._enabled
 
     @property
     def name(self):
@@ -135,16 +129,16 @@ class RgbMatrix:
         Enables/starts a thread for the target process. This does not need to
         be called if just using the matrix directly.
         '''
-        if not self._closed and not self._closing:
+        if not self.closed:
             if self._enable_threading:
                 if self._thread_PORT is None and self._thread_STBD is None:
-                    self._enabled = True
+                    Component.enable(self)
                     _target = self._get_target()
                     if self._port_rgbmatrix:
-                        self._thread_PORT = Thread(name='rgb-port', target=_target[0], args=[self, self._port_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
+                        self._thread_PORT = Thread(name='rgb-port', target=_target[0], args=[self, self._port_rgbmatrix, _target[1], lambda: self.enabled], daemon=True)
                         self._thread_PORT.start()
                     if self._stbd_rgbmatrix:
-                        self._thread_STBD = Thread(name='rgb-stbd', target=_target[0], args=[self, self._stbd_rgbmatrix, _target[1], lambda n: self._enabled], daemon=True)
+                        self._thread_STBD = Thread(name='rgb-stbd', target=_target[0], args=[self, self._stbd_rgbmatrix, _target[1], lambda: self.enabled], daemon=True)
                         self._thread_STBD.start()
                     self._log.debug('enabled.')
                 else:
@@ -155,30 +149,32 @@ class RgbMatrix:
             self._log.debug('cannot enable: already closed.')
 
     def disable(self):
-        self._log.info('disabling…')
-        self._enabled = False
-        if self._thread_PORT != None:
-            try:
-                self._thread_PORT.join(timeout=1.0)
-                self._log.info('port rgbmatrix thread joined.')
-            except Exception as e:
-                self._log.error('error joining port rgbmatrix thread: {}'.format(e))
-            finally:
-                self._thread_PORT = None
-        if self._thread_STBD != None:
-            try:
-                self._thread_STBD.join(timeout=1.0)
-                self._log.info('starboard rgbmatrix thread joined.')
-            except Exception as e:
-                self._log.error('error joining starboard rgbmatrix thread: {}'.format(e))
-            finally:
-                self._thread_STBD = None
-        if self._port_rgbmatrix:
-            self._clear(self._port_rgbmatrix)
-        if self._stbd_rgbmatrix:
-            self._clear(self._stbd_rgbmatrix)
-        self._log.info('disabled.')
-        return self._enabled
+        if not self.disabled:
+            self._log.info('disabling…')
+            Component.disable(self)
+            if self._thread_PORT != None:
+                try:
+                    self._thread_PORT.join(timeout=1.0)
+                    self._log.info('port rgbmatrix thread joined.')
+                except Exception as e:
+                    self._log.error('error joining port rgbmatrix thread: {}'.format(e))
+                finally:
+                    self._thread_PORT = None
+            if self._thread_STBD != None:
+                try:
+                    self._thread_STBD.join(timeout=1.0)
+                    self._log.info('starboard rgbmatrix thread joined.')
+                except Exception as e:
+                    self._log.error('error joining starboard rgbmatrix thread: {}'.format(e))
+                finally:
+                    self._thread_STBD = None
+            if self._port_rgbmatrix:
+                self._clear(self._port_rgbmatrix)
+            if self._stbd_rgbmatrix:
+                self._clear(self._stbd_rgbmatrix)
+            self._log.info('disabled.')
+        else:
+            self._log.debug('already disabled.')
 
     def _cpu(self, rgbmatrix5x5, arg, is_enabled):
         '''
@@ -699,17 +695,13 @@ class RgbMatrix:
         self._display_type = display_type
 
     def close(self):
-        if self._closing:
-            self._log.warning('already closing.')
-            return
-        self.set_color(Color.BLACK)
-        self._closing = True
-        self.disable()
-        self._closed = True
-        self._log.info('closed.')
+        if not self.closed:
+            self.set_color(Color.BLACK)
+            Component.close(self)
+            self._log.info('closed.')
+        else:
+            self._log.debug('already closing.')
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DisplayType(Enum):
     BLINKY     = 1
     CPU        = 2

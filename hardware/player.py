@@ -44,7 +44,7 @@ class Player(Component):
             self._log = Logger(Player.NAME, level=Level.INFO)
             Component.__init__(self, self._log, suppressed=False, enabled=False)
             self._tinyfx_controller = TinyFxController(level=Level.INFO)
-            self._verbose     = True
+            self._verbose     = False
             self._initialized = True
             self.enable() # by default
             self._log.info('ready.')
@@ -93,7 +93,7 @@ class Player(Component):
             if response == 'OK':
                 self._log.info(Style.DIM + 'response: {}'.format(response))
             else:
-                self._log.warning('response: {}'.format(response))
+                self._log.info('response: {}'.format(response))
 
     def enable(self):
         '''

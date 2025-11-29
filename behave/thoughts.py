@@ -13,7 +13,7 @@ import itertools
 import asyncio
 import time
 from math import isclose
-from random import choice, expovariate, randint
+from random import choice, expovariate, randint, uniform
 from datetime import datetime as dt
 from colorama import init, Fore, Style
 init()
@@ -28,8 +28,8 @@ from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.player import Player
+from hardware.tinyfx_controller import TinyFxController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Thoughts(Behaviour):
     NAME = 'thoughts'
     _LISTENER_LOOP_NAME = '__thoughts_listener_loop'
@@ -51,7 +51,7 @@ class Thoughts(Behaviour):
         _idle_cfg = config['kros']['behaviour']['idle']
         self._idle_threshold_sec = _idle_cfg.get('idle_threshold_sec')
         self._loop_freq_hz = _idle_cfg.get('loop_freq_hz', 1)
-        self._idle_loop_delay_sec = 1.0 / self._loop_freq_hz
+        self._loop_delay_sec = 1.0 / self._loop_freq_hz
         self._log.info('idle threshold: {:d}s; loop freq: {:d}Hz'.format(
             self._idle_threshold_sec, self._loop_freq_hz))
         # thoughts configuration
@@ -65,11 +65,12 @@ class Thoughts(Behaviour):
         self._rate_delay_ms  = _cfg.get('rate_limit_ms', 1500)
         self._bored_sound    = _cfg.get('bored_sound')
         self._sleeping_sound = _cfg.get('sleeping_sound')
-        self._sounds         = _cfg.get('sounds', [])
-        if not self._sounds:
+        self._active_sounds  = _cfg.get('active_sounds', [])
+        if not self._active_sounds:
             raise ValueError('no sounds configured.')
         self._log.info('configured {} sounds; max activity: {:4.2f}; activity scale: {:4.2f}; jitter: {:4.2f}; max freq: {:4.2f}Hz; rate limit: {:d}ms'.format(
-            len(self._sounds), self._max_activity, self._activity_scale, self._jitter_factor, self._max_frequency, self._rate_delay_ms))
+            len(self._active_sounds), self._max_activity, self._activity_scale, self._jitter_factor, self._max_frequency, self._rate_delay_ms))
+        self._poll_pir = False # not currently functional
         # components
         _registry = Component.get_registry()
         self._eyeballs_monitor = _registry.get(EyeballsMonitor.NAME)
@@ -91,14 +92,9 @@ class Thoughts(Behaviour):
         self._loop_running = False
         self.add_events([member for member in Group
                         if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
-#       Player.play('silence')
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    @property
-    def name(self):
-        return Thoughts.NAME
 
     @property
     def using_dynamic_priority(self):
@@ -154,14 +150,32 @@ class Thoughts(Behaviour):
         '''
         self._log.info('loop started (threshold: {:d}s)'.format(self._idle_threshold_sec))
         try:
-            self._idle_count  = 0
-            self._bored       = False
-            self._sleeping    = False
-            self._bored_count = randint(10, 20)
-            self._sleep_count = randint(21, 31)
-            self._snore_rate  = randint(8, 11)
+            self._idle_count       = 0
+            self._snore_count      = 0
+            self._sleep_count      = 0
+            self._bored            = False
+            self._sleeping         = False
+            self._bored_limit      = randint(10, 20)  # how long before we get bored?
+            self._sleep_limit      = randint(21, 31)  # how many cycles before falling asleep?
+            self._deep_sleep_limit = randint(5, 10)   # how many cycles before we fall into deep sleep?
+            self._snore_limit      = randint(8, 11)   # how many snores?
+            self._snore_rate       = randint(8, 11)   # how fast to snore?
+
             while f_is_enabled():
                 _count = next(self._counter)
+#               self._log.info("is '{}' released by toggle? {}".format(self.name, self.is_released_by_toggle()))
+                if self.suppressed and self.is_released_by_toggle():
+                    self._log.info(Fore.WHITE + Style.BRIGHT + 'releasing…')
+                    self.release()
+                elif self.released and not self.is_released_by_toggle():
+                    self._log.info(Fore.WHITE + Style.BRIGHT + 'suppressing…')
+                    self.suppress()
+                if self.suppressed:
+                    if self._verbose:
+                        self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(_count))
+                    await asyncio.sleep(self._loop_delay_sec)
+                    continue
+
                 # check odometer for movement activity
                 if self._odometer:
                     vx, vy, omega = self._odometer.get_velocity()
@@ -171,12 +185,15 @@ class Thoughts(Behaviour):
                         _raw_activity = 0.0
                         self._idle_count += 1
                     else:
+                        # reset, there's been activity
                         _style = Style.NORMAL
                         self._last_activity_time = dt.now()
                         self._last_idle_publish_time = None
-                        self._sleeping   = False
-                        self._bored      = False
-                        self._idle_count = 0
+                        self._sleeping    = False
+                        self._bored       = False
+                        self._sleep_count = 0
+                        self._idle_count  = 0
+                        self._snore_count = 0
                     # normalize and scale activity
                     _normalized = _raw_activity / self._max_activity
                     _activity = _normalized * self._activity_scale
@@ -186,11 +203,11 @@ class Thoughts(Behaviour):
                         _bored_style    = Style.NORMAL if ( self._bored and not self._sleeping ) else Style.DIM
                         _sleeping_style = Style.NORMAL if self._sleeping else Style.DIM
                         self._log.info(Fore.BLUE + _style + '[{:05d}] activity: {:4.2f} (raw: {:4.2f});'.format(
-                               _count, _activity, _raw_activity)  
+                               _count, _activity, _raw_activity)
                                + Style.NORMAL
                                + Fore.WHITE   + _idle_style     + ' idle: {};'.format(self._idle_count)
-                               + Fore.YELLOW  + _bored_style    + ' bored: {};'.format(self._bored_count)
-                               + Fore.BLUE    + _sleeping_style + ' sleep: {};'.format(self._sleep_count)
+                               + Fore.YELLOW  + _bored_style    + ' bored: {};'.format(self._bored_limit)
+                               + Fore.BLUE    + _sleeping_style + ' sleep: {};'.format(self._sleep_limit)
                                + Fore.BLACK   + ' snore: {}'.format(self._snore_rate)
                         )
 
@@ -202,35 +219,40 @@ class Thoughts(Behaviour):
 
                     elif self._sleeping: # sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         if _count % self._snore_rate == 0: # every n seconds, snore
-                            self._log.info(Fore.BLUE + Style.DIM + 'still sleeping…')
-                            Player.play('snore')
-                            self._snore_rate = randint(8, 11) # change snore rate
+                            self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(_count))
+                            self._snore_count += 1
+                            if self._snore_count < self._snore_limit:
+                                Player.play('snore')
+                                self._snore_rate = randint(8, 11) # change snore rate
+                            else:
+                                if self._poll_pir: # check for human/cat activity
+                                    self.pir()
+                                elif self._sleep_count > 5:
+                                    self._eyeballs_monitor.set_eyeballs(Eyeball.DEEP_SLEEP)
+                                    Player.play('quiet-breathing')
+                                else:
+                                    self._sleep_count += 1
+                                    Player.play('breathing')
 
-                    elif self._idle_count % self._sleep_count == 0: # start sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                    elif self._idle_count % self._sleep_limit == 0: # start sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._log.info(Fore.BLUE + 'sleeping…')
                         self._sleeping    = True
-                        self._sleep_count = randint(21, 31) # reset to different threshold
-#                       self._log.info(Fore.BLUE + 'sleeping at: {}.'.format(self._sleep_count))
+                        self._sleep_limit = randint(21, 31) # reset to different threshold
+                        self._log.info(Fore.BLUE + 'sleeping at: {}.'.format(self._sleep_limit))
                         Player.play(self._sleeping_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
 
-                    elif not self._bored and self._idle_count % self._bored_count == 0: # bored ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                    elif not self._bored and self._idle_count % self._bored_limit == 0: # bored ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._log.info(Fore.BLUE + 'bored…')
                         self._bored = True
-                        self._bored_count = randint(11, 17)
-#                       self._log.info(Fore.BLUE 'bored at: {}.'.format(self._bored_count))
+                        self._bored_limit = randint(11, 17)
+#                       self._log.info(Fore.BLUE 'bored at: {}.'.format(self._bored_limit))
                         Player.play(self._bored_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.BORED)
 
                     else:
-#                       self._log.info(Fore.BLUE + 'something else…')
+#                       self._log.info('something else…')
                         pass
-
-                if self.suppressed:
-                    if self._verbose:
-                        self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(_count))
-                    await asyncio.sleep(self._idle_loop_delay_sec)
-                    continue
                 # calculate elapsed time since last activity
                 elapsed_sec = self.elapsed_seconds
                 if elapsed_sec >= self._idle_threshold_sec:
@@ -239,12 +261,18 @@ class Thoughts(Behaviour):
                 else:
                     if self._verbose:
                         self._log.info(Fore.BLUE + '[{:05d}] active ({:.1f}s since last activity)'.format(_count, elapsed_sec))
-                await asyncio.sleep(self._idle_loop_delay_sec)
+                if self._sleep_count > 0:
+                    # randomly longer
+                    await asyncio.sleep(self._loop_delay_sec * uniform(1.2, 2.0))
+                else:
+                    await asyncio.sleep(self._loop_delay_sec)
 
         except asyncio.CancelledError:
             self._log.info('thoughts listener loop cancelled.')
             raise
         finally:
+            self._log.info('f_enabled on finally? {}'.format(f_is_enabled()))
+            self._log.info('self.enabled on finally? {}'.format(self.enabled))
             self._log.info('thoughts listener loop complete.')
 
     def _maybe_play_random_sound(self, activity):
@@ -257,7 +285,7 @@ class Thoughts(Behaviour):
         frequency = self._max_frequency * activity
         if frequency > 0:
             if now >= self._next_play_time:
-                name = choice([n for n in self._sounds if n != self._last_name])
+                name = choice([n for n in self._active_sounds if n != self._last_name])
                 self._log.info(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
                 Player.play(name)
                 self._last_name = name
@@ -279,6 +307,18 @@ class Thoughts(Behaviour):
             self._last_activity_time = dt.now()
             self._last_idle_publish_time = None
         await Subscriber.process_message(self, message)
+
+    def pir(self):
+        try:
+            _component_registry = Component.get_registry()
+            _tinyfx = _component_registry.get(TinyFxController.NAME)
+            if _tinyfx:
+                elapsed_sec = _tinyfx.pir()
+                self._log.info(Fore.WHITE + 'pir elapsed: {} sec'.format(elapsed_sec))
+            else:
+                self._log.warning('no tinyfx available.')
+        except Exception as e:
+            self._log.error('{} raised in pir: {}'.format(type(e), e))
 
     def execute(self, message):
         '''

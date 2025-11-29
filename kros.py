@@ -57,6 +57,7 @@ from hardware.player import Player
 from hardware.system import System
 from hardware.usfs import Usfs
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
+from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
 #from hardware.sound import Sound
 #from hardware.system_subscriber import SystemSubscriber
@@ -148,6 +149,17 @@ class KROS(Component, FiniteStateMachine):
         _app_cfg = self._config['kros'].get('application')
         self._data_logging = _app_cfg.get('data_logging')
 
+        # toggle switch configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+        _toggle_config = ToggleConfig(self._config, level=Level.INFO)
+        _toggle3 = _toggle_config.toggle(3) # assigned to roam
+        _toggle4 = _toggle_config.toggle(4) # unassigned
+
+        _gamepad_enabled_by_toggle = _toggle_config.is_enabled('gamepad')
+        _behaviour_manager_enabled_by_toggle = _toggle_config.is_enabled('behaviour_manager')
+        _roam_released_by_toggle  = _toggle_config.is_enabled('roam')
+        _avoid_released_by_toggle = _toggle_config.is_enabled('avoid')
+
         # configuration from command line arguments ┈┈┈┈┈┈┈┈
 
         _args = self._config['kros'].get('arguments')
@@ -165,6 +177,10 @@ class KROS(Component, FiniteStateMachine):
 #       self._log.info('argument gamepad:     {}'.format(arguments.gamepad))
         _args['gamepad_enabled'] = arguments.gamepad and self._is_raspberry_pi
         self._gamepad_enabled = _args['gamepad_enabled']
+        if not self._gamepad_enabled and _gamepad_enabled_by_toggle:
+            self._log.info(Fore.GREEN + 'gamepad enabled from toggle 1.')
+            self._gamepad_enabled = True
+
         self._log.info('gamepad enabled:      {}'.format(self._gamepad_enabled))
 
         # print remaining arguments
@@ -282,6 +298,10 @@ class KROS(Component, FiniteStateMachine):
         # create behaviours ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
         _enable_behaviours = _cfg.get('enable_behaviours')
+        if not _enable_behaviours and _behaviour_manager_enabled_by_toggle:
+            self._log.info(Fore.GREEN + 'behaviour manager enabled from toggle 2.')
+            _enable_behaviours = True
+
         if _enable_behaviours:
             self._log.info('creating behaviour manager…')
             self._behaviour_mgr = BehaviourManager(self._config, self._message_bus, self._message_factory, self._level)
@@ -341,28 +361,12 @@ class KROS(Component, FiniteStateMachine):
 
         # begin main loop ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-        self._log.notice('Press Ctrl-C to exit.')
-        self._log.info('begin main os loop.\r')
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'Press Ctrl-C to exit.')
 
         # we enable ourself if we get this far successfully
+        self._log.info('beginning main os loop…')
         Component.enable(self)
         FiniteStateMachine.enable(self)
-
-        if self._tinyfx:
-            self._tinyfx.play('beep')
-
-        _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
-        if _motor_ctrl_cfg.get('enable'):
-            self._log.info('enable motor controller…')
-            self._motor_controller.enable()
-        else:
-            self._log.warning('motor controller disabled.')
-
-        if self._data_logging:
-            self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
-            self._data_log.data('START')
-
-        # ════════════════════════════════════════════════════════════════════
         # now in main application loop until quit or Ctrl-C…
         self._message_bus.add_callback_on_start(self.started)
         self._started = True
@@ -378,16 +382,31 @@ class KROS(Component, FiniteStateMachine):
         A callback executed upon starting the MessageBus.
         '''
         self._log.info(Fore.MAGENTA + 'kros started.')
+
+        _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
+        if _motor_ctrl_cfg.get('enable'):
+            self._log.info('enable motor controller…')
+            self._motor_controller.enable()
+        else:
+            self._log.warning('motor controller disabled.')
+        if self._data_logging:
+            self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
+            self._data_log.data('START')
         # print registry of components
-        self._component_registry.print_registry()
         Player.play('yaay')
+        self._component_registry.print_registry()
+        # register callback on close
         atexit.register(lambda: self._post_cleanup())
 
     def _post_cleanup(self):
         '''
         Called by atexit upon close of the application.
         '''
-        self._log.info(Fore.MAGENTA + 'kros cleanup.')
+        self._log.info(Fore.MAGENTA + 'kros cleanup: closing log…')
+        # close all logging now
+        if self._data_log:
+            self._data_log.data('END')
+        self._log.close()
         self._report_remaining_frames()
         # print final message using the Logger formatting
         self._fake_logger_info(Fore.MAGENTA + 'application closed.')
@@ -470,7 +489,6 @@ class KROS(Component, FiniteStateMachine):
         This closes KROS and sets the robot to a passive, stable state
         following a session.
         '''
-        self._log.info(Fore.MAGENTA + 'closing KROS ...............................................')
         if self.closed:
             self._log.warning('already closed.')
         elif self.closing:
@@ -478,13 +496,13 @@ class KROS(Component, FiniteStateMachine):
         else:
             try:
                 self._closing = True
-                self._log.info(Fore.MAGENTA + Style.BRIGHT + 'closing…')
+                self._log.info('closing…')
                 if self._gamepad_enabled:
                     _gamepad_monitor = self._component_registry.get(GamepadMonitor.NAME)
                     if _gamepad_monitor:
                         _gamepad_monitor.close()
                     else:
-                        self._log.warning(Fore.MAGENTA + Style.BRIGHT + 'could not find gamepad monitor! ({}) in registry.'.format(GamepadMonitor.NAME))
+                        self._log.warning("could not find gamepad monitor! ('{}') in registry.".format(GamepadMonitor.NAME))
                 if self._tinyfx:
                     self._tinyfx.off()
                 if self._motor_controller:
@@ -523,16 +541,12 @@ class KROS(Component, FiniteStateMachine):
                         self._log.info('finished waiting for components to close; {} remain open:'.format(_open_count))
                         for _name in self._component_registry.names:
                             self._log.info('    {}'.format(_name))
-                # close all logging now
-                if self._data_log:
-                    self._data_log.data('END')
-                self._log.close()
                 self._log.info(Fore.MAGENTA + 'closing kros…')
-                print(Fore.WHITE + '🍊 1/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '🍊 1/5. kros close.' + Style.RESET_ALL)
                 Component.close(self) # will call disable()
-                print(Fore.WHITE + '🍊 2/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '🍊 2/5. kros close.' + Style.RESET_ALL)
                 FiniteStateMachine.close(self)
-                print(Fore.WHITE + '🍊 3/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '🍊 3/5. kros close.' + Style.RESET_ALL)
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
@@ -540,7 +554,7 @@ class KROS(Component, FiniteStateMachine):
                     self._log.info(Fore.MAGENTA + 'message bus closed.')
                 else:
                     self._log.warning('message bus not closed.')
-                print(Fore.WHITE + '🍊 4/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '🍊 4/5. kros close.' + Style.RESET_ALL)
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:

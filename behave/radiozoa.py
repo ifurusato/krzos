@@ -26,10 +26,24 @@ from hardware.radiozoa_sensor import RadiozoaSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Radiozoa(AsyncBehaviour):
     NAME = 'radiozoa'
+    '''
+    A Behaviour based around the Radiozoa sensor.
 
+    Smoothing and hysteresis parameters:
+
+      * Deadband (min_sensor_diff_mm): Robot only reacts when paired sensors differ by at
+        least 50mm, preventing tiny differences from causing motion.
+      * Settling zone (settling_threshold_mm): When all sensor pairs are balanced within
+        30mm, robot stops moving - considers itself "settled."
+      * Exponential smoothing (smoothing_factor): Smooths the intent vector over time.
+        0.3 means 30% of previous value + 70% of new value, providing smooth transitions
+        without lag.
+
+    Tracks maximum imbalance: Uses the worst-case pair imbalance to determine if robot
+    should settle.
+    '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Radiozoa.NAME, level)
         _component_registry = Component.get_registry()
@@ -48,20 +62,6 @@ class Radiozoa(AsyncBehaviour):
         self._priority          = _cfg.get('default_priority', 0.4)
         self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
-        '''
-        Smoothing and hysteresis parameters:
-
-          * Deadband (min_sensor_diff_mm): Robot only reacts when paired sensors differ by at
-            least 50mm, preventing tiny differences from causing motion.
-          * Settling zone (settling_threshold_mm): When all sensor pairs are balanced within
-            30mm, robot stops moving - considers itself "settled."
-          * Exponential smoothing (smoothing_factor): Smooths the intent vector over time.
-            0.3 means 30% of previous value + 70% of new value, providing smooth transitions
-            without lag.
-
-        Tracks maximum imbalance: Uses the worst-case pair imbalance to determine if robot
-        should settle.
-        '''
         # directienal vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
@@ -97,9 +97,7 @@ class Radiozoa(AsyncBehaviour):
             self._log.info('using existing Radiozoa sensor.')
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Radiozoa.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -152,7 +150,7 @@ class Radiozoa(AsyncBehaviour):
 
         Priority scales continuously with imbalance severity and obstacle proximity
         using the sensor's defined threshold ranges, avoiding arbitrary fixed values.
-        
+
         Returns (vx, vy, omega) tuple.
         '''
         for i, d in enumerate(distances):

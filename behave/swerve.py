@@ -8,6 +8,7 @@
 # author:   Murray Altheim
 # created:  2025-11-07
 # modified: 2025-11-15
+
 import sys
 import time
 import itertools
@@ -24,7 +25,6 @@ from hardware.easing import Easing
 from hardware.swerve_sensor import SwerveSensor
 from hardware.motor_controller import MotorController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Swerve(AsyncBehaviour):
     NAME = 'swerve'
     '''
@@ -94,12 +94,9 @@ class Swerve(AsyncBehaviour):
             self._swerve_sensor = SwerveSensor(config, level=Level.INFO)
         else:
             self._log.info('using existing Swerve sensor.')
-
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Swerve.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -212,7 +209,7 @@ class Swerve(AsyncBehaviour):
             vx:    lateral velocity (positive = move right/starboard, negative = move left/port)
             vy:    longitudinal velocity (always 0.0 for Swerve)
             omega: angular velocity (always 0.0 for Swerve)
-            
+
         Returns (vx, vy, omega) tuple.
         '''
         if self._motor_controller.braking_active:

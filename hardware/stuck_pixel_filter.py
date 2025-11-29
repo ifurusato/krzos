@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-08
-# modified: 2025-11-13
+# modified: 2025-11-29
 
 import numpy as np
 from colorama import init, Fore, Style
@@ -41,6 +41,7 @@ class StuckPixelFilter(Component):
         # state
         self._pixel_history = {}  # {(row, col): [val1, val2, ...]}
         self._stuck_pixels = set()  # {(row, col), ...}
+        self._verbose = False
         self._log.info('ready [threshold={}]'.format(self._threshold))
 
     @property
@@ -62,7 +63,8 @@ class StuckPixelFilter(Component):
         '''
         self._pixel_history.clear()
         self._stuck_pixels.clear()
-        self._log.debug('cleared all stuck pixel history')
+        if self._verbose:
+            self._log.info('cleared all stuck pixel history')
 
     def interpolate_zeros(self, grid):
         '''
@@ -107,11 +109,12 @@ class StuckPixelFilter(Component):
                 median_value = int(np.median(neighbors))
                 corrected_grid[row, col] = median_value
                 corrected_count += 1
-                self._log.debug('interpolated pixel ({},{}): replaced 0 with median value {}'.format(row, col, median_value))
+                if self._verbose:
+                    self._log.info('interpolated pixel ({},{}): replaced 0 with median value {}'.format(row, col, median_value))
 
-        if corrected_count > 0:
-            self._log.info('interpolated {} zero-value pixels.'.format(corrected_count))
-            
+        if self._verbose:
+            if corrected_count > 0:
+                self._log.info('interpolated {} zero-value pixels.'.format(corrected_count))
         return corrected_grid, corrected_count
 
     def update(self, grid, rows_to_check=None, cols_to_check=None):
@@ -152,13 +155,14 @@ class StuckPixelFilter(Component):
                     if len(set(values)) == 1:
                         if key not in self._stuck_pixels:
                             self._stuck_pixels.add(key)
-                            self._log.debug('stuck pixel detected: row={}, col={}, value={}mm (unchanging)'.format(
-                                row, col, val))
+                            if self._verbose:
+                                self._log.info('stuck pixel detected: row={}, col={}, value={}mm (unchanging)'.format(row, col, val))
                     else:
                         # pixel is varying, remove from stuck set
                         if key in self._stuck_pixels:
                             self._stuck_pixels.remove(key)
-                            self._log.debug('pixel recovered: row={}, col={}'.format(row, col))
+                            if self._verbose:
+                                self._log.info('pixel recovered: row={}, col={}'.format(row, col))
 
     def filter_values(self, values_with_coords):
         '''

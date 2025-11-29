@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2023-05-01
-# modified: 2025-11-15
+# modified: 2025-11-28
 
 import sys
 import time
@@ -27,7 +27,6 @@ from hardware.roam_sensor import RoamSensor
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Roam(AsyncBehaviour):
     NAME = 'roam'
     '''
@@ -56,7 +55,7 @@ class Roam(AsyncBehaviour):
         self._verbose = _cfg.get('verbose', False)
         self._use_color = True
         self._default_speed       = _cfg.get('default_speed', 0.8)
-        self._priority            = _cfg.get('default_priority', 0.3) 
+        self._priority            = _cfg.get('default_priority', 0.3)
         self._use_dynamic_speed   = _cfg.get('use_dynamic_speed', True)
         self._deadband_threshold  = _cfg.get('deadband_threshold', 0.07)
         _easing_value = _cfg.get('obstacle_easing', 'SQUARE_ROOT')
@@ -82,9 +81,7 @@ class Roam(AsyncBehaviour):
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
         self._log.info('ready.')
 
-    @property
-    def name(self):
-        return Roam.NAME
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_ballistic(self):
@@ -138,7 +135,7 @@ class Roam(AsyncBehaviour):
             vx:    lateral velocity (always 0.0 for Roam)
             vy:    longitudinal velocity (forward/backward), scaled by obstacles
             omega: angular velocity (always 0.0 for Roam)
-            
+
         Returns (vx, vy, omega) tuple.
         '''
         if self._motor_controller.braking_active:
@@ -152,17 +149,14 @@ class Roam(AsyncBehaviour):
             if self._verbose:
                 self._display_info('stopped', 0.0, 0.0, 0.0)
             return (0.0, 0.0, 0.0)
-        # obstacle scaling only for forward motion
         if amplitude > 0.0:
-#           self._front_distance = self._roam_sensor.get_distance()
-#           if self._front_distance is None:
-#               self._front_distance = self._max_distance
             try:
                 self._front_distance = self._roam_sensor.get_distance()
                 if self._front_distance is None:
+                    # obstacle scaling only for forward motion
                     self._front_distance = self._max_distance
             except (TypeError, ValueError) as e:
-                self._log.warning('sensor error: {}, using max distance'.format(e))
+                self._log.warning('sensor error: {}, using max distance:\n{}'.format(e, traceback.format_exc()))
                 self._front_distance = self._max_distance
             if self._front_distance >= self._max_distance:
                 obstacle_scale = 1.0  # beyond sensor range, full speed

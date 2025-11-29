@@ -232,6 +232,7 @@ class Gamepad(Component):
                 self._log.info('caught Ctrl-C, exiting…')
             except Exception as e:
                 self._log.error('gamepad device error: {}'.format(e))
+                raise
             except OSError as e:
                 self._log.error(Gamepad.__NOT_AVAILABLE_ERROR + ' [lost connection to gamepad]')
             finally:

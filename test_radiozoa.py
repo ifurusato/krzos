@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2025-10-08
 # modified: 2025-10-09
-#
 
 import sys
 import time
@@ -47,7 +46,6 @@ def test_radiozoa_sensor_addresses():
     _missing = [ addr for addr in _sensor_addresses if not _i2c_scanner.has_hex_address([addr]) ]
 
     if _has_default or _missing:
-#       _log.warning("initial or error condition detected: 0x29 present={} or missing sensor addresses={}".format(_has_default, _missing))
         _log.info(Style.BRIGHT + "reasssigning radiozoa addresses…")
         try:
             radiozoa_config = RadiozoaConfig(_config, level=Level.INFO)
