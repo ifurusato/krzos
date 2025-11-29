@@ -115,7 +115,6 @@ class ComponentRegistry:
         Remove a component from the registry by name. Logs a warning if the
         name is not found.
         '''
-        print(Fore.RED + '💋 REMOVE COMPONENT: {}'.format(name) + Style.RESET_ALL)
         if name in self._dict:
             removed = self._dict.pop(name)
             self._log.info(Fore.WHITE + "removed component '{}' ({}) from registry ({} remaining).".format(name, removed.uuid, len(self._dict)))
@@ -164,9 +163,9 @@ class ComponentRegistry:
                 )
 
     def count_open_components(self):
-        """
+        '''
         Returns the number of components in the registry that are not closed.
-        """
+        '''
         return sum(1 for c in self._dict.values() if not c.closed)
 
     def all(self):

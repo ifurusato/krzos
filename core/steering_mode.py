@@ -15,11 +15,9 @@
 # For SIDEWAYS, ROTATE, FORWARD_PIVOT and AFT_PIVOT, either the robot should
 # be stopped before changing to these modes, or they need to be gradually
 # implemented.
-#
 
 from enum import Enum
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class SteeringMode(Enum):
     NONE              = (  0, 'none',                     'none') # used only for reset
     ACKERMANN         = (  1, 'ackermann',                'ackm')
@@ -40,11 +38,11 @@ class SteeringMode(Enum):
         self._mnemonic = mnemonic
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def name(self):
         return self._name
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def mnemonic(self):
         return self._mnemonic

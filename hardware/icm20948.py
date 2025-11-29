@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2024-05-20
 # modified: 2024-05-27
-#
 
 import traceback
 import itertools
@@ -44,7 +43,6 @@ OUT_MIN = -1.0 * π / RANGE_DIVISOR  # minimum scaled output value
 OUT_MAX = π / RANGE_DIVISOR         # maximum scaled output value
 HALF_PI = π / 2.0
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Icm20948(Component):
     '''
     Wraps the functionality of an ICM20948 IMU largely as a compass, though
@@ -62,7 +60,7 @@ class Icm20948(Component):
         self._log.info('initialising icm20948…')
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
-        # add color display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # add color display
         self._rgbmatrix          = rgbmatrix
         self._port_rgbmatrix5x5  = None
         self._stbd_rgbmatrix5x5  = None
@@ -72,7 +70,7 @@ class Icm20948(Component):
             self._port_rgbmatrix5x5 = self._rgbmatrix.get_rgbmatrix(Orientation.PORT)
             self._stbd_rgbmatrix5x5 = self._rgbmatrix.get_rgbmatrix(Orientation.STBD)
         self._counter = itertools.count()
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         _cfg = config['kros'].get('hardware').get('icm20948')
         self._verbose            = _cfg.get('verbose')
         self._adjust_trim        = True #_cfg.get('adjust_trim')
@@ -80,7 +78,7 @@ class Icm20948(Component):
         self._show_rgbmatrix5x5  = _cfg.get('show_rgbmatrix5x5')
         self._show_rgbmatrix11x7 = _cfg.get('show_rgbmatrix11x7')
         self._play_sound         = False #_cfg.get('play_sound') # if True, play sound to indicate calibration
-        # set up trim control ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # set up trim control
         self._pitch_trim = _cfg.get('pitch_trim') # 0.0
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
         # use fixed heading trim value
@@ -91,12 +89,12 @@ class Icm20948(Component):
         self._trim_adjust = 0.0
         if self._adjust_trim:
             _component_registry = Component.get_registry()
-            # configure potentiometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # configure potentiometer
             self._digital_pot = _component_registry.get('digital-pot')
             if self._digital_pot:
                 self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
                 self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
-        # add numeric display ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # add numeric display
         self._low_brightness    = 0.15
         self._medium_brightness = 0.25
         self._high_brightness   = 0.45
@@ -108,8 +106,8 @@ class Icm20948(Component):
                 self._matrix11x7.set_brightness(self._low_brightness)
         self._cardinal_tolerance = _cfg.get('cardinal_tolerance') # tolerance to cardinal points (in radians)
         self._log.info('cardinal tolerance: {:.8f}'.format(self._cardinal_tolerance))
-        # general orientation ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _vertical_mount = _cfg.get('vertical_mount') 
+        # general orientation
+        _vertical_mount = _cfg.get('vertical_mount')
         if _vertical_mount: # orientation of Pimoroni board mounted vertically, Y along front-rear axis of robot
             self._X = 0
             self._Y = 1
@@ -123,13 +121,13 @@ class Icm20948(Component):
         # When the sensor is sitting vertically upright in a Breakout Garden
         # socket, use (Z,Y), where hanging upside down would be (Y,Z).
         self._axes = self._Z, self._Y
-        # queue for stability check stats ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # queue for stability check stats
         self._stdev = 0.0
         self._queue_length = _cfg.get('queue_length') # also affects how fast mean catches up to data
 #       self._queue = deque(self._queue_length*[0], self._queue_length)
         self._queue = deque([], self._queue_length)
         self._stability_threshold = _cfg.get('stability_threshold')
-        # misc/variables ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # misc/variables
         self._heading_count = 0
         self._display_rate = 20 # display every 10th set of values
         self._poll_rate_hz = _cfg.get('poll_rate_hz')
@@ -148,20 +146,16 @@ class Icm20948(Component):
         self._gyro =  [0.0, 0.0, 0.0]
         self._include_accel_gyro = _cfg.get('include_accel_gyro')
         self._is_calibrated  = False
-        # instantiate sensor class  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # instantiate sensor class
         self.__icm20948 = ICM20948(i2c_addr=_cfg.get('i2c_address'))
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    def include_accel_gyro (self, include):
-        self._include_accel_gyro = include
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def queue_length(self):
         return self._queue_length
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_calibrated(self):
         '''
@@ -172,15 +166,102 @@ class Icm20948(Component):
         '''
         return self._is_calibrated
 
-#   def set_is_calibrated(self, calibrated):
-#       '''
-#       Externally set the value of the state of calibration of the ICM20948.
-#       This is done by processes that utilise the ICM20948 but themselves
-#       determine the calibration state.
-#       '''
-#       self._is_calibrated = calibrated
+    @property
+    def pitch(self):
+        '''
+        Return the last-polled pitch value.
+        '''
+        return self._pitch
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def roll(self):
+        '''
+        Return the last-polled roll value.
+        '''
+        return self._roll
+
+    @property
+    def uncalibrated_heading(self):
+        '''
+        Return the compass heading in degrees from a potentially
+        uncalibrated IMU.
+
+        This may not be a valid value if the device is not calibrated.
+        '''
+        if self._amin is None or self._amax is None:
+            self._amin = list(self.__icm20948.read_magnetometer_data())
+            self._amax = list(self.__icm20948.read_magnetometer_data())
+        return self._read_heading(self._amin, self._amax)
+#       return self._heading
+
+    @property
+    def heading(self):
+        '''
+        Return the last-polled compass heading in degrees (as an int).
+
+        This is only valid if the device is calibrated.
+        '''
+        return self._heading
+
+    @property
+    def heading_radians(self):
+        '''
+        Return the last-polled compass heading in radians.
+
+        This is only valid if the device is calibrated.
+        '''
+        return self._radians
+
+    @property
+    def mean_heading(self):
+        '''
+        Return the mean compass heading in degrees (as an int). This is the
+        mean value of the current queue, whose size and rate accumulated are
+        set in configuration. Because this is calculated from the queue, if
+        the queue is changing rapidly this returned value won't accurately
+        reflect the mean. Depending on configuration this takes roughly 1
+        second to stabilise to a mean reflective of the robot's position,
+        which then doesn't change very quickly. It is therefore suitable for
+        gaining an accurate heading of a resting robot.
+
+        This is only valid if the device is calibrated.
+        '''
+        return self._mean_heading
+
+    @property
+    def mean_heading_radians(self):
+        '''
+        Return the mean compass heading in radians (as a float).
+        '''
+        return self._mean_heading_radians
+
+    @property
+    def standard_deviation(self):
+        '''
+        Return the current value of the standard deviation of headings
+        calculated from the queue.
+        '''
+        return self._stdev
+
+    @property
+    def accelerometer(self):
+        '''
+        Return the IMU's accelerometer value as an x,y,z value.
+        If not enabled this returns zeros.
+        '''
+        return self._accel
+
+    @property
+    def gyroscope(self):
+        '''
+        Return the IMU's gyroscope value as an x,y,z value.
+        If not enabled this returns zeros.
+        '''
+        return self._gyro
+
+    def include_accel_gyro (self, include):
+        self._include_accel_gyro = include
+
     def is_cardinal_aligned(self, cardinal=None):
         '''
         Returns True if the mean heading is aligned within a 3° tolerance to
@@ -210,7 +291,6 @@ class Icm20948(Component):
         else:
             return False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def difference_from_cardinal(self, cardinal):
         '''
         Returns the difference between the current heading and the provided
@@ -218,7 +298,6 @@ class Icm20948(Component):
         '''
         return Convert.get_offset_from_cardinal(self.heading_radians, cardinal)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def ratio_from_cardinal(self, cardinal):
         '''
         Returns a ratio (range: 0.0-1.0) between the current heading and the
@@ -226,62 +305,10 @@ class Icm20948(Component):
         '''
         return Convert.get_offset_from_cardinal(self.heading_radians, cardinal) / HALF_PI
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable_displays(self):
         self._show_rgbmatrix5x5  = False
         self._show_rgbmatrix11x7 = False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def pitch(self):
-        '''
-        Return the last-polled pitch value.
-        '''
-        return self._pitch
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def roll(self):
-        '''
-        Return the last-polled roll value.
-        '''
-        return self._roll
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def uncalibrated_heading(self):
-        '''
-        Return the compass heading in degrees from a potentially
-        uncalibrated IMU.
-
-        This may not be a valid value if the device is not calibrated.
-        '''
-        if self._amin is None or self._amax is None:
-            self._amin = list(self.__icm20948.read_magnetometer_data())
-            self._amax = list(self.__icm20948.read_magnetometer_data())
-        return self._read_heading(self._amin, self._amax)
-#       return self._heading
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def heading(self):
-        '''
-        Return the last-polled compass heading in degrees (as an int).
-
-        This is only valid if the device is calibrated.
-        '''
-        return self._heading
-
-    @property
-    def heading_radians(self):
-        '''
-        Return the last-polled compass heading in radians.
-
-        This is only valid if the device is calibrated.
-        '''
-        return self._radians
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_formatted_heading(self):
         '''
         Return a lambda function whose result is the last-polled compass
@@ -291,59 +318,6 @@ class Icm20948(Component):
         '''
         return self._formatted_heading
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def mean_heading(self):
-        '''
-        Return the mean compass heading in degrees (as an int). This is the
-        mean value of the current queue, whose size and rate accumulated are
-        set in configuration. Because this is calculated from the queue, if
-        the queue is changing rapidly this returned value won't accurately
-        reflect the mean. Depending on configuration this takes roughly 1
-        second to stabilise to a mean reflective of the robot's position,
-        which then doesn't change very quickly. It is therefore suitable for
-        gaining an accurate heading of a resting robot.
-
-        This is only valid if the device is calibrated.
-        '''
-        return self._mean_heading
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def mean_heading_radians(self):
-        '''
-        Return the mean compass heading in radians (as a float).
-        '''
-        return self._mean_heading_radians
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def standard_deviation(self):
-        '''
-        Return the current value of the standard deviation of headings
-        calculated from the queue.
-        '''
-        return self._stdev
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def accelerometer(self):
-        '''
-        Return the IMU's accelerometer value as an x,y,z value.
-        If not enabled this returns zeros.
-        '''
-        return self._accel
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def gyroscope(self):
-        '''
-        Return the IMU's gyroscope value as an x,y,z value.
-        If not enabled this returns zeros.
-        '''
-        return self._gyro
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def calibrate(self):
         '''
         Manually calibrate the sensor by looping while the sensor is rotated
@@ -388,7 +362,7 @@ class Icm20948(Component):
                     if _count % 5 == 0:
 #                       if self._port_rgbmatrix5x5:
 #                           self._rgbmatrix.set_random_delay_sec(_ranger.convert(self._stdev)) # speeds up random display as stdev shrinks
-                        self._log.info(Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:4.2f} < {:4.2f}?; '.format(_count, self._stdev, self._stability_threshold) 
+                        self._log.info(Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:4.2f} < {:4.2f}?; '.format(_count, self._stdev, self._stability_threshold)
                                 + Style.DIM + '(calibrated? {}; over limit? {})'.format(
                                 self.is_calibrated, _count > _limit))
                 except Exception as e:
@@ -413,7 +387,6 @@ class Icm20948(Component):
                     pass
         return self.is_calibrated
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_queue(self):
         '''
         Clears the statistic queue.
@@ -422,7 +395,6 @@ class Icm20948(Component):
 #       for _ in range(100): # ...by populating it with zeros.
 #           self._queue.append(0)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def calibration_check(self, heading):
         '''
         Adds a heading value to the queue and checks to see if the IMU is
@@ -438,11 +410,9 @@ class Icm20948(Component):
         self._stdev = statistics.stdev(self._queue)
 #       self._log.info('added heading of {:4.2f} to queue of {:d} values in queue with stdev of: {:5.3f}.'.format(heading, self._heading_count, self._stdev))
         if self._stdev < self._stability_threshold: # stable? then permanently flag as calibrated
-#           self.set_is_calibrated(True)
             self._is_calibrated = True
         return self._is_calibrated
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def scan(self, enabled=None, callback=None):
         '''
         This starts a loop that will repeat until the application exits or
@@ -462,7 +432,6 @@ class Icm20948(Component):
                 callback()
             _rate.wait()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def poll(self):
         '''
         An individual call to the sensor. This is called in a loop by scan(),
@@ -473,10 +442,6 @@ class Icm20948(Component):
 
         Note: calling this method will fail if not previously calibrated.
         '''
-#       if not self.is_calibrated:
-#           self._log.warning('IMU is not calibrated.')
-#           raise Exception('IMU is not calibrated.')
-#           return None
         try:
             self._heading = self._read_heading(self._amin, self._amax)
             # add to queue to calculate mean heading
@@ -484,7 +449,6 @@ class Icm20948(Component):
             if len(self._queue) > 1:
                 self._stdev = statistics.stdev(self._queue)
                 if self._stdev < self._stability_threshold: # stable? then permanently flag as calibrated
-#                   self.set_is_calibrated(True)
                     self._is_calibrated = True
             self._mean_heading = statistics.mean(self._queue)
             self._mean_heading_radians = math.radians(self._mean_heading)
@@ -528,7 +492,6 @@ class Icm20948(Component):
             self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
             return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _show_rgbmatrix(self, r, g, b):
         if self._is_calibrated:
             if self._port_rgbmatrix5x5:
@@ -553,7 +516,6 @@ class Icm20948(Component):
         if self._stbd_rgbmatrix5x5:
             self._stbd_rgbmatrix5x5.show()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _read_heading(self, amin, amax, calibrating=False):
         '''
         Does the work of obtaining the heading value in degrees.

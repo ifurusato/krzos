@@ -22,7 +22,6 @@ from hardware.i2c_scanner import DeviceNotFound
 REG_ADCCON0 = 0xa8
 REG_PWMCON0 = 0x98
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DigitalPotentiometer(Component):
     NAME = 'digital-pot'
     '''
@@ -90,8 +89,6 @@ class DigitalPotentiometer(Component):
             self._ioe.set_mode(self._pin_red,   io.PWM, invert=True)
             self._ioe.set_mode(self._pin_green, io.PWM, invert=True)
             self._ioe.set_mode(self._pin_blue,  io.PWM, invert=True)
-
-
 #           _result = self._ioe.get_bit(REG_ADCCON0, 7)
 #           print('REG_ADCCON0: {}'.format(_result))
 #           _result = self._ioe.get_bit(REG_PWMCON0, 6)
@@ -105,6 +102,7 @@ class DigitalPotentiometer(Component):
         self._log.info("ready.")
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def set_input_range(self, in_min, in_max):
         '''
         Used to change the input minimum and maximum values.
@@ -122,7 +120,6 @@ class DigitalPotentiometer(Component):
         self._in_max = in_max
         self._log.info('input range:\t{:>5.2f}-{:<5.2f}'.format(self._in_min, self._in_max))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_output_range(self, out_min, out_max):
         '''
         Used to change the output minimum and maximum values.
@@ -140,7 +137,6 @@ class DigitalPotentiometer(Component):
         self._out_max = out_max
         self._log.info('output range:\t{:>5.2f}-{:<5.2f}'.format(self._out_min, self._out_max))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def value(self):
         if self.disabled or not self._ioe:
@@ -149,21 +145,18 @@ class DigitalPotentiometer(Component):
         self._log.debug('raw value: {:<5.2f}'.format(_value))
         return _value
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_white(self):
         if self._ioe:
             self._ioe.output(self._pin_red, 255)
             self._ioe.output(self._pin_green, 255)
             self._ioe.output(self._pin_blue, 255)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_black(self):
         if self._ioe:
             self._ioe.output(self._pin_red, 0)
             self._ioe.output(self._pin_green, 0)
             self._ioe.output(self._pin_blue, 0)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_rgb(self, value):
         if self._ioe:
             h = value / self._max_value # time.time() / 10.0
@@ -173,7 +166,6 @@ class DigitalPotentiometer(Component):
             self._ioe.output(self._pin_blue, b)
             self._log.debug('value: {:<5.2f}; rgb: {},{},{}'.format(value, r, g, b))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_scaled_value(self, update_led=True, absolute_tolerance=None):
         '''
         Return a scaled value while also updating the RGB LED if the
@@ -196,7 +188,6 @@ class DigitalPotentiometer(Component):
         else:
             return _scaled_value
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def scale_value(self, value):
         '''
         Scales the value as per the formula:
@@ -215,8 +206,6 @@ class DigitalPotentiometer(Component):
             raise Exception('input or output range not set.')
         return (( self._out_max - self._out_min ) * ( value - self._in_min ) / ( self._in_max - self._in_min )) + self._out_min
 
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __reset(self):
         '''
         Set the display to black carefully, to be used during closing.
@@ -229,7 +218,6 @@ class DigitalPotentiometer(Component):
             self._ioe.output(self._pin_blue, 0)
         return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         if self.enabled:
             _count = 0

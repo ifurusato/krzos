@@ -23,7 +23,6 @@ from hardware.decoder import Decoder
 from hardware.system import System
 from hardware.thunderborg import ThunderBorg
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorConfigurer(Component):
     NAME = 'motor-config'
     '''
@@ -61,11 +60,11 @@ class MotorConfigurer(Component):
         if self._max_power_ratio is None: # this should have been set by the ThunderBorg code.
             raise ValueError('max_power_ratio not set.')
         try:
-            # now import motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # now import motors
             self._log.info('configuring motors…')
             # GPIO pins configured for A and B channels for each encoder, reversed on starboard side
             _odo_cfg = self._config['kros'].get('motor').get('odometry')
-            # PFWD "port-forward" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # PFWD "port-forward"
             self._pfwd_motor = Motor(self._config, self._port_tb, Orientation.PFWD, level)
             self._pfwd_motor.max_power_ratio = self._max_power_ratio
             _motor_encoder_pfwd_a    = _odo_cfg.get('motor_encoder_pfwd_a')
@@ -80,7 +79,7 @@ class MotorConfigurer(Component):
             self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
                 Orientation.PFWD, _motor_encoder_pfwd_a, _motor_encoder_pfwd_b, _reverse_encoder_pfwd))
 
-            # SFWD "starboard-forward" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # SFWD "starboard-forward"
             self._sfwd_motor = Motor(self._config, self._stbd_tb, Orientation.SFWD, level)
             self._sfwd_motor.max_power_ratio = self._max_power_ratio
             _motor_encoder_sfwd_a    = _odo_cfg.get('motor_encoder_sfwd_a')
@@ -95,7 +94,7 @@ class MotorConfigurer(Component):
             self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
                 Orientation.SFWD, _motor_encoder_sfwd_a, _motor_encoder_sfwd_b, _reverse_encoder_sfwd))
 
-            # PAFT "port-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # PAFT "port-aft"
             self._paft_motor = Motor(self._config, self._port_tb, Orientation.PAFT, level)
             self._paft_motor.max_power_ratio = self._max_power_ratio
             _motor_encoder_paft_a    = _odo_cfg.get('motor_encoder_paft_a')
@@ -110,7 +109,7 @@ class MotorConfigurer(Component):
             self._log.info('configured {} motor encoder on pin {} and {} (reversed? {}).'.format(
                 Orientation.PAFT, _motor_encoder_paft_a, _motor_encoder_paft_b, _reverse_encoder_paft))
 
-            # SAFT "starboard-aft" ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # SAFT "starboard-aft"
             self._saft_motor = Motor(self._config, self._stbd_tb, Orientation.SAFT, level)
             self._saft_motor.max_power_ratio = self._max_power_ratio
             _motor_encoder_saft_a    = _odo_cfg.get('motor_encoder_saft_a')
@@ -135,6 +134,7 @@ class MotorConfigurer(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _import_thunderborg(self, orientation):
         if self._motors_enabled:
             if orientation is Orientation.PORT:
@@ -182,7 +182,7 @@ class MotorConfigurer(Component):
                             orientation.name, _thunderborg_address))
                 except Exception as e:
                     raise Exception('{} error instantiating ThunderBorg [5]: {}\n{}'.format(type(e), e, traceback.format_exc()))
-            # initialise ThunderBorg ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # initialise ThunderBorg
             _tb.SetLedShowBattery(True)
             self._log.info('getting battery reading…')
             voltage_in = 0
@@ -214,7 +214,6 @@ class MotorConfigurer(Component):
                     str(Fraction(self._max_power_ratio).limit_denominator(max_denominator=20)).replace('/',':')))
             return _tb
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_thunderborg_leds(self, enable):
         '''
         Turns the motor controller LEDs on or off.
@@ -228,7 +227,6 @@ class MotorConfigurer(Component):
             if not enable:
                 self._stbd_tb.SetLeds(0.0, 0.0, 0.0) # black
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_thunderborg(self, orientation):
         '''
         Temporary: do not use this brain.
@@ -240,7 +238,6 @@ class MotorConfigurer(Component):
         else:
             raise ValueError('expected a PORT or STBD orientation.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_motor(self, orientation):
         if orientation is Orientation.PFWD:
             return self._pfwd_motor
@@ -251,7 +248,6 @@ class MotorConfigurer(Component):
         elif orientation is Orientation.SAFT:
             return self._saft_motor
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         self.set_thunderborg_leds(True)
         # anything else?

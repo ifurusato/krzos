@@ -34,7 +34,6 @@ from core.component import Component
 from core.orientation import Orientation
 from hardware.depth_utils import DepthUtils
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DepthCamera(Component):
     '''
     Component wrapper for OAK-D Lite depth-only acquisition using DepthAI 3.x.
@@ -46,7 +45,7 @@ class DepthCamera(Component):
         self._log = Logger('depth-camera', level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         _start_time = dt.now()
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         _cfg = config.get('kros').get('hardware').get('depth_camera')
         _preset_mode_value  = _cfg.get('preset_mode')
         _preset_mode = DepthCamera.parse_preset_mode(_preset_mode_value, default=dai.node.StereoDepth.PresetMode.ROBOTICS)
@@ -54,28 +53,28 @@ class DepthCamera(Component):
         _subpixel    =  _cfg.get('subpixel')                  # better accuracy for longer distance, fractional disparity 32-levels
         _lr_check    =  _cfg.get('left_right_check')          # better handling for occlusions
         self.scale_pixel_coordinates = True
-        # create pipeline ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create pipeline
         self._pipeline = dai.Pipeline()
-        # mono cameras and stereo depth node ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # mono cameras and stereo depth node
         mono_left  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
         mono_right = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
         stereo = self._pipeline.create(dai.node.StereoDepth)
-        # color camera ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # color camera
         color_cam  = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
 #       color_cam  = self._pipeline.create(dai.node.ColorCamera).build(dai.CameraBoardSocket.CAM_A)
 #       color_cam.setPreviewSize(640, 480)
 #       color_cam.setInterleaved(False)
-        # video streaming ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # video streaming
         self._streamer = None
         self._streamer_thread = None
         self._streaming_enabled = False
-        # linking ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # linking
         mono_left_out  = mono_left.requestFullResolutionOutput(type=dai.ImgFrame.Type.NV12)
         mono_right_out = mono_right.requestFullResolutionOutput(type=dai.ImgFrame.Type.NV12)
         # link mono outputs to stereo node
         mono_left_out.link(stereo.left)
         mono_right_out.link(stereo.right)
-        # set stereo features ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # set stereo features
         # create a node that will produce the depth map using disparity output
         stereo.setRectification(True)
         stereo.setDefaultProfilePreset(_preset_mode)
@@ -84,7 +83,7 @@ class DepthCamera(Component):
         stereo.setLeftRightCheck(_lr_check)
         stereo.setExtendedDisparity(_extended_disparity)
         stereo.setSubpixel(_subpixel)
-        # output queues ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # output queues
         self._mono_left_queue  = mono_left_out.createOutputQueue()
         self._mono_right_queue = mono_right_out.createOutputQueue()
         self._depth_queue      = stereo.depth.createOutputQueue()
@@ -95,6 +94,8 @@ class DepthCamera(Component):
         self._pipeline.start()
         _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
         self._log.info('depth camera initialized and pipeline started: {}ms elapsed.'.format(_elapsed_ms))
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @staticmethod
     def parse_preset_mode(mode_str, default=None):
@@ -179,7 +180,7 @@ class DepthCamera(Component):
 
     def get_frame(self, orientation=None):
         '''
-        Returns either the PORT or STBD greyscale camera frame as an array 
+        Returns either the PORT or STBD greyscale camera frame as an array
         of uint8 values, where each value is a greyscale intensity of 0-255.
         '''
         if orientation is Orientation.PORT:
@@ -191,9 +192,9 @@ class DepthCamera(Component):
 
     def get_depth_frame(self):
         '''
-        Gets the latest depth frame as a numpy array of uint16 values, 
+        Gets the latest depth frame as a numpy array of uint16 values,
         where each is depth value in millimeters.
-        Returns None if no frame is available. Note that values may be zero 
+        Returns None if no frame is available. Note that values may be zero
         if the camera is unable to determine a depth value.
         '''
         if not self.enabled:
@@ -243,8 +244,6 @@ class DepthCamera(Component):
             self._log.warning('no depth frame to save.')
             return False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def get_reference_pixel_grid(self):
         '''
         Returns a numpy array of (x, y) pixel coordinates for the normalized reference grid
@@ -287,8 +286,6 @@ class DepthCamera(Component):
         self._log.info(Fore.WHITE + 'depth camera returned reference depth: {}ms elapsed.'.format(_elapsed_ms))
         return depths.reshape((15, 5))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def save_camera_frames_png(self, base_filename="output"):
         '''
         Saves PNG images for left, right, and depth frames from the pipeline.
@@ -299,7 +296,7 @@ class DepthCamera(Component):
         stbd_frame = self.get_frame(Orientation.STBD)
         depth_frame = self.get_depth_frame()
 
-        height, width = 480, 640 
+        height, width = 480, 640
 
         def nv12_to_gray(nv12_frame, width, height):
             # Y plane is first 'height' rows and first 'width' columns
@@ -328,8 +325,6 @@ class DepthCamera(Component):
             self._log.warning("No depth frame available to save.")
             success = False
         return success
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def ground_to_pixel(self, X, Z, ref_width=640, ref_height=480):
         '''
@@ -456,8 +451,6 @@ class DepthCamera(Component):
         except Exception as e:
             self._log.error('error retrieving color frame: {}'.format(e))
             return None
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def enable(self):
         self._log.info('enabling depth camera…')

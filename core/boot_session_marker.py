@@ -21,7 +21,7 @@ class BootSessionMarker:
     Utility class for tracking whether an operation has been performed during
     the current boot session. Useful for operations that only need to happen
     once per power cycle (e.g., firmware loading).
-    
+
     Uses /proc/sys/kernel/random/boot_id to detect system reboots. This UUID
     changes on every boot, so markers automatically become invalid after reboot.
     '''
@@ -35,7 +35,7 @@ class BootSessionMarker:
         marker_dir = Path(tempfile.gettempdir())
         self._marker_path = marker_dir / '.{}_boot_marker'.format(marker_name)
         self._log.info('marker path: {}'.format(self._marker_path))
-    
+
     def _get_boot_id(self):
         '''
         Get unique boot session ID from kernel.
@@ -47,11 +47,11 @@ class BootSessionMarker:
         except IOError as e:
             self._log.warning('could not read boot_id: {}'.format(e))
             return None
-    
+
     def is_marked(self):
         '''
         Check if the operation has been marked as completed during this boot session.
-        
+
         Returns:
             True if operation was performed this boot, False otherwise
         '''
@@ -77,7 +77,7 @@ class BootSessionMarker:
         except IOError as e:
             self._log.warning('error reading marker for "{}": {}'.format(self._marker_name, e))
             return False
-    
+
     def mark(self):
         '''
         Mark the operation as completed for this boot session.
@@ -92,7 +92,7 @@ class BootSessionMarker:
                 self._log.warning('could not determine boot_id, marker not created for "{}"'.format(self._marker_name))
         except IOError as e:
             self._log.warning('could not create marker for "{}": {}'.format(self._marker_name, e))
-    
+
     def clear(self):
         '''
         Remove the marker file (forces operation to run on next check).
@@ -107,4 +107,4 @@ class BootSessionMarker:
         except IOError as e:
             self._log.warning('could not clear marker for "{}": {}'.format(self._marker_name, e))
 
-# EOF
+#EOF

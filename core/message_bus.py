@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
-# created:  2021-03-10
+# created:  2020-11-10
 # modified: 2025-08-31
 #
 # An asyncio-based publish/subscribe-style message bus guaranteeing exactly-once

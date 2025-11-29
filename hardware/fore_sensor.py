@@ -20,12 +20,11 @@ from core.component import Component
 from core.convert import Convert
 from hardware.i2c_scanner import I2CScanner
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ForeSensor(Component):
     NAME = 'fore-sensor'
     '''
     Wraps an IO Expander board as input for a single Pololu analog distance sensor.
-    
+
     :param config:            the application configuration
     :param level:             the log level
     '''
@@ -63,6 +62,7 @@ class ForeSensor(Component):
             raise Exception('This script requires the pimoroni-ioexpander module\nInstall with: pip3 install --user pimoroni-ioexpander')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def get_raw_value(self):
         '''
         Return the current (live) raw analog value from the sensor.
@@ -71,7 +71,6 @@ class ForeSensor(Component):
             raise Exception('IO Expander not configured.')
         return self._ioe.input(self._sensor_pin)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_value(self):
         '''
         Return the current (live) scaled analog value from the sensor (0-100).
@@ -80,7 +79,6 @@ class ForeSensor(Component):
             raise Exception('IO Expander not configured.')
         return int(round(self._ioe.input(self._sensor_pin) * 100.0))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _smooth(self, value):
         '''
         Applies smoothing to the value if enabled.
@@ -92,7 +90,6 @@ class ForeSensor(Component):
         smoothed = np.mean(self._window)
         return smoothed
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_distance_cm(self):
         '''
         Return the current (live) distance in centimeters with optional smoothing,
@@ -106,7 +103,6 @@ class ForeSensor(Component):
         _distance_cm = int(_converted) + self._trim_cm
         return int(self._smooth(_distance_cm)) if self._smoothing else _distance_cm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
         Enables the sensor.
@@ -117,7 +113,6 @@ class ForeSensor(Component):
         else:
             self._log.info('already enabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disables the sensor.
@@ -128,7 +123,6 @@ class ForeSensor(Component):
         else:
             self._log.info('already disabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         Closes the sensor and frees resources.
@@ -140,4 +134,4 @@ class ForeSensor(Component):
         else:
             self._log.info('already closed.')
 
-# EOF
+#EOF

@@ -205,7 +205,6 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
     else:
         __log.error('failed to set new I2C address...')
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ThunderBorg:
     '''
     This module is designed to communicate with the ThunderBorg.
@@ -351,8 +350,6 @@ class ThunderBorg:
             retryCount -= 1
 #           time.sleep(0.005) # add short delay between attempts (maybe 0.01)
         raise IOError('I2C read for command {} failed'.format(command))
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def I2cAddress(self):
@@ -707,8 +704,6 @@ class ThunderBorg:
         else:
             return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def SetCommsFailsafe(self, state):
         '''
         SetCommsFailsafe(state)
@@ -842,8 +837,6 @@ class ThunderBorg:
         else:
             return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def GetBatteryReading(self):
         '''
         voltage = GetBatteryReading()
@@ -956,8 +949,6 @@ class ThunderBorg:
         # Send each colour in turn
         for r, g, b in colours:
             self.WriteExternalLedWord(255, 255 * b, 255 * g, 255 * r)
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def Help(self):
         '''

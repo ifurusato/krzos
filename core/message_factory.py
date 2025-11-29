@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2019-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2019-12-23
 # modified: 2020-03-12
-#
 
 from datetime import datetime as dt
 from colorama import init, Fore, Style
@@ -20,7 +19,6 @@ from core.message import Message
 from core.message_bus import MessageBus
 from core.event import Event
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MessageFactory(Component):
     '''
     A factory for Messages.
@@ -36,6 +34,7 @@ class MessageFactory(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def create_message(self, event, value=None):
         '''
         Create and return a new message with the supplied event and optional

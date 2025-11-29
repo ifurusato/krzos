@@ -18,7 +18,6 @@ from core.orientation import Orientation
 from hardware.distance_sensor import DistanceSensor
 from hardware.easing import Easing
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensors(Component):
     NAME = 'distance-sensors'
     '''
@@ -39,7 +38,7 @@ class DistanceSensors(Component):
         self._level = level
         self._log = Logger(DistanceSensors.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('hardware').get('distance_sensors')
@@ -47,7 +46,7 @@ class DistanceSensors(Component):
         self._default_distance = _cfg.get('max_distance', 270)
         _easing_value          = _cfg.get('easing', 'linear')
         self._easing           = Easing.from_string(_easing_value)
-        # sensors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # sensors
         self._port_sensor = DistanceSensor(config, Orientation.PORT)
         self._fwd_sensor  = DistanceSensor(config, Orientation.FWD)
         self._stbd_sensor = DistanceSensor(config, Orientation.STBD)
@@ -59,6 +58,7 @@ class DistanceSensors(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def enable(self):
         '''
         Enable the three sensors as well as this class.
@@ -68,7 +68,6 @@ class DistanceSensors(Component):
         Component.enable(self)
         self._log.info('enabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def sensors(self):
         '''
@@ -76,7 +75,6 @@ class DistanceSensors(Component):
         '''
         return self._sensors
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __iter__(self):
         '''
         Iterate over the sensors, permitting this construction:
@@ -85,8 +83,6 @@ class DistanceSensors(Component):
                 distance_mm = _sensor.distance
         '''
         return iter(self._sensors.values())
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def get_distance(self, orientation):
         '''
@@ -105,30 +101,11 @@ class DistanceSensors(Component):
             case _:
                 raise ValueError('unsupported orientation: {}'.format(orientation.name))
 
-#   @property
-#   def port_distance(self):
-#       return self._port_sensor.distance
-
-#   @property
-#   def fwd_distance(self):
-#       return self._fwd_sensor.distance
-
-#   @property
-#   def stbd_distance(self):
-#       return self._stbd_sensor.distance
-
-#   @property
-#   def all(self):
-#       return self._port_sensor.distance, self._fwd_sensor.distance, self._stbd_sensor.distance
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_sensor(self, orientation: Orientation):
         '''
         Get method to retrieve the sensor by Orientation.
         '''
         return self._sensors.get(orientation, None)  # Returns the sensor or None if not found
-
-    # weighted averages support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def normalise_distance(self, dist):
         '''
@@ -161,7 +138,6 @@ class DistanceSensors(Component):
         stbd_norm = self.normalise_distance(stbd_avg)
         return port_norm, stbd_norm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disable the three sensors as well as this class.

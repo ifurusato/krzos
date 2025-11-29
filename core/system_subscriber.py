@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2021-07-19
 # modified: 2021-08-20
-#
 
 from colorama import init, Fore, Style
 init()
@@ -17,7 +16,6 @@ from core.logger import Logger, Level
 from core.event import Event, Group
 from core.subscriber import Subscriber, GarbageCollectedError
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class SystemSubscriber(Subscriber):
     '''
     A subscriber to system events. This is required for shutdown and reacting
@@ -36,6 +34,7 @@ class SystemSubscriber(Subscriber):
         self.add_events(Event.by_group(Group.SYSTEM))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     async def _arbitrate_message(self, message):
         '''
         Pass the message on to the Arbitrator and acknowledge that it has been
@@ -46,7 +45,6 @@ class SystemSubscriber(Subscriber):
         message.acknowledge_sent()
         self._log.info('arbitrated payload for event {}; value: {}'.format(message.payload.event.name, message.payload.value))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
         '''
         Process the message.
@@ -65,7 +63,6 @@ class SystemSubscriber(Subscriber):
         await Subscriber.process_message(self, message)
         self._log.debug('post-processing message {}'.format(message.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def dispatch_system_event(self, payload):
         '''
         Process an incoming event's payload.

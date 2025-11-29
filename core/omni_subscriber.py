@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2021-11-06
 # modified: 2021-11-06
-#
 
 import asyncio
 from colorama import init, Fore, Style
@@ -18,7 +17,6 @@ from core.logger import Logger, Level
 from core.event import Event, Group
 from core.subscriber import Subscriber
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class OmniSubscriber(Subscriber):
     NAME = 'omni'
     '''
@@ -41,12 +39,11 @@ class OmniSubscriber(Subscriber):
                 Group.THETA,
                 Group.CHADBURN,
                 Group.BEHAVIOUR
-#               Group.EXPERIMENT,
-#               Group.OTHER
             ]) # do not include Group.CLOCK
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     async def _arbitrate_message(self, message):
         '''
         Pass the message on to the Arbitrator and acknowledge that it has been
@@ -59,7 +56,6 @@ class OmniSubscriber(Subscriber):
                 + Fore.CYAN + 'for event \'{}\' with value type: '.format(message.event.label)
                 + Fore.YELLOW + '{}'.format(type(_value)))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
         '''
         Process the message.

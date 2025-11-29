@@ -16,7 +16,6 @@ init()
 from core.logger import Level, Logger
 from core.component import Component
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class SlewLimiter(Component):
     '''
     A time-based slew limiter that limits the rate of change of intent vectors
@@ -32,7 +31,7 @@ class SlewLimiter(Component):
     def __init__(self, config, level=Level.INFO):
         self._log = Logger('slew-limiter', level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        
+
         # read configuration - rates are per second
         _cfg = config['kros'].get('motor_controller').get('slew_limiter')
         self._max_vx_rate    = _cfg.get('max_vx_rate')      # lateral motion rate limit (per second)
@@ -76,10 +75,10 @@ class SlewLimiter(Component):
     def _variable_limit(self, target_intent):
         '''
         Limit the rate of change to target_intent based on elapsed time.
-        
+
         Args:
             target_intent: tuple (vx, vy, omega) - desired intent vector
-        
+
         Returns:
             tuple (vx, vy, omega) - rate-limited intent vector
         '''
@@ -120,16 +119,15 @@ class SlewLimiter(Component):
                     elapsed_sec * 1000.0, tgt_vx, tgt_vy, tgt_omega, limited_vx, limited_vy, limited_omega))
         return limited_intent
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _clamp_change(self, current, target, max_change):
         '''
         Clamp the change from current to target by max_change.
-        
+
         Args:
             current:    current value
             target:     desired value
             max_change: maximum allowed change (based on elapsed time)
-        
+
         Returns:
             clamped value
         '''
@@ -143,7 +141,6 @@ class SlewLimiter(Component):
         else:
             return current - max_change
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def reset(self):
         '''
         Reset internal state to zero. Useful when stopping or changing modes.
@@ -152,7 +149,6 @@ class SlewLimiter(Component):
         self._last_time = time.perf_counter()
         self._log.debug('reset to zero state.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.enabled:
             Component.enable(self)
@@ -160,7 +156,6 @@ class SlewLimiter(Component):
             self._last_time = time.perf_counter()
             self._log.info('enabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         if self.enabled:
             Component.disable(self)

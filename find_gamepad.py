@@ -13,7 +13,6 @@
 # a paired Bluetooth device.
 #
 #   pair E4:17:D8:37:05:72
-#
 
 import os, sys, time, asyncio, traceback
 import datetime as dt
@@ -93,7 +92,6 @@ from core.config_loader import ConfigLoader
         https://raspberrypi.stackexchange.com/a/123914
 '''
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadFinder:
 
     _NOT_AVAILABLE_ERROR = 'gamepad device not found (not configured, paired, powered or otherwise available)'
@@ -116,6 +114,7 @@ class GamepadFinder:
         self._gamepad         = None
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def connect(self):
         '''
         Scan for likely gamepad device, and if found, connect.
@@ -128,11 +127,9 @@ class GamepadFinder:
 #           raise ConnectionError('no gamepad device found.')
         self._connect()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_connection(self):
         return self._gamepad != None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _connect(self):
         self._log.info('scanning for gamepad…')
         try:
@@ -144,7 +141,6 @@ class GamepadFinder:
             self._gamepad = None
             raise ConnectionError('unable to connect to input device path {}: {}'.format(self._device_path, e))
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadScan:
     '''
     Returns the device with the most recently changed status from /dev/input/event{n}
@@ -157,6 +153,7 @@ class GamepadScan:
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _get_ctime(self, path):
         try:
             _device_stat = os.stat(path)
@@ -164,7 +161,6 @@ class GamepadScan:
         except OSError:
             return -1.0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_latest_device(self):
         '''
         Build a dictionary of available devices, return the one with the
@@ -195,7 +191,6 @@ class GamepadScan:
         self._log.info('most recent device: ' + Fore.YELLOW + '{}'.format(_latest_device))
         return _latest_device
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_gamepad_device(self):
         '''
         Checks that the configured device matches the device with the most
@@ -213,7 +208,8 @@ class GamepadScan:
             return False
 
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 def main():
     try:
         # read YAML configuration

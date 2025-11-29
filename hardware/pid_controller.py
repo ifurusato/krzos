@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2020-04-20
 # modified: 2025-11-11
-#
 
 import time
 from datetime import datetime as dt
@@ -25,7 +24,6 @@ from core.orientation import Orientation
 from core.message import Message
 from hardware.pid import PID
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class PIDController(Component):
     '''
     Provides a configurable PID-based motor controller. This also maintains
@@ -94,6 +92,7 @@ class PIDController(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def pid(self):
         '''
@@ -101,17 +100,14 @@ class PIDController(Component):
         '''
         return self._pid
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def velocity(self):
         return self._velocity
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def orientation(self):
         return self._orientation
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def kp(self):
         return self._pid.kp
@@ -136,17 +132,14 @@ class PIDController(Component):
     def kd(self, kd):
         self._pid.kd = kd
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def steps(self):
         return self._motor.steps
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def reset_steps(self):
         print(Fore.RED + 'RESET STEPS' + Style.RESET_ALL)
         self._motor._steps = 0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_limit(self, limit):
         '''
         Setter for the limit of the PID setpoint.
@@ -154,7 +147,6 @@ class PIDController(Component):
         '''
         self._pid.set_limit(limit)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def stats(self):
         '''
@@ -165,11 +157,10 @@ class PIDController(Component):
         cp, ci, cd = self._pid.components
         return kp, ki, kd, cp, ci, cd, self._last_power, self._motor.get_current_power(), self._power, self._motor.target_speed, self._pid.setpoint, self._motor.steps
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_speed(self, target_speed):
         _changed = target_speed != self._target_speed
         if _changed:
-            self._target_speed = target_speed 
+            self._target_speed = target_speed
         if not self.enabled:
             self._log.info(Fore.RED + 'pid controller disabled.')
             return 0.0
@@ -227,7 +218,6 @@ class PIDController(Component):
         self._last_time = dt.now()
         return _motor_power
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_mean_setpoint(self, value):
         '''
         Returns the mean of setpoint values collected in the queue.
@@ -244,20 +234,17 @@ class PIDController(Component):
             _mean += ( x - _mean ) / _n
         return float('nan') if _n < 1 else _mean
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_state(self):
         _fore = Fore.RED if self._orientation == Orientation.PORT else Fore.GREEN
         self._log.info(_fore + 'power:        \t{}'.format(self._power))
         self._log.info(_fore + 'last_power:   \t{}'.format(self._last_power))
         self._pid.print_state()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def reset(self):
         self._pid.reset()
         self._motor.stop()
         self._log.info(Style.DIM + 'reset.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if self.closed:
             self._log.warning('cannot enable PID loop: already closed.')

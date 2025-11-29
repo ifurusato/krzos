@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # -*- coding: utf-8 -*-
 #
 # Portions copyright 2020-2025 by Murray Altheim. All rights reserved. This file
@@ -51,7 +50,6 @@ from core.component import Component
 from core.logger import Logger, Level
 from matrix11x7.fonts import font3x5
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Usfs(Component):
     NAME = 'usfs'
     MAG_RATE       = 100  # Hz
@@ -87,9 +85,9 @@ class Usfs(Component):
         # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
         self._declination = _cfg.get('declination', 13.8) # set for your location
         self._log.info('declination: {:5.3f}'.format(self._declination))
-        # create USFS ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # create USFS
         self._usfs = USFS_Master(self.MAG_RATE, self.ACCEL_RATE, self.GYRO_RATE, self.BARO_RATE, self.Q_RATE_DIVISOR)
-        # start the USFS in master mode ┈┈┈┈┈┈┈┈┈┈
+        # start the USFS in master mode
         if not self._usfs.begin():
             self._log.error('unable to start USFS: {}'.format(self._usfs.getErrorString()))
 #           sys.exit(1)

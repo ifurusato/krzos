@@ -20,7 +20,6 @@ from core.message_factory import MessageFactory
 from core.publisher import Publisher
 from hardware.distance_sensors import DistanceSensors
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensorsPublisher(Publisher):
     CLASS_NAME = 'distance'
     _LISTENER_LOOP_NAME = '__distance-sensors-loop'
@@ -38,7 +37,7 @@ class DistanceSensorsPublisher(Publisher):
             raise ValueError('wrong type for log level argument: {}'.format(type(level)))
         self._level = level
         Publisher.__init__(self, DistanceSensorsPublisher.CLASS_NAME, config, message_bus, message_factory, level=self._level)
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['krzos'].get('publisher').get('distance_sensors')
@@ -47,11 +46,9 @@ class DistanceSensorsPublisher(Publisher):
         self._sense_threshold  = _cfg.get('sense_threshold')
         self._bump_threshold   = _cfg.get('bump_threshold')
         self._exit_on_cancel   = True # FIXME
-        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._reverse_curve    = False # reverse normalisation curve
         self._default_distance = 300   # max sensor range in mm
         self._min_distance     = 80    # minimum distance for scaling
-        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         if distance_sensors:
             self._sensors = distance_sensors
         else:
@@ -63,6 +60,7 @@ class DistanceSensorsPublisher(Publisher):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def enable(self):
         Publisher.enable(self)
         if self.enabled:
@@ -74,8 +72,6 @@ class DistanceSensorsPublisher(Publisher):
                 self._log.info('enabled.')
         else:
             self._log.warning('failed to enable publisher.')
-
-    # weighted averages support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @staticmethod
     def normalize_distance(dist, min_dist=80, max_dist=300, reverse=False):
@@ -110,7 +106,6 @@ class DistanceSensorsPublisher(Publisher):
                 reverse=self._reverse_curve)
         return (port_norm, stbd_norm)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_bumper_event(self, orientation):
         match orientation:
             case Orientation.PORT:
@@ -129,7 +124,6 @@ class DistanceSensorsPublisher(Publisher):
             case Orientation.STBD:
                 return Event.INFRARED_STBD  
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _dist_listener_loop(self, f_is_enabled):
         self._log.info('starting distance sensor listener loop.')
         _exit_flag = False
@@ -166,7 +160,6 @@ class DistanceSensorsPublisher(Publisher):
 
         self._log.info('distance sensors publish loop complete.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disable this publisher.

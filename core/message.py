@@ -12,7 +12,6 @@
 # NOTE: to guarantee exactly-once delivery each message must contain a list
 # of the identifiers for all current subscribers, with each subscriber
 # acknowledgement removing it from that list.
-#
 
 import string, uuid, random
 from datetime import datetime as dt
@@ -25,7 +24,6 @@ from core.event import Event
 from core.direction import Direction
 from core.speed import Speed
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Message(object):
 
     ID_CHARACTERS = string.ascii_uppercase + string.digits
@@ -56,14 +54,13 @@ class Message(object):
         self._subscribers   = {} # list of subscriber names who've acknowledged message
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def set_subscribers(self, subscribers):
         '''
         Set the list of expected subscribers to this message.
         '''
         for subscriber in subscribers:
             self._subscribers[subscriber] = False
-
-    # instance_name ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def name(self):
@@ -72,25 +69,17 @@ class Message(object):
         '''
         return self._instance_name
 
-    # message_id ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def message_id(self):
         return self._message_id
-
-    # timestamp ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def timestamp(self):
         return self._timestamp
 
-    # payload ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def payload(self):
         return self._payload
-
-    # event ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def event(self):
@@ -98,8 +87,6 @@ class Message(object):
         A convenience method providing access to the Payload event.
         '''
         return self._payload.event
-
-    # value ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def value(self):
@@ -115,14 +102,10 @@ class Message(object):
         '''
         self._payload.value = value
 
-    # age ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def age(self):
         _age_ms = (dt.now() - self._timestamp).total_seconds() * 1000.0
         return int(_age_ms)
-
-    # expired ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def expired(self):
@@ -130,8 +113,6 @@ class Message(object):
 
     def expire(self):
         self._expired = True
-
-    # sent ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def sent(self):
@@ -149,8 +130,6 @@ class Message(object):
         To be called when the message's payload has been sent the Arbitrator.
         '''
         self._sent += 1
-
-    # processed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def print_procd(self):
         '''
@@ -176,15 +155,12 @@ class Message(object):
         else:
             self._processors[processor] = True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __hash__(self):
         return hash((self._timestamp, self._message_id, self._instance_name, self._sent, self._expired, self._gc, self._payload))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __eq__(self, other):
         return isinstance(other, Message) and self.__hash__() == other.__hash__()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __str__(self):
         _sb = StringBuilder('Message[', indent=2, delim='\n')
         _sb.append('id={}'.format(id(self)))
@@ -199,8 +175,6 @@ class Message(object):
         _sb.append(']', indent=0, delim=StringBuilder.NONE)
         return _sb.to_string()
 
-    # garbage collection ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def gcd(self):
         return self._gc
@@ -214,8 +188,6 @@ class Message(object):
             raise Exception('already garbage collected.')
         self._gc = True
 
-    # acknowledged ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def print_acks(self):
         '''
         Returns a pretty-printed list of subscribers that have acknowledged
@@ -226,10 +198,6 @@ class Message(object):
             if self._subscribers[subscriber]:
                 _list.append('{} '.format(subscriber.name))
         return ''.join(_list) if len(_list) > 0 else '[none]'
-
-#   @property
-#   def acknowledgements(self):
-#       return self._subscribers
 
     @property
     def unacknowledged_count(self):
@@ -273,7 +241,6 @@ class Message(object):
         else:
             self._subscribers[subscriber] = True
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Payload(object):
     '''
     A Message's payload, containing the Event (with priority) and an optional
@@ -287,7 +254,7 @@ class Payload(object):
         self._is_motor_directive = isinstance(value, tuple) \
                 and isinstance(value[0], Direction) and isinstance(value[1], Speed)
 
-    # is motor directive ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_motor_directive(self):
@@ -297,31 +264,21 @@ class Payload(object):
         '''
         return self._is_motor_directive
 
-    # priority ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def priority(self):
         return self._event.priority
-
-    # event ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def event(self):
         return self._event
 
-    # direction ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def direction(self):
         return self._value[0]
 
-    # speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def speed(self):
         return self._value[1]
-
-    # value ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def value(self):
@@ -331,15 +288,12 @@ class Payload(object):
     def value(self, value):
         self._value = value
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __hash__(self):
         return hash((self._event, self._value))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __eq__(self, other):
         return isinstance(other, Payload) and self.__hash__() == other.__hash__()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __str__(self):
         _sb = StringBuilder('Payload[', indent=6, delim='\n')
         _sb.append('id={}'.format(id(self)))
@@ -351,7 +305,7 @@ class Payload(object):
         _sb.append(']', indent=4, delim=StringBuilder.NONE)
         return _sb.to_string()
 
-    # not equals ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # not equals
 #  def __ne__(self, other):
 #       return not self == other
 

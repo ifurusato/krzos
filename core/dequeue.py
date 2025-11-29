@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2021-09-25
 # modified: 2021-10-15
-#
 
 import copy
 from copy import deepcopy
@@ -18,7 +17,6 @@ init(autoreset=True)
 
 from core.stringbuilder import StringBuilder
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DeQueue(object):
 
     FIFO = QUEUE = 0 # use FIFO queue
@@ -45,6 +43,7 @@ class DeQueue(object):
             self._backing_queue = self._queue.queue
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def queue(self):
         '''
@@ -52,7 +51,6 @@ class DeQueue(object):
         '''
         return self._backing_queue
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def iterator(self):
         '''
@@ -60,7 +58,6 @@ class DeQueue(object):
         '''
         return self._queue
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def size(self):
         '''
@@ -68,28 +65,24 @@ class DeQueue(object):
         '''
         return self._queue.qsize()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear(self):
         '''
         Clears the contents of the queue.
         '''
         self._queue.clear()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def empty(self):
         '''
         Returns True if the queue is empty.
         '''
         return self.size == 0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def full(self):
         '''
         Returns True if the queue has reached its maximum length.
         '''
         return self._queue.full()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def peek(self):
         '''
         Return the next item on the queue without getting it.
@@ -102,7 +95,6 @@ class DeQueue(object):
         elif self._mode == DeQueue.LIFO: # stack
             return self._backing_queue[self.size-1]
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def poll(self):
         '''
         Return the next item on the queue.
@@ -113,7 +105,6 @@ class DeQueue(object):
             raise TypeError('poll() unsuppported in LIFO mode (stack), use pop() or the more general get().')
         return self._queue.get(self.size-1)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def put_as_set(self, item):
         '''
         This puts the item onto the queue only if it doesn't already exist,
@@ -123,14 +114,12 @@ class DeQueue(object):
         if item not in self._queue:
             self.put(item)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def push(self, item):
         '''
-        An alias for put(item). 
+        An alias for put(item).
         '''
         self.put(item)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def put(self, item):
         '''
         Put the item onto the queue.
@@ -143,7 +132,6 @@ class DeQueue(object):
         if item:
             self._queue.put(item)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def pop(self):
         '''
         An alias for get().
@@ -152,7 +140,6 @@ class DeQueue(object):
             raise TypeError('pop() unsuppported in FIFO mode (queue), use poll() or the more general get().')
         return self.get()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get(self):
         '''
         Get the next item from the queue.
@@ -161,17 +148,14 @@ class DeQueue(object):
             raise Empty()
         return self._queue.get()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __eq__(self, other):
         return isinstance(other, DeQueue) \
                 and self.__hash__() == other.__hash__() \
                 and self._queue == other.queue
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __hash__(self):
         return hash((self._maxsize, self._mode, self._queue.qsize()))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __str__(self):
         _sb = StringBuilder('  DeQueue[', indent=6, delim='\n')
         _sb.append('id={}'.format(id(self)))
@@ -185,7 +169,6 @@ class DeQueue(object):
         _sb.append(']', indent=6, delim=StringBuilder.NONE)
         return _sb.to_string()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __deepcopy__(self, memo):
         return DeQueue(maxsize=self._maxsize, backing_queue=copy.deepcopy(self._backing_queue), mode=self._mode)
 
@@ -199,14 +182,12 @@ class DeQueue(object):
 #   def nsmallest(n, iterable, key=None):
 #   def nlargest(n, iterable, key=None):
 
-## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #class Empty(Exception):
 #    '''
 #    An exception thrown when an action is taken upon an empty queue.
 #    '''
 #    pass
-#
-## ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 #class Full(Exception):
 #    '''
 #    An exception thrown when the queue would overflow upon fulfilling an action.

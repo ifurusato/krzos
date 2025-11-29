@@ -32,7 +32,6 @@ from hardware.motor_configurer import MotorConfigurer
 from hardware.odometer import Odometer
 from hardware.slew_limiter import SlewLimiter
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MotorController(Component):
     NAME = 'motor-ctrl'
     BASE_NAME = 'base-intent-vector'
@@ -72,7 +71,7 @@ class MotorController(Component):
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('motor_controller')
         _i2c_scanner = I2CScanner(config=config, i2c_bus_number=1, i2c_bus=None, level=level)
-        # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         self._verbose        = _cfg.get('verbose')
         self._loop_freq_hz   = _cfg.get('loop_freq_hz') # main loop frequency
         self._loop_delay_sec = 1 / self._loop_freq_hz
@@ -131,7 +130,7 @@ class MotorController(Component):
             self._rate = None
             self._log.info('using external clock.')
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
-        # motor controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # motor controller
         self._closed_loop = None
         self._all_motors  = []
         self._motor_configurer = MotorConfigurer(config, _i2c_scanner, motors_enabled=True, level=level)
@@ -151,7 +150,7 @@ class MotorController(Component):
         self._is_braked          = False
         self._braking_event      = Event()
         self._current_brake_step = None
-        # speed and changes to speed ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # speed and changes to speed
         self._intent_vectors = {}  # {name: lambda}, intent vector registry
         self._blended_intent_vector = (0.0, 0.0, 0.0) # cached blended intent vector from last motor tick
         self.__callback      = None
@@ -269,7 +268,7 @@ class MotorController(Component):
     def has_intent_vector(self, name):
         '''
         Check if a named intent vector is currently registered.
-        
+
         :param name: the name of the intent vector to check
         :return: True if the intent vector exists, False otherwise
         '''
@@ -346,10 +345,10 @@ class MotorController(Component):
         by the magnitude of its intent vector. This ensures that inactive or weakly
         contributing behaviors (small magnitude) don't dilute the blend as much as
         strongly contributing behaviors.
-        
+
         Higher priority behaviors have proportionally more influence, but only when
         they are actively contributing (non-zero magnitude).
-        
+
         Returns a tuple (vx, vy, omega) representing the blended intent vector.
         '''
         if not self._intent_vectors:
@@ -947,7 +946,7 @@ class MotorController(Component):
                     self.clear_intent_vectors()
                 self._braking_active = False
                 self._current_brake_step = None
-                self._is_braked = True 
+                self._is_braked = True
                 self._braking_event.set()  # Signal completion
                 return MotorController.BRAKE_LAMBDA_NAME
             return modified

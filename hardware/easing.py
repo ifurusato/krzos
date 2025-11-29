@@ -8,15 +8,13 @@
 # author:   Murray Altheim
 # created:  2025-05-20
 # modified: 2025-05-20
-#
 
 import math
 from enum import Enum
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Easing(Enum):
-    LINEAR      = 'linear'       # direct proportional mapping 
-    QUADRATIC   = 'quadratic'    # values decrease quickly near max, then flatten near min 
+    LINEAR      = 'linear'       # direct proportional mapping
+    QUADRATIC   = 'quadratic'    # values decrease quickly near max, then flatten near min
     CUBIC       = 'cubic'        # decreases very fast initially, then barely changes close to obstacles
     SQUARE_ROOT = 'square_root'  # maintains higher values longer, drops more gradually near obstacles
     LOGARITHMIC = 'logarithmic'  # keeps values high over a wide range, drops off sharply only near minimum
@@ -58,7 +56,7 @@ class Easing(Enum):
                 Reverse logarithmic: stays very low over most of the range, then rises sharply only when
                 very close to maximum (obstacle very close). Ideal for aft sensor where you want minimal
                 interference until obstacle is dangerously close, then strong avoidance force.
-                
+
                 At normalised=0.0 (far):   returns ~0.0
                 At normalised=0.5 (mid):   returns ~0.15
                 At normalised=0.8 (close): returns ~0.55
@@ -85,3 +83,4 @@ class Easing(Enum):
                 return member
         raise ValueError("'{}' is not a valid Easing type. Available options: {}".format(name, [e.value for e in cls]))
 
+#EOF

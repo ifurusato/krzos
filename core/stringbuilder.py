@@ -8,11 +8,9 @@
 # author:   Murray Altheim
 # created:  2021-10-15
 # modified: 2021-10-15
-#
 
 from io import StringIO
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class StringBuilder():
     NONE = ''
     '''
@@ -30,9 +28,10 @@ class StringBuilder():
         if init_obj:
             self.append(init_obj)
         if indent > 0:
-            self._indent = ' ' * indent 
+            self._indent = ' ' * indent
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def append(self, obj, indent=None, delim=None):
         '''
         Append the object to the buffer. This accepts any object.
@@ -57,11 +56,9 @@ class StringBuilder():
         elif self._delim:
             self._buffer.write(self._delim)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __str__(self):
         return self._buffer.getvalue()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def to_string(self):
         return self._buffer.getvalue()
 

@@ -8,9 +8,7 @@
 # author:   Murray Altheim
 # created:  2021-09-02
 # modified: 2021-09-02
-#
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Ranger(object):
     '''
     A simple range converter class, e.g.:
@@ -33,6 +31,7 @@ class Ranger(object):
                 else (((n - self._old_min) * (self._new_max - self._new_min)) / (self._old_max - self._old_min)) + self._new_min
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def convert(self, value):
         return int(self._convert(value)) if self._convert_to_int else float(self._convert(value))
 

@@ -17,7 +17,6 @@ from core.logger import Logger, Level
 from core.event import Event, Group
 from core.subscriber import Subscriber
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensorsSubscriber(Subscriber):
     NAME = 'distance'
     '''
@@ -35,6 +34,7 @@ class DistanceSensorsSubscriber(Subscriber):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def get_fore(self, event):
         match event:
             case Event.INFRARED_PORT:
@@ -50,7 +50,6 @@ class DistanceSensorsSubscriber(Subscriber):
             case Event.INFRARED_STBD:
                 return Fore.GREEN
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def is_bumper_event(event):
         return event.group is Group.BUMPER
@@ -59,7 +58,6 @@ class DistanceSensorsSubscriber(Subscriber):
     def is_infrared_event(event):
         return event.group is Group.INFRARED
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def process_message(self, message):
         '''
         Process the message.

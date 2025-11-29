@@ -18,7 +18,6 @@ init()
 from core.logger import Level, Logger
 from core.component import Component
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class LuxSensor(Component):
     '''
     Represents a light sensor component using the LTR559 sensor.

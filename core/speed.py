@@ -8,13 +8,11 @@
 # author:   Murray Altheim
 # created:  2021-07-29
 # modified: 2024-06-08
-#
 
 from enum import Enum
 
 from core.util import Util
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Speed(Enum):
     '''
     Provides an enumeration of both ahead (forward) and astern (reverse)
@@ -46,17 +44,12 @@ class Speed(Enum):
         self._astern   = astern
         self._ahead    = ahead
 
-#   # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#   @property
-#   def value(self):
-#       raise Exception('can\'t call value directly.')
-
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def label(self):
         return self._label
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def velocity(self):
         '''
@@ -64,7 +57,6 @@ class Speed(Enum):
         '''
         return self._velocity
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def proportional(self):
         '''
@@ -72,7 +64,6 @@ class Speed(Enum):
         '''
         return self._proportional
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def astern(self):
         '''
@@ -87,7 +78,6 @@ class Speed(Enum):
         '''
         self._astern = astern
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def ahead(self):
         '''
@@ -102,12 +92,10 @@ class Speed(Enum):
         '''
         self._ahead = ahead
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def __str__(self):
         return 'Speed.{}:{}v={:5.2f};\t{:5.2f}->{:5.2f}.'.format(self.name, (' ' * max(0, (16 - len(self.name)))),
                 self._velocity, self._astern, self._ahead)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def from_string(value):
         '''
@@ -119,7 +107,6 @@ class Speed(Enum):
                 return s
         raise NotImplementedError
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def get_proportional_power(velocity):
         '''
@@ -150,7 +137,6 @@ class Speed(Enum):
                 _pp *= -1
         return _pp
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def lerp(v0: float, v1: float, t: float) -> float:
         return (1 - t) * v0 + t * v1
@@ -163,7 +149,6 @@ class Speed(Enum):
     def remap(i_min: float, imax: float, o_min: float, o_max: float, v: float) -> float:
         return lerp(o_min, o_max, inv_lerp(i_min, imax, v))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def xrange(x):
         if abs(x) >= Speed.MAXIMUM.velocity:
@@ -194,15 +179,13 @@ class Speed(Enum):
             raise Exception('only 1: speed: {}'.format(r))
         return r
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def print_configuration(log):
         log.info('configured speeds:')
         for _speed in Speed:
-            log.info('  {}:{}astern: '.format(_speed.name, Util.repeat(' ', 21 - len(_speed.name))) + '{:>5.2f}'.format(_speed.astern) 
+            log.info('  {}:{}astern: '.format(_speed.name, Util.repeat(' ', 21 - len(_speed.name))) + '{:>5.2f}'.format(_speed.astern)
                     + '   ahead: {:>5.2f}'.format(_speed.ahead))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def configure(config):
         '''

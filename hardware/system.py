@@ -20,7 +20,6 @@ from core.logger import Level, Logger
 from hardware.ina260_sensor import Ina260
 from ads1015 import ADS1015
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class System(Component):
     '''
     A collection of system control/info/statistical methods.
@@ -67,7 +66,7 @@ class System(Component):
             raise e
         self._log.info('ready.')
 
-    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def battery_12v(self):
@@ -158,7 +157,6 @@ class System(Component):
         '''
         return self._system_current_max
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_nice(self):
         '''
         Set KROS as high priority process.
@@ -167,7 +165,6 @@ class System(Component):
         proc = psutil.Process(os.getpid())
         proc.nice(10)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def is_raspberry_pi(self):
         '''
         Returns True if the system is named 'Linux' and shows as either a 32
@@ -183,7 +180,6 @@ class System(Component):
         _arch = platform.machine()
         return  platform.system() == 'Linux' and ( _arch == 'armv71' or _arch == 'aarch64' ) # 32 and 64 bit architecture names
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_platform_info(self):
         '''
         Returns a list of information about the current environment, or None
@@ -210,7 +206,6 @@ class System(Component):
             self._log.error('error getting platform information:  {}'.format(e))
             return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_battery_bars(self, voltage):
         '''
         Return a characterisation of the battery state, including the number
@@ -231,7 +226,6 @@ class System(Component):
         else:
             return Fore.WHITE + Style.BRIGHT + "unknown state"
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_battery_info(self):
         try:
             _battery_12v, _reg_5v, _reg_3v3 = self.get_voltages()
@@ -243,7 +237,6 @@ class System(Component):
         except Exception as e:
             self._log.error('{} raised in power supply test: {}'.format(type(e), e))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_sys_info(self):
         if self._kros:
             self._log.info('kros:  state: ' + Fore.YELLOW + '{}  \t'.format(self._kros.state.name) \
@@ -286,7 +279,6 @@ class System(Component):
         if temperature:
             self._log.info('cpu temperature:\t' + Fore.YELLOW + '{:5.2f}°C'.format(temperature))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def read_cpu_temperature(self):
         temp_file = Path('/sys/class/thermal/thermal_zone0/temp')
         if temp_file.is_file():

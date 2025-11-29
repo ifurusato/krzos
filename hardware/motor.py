@@ -18,7 +18,6 @@ from core.component import Component
 from core.orientation import Orientation
 from hardware.pid_controller import PIDController
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Motor(Component):
     '''
     Controls a motor that uses a Hall Effect encoder to determine the robot's
@@ -69,7 +68,7 @@ class Motor(Component):
         self._reverse_motor = _cfg.get('reverse_motor_{}'.format(orientation.label))
         self._log.info('reverse motor: {}'.format(self._reverse_motor))
         self._counter            = itertools.count()
-        self.__callbacks         = []
+#       self.__callbacks         = []
         self.__max_applied_power = 0.0      # capture maximum power applied
         self.__max_power_ratio   = 0.0      # will be set by MotorConfigurer
         self.__target_speed      = 0.0      # the current target speed of the motor
@@ -83,6 +82,7 @@ class Motor(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def velocity(self):
         '''
@@ -97,7 +97,6 @@ class Motor(Component):
         self._log.warning('get_velocity is DEPRECATED.')
         return self._pid_controller.velocity
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def current_power(self):
         '''
@@ -105,7 +104,6 @@ class Motor(Component):
         '''
         return self.get_current_power(settle_to_zero=False)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_callback(self, callback):
         '''
         Used by the Velocity class to obtain a callback on the motor loop.
@@ -113,7 +111,6 @@ class Motor(Component):
 #       self.__callbacks.append(callback)
         raise NotImplementedError('add_callback unsupported in Motor.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def orientation(self):
         '''
@@ -121,7 +118,6 @@ class Motor(Component):
         '''
         return self._orientation
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def max_observed_speed(self):
         '''
@@ -129,7 +125,6 @@ class Motor(Component):
         '''
         return self._max_observed_speed
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def add_speed_multiplier(self, name, lambda_function, exclusive=True):
         '''
         Adds a named speed multiplier to the dict of lambda functions. This
@@ -151,7 +146,6 @@ class Motor(Component):
             self._log.info('adding \'{}\' lambda to motor {}…'.format(name, self.orientation.name))
             self.__speed_lambdas[name] = lambda_function
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def remove_speed_multiplier(self, name):
         '''
         Removes a named (or partial-named) speed multiplier from the dict of
@@ -165,7 +159,6 @@ class Motor(Component):
 #               self._log.info('removing \'{}\' lambda from motor {}…'.format(_name, self.orientation.name))
                 del self.__speed_lambdas[_name]
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_speed_multiplier(self, name):
         '''
         Returns true if a named speed multiplier exists in the dict of lambda functions.
@@ -175,7 +168,6 @@ class Motor(Component):
             return False
         return name in self.__speed_lambdas
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_speed_multipliers(self):
         '''
         Resets the speed multipliers to None, i.e., no function.
@@ -188,7 +180,6 @@ class Motor(Component):
             self._log.info('clearing {:d} speed multipliers…'.format(_count))
             self.__speed_lambdas.clear()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def speed_multiplier_count(self):
         '''
@@ -199,7 +190,6 @@ class Motor(Component):
             return 0
         return len(self.__speed_lambdas)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def list_speed_multipliers(self):
         '''
         Lists the current speed multipliers to the log.
@@ -215,15 +205,12 @@ class Motor(Component):
             for _lambda in self.__speed_lambdas:
                 self._log.info(Fore.GREEN + '    speed multiplier: {}'.format(_lambda))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def pid_controller(self):
         '''
         Returns the PID controller used by this motor.
         '''
         return self._pid_controller
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def decoder(self):
@@ -233,7 +220,6 @@ class Motor(Component):
     def decoder(self, decoder):
         self._decoder = decoder
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def modified_speed(self):
         '''
@@ -241,7 +227,6 @@ class Motor(Component):
         '''
         return self.__modified_target_speed
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def target_speed(self):
         '''
@@ -263,15 +248,12 @@ class Motor(Component):
             else:
                 self._log.info('target speed: {:5.2f}'.format(self.__target_speed))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def steps(self):
         '''
         Return the value of the step count from the motor encoder.
         '''
         return self._decoder.steps
-
-    # max power rate ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def max_power_ratio(self):
@@ -282,7 +264,6 @@ class Motor(Component):
         self.__max_power_ratio = max_power_ratio
         self._log.info('set maximum power ratio: {:<5.2f}'.format(self.__max_power_ratio))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_stopped(self):
         '''
@@ -296,7 +277,6 @@ class Motor(Component):
         else:
             return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_in_motion(self):
         '''
@@ -307,7 +287,6 @@ class Motor(Component):
 #       return self.get_current_power() != 0.0
         return not isclose(self.get_current_power(settle_to_zero=False), 0.0, abs_tol=1e-2)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_moving_ahead(self):
         '''
@@ -316,7 +295,6 @@ class Motor(Component):
         '''
         return self.get_current_power() > 0.0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_moving_astern(self):
         '''
@@ -325,7 +303,6 @@ class Motor(Component):
         '''
         return self.get_current_power() < 0.0
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def update_target_speed(self):
         '''
         Align the current speed and the target speed and motor power. This
@@ -334,8 +311,8 @@ class Motor(Component):
         Returns the calculated motor speed after setting motor power to the value.
         '''
         if self.enabled:
-            for callback in self.__callbacks:
-                callback()
+#           for callback in self.__callbacks:
+#               callback()
             # we start with the current value of the target speed
             self.__modified_target_speed = self.__target_speed
             _returned_value = 0.0
@@ -365,7 +342,6 @@ class Motor(Component):
                 self.set_motor_power(_motor_speed)
                 return _motor_speed
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def set_motor_power(self, target_power):
         '''
         Direct-drive the motor via a target power argument, whose value must be
@@ -425,7 +401,6 @@ class Motor(Component):
         # keep track of highest-applied target power
         self.__max_applied_power = max(abs(target_power), self.__max_applied_power)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def tb(self):
         '''
@@ -433,7 +408,6 @@ class Motor(Component):
         '''
         return self._tb
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_current_power(self, settle_to_zero=True):
         '''
         Makes a best attempt at getting the current power value from the motors.
@@ -468,7 +442,6 @@ class Motor(Component):
                 self._tb.SetMotor2(_value)
         return _value
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def last_power(self):
         '''
@@ -476,7 +449,6 @@ class Motor(Component):
         '''
         return self._last_driving_power
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def stop(self):
         '''
         Stops the motor immediately.
@@ -491,7 +463,6 @@ class Motor(Component):
             raise ValueError('unrecognised orientation.')
         self._log.info('{} motor stopped.'.format(self._orientation.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def off(self):
         '''
         Stops the motor entirely.
@@ -504,17 +475,14 @@ class Motor(Component):
             raise ValueError('unrecognised orientation.')
         self._log.info('{} motor off.'.format(self._orientation.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def is_enabled(self):
         return self.enabled
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.enabled:
             Component.enable(self)
         self._log.info('enabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         if self.enabled:
             Component.disable(self)
@@ -524,7 +492,6 @@ class Motor(Component):
             self._log.warning('already disabled.')
         self.off() # in any case
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         # just do it anyway
         self.stop()

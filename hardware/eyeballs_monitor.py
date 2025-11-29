@@ -18,15 +18,14 @@ from core.component import Component
 from hardware.eyeballs import Eyeballs
 from hardware.eyeball import Eyeball
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class EyeballsMonitor(Component):
     NAME = 'eyeballs-mon'
     '''
     Monitors the robot's motion direction and displays corresponding eye expressions.
-    
+
     Uses the motor controller's blended intent vector (vx, vy, omega) to determine
     direction and updates the eyeballs display only when direction changes.
-    
+
     Direction mapping:
 
         - stopped:            BLANK
@@ -38,7 +37,7 @@ class EyeballsMonitor(Component):
         - forward+starboard:  LOOK_STBD_FWD
         - aft+port:           LOOK_PORT_AFT
         - aft+starboard:      LOOK_STBD_AFT
-    
+
     :param motor_controller:  the MotorController instance to monitor
     :param level:             the logging Level
     '''
@@ -57,7 +56,7 @@ class EyeballsMonitor(Component):
         self._previous_eyeball  = None  # track previous state to avoid redundant updates
         self._manual_eyeball    = None  # holds manual Eyeball enum when set, None = auto
         self._log.info('ready.')
-    
+
     @property
     def name(self):
         return EyeballsMonitor.NAME
@@ -71,7 +70,7 @@ class EyeballsMonitor(Component):
     def set_eyeballs(self, eyeball):
         '''
         Manually set the eyeball expression, overriding motor controller monitoring.
-        
+
         Args:
             eyeball: Eyeball enum value to display
         '''
@@ -88,12 +87,12 @@ class EyeballsMonitor(Component):
         self._manual_eyeball   = None
         self._previous_eyeball = None  # force update on next motor tick
         self._log.info('manual override cleared, resuming motor monitoring.')
-    
+
     def update(self):
         '''
         Check the motor controller's current intent vector and update eyeballs
         display if direction has changed.
-        
+
         Called by MotorController during each motor tick.
         '''
         if not self.enabled or self._eyeballs is None or self._manual_eyeball is not None:
@@ -106,21 +105,21 @@ class EyeballsMonitor(Component):
         if eyeball != self._previous_eyeball:
             self._display_eyeball(eyeball)
             self._previous_eyeball = eyeball
-    
+
     def _calculate_eyeball(self, vx, vy, omega):
         '''
         Determine the appropriate eyeball expression based on intent vector components.
-        
+
         Args:
             vx: lateral velocity (+ = starboard, - = port)
             vy: longitudinal velocity (+ = forward, - = aft)
             omega: rotational velocity (ignored for display purposes)
-        
+
         Returns:
             Eyeball: the appropriate eyeball enum value
         '''
         # check if stopped (all components near zero)
-        if (isclose(vx, 0.0, abs_tol=self._motion_threshold) and 
+        if (isclose(vx, 0.0, abs_tol=self._motion_threshold) and
             isclose(vy, 0.0, abs_tol=self._motion_threshold)):
             return Eyeball.BLANK
         if self._motor_controller.is_stopped:
@@ -155,16 +154,16 @@ class EyeballsMonitor(Component):
     def _display_eyeball(self, eyeball):
         '''
         Update eyeballs display with the specified expression.
-        
+
         Args:
             eyeball: Eyeball enum value
         '''
         self._eyeballs.set_matrix(eyeball.array, self._eyeballs._port_rgbmatrix, eyeball.color)
         self._eyeballs.set_matrix(eyeball.array, self._eyeballs._stbd_rgbmatrix, eyeball.color)
         self._eyeballs._show()
-        
+
         self._log.debug('displaying eyeball: {}'.format(eyeball.name))
-    
+
     def enable(self):
         if not self.enabled:
             Component.enable(self)
@@ -173,7 +172,7 @@ class EyeballsMonitor(Component):
             self._log.info('enabled.')
         else:
             self._log.debug('already enabled.')
-    
+
     def disable(self):
         if self.enabled:
             Component.disable(self)
@@ -181,7 +180,7 @@ class EyeballsMonitor(Component):
             self._log.info('disabled.')
         else:
             self._log.debug('already disabled.')
-    
+
     def close(self):
         if not self.closed:
             self.disable()

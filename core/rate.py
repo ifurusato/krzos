@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2020-08-23
 # modified: 2021-02-05
-#
 
 import time
 from colorama import init, Fore, Style
@@ -16,7 +15,6 @@ init()
 
 from core.logger import Level, Logger
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Rate():
     '''
     By calling wait() faster than the set frequency, results in looping at a
@@ -43,13 +41,13 @@ class Rate():
         self._trim = 0.0
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def get_period_sec(self):
         '''
         Returns the period in seconds, as a float.
         '''
         return self._dt_s
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def trim(self):
         '''
@@ -59,7 +57,6 @@ class Rate():
         '''
         return self._trim
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @trim.setter
     def trim(self, trim_s):
         '''
@@ -74,7 +71,6 @@ class Rate():
         else:
             self._log.warning('trim argument {:8.5f}s larger than dt ({:8.5f}s): ignored.'.format(trim_s, self._dt_s))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def dt_ms(self):
         '''
@@ -83,7 +79,6 @@ class Rate():
         '''
         return self._dt_ms
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_period_ms(self):
         '''
         Returns the period in milliseconds, rounded to an int.
@@ -91,14 +86,12 @@ class Rate():
         '''
         return round(self._dt_s * 1000)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def waiting(self):
         '''
         Return True if still waiting for the current loop to complete.
         '''
         return self._dt_s < ( time.time() - self._last_time )
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def wait(self):
         '''
         If called before the allotted period will wait the remaining time

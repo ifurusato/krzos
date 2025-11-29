@@ -28,7 +28,6 @@ init()
 
 from core.logger import Logger, Level
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Decoder(object):
     '''
     Class to decode mechanical rotary encoder pulses, implemented
@@ -123,7 +122,7 @@ class Decoder(object):
 
         No longer used.
         '''
-        pass 
+        pass
 
     def cancel(self):
         '''

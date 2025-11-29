@@ -11,12 +11,11 @@
 
 from core.logger import Level, Logger
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class ConfigurationError(Exception):
     '''
     This exception is thrown when any error due to configuration occurs.
     '''
-    def __init__(self, message):            
+    def __init__(self, message):
         super().__init__(message)
 
 #EOF

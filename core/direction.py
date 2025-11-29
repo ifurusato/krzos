@@ -11,7 +11,6 @@
 
 from enum import Enum
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Direction(Enum):
     STOPPED           = ( 0, 'stopped',           'stop',  0.0,  0.0)
     AHEAD             = ( 1, 'ahead',             'ahed',  0.0,  1.0)
@@ -28,6 +27,8 @@ class Direction(Enum):
         self._label = label
         self._vx_direction = vx_direction
         self._vy_direction = vy_direction
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def name(self):
@@ -51,7 +52,6 @@ class Direction(Enum):
         '''
         return self._vy_direction
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @staticmethod
     def get_direction_for(port_velocity, stbd_velocity):
         if port_velocity and stbd_velocity:

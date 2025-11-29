@@ -15,7 +15,6 @@
 #  address).
 #
 # DeviceNotFound class at bottom.
-#
 
 import re
 import subprocess
@@ -24,7 +23,7 @@ import datetime as dt
 from colorama import init, Fore, Style
 init()
 
-# import smbus ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# import smbus
 import pkg_resources
 SMBUS='smbus2'
 for dist in pkg_resources.working_set:
@@ -37,12 +36,10 @@ if SMBUS == 'smbus':
     import smbus
 elif SMBUS == 'smbus2':
     import smbus2 as smbus
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 from core.logger import Level, Logger
 from core.config_loader import ConfigLoader
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class I2CScanner:
     NAME = 'i2c-scanner'
     '''
@@ -75,6 +72,7 @@ class I2CScanner:
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def get_hex_addresses(self, force_scan=False):
         '''
         Returns a hexadecimal version of the list.
@@ -87,7 +85,6 @@ class I2CScanner:
             self._scan_addresses()
         return self._hex_list
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_int_addresses(self, force_scan=False):
         '''
         Returns an integer version of the list.
@@ -100,7 +97,6 @@ class I2CScanner:
             self._scan_addresses()
         return self._int_list
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_address(self, addresses, force_scan=False):
         '''
         Performs the address scan (if necessary) and returns true if a device
@@ -118,7 +114,6 @@ class I2CScanner:
                 return True
         return False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_hex_address(self, addresses, force_scan=False):
         '''
         Performs the address scan (if necessary) and returns true if a device
@@ -136,14 +131,12 @@ class I2CScanner:
                 return True
         return False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def normalise(self, address):
         '''
         Uppercases the numerical part of the hex string.
         '''
         return '0x{}'.format(address[2:].upper())
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _scan_addresses(self, timeout=5):
         '''
         Executes i2cdetect as a subprocess and parses its output to return a
@@ -228,14 +221,12 @@ class I2CScanner:
         else:
             self._log.info("found no devices (no devices are available, or no smbus is available).")
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_device_list(self):
         self._addrDict = dict(list(map(lambda x, y:(x,y), self.get_int_addresses(), self.get_hex_addresses())))
         for _address in self.get_int_addresses():
             _device_name = self.get_device_for_address(_address)
             self._log.info('  I²C address 0x{:02X}: '.format(_address) + Fore.YELLOW + '{}'.format(_device_name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_device_for_address(self, address):
         '''
         Returns the lookup device name from the device registry found in
@@ -244,16 +235,14 @@ class I2CScanner:
         _device = self._config['devices'].get(address)
         return 'Unknown' if _device is None else _device
 
-    # end class ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DeviceNotFound(Exception):
     '''
     Thrown when an expected device cannot be found.
     '''
     pass
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 def main():
 
     level = Level.INFO

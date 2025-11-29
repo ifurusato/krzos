@@ -21,7 +21,6 @@ from hardware.rgb_led import RGBLED
 from hardware.color import Color
 from hardware.backlight import Backlight
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Diagnostics:
     '''
     A diagnostics class that scans for test files and then executes any methods
@@ -33,6 +32,7 @@ class Diagnostics:
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def _find_test_files(self):
         '''
         Scans the current working directory for .py files containing pytest functions with the '@pytest.mark.unit' decorator.
@@ -53,7 +53,6 @@ class Diagnostics:
             self._led_control.set_color(Color.BLACK)
         return sorted(test_files)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_marked_tests(self, filename, marker="unit"):
         '''
         Parses a Python file to find all test functions with a specific marker.
@@ -83,7 +82,6 @@ class Diagnostics:
             self._led_control.set_color(Color.BLACK)
         return marked_tests
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _execute_tests(self, files_to_test):
         '''
         Executes pytest on the provided list of files and specific functions.
@@ -150,7 +148,6 @@ class Diagnostics:
             time.sleep(3)
             return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def run(self, run_tests=False):
         '''
         Orchestrate the scanning and optional execution of tests.
@@ -180,7 +177,8 @@ class Diagnostics:
             _elapsed_ms = int((time.monotonic() - _start_time) * 1000)
             self._log.info('diagnostics complete: {}ms elapsed.'.format(_elapsed_ms))
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 def main():
     _diagnostics = Diagnostics()
     _diagnostics.run("--skip-tests" not in sys.argv)

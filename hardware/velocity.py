@@ -22,7 +22,6 @@ from core.event import Event
 from core.message import Message
 from core.orientation import Orientation
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Velocity(object):
     '''
     Velocity is a property of a motor, and therefore this class is meant
@@ -129,7 +128,6 @@ class Velocity(object):
             self._log.info('conversion constant:    ' + Fore.GREEN + ' {:7.4f} steps/cm'.format(self._steps_per_cm))
             self._log.info('example conversion:     ' + Fore.GREEN + ' {:7.4f}cm/rotation'.format(_test_velocity))
         assert _test_velocity == self._wheel_circumference
-        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._stepcount_timestamp = time.perf_counter()
         self._steps_begin  = 0      # step count at beginning of velocity measurement
         self._velocity     = 0.0    # current velocity
@@ -139,27 +137,38 @@ class Velocity(object):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def steps_per_rotation(self):
+        return self._steps_per_rotation
+
+    @property
+    def steps_per_cm(self):
+        return self._steps_per_cm
+
+    @property
+    def value(self):
+        '''
+        Returns the current velocity value as a property. If the motors is
+        stopped this always returns 0.0.
+        '''
+        if self._motor.is_stopped:
+            return 0.0
+        return self._velocity
+
+    @property
+    def max_velocity(self):
+        return self._max_velocity
+
     def reset_steps(self):
         self._log.info(Fore.YELLOW + 'reset steps.')
         self._steps_begin = 0
 #       self._steps_begin = self._motor.steps
         self._stepcount_timestamp = time.perf_counter()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def steps_per_rotation(self):
-        return self._steps_per_rotation
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def steps_per_cm(self):
-        return self._steps_per_cm
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def steps_to_cm(self, steps):
         return steps / self._steps_per_cm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def tick(self):
         '''
         This should be called regularly every 50ms (i.e., at 20Hz), calculating
@@ -195,23 +204,6 @@ class Velocity(object):
             self._velocity = 0.0
             self._log.warning('tick failed: disabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def value(self):
-        '''
-        Returns the current velocity value as a property. If the motors is
-        stopped this always returns 0.0.
-        '''
-        if self._motor.is_stopped:
-            return 0.0
-        return self._velocity
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    @property
-    def max_velocity(self):
-        return self._max_velocity
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self._closed:
             self._enabled = True
@@ -219,7 +211,6 @@ class Velocity(object):
         else:
             self._log.warning('cannot enable: already closed.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         if self._enabled:
             self._enabled = False
@@ -227,7 +218,6 @@ class Velocity(object):
         else:
             self._log.warning('already disabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         self.disable()
         self._closed = True

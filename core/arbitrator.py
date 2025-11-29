@@ -7,7 +7,6 @@
 # author:   Murray Altheim
 # created:  2020-01-02
 # modified: 2021-04-26
-#
 
 import itertools
 import datetime as dt
@@ -20,7 +19,6 @@ from core.event import Event
 from core.component import Component
 from core.controller import Controller
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Arbitrator(Component):
     '''
     Arbitrates a stream of events from a MessageBus according to priority,
@@ -36,15 +34,14 @@ class Arbitrator(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def set_log_level(self, level):
         self._log.level = level
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def controllers(self):
         return self._controllers
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def register_controller(self, controller: Controller):
         '''
         Registers the Controller with the Arbitrator. When a Payload appears
@@ -53,7 +50,6 @@ class Arbitrator(Component):
         self._controllers.append(controller)
         self._log.info('registered controller: \'{}\''.format(controller.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def count(self):
         '''
@@ -62,7 +58,6 @@ class Arbitrator(Component):
         '''
         return self._count
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def arbitrate(self, payload):
         '''
         Arbitrates the addition of the payload into the priority queue.
@@ -78,19 +73,11 @@ class Arbitrator(Component):
         else:
             _start_time = dt.datetime.now()
             self._count = next(self._counter)
-#           self._log.info('[{:03d}] putting payload: \'{}\' onto queue...'.format(self._count, payload.event.label))
             if len(self._controllers) > 0:
                 await self._queue.put((payload.priority, payload))
-#               self._log.debug('payload \'{}\' put onto queue: {} element{}.'.format(
-#                       payload.event.label, self._queue.qsize(), '' if self._queue.qsize() == 1 else 's'))
                 await self.trigger_callback()
                 _elapsed_ms = int((dt.datetime.now() - _start_time).total_seconds() * 1000)
-#               self._log.debug('{:4.2f}ms elapsed.'.format(_elapsed_ms))
-            else:
-#               self._log.warning('no registered controllers: payload ignored.')
-                pass
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def trigger_callback(self):
         self._log.debug('trigger callback.')
         _tuple = await self._queue.get()
@@ -98,4 +85,4 @@ class Arbitrator(Component):
         for controller in self._controllers:
             controller.callback(_payload)
 
-# EOF
+#EOF

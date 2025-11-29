@@ -8,7 +8,6 @@
 # author:   Murray Altheim
 # created:  2024-08-13
 # modified: 2025-05-26
-#
 
 import traceback
 from smbus import SMBus
@@ -17,10 +16,9 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
-from hardware.payload import Payload 
+from hardware.payload import Payload
 from tinyfx.response import*
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class Controller:
     RESPONSE_32 = True
     '''
@@ -49,6 +47,7 @@ class Controller:
         self._log.info('ready on address 0x{:02X}.'.format(i2c_address))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def send_payload(self, command):
         '''
         Generates a payload and sends it to the I2C slave.
@@ -63,7 +62,6 @@ class Controller:
         self._log.info("send payload: " + Fore.GREEN + "'{}'".format(command))
         return self._write_payload(Payload(command))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _write_payload(self, payload):
         '''
         Writes the payload argument to the Motor 2040.
@@ -100,7 +98,7 @@ class Controller:
                     _command = _response_payload.command.strip()
                     # lookup Response by label or description
                     _response = Response.from_label(_command) or Response.from_description(_command)
-#                   self._log.info("payload received: " + Fore.GREEN + "'{}'".format(_response_payload.command) 
+#                   self._log.info("payload received: " + Fore.GREEN + "'{}'".format(_response_payload.command)
 #                           + Fore.CYAN  + " with response: " + Fore.GREEN + "'{}'".format(_response.description))
                 except ValueError as e:
                     self._log.error("error processing payload: {}".format(e))
@@ -132,7 +130,6 @@ class Controller:
             self._log.error('{} raised writing payload: {}\n{}'.format(type(e), e, traceback.format_exc()))
             return RESPONSE_RUNTIME_ERROR
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         self._log.info("closing…")
         if self._i2cbus:

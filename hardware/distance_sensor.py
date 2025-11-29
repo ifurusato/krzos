@@ -21,7 +21,6 @@ from core.component import Component
 from core.orientation import Orientation
 from core.util import Util
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class DistanceSensor(Component):
     '''
     Provides distance information in millimeters from a Pololu PWM-based
@@ -74,17 +73,16 @@ class DistanceSensor(Component):
         GPIO.setup(self._pin, GPIO.IN)
         self._log.info('{} distance sensor ready on pin {}.'.format(self._orientation.label, self._pin))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def name(self):
         return self._name
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def orientation(self):
         return self._orientation
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _measure_pulse_width(self):
         '''
         Polls the GPIO pin to measure pulse width in microseconds.
@@ -110,7 +108,6 @@ class DistanceSensor(Component):
         self._log.debug("measured pulse width: {:.1f} us".format(pulse_width_us))
         return pulse_width_us
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _compute_distance(self):
         '''
         Compute and update the distance based on the current pulse width,
@@ -151,9 +148,8 @@ class DistanceSensor(Component):
         self._last_read_time = time.time()
         return int(distance_mm)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _external_callback_method(self):
-        ''' 
+        '''
         The callback called by the external clock as an alternative to the asyncio _loop() method.
         Computes distance and caches it.
         '''
@@ -161,7 +157,6 @@ class DistanceSensor(Component):
         if distance_mm is not None:
             self._distance = distance_mm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_distance(self):
         '''
         Returns the current cached distance value in millimeters.
@@ -180,14 +175,12 @@ class DistanceSensor(Component):
                 # _last_read_time already updated in _compute_distance() line 131
             return distance_mm
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def check_timeout(self):
         '''
         Check if the sensor has timed out (no pulse received recently).
         '''
         return time.time() - self._last_read_time > self._timeout
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         '''
         Enable the sensor, setting up the GPIO pin.
@@ -201,7 +194,6 @@ class DistanceSensor(Component):
         else:
             self._log.debug('already enabled distance sensor.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         Disable the sensor and clean up resources.
@@ -219,7 +211,6 @@ class DistanceSensor(Component):
                     self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
             Component.disable(self)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         Stop the loop if running, then close the sensor.

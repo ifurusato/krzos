@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2019-2021 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2019-2025 by Murray Altheim. All rights reserved. This file is part
 # of the K-Series Robot Operating System (KROS) project, released under the MIT
 # License. Please see the LICENSE file included as part of this package.
 #
@@ -13,7 +13,6 @@ import sys, re
 #import logging
 from logging import FileHandler
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class AnsiFilteringFileHandler(FileHandler):
     '''
     Extends FileHandler to filter out ANSI character sequences from
@@ -24,6 +23,7 @@ class AnsiFilteringFileHandler(FileHandler):
         # ready.
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def emit(self, record):
         try:
             if self.stream is None:
@@ -38,7 +38,6 @@ class AnsiFilteringFileHandler(FileHandler):
         except Exception:
             self.handleError(record)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _escape_ansi(self, line):
         ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
         return ansi_escape.sub('', line)

@@ -380,7 +380,6 @@ class Gamepad(Component):
             return _message
         return None
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class GamepadScan:
     '''
     Returns the device with the most recently changed status from /dev/input/event{n}
@@ -412,7 +411,8 @@ class GamepadScan:
                 _ctime = _device_stat.st_ctime
             except OSError:
                 break
-            self._log.debug('device path:        ' + Fore.YELLOW + '{}\t'.format(_path) + Fore.CYAN + '  status changed: ' + Fore.YELLOW + '{}'.format(dt.datetime.fromtimestamp(_ctime)))
+            self._log.debug('device path:        ' + Fore.YELLOW + '{}\t'.format(_path)
+                    + Fore.CYAN + '  status changed: ' + Fore.YELLOW + '{}'.format(dt.datetime.fromtimestamp(_ctime)))
             _dict[_path] = _ctime
         # find most recent by sorting the dictionary on ctime
         _sorted = sorted(_dict.items(), key=lambda x:x[1])
