@@ -119,7 +119,7 @@ class AsyncBehaviour(Behaviour):
             lambda: self.priority
         )
         self._intent_vector_registered = True
-        self._log.info('intent vector lambda registered with motor controller.')
+        self._log.debug('intent vector lambda registered with motor controller.')
 
     def _remove_intent_vector(self):
         '''
@@ -132,7 +132,7 @@ class AsyncBehaviour(Behaviour):
             return
         self._motor_controller.remove_intent_vector(self.name)
         self._intent_vector_registered = False
-        self._log.info('intent vector lambda removed from motor controller.')
+        self._log.debug('intent vector lambda removed from motor controller.')
 
     def set_intent_vector(self, vx, vy, omega):
         '''
@@ -170,19 +170,19 @@ class AsyncBehaviour(Behaviour):
             is_blind = message.value
             if is_blind:
                 if not self._hold_at_zero:
-                    self._log.warning("BLIND(True) received. Engaging hold-at-zero and ramping down intent.")
+                    self._log.warning("BLIND(True) received: engaging hold-at-zero and ramping down intent…")
                     self._hold_at_zero = True
-                    # First responder triggers the brake
+                    # trigger the brake
                     if self._motor_controller and not self._motor_controller.braking_active:
-                        self._log.info("First responder: triggering system brake.")
+                        self._log.info("triggering system brake…")
                         self._motor_controller.brake()
             else: # is not blind
                 if self._hold_at_zero:
-                    self._log.info("BLIND(False) received. Disengaging hold-at-zero.")
+                    self._log.info("BLIND(False) received: disengaging hold-at-zero…")
                     self._hold_at_zero = False
-                    # First responder releases the brake
+                    # first responder releases the brake
                     if self._motor_controller and self._motor_controller.is_braked:
-                        self._log.info("First responder: triggering brake release.")
+                        self._log.info("first responder: triggering brake release.")
                         self._motor_controller.release_brake()
             message.process(self)
         else:
@@ -197,7 +197,7 @@ class AsyncBehaviour(Behaviour):
         if self._loop_instance and self._loop_instance.is_running():
             self._log.warning('loop already running.')
             return
-        self._log.info('starting async loop…')
+        self._log.debug('starting async loop…')
         self._stop_event.clear()
         self._loop_instance = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop_instance)
@@ -206,17 +206,17 @@ class AsyncBehaviour(Behaviour):
         self._thread.start()
         if self._motor_controller and not self._intent_vector_registered:
             self._register_intent_vector()
-        self._log.info('async loop started.')
+        self._log.debug('async loop started.')
 
     def suppress(self):
         '''
         Suppresses the Behaviour. Note that this does not stop the loop but
         instead relies on the flags inside the loop to handle correct polling.
         '''
-        self._log.info(Fore.WHITE + Style.BRIGHT + "suppress.")
         if not self.enabled:
             self._log.warning('cannot suppress: behaviour is disabled.')
         elif not self.suppressed:
+            self._log.debug("suppressing…")
             Behaviour.suppress(self)
 #           self._remove_intent_vector()
             # stop the loop when suppressed
@@ -234,6 +234,7 @@ class AsyncBehaviour(Behaviour):
         if not self.enabled:
             self._log.warning('cannot release: behaviour is disabled.')
         elif not self.released:
+            self._log.debug("releasing…")
             Behaviour.release(self)
             # start the loop when released for the first time
             if not self._loop_instance:
@@ -294,16 +295,15 @@ class AsyncBehaviour(Behaviour):
         try:
             self.start_loop_action()
             while not self._stop_event.is_set():
-
                 if not self.enabled:
-                    self._log.info(Style.DIM + "behaviour disabled during loop, exiting… [BEFORE]")
+                    self._log.debug("behaviour disabled during loop, exiting… [BEFORE]")
                     break
                 if self.has_toggle_assignment():
                     if self.suppressed and self.is_released_by_toggle():
-                        self._log.info(Fore.WHITE + Style.BRIGHT + 'releasing…')
+                        self._log.info('releasing…')
                         self.release()
                     elif self.released and not self.is_released_by_toggle():
-                        self._log.info(Fore.WHITE + Style.BRIGHT + 'suppressing…')
+                        self._log.info('suppressing…')
                         self.suppress()
                 if self.suppressed:
                     self.clear_intent_vector()
@@ -333,17 +333,17 @@ class AsyncBehaviour(Behaviour):
                         )
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
-                    self._log.info(Style.DIM + "behaviour disabled during loop, exiting… [AFTER]")
+                    self._log.debug("behaviour disabled during loop, exiting… [AFTER]")
                     break
 
         except asyncio.CancelledError:
-            self._log.info("async loop cancelled.")
+            self._log.debug("async loop cancelled.")
         except Exception as e:
             self._log.error('{} encountered in async loop: {}'.format(type(e), e))
             self.disable()
         finally:
             self.stop_loop_action()
-            self._log.info("async loop stopped.")
+            self._log.debug("async loop stopped.")
 
     def _stop_loop(self):
         '''
@@ -352,8 +352,7 @@ class AsyncBehaviour(Behaviour):
         if not self._loop_instance:
             self._log.debug('no loop instance to stop.')
             return
-
-        self._log.info("shutting down event loop…")
+        self._log.debug("shutting down event loop…")
         try:
             self._log.debug('closing {} polling loop…'.format(self.name))
             # check if we're being called from the loop's own thread
@@ -384,13 +383,13 @@ class AsyncBehaviour(Behaviour):
             self._log.error("{} raised stopping loop: {}".format(type(e), e))
         finally:
             self._loop_instance = None
-            self._log.info('event loop shut down.')
+            self._log.debug('event loop shut down.')
 
     def _shutdown(self):
         '''
         Cancel all pending tasks in the event loop.
         '''
-        self._log.info("shutting down tasks…")
+        self._log.debug("shutting down tasks…")
         try:
             tasks = [task for task in asyncio.all_tasks(self._loop_instance) if not task.done()]
             if len(tasks) > 0:
@@ -402,7 +401,7 @@ class AsyncBehaviour(Behaviour):
                     self._log.warning('no loop instance .'.format(self.name))
         except Exception as e:
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
-        self._log.info('task shutdown complete.')
+        self._log.debug('task shutdown complete.')
 
     def close(self):
         '''

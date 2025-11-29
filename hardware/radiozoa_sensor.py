@@ -14,7 +14,6 @@ from datetime import datetime as dt
 import asyncio
 import time
 from threading import Thread, Lock, Event
-#import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
 init()
 
@@ -69,8 +68,6 @@ class RadiozoaSensor(Component):
         self._config = config
         _cfg_radiozoa        = config.get('kros').get('hardware').get('radiozoa')
         self._cfg_devices    = _cfg_radiozoa.get('devices')
-#       GPIO.setwarnings(False)
-#       GPIO.setmode(GPIO.BCM)
         self._i2c_bus_number = _cfg_radiozoa.get('i2c_bus_number')
         if not isinstance(self._i2c_bus_number, int):
             raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
@@ -396,9 +393,6 @@ class RadiozoaSensor(Component):
             finally:
                 if not self.closed:
                     self._log.warning('did not close properly, left in ambiguous state.')
-                if not self._ioe:
-#                   GPIO.cleanup()
-                    pass
         self._log.info('closed.')
 
 #EOF

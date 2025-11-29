@@ -180,9 +180,9 @@ class RoamSensor(Component):
         Returns a fused and smoothed distance value for Roam behaviour.
         Takes the minimum of the IR ForeSensor and the VL53L5CX ToF sensor.
         '''
-        _ir_distance = self._fore_sensor.get_distance_cm() * 10.0 # convert to mm
-        _tof_distance  = self._get_vl53l5cx_front_distance()
-        if _ir_distance is None and _tof_distance is None:
+        _ir_distance_cm = self._fore_sensor.get_distance_cm()
+        _tof_distance_mm  = self._get_vl53l5cx_front_distance()
+        if _ir_distance_cm is None or _tof_distance_mm is None:
             now = dt.now()
             elapsed_ms = (now - self._last_read_time).total_seconds() * 1000.0
             if self._last_value is not None and elapsed_ms < self._stale_timeout_ms:
@@ -190,7 +190,8 @@ class RoamSensor(Component):
                     self._last_value, elapsed_ms))
                 return self._last_value
             return -1.0
-        value = self._fuse(_ir_distance, _tof_distance)
+        _ir_distance_mm = _ir_distance_cm * 10.0 # convert to mm
+        value = self._fuse(_ir_distance_mm, _tof_distance_mm)
         if self._smoothing and value is not None:
             value = self._smooth(value)
         if value is not None:

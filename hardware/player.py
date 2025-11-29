@@ -74,7 +74,7 @@ class Player(Component):
         '''
         if self.enabled:
             if self._verbose:
-                self._log.info(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name))
+                self._log.info(Style.DIM + 'calling play: ' + Fore.GREEN + "'{}'".format(name))
             self._play_sound(name)
         else:
             self._log.warning('not enabled.')

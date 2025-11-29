@@ -53,8 +53,8 @@ class Subscriber(Component, FiniteStateMachine):
         if message_bus is None:
             raise ValueError('no message bus argument provided.')
         self._message_bus = message_bus
-        self._events = [] # list of acceptable event types
-        self._brief  = True # brief messages by default
+        self._events  = [] # list of acceptable event types
+        self._brief   = True # brief messages by default
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         FiniteStateMachine.__init__(self, self._log, self._name)
 
@@ -115,7 +115,8 @@ class Subscriber(Component, FiniteStateMachine):
         if not isinstance(event, Event):
             raise TypeError('expected Event argument, not {}'.format(type(event)))
         self._events.append(event)
-        self._log.info('added \'{}\' event to subscriber {} ({:d} events).'.format(event.name, self._name, len(self._events)))
+        if self._message_bus.verbose:
+            self._log.info('added \'{}\' event to subscriber {} ({:d} events).'.format(event.name, self._name, len(self._events)))
 
     def print_events(self):
         if self._events == [Event.ANY]:
@@ -280,17 +281,17 @@ class Subscriber(Component, FiniteStateMachine):
 
     def disable(self):
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             FiniteStateMachine.disable(self)
-            self._log.info('subscriber {} disabled.'.format(self.name))
+            self._log.debug('subscriber {} disabled.'.format(self.name))
         else:
             self._log.warning('subscriber {} already disabled.'.format(self.name))
 
     def close(self):
         if not self.closed:
-            Component.close(self)
+            super().close()
             FiniteStateMachine.close(self)
-            self._log.info('subscriber {} closed.'.format(self.name))
+            self._log.debug('subscriber {} closed.'.format(self.name))
         else:
             self._log.warning('subscriber {} already closed.'.format(self.name))
 
@@ -355,7 +356,7 @@ class GarbageCollector(Subscriber):
                 _peeked_message.acknowledge(self)
         except (asyncio.CancelledError, RuntimeError):
             # loop is shutting down, exit gracefully
-            self._log.info('loop is shutting down…') # TEMP
+            self._log.debug('loop is shutting down…')
             pass
 
 class GarbageCollectedError(Exception):

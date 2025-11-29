@@ -15,11 +15,12 @@ from colorama import init, Fore, Style
 init()
 
 from core.component import Component, MissingComponentError
+from core.event import Event, Group
 from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.subscriber import Subscriber
 from behave.async_behaviour import AsyncBehaviour
-from core.event import Event, Group
+from hardware.player import Player
 from hardware.motor_controller import MotorController
 
 class Nudge(AsyncBehaviour):
@@ -97,13 +98,18 @@ class Nudge(AsyncBehaviour):
         orientation: Orientation.PORT / STBD / FWD / AFT
         time_ms: hold time in milliseconds (0 => cancel)
         '''
-        if time_ms == 0:
+        if self.disabled:
+            self._log.warning('disabled.')
+        elif self.suppressed:
+            self._log.warning('suppresseed.')
+        elif time_ms == 0:
             self.cancel()
-            return
-        if orientation is Orientation.PORT or orientation is Orientation.STBD:
+        elif orientation is Orientation.PORT or orientation is Orientation.STBD:
+            Player.play('zzt')
             hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vx_ms_default
             self._nudge_lateral(orientation, hold_ms)
         elif orientation is Orientation.FWD or orientation is Orientation.AFT:
+            Player.play('tweak')
             hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vy_ms_default
             self._nudge_longitudinal(orientation, hold_ms)
         else:
@@ -200,13 +206,13 @@ class Nudge(AsyncBehaviour):
         event = message.event
         match(event):
             case Event.A_BUTTON:
-                self._log.info(Style.DIM + '🌼 A_BUTTON.')
+                self._log.info(Style.DIM + '🌸 A_BUTTON.')
             case Event.B_BUTTON:
-                self._log.info(Style.DIM + '🌼 B_BUTTON.')
+                self._log.info(Style.DIM + '🌸 B_BUTTON.')
             case Event.X_BUTTON:
-                self._log.info(Style.DIM + '🌼 X_BUTTON.')
+                self._log.info(Style.DIM + '🌸 X_BUTTON.')
             case Event.Y_BUTTON:
-                self._log.info(Style.DIM + '🌼 Y_BUTTON.')
+                self._log.info(Style.DIM + '🌸 Y_BUTTON.')
             case Event.L1_BUTTON:
                 self._log.info(Style.DIM + 'L1_BUTTON.')
             case Event.L2_BUTTON:

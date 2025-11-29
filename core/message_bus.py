@@ -25,8 +25,7 @@
 #
 # see; /usr/local/lib/python3.8/asyncio/queues.py
 #
-# class MessageRoutingError at bottom.
-#
+# PeekableQueue and MessageRoutingError at bottom.
 
 import sys, time, traceback, logging
 import asyncio, signal
@@ -46,7 +45,16 @@ from core.publisher import Publisher
 from core.subscriber import Subscriber
 from core.numbers import Numbers
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE_NESTING = True
+if USE_NESTING:
+    # see: https://pypi.org/project/nest-asyncio/
+    try:
+        import nest_asyncio
+        nest_asyncio.apply()
+    except Exception as e:
+        print('{} raised importing nest_asyncio: {}'.format(type(e), e))
+        print('install via:\n    sudo pip3 install nest_asyncio --break-system-packages\n')
+
 class MessageBus(Component):
     '''
     An asyncio-based asynchronous message bus.
@@ -78,13 +86,13 @@ class MessageBus(Component):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     def add_callback_on_start(self, callback):
         '''
         Add a callback to be executed upon start of the message bus.
         '''
         self._start_callbacks.append(callback)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def last_message_timestamp(self):
         '''
@@ -101,7 +109,6 @@ class MessageBus(Component):
         '''
         self._last_message_timestamp = dt.now()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def loop(self):
         '''
@@ -109,7 +116,6 @@ class MessageBus(Component):
         '''
         return self._loop
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_all_tasks(self, include_hidden=False):
         '''
         Returns the task list, not including the current task or those whose
@@ -127,7 +133,6 @@ class MessageBus(Component):
                 self._log.debug('cannot get task list: {}'.format(e))
         return _tasks
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_tasks(self):
         '''
         Clears the task list of any completed tasks.
@@ -141,7 +146,6 @@ class MessageBus(Component):
                 if _task.done():
                     _tasks.remove(_task)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def is_running(self):
         '''
@@ -149,7 +153,6 @@ class MessageBus(Component):
         '''
         return self.loop.is_running() if self.loop else False
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def queue(self):
         '''
@@ -159,7 +162,6 @@ class MessageBus(Component):
         '''
         return self._queue
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def queue_empty(self):
         '''
@@ -169,7 +171,6 @@ class MessageBus(Component):
         '''
         return self._queue.empty()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def pop_queue(self):
         '''
         Pops the queue but does nothing with the message, if there is one.
@@ -180,24 +181,20 @@ class MessageBus(Component):
             _message = await self._queue.get()
             self._queue.task_done()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def arbitrate(self, payload):
         self._log.info("arbitrating payload '{}'…".format(payload.event.name))
         await self._arbitrator.arbitrate(payload)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def queue_size(self):
         return self._queue.qsize()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear_queue(self):
         '''
         Clear the message bus of any messages.
         '''
         self._queue.clear()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def verbose(self):
         '''
@@ -222,8 +219,6 @@ class MessageBus(Component):
         self._arbitrator.set_log_level(self._log.level)
         for _controller in self._arbitrator.controllers:
             _controller.set_log_level(self._log.level)
-
-    # publisher ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def publishers(self):
@@ -266,8 +261,6 @@ class MessageBus(Component):
         for _controller in self._arbitrator.controllers:
             _controller.print_statistics()
 
-    # subscriber ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     @property
     def subscribers(self):
         return Component.get_registry().filter_by_type(Subscriber)
@@ -307,8 +300,6 @@ class MessageBus(Component):
                     + Fore.CYAN + 'listening for: '
                     + Fore.YELLOW + '{}'.format(_event_list))
 
-    # controller ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def register_controller(self, controller):
         '''
         Register a controller with the Arbitrator.
@@ -318,7 +309,6 @@ class MessageBus(Component):
         self._arbitrator.register_controller(controller)
         self._log.info('registered controller: {}'.format(controller.name))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def is_expired(self, message):
         '''
         Returns True if the message has been manually expired or its age has
@@ -326,7 +316,6 @@ class MessageBus(Component):
         '''
         return message.expired or message.age > self._max_age_ms
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def _start_consuming(self):
         '''
         Enable the publishers and then start the subscribers' consume cycle.
@@ -337,28 +326,31 @@ class MessageBus(Component):
         '''
         self._enable_publishers()
         _subscribers = self.subscribers
-        self._log.info(Fore.MAGENTA + 'starting {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
+        self._log.debug(Fore.MAGENTA + 'starting {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
         for _subscriber in _subscribers:
             if isinstance(_subscriber, Subscriber):
-                self._log.info(Fore.MAGENTA + "starting subscriber '{}'…".format(_subscriber.name))
+                self._log.debug(Fore.MAGENTA + "starting subscriber '{}'…".format(_subscriber.name))
                 _subscriber.start()
             else:
                 self._log.warning('unable to start non-subscriber: {}; value: {}'.format(type(_subscriber), _subscriber))
-        self._log.info(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(
-                len(_subscribers), '' if len(_subscribers) == 1 else 's'))
-        self._log.info('start callbacks…')
-        for _callback in self._start_callbacks:
-            _callback()
-        self._log.info('callbacks started.')
+        self._log.debug(Fore.MAGENTA + 'starting consume loop with {:d} subscriber{}…'.format(len(_subscribers), '' if len(_subscribers) == 1 else 's'))
+        if len(self._start_callbacks) > 0:
+            self._log.debug('start callbacks…')
+            for _callback in self._start_callbacks:
+                _callback()
+            self._log.debug('callbacks started.')
         try:
             while self.enabled and len(_subscribers) > 0:
                 for _subscriber in _subscribers:
                     await _subscriber.consume()
-            self._log.info('completed consume loop.')
+                    # TENTATIVE
+                    await asyncio.sleep(0.05)
+            self._log.debug('completed consume loop.')
+        except asyncio.CancelledError:
+            self._log.info('consume loop cancelled.')
         finally:
             self._log.info('finally: completed consume loop.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _enable_publishers(self):
         _publishers = self.publishers
         self._log.info('enabling {:d} publisher{}…'.format(len(_publishers), '' if len(_publishers) == 1 else 's'))
@@ -370,7 +362,6 @@ class MessageBus(Component):
             else:
                 self._log.warning('unable to start non-publisher: {}; value: {}'.format(type(_publisher), _publisher))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_system_status(self):
         '''
         Prints the current system status to the console.
@@ -380,7 +371,6 @@ class MessageBus(Component):
         self.print_publishers()
         self.print_subscribers()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def print_task_info(self):
         self._log.info('in queue:    \t' + Fore.YELLOW + '{:d} message{}.'.format(self._queue.qsize(), '' if self._queue.qsize() == 1 else 's'))
         _tasks = self.get_all_tasks()
@@ -394,7 +384,6 @@ class MessageBus(Component):
             for _task in _tasks:
                 self._log.info(Fore.YELLOW + '    \t\t{};  \t'.format(_task.get_name()) + Fore.BLACK + ' done? {}'.format(_task.done()))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def peek_message(self):
         '''
         Asynchronously waits until it peeks a message from the queue. This
@@ -402,7 +391,6 @@ class MessageBus(Component):
         '''
         return await self._queue.peek()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def consume_message(self):
         '''
         Asynchronously waits until it pops a message from the queue.
@@ -412,7 +400,6 @@ class MessageBus(Component):
         '''
         return self._queue.get()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def consumed(self):
         '''
         Every call to consume_message() should correspond with a call to consumed().
@@ -420,19 +407,19 @@ class MessageBus(Component):
         '''
         self._queue.task_done()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def publish_message(self, message):
         '''
         Asynchronously publishes the Message to the MessageBus, and therefore to any Subscribers.
 
         NOTE: calls to this function should be await'd.
         '''
-        _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
+        # TENTATIVE: is this the breaker?
+#       _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
+        await self._queue.put(message)
         # the first time the message is published we update the 'last_message_timestamp'
         self.update_last_message_timestamp()
         await asyncio.sleep(self._publish_delay_sec)
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     async def republish_message(self, message):
         '''
         Asynchronously re-publishes a Message to the MessageBus, making it
@@ -443,8 +430,6 @@ class MessageBus(Component):
         asyncio.create_task(self._queue.put(message), name='republish-message-{}'.format(message.name))
         # when the message is republished we also update the 'last_message_timestamp'
         self.update_last_message_timestamp()
-
-    # exception handling ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def handle_exception(self, loop, context):
         self._log.error('handle exception on loop: {}'.format(loop))
@@ -459,8 +444,6 @@ class MessageBus(Component):
             asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
         else:
             self._log.warning("loop already shut down.")
-
-    # shutdown ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     async def shutdown(self, signal=None):
         '''
@@ -487,7 +470,6 @@ class MessageBus(Component):
             self._log.info('event loop stopped.')
         self._log.info('shutting down…')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _close_message_bus(self):
         '''
         This method is only to be called by the close method, used when
@@ -511,7 +493,6 @@ class MessageBus(Component):
             self._log.error('error stopping event loop: {}'.format(e))
         return True
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def get_task_by_name(self, name):
         '''
         A convenience method that returns the first found instance of a task
@@ -527,7 +508,6 @@ class MessageBus(Component):
             self._log.error('unable to get task: {}'.format(e))
         return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def enable(self):
         if not self.closed and not self.enabled:
             Component.enable(self)
@@ -537,14 +517,12 @@ class MessageBus(Component):
 #           self._log.info('exited message bus forever loop.')
         return None
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def has_event_loop(self):
         '''
         Returns True if there is an even tloop and it is running.
         '''
         return self._loop and self._loop.is_running()
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _get_event_loop(self):
         '''
         Return the asyncio event loop, starting it if it is not already running.
@@ -572,7 +550,6 @@ class MessageBus(Component):
 #                   self.loop.close()
         return self._loop
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def disable(self):
         '''
         This disables and closes all publishers and subscribers as there is
@@ -588,24 +565,52 @@ class MessageBus(Component):
         else:
             Component.disable(self)
             self._log.info('disabling…')
+#           if self.publisher_count > 0:
+#               self._log.info('closing {:d} publishers…'.format(self.publisher_count))
+#               [_publisher.close() for _publisher in self.publishers]
+#           if self.subscriber_count > 0:
+#               self._log.info('closing {:d} subscribers…'.format(self.subscriber_count))
+#               [_subscriber.close() for _subscriber in self.subscribers]
             if self.publisher_count > 0:
-                self._log.info('closing {:d} publishers…'.format(self.publisher_count))
-                [_publisher.close() for _publisher in self.publishers]
+                self._log. info('closing {:d} publishers…'.format(self.publisher_count))
+                [_publisher.close() for _publisher in self.publishers if not _publisher.closed]
             if self.subscriber_count > 0:
                 self._log.info('closing {:d} subscribers…'.format(self.subscriber_count))
-                [_subscriber.close() for _subscriber in self.subscribers]
+                [_subscriber.close() for _subscriber in self.subscribers if not _subscriber.closed]
             self.clear_tasks()
+            # BEGIN TENTATIVE
+            # cancel all tasks before stopping the loop
+            if self._loop: # and self._loop.is_running():
+                self._log.info('cancelling tasks…')
+                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
+                for _task in _tasks:
+                    _task.cancel()
+                # give tasks a moment to handle cancellation
+                time.sleep(0.1)
+            time.sleep(0.2)
+            # END TENTATIVE
             self.clear_queue()
+            # BEGIN TENTATIVE
+            try:
+                current_loop = asyncio.get_running_loop()
+                _tasks = [t for t in asyncio.all_tasks(self._loop) if not t.done()]
+                for _task in _tasks:
+                    _task.cancel()
+                self._loop.stop()
+                time.sleep(0.2)
+            except RuntimeError as e:
+                if self.loop and self.loop.is_running():
+                    fut = asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop)
+                    fut.result()
+            # END TENTATIVE
             _nil = self._close_message_bus()
             time.sleep(0.1)
             self._log.info('disabled.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     @property
     def closing(self):
         return self._closing
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def close(self):
         '''
         This defers most of the shutdown process to disable().
@@ -616,11 +621,10 @@ class MessageBus(Component):
             self._log.warning('already closing.')
         else:
             self._log.info('closing…')
-            Component.close(self) # will call disable()
+            super().close() # will call disable()
             self._closing = False
             self._log.info('closed.')
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class PeekableQueue(Queue):
     '''
     Extends the asyncio Queue to add peek() and clear() methods.
@@ -631,6 +635,7 @@ class PeekableQueue(Queue):
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     async def peek(self):
         '''
         Returns the message at the top of the queue without removing it.
@@ -644,7 +649,6 @@ class PeekableQueue(Queue):
         self.put_nowait(_message)
         return _message
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def clear(self):
         '''
         Clears the queue of any messages, brute-force, without waiting.
@@ -656,7 +660,6 @@ class PeekableQueue(Queue):
                 continue
         self._log.info('cleared.')
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 class MessageRoutingError(Exception):
     '''
     A Message was routed to the wrong Subscriber.

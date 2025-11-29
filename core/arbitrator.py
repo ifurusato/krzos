@@ -31,6 +31,7 @@ class Arbitrator(Component):
         self._count       = 0
         self._queue       = PriorityQueue()
         self._controllers = []
+        self._verbose     = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -66,8 +67,9 @@ class Arbitrator(Component):
         If the Event Group is CLOCK this will trigger the callback without
         arbitration.
         '''
-        self._log.info('payload event type: {}'.format(type(payload.event)))
-        self._log.info('arbitrating payload: {}'.format(payload.event.label))
+        if self._verbose:
+            self._log.debug('payload event type: {}'.format(type(payload.event)))
+            self._log.info('arbitrating payload: {}'.format(payload.event.label))
         if self._suppressed:
             self._queue.clear()
         else:

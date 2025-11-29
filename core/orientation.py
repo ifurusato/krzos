@@ -28,7 +28,8 @@ class Orientation(Enum):
     SAFT  = ( 11, "starboard-aft", 'STBD',  "saft")
     MAST  = ( 12, "mast",          'NONE',  "mast")
     PIR   = ( 13, "pir",           'NONE',  "pir")
-    ALL   = ( 14, "all",           'NONE',  "all") # all extant orientations
+    INT   = ( 14, "internal",      'NONE',  "int")
+    ALL   = ( 15, "all",           'NONE',  "all") # all extant orientations
 
     # ignore the first param since it's already set by __new__
     def __init__(self, num, name, side, label):

@@ -60,6 +60,7 @@ class Radiozoa(AsyncBehaviour):
         self._use_dynamic_priority = True
         self._use_dynamic_speed = _cfg.get('dynamic_speed', False)
         self._priority          = _cfg.get('default_priority', 0.4)
+        self._deadband          = _cfg.get('deadband', 0.275)
         self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
         # directienal vectors
@@ -69,9 +70,9 @@ class Radiozoa(AsyncBehaviour):
             (Cardinal.WEST, Cardinal.EAST),
             (Cardinal.NORTHEAST, Cardinal.SOUTHWEST),
         ]
-        _smoothing_factor        = _cfg.get('smoothing_factor', 0.3)             # 0.0=no smoothing, 1.0=no response
+        _smoothing_factor        = _cfg.get('smoothing_factor', 0.3)      # 0.0=no smoothing, 1.0=no response
         self._smoothing_factor   = max(0.0, min(1.0, _smoothing_factor))
-        self._min_sensor_diff    = _cfg.get('min_sensor_diff_mm', 100)       # minimum difference to react
+        self._min_sensor_diff    = _cfg.get('min_sensor_diff_mm', 100)    # minimum difference to react
         self._settling_threshold = _cfg.get('settling_threshold_mm', 60)  # all pairs within this = settled
         # exponential moving average for smoothed intent vector
         self._smoothed_vector = np.array([0.0, 0.0])
@@ -135,7 +136,16 @@ class Radiozoa(AsyncBehaviour):
                 self._priority = 0.3
                 return (0.0, 0.0, 0.0)
             else:
-                return self._update_intent_vector(distances)
+                vx, vy, omega = self._update_intent_vector(distances)
+                if abs(vx) < self._deadband and abs(vy) < self._deadband:
+                    if self._verbose:
+                        self._display_info(vx, vy, message= Fore.BLACK + 'deadband')
+                    return (0.0, 0.0, 0.0)
+                else:
+                    if self._verbose:
+                        self._display_info(vx, vy, message='polled')
+                    return (vx, vy, omega)
+#               return self._update_intent_vector(distances)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
             # Set stop event to exit the loop gracefully

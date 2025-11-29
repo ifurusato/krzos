@@ -77,11 +77,11 @@ class Idle(Behaviour, Publisher):
         self._log.info('idle threshold: {:d}s; loop freq: {:d}Hz'.format(
             self._idle_threshold_sec, self._loop_freq_hz))
         # components
-        _registry = Component.get_registry()
-        self._eyeballs_monitor = _registry.get(EyeballsMonitor.NAME)
+        _component_registry = Component.get_registry()
+        self._eyeballs_monitor = _component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
-        self._motor_controller = _registry.get(MotorController.NAME)
+        self._motor_controller = _component_registry.get(MotorController.NAME)
         if self._motor_controller is None:
             self._log.info('motor controller not available; relying on message activity alone.')
         else:

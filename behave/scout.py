@@ -451,13 +451,13 @@ class Scout(AsyncBehaviour):
         self._log.info("scout enabled.")
 
     def disable(self):
-        if not self.enabled:
+        if self.enabled:
+            self._log.debug("disabling scout…")
+            if self._scout_sensor and self._scout_sensor.enabled:
+                self._scout_sensor.disable()
+            super().disable()
+            self._log.info('disabled.')
+        else:
             self._log.debug("already disabled.")
-            return
-        self._log.info("disabling scout…")
-        if self._scout_sensor and self._scout_sensor.enabled:
-            self._scout_sensor.disable()
-        AsyncBehaviour.disable(self)
-        self._log.info(Fore.YELLOW + 'disabled.')
 
 #EOF

@@ -13,7 +13,7 @@
 import time
 import traceback
 from datetime import datetime as dt
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
 init()
 
@@ -48,9 +48,9 @@ class ProximitySensor(Component):
         self._id          = cardinal.id
         self._log = Logger('proximity-{}'.format(self._id), level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=enabled)
-        self._label       = cardinal.label 
+        self._label       = cardinal.label
         self._abbrev      = cardinal.abbrev
-        self._i2c_bus     = i2c_bus 
+        self._i2c_bus     = i2c_bus
         self._i2c_address = i2c_address
         self._ioe         = ioe
         self._is_ranging  = False
@@ -61,9 +61,10 @@ class ProximitySensor(Component):
             if self._ioe:
                 self._log.debug('sensor {} ({}) ready using IO Expander.'.format(self._label, self._id))
             else:
-                GPIO.setwarnings(False)
-                GPIO.setmode(GPIO.BCM)
-                self._log.debug('sensor {} ({}) ready using GPIO.'.format(self._label, self._id))
+                raise NotImplementedError('IO Expander required: GPIO implementation not supported.')
+#               GPIO.setwarnings(False)
+#               GPIO.setmode(GPIO.BCM)
+#               self._log.debug('sensor {} ({}) ready using GPIO.'.format(self._label, self._id))
         except Exception as e:
             self._log.info('{} raised during pin setup: {}'.format(type(e).__name__, e))
             raise

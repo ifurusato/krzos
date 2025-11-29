@@ -19,7 +19,7 @@ from core.logger import Logger
 from core.component_registry import ComponentRegistry
 
 class Component:
-    _registry = ComponentRegistry() # singleton
+    __registry = ComponentRegistry() # singleton
     '''
     A basic component providing support for enable or disable, suppress or
     release, and close flags. The enable/disable and suppress/release differ
@@ -51,8 +51,8 @@ class Component:
         if not isinstance(enabled, bool):
             raise ValueError('wrong type for enabled argument: {}'.format(type(enabled)))
         self._uuid       = uuid.uuid4()
-        if not Component._registry.has(self._log.name): # properly handle multiple inheritance
-            Component._registry.add(self)
+        if not Component.__registry.has(self._log.name): # properly handle multiple inheritance
+            Component.__registry.add(self)
         self._suppressed = suppressed
         self._enabled    = enabled
         self._closed     = False
@@ -61,7 +61,7 @@ class Component:
 
     @staticmethod
     def get_registry():
-        return Component._registry
+        return Component.__registry
 
     @property
     def name(self):
@@ -172,8 +172,8 @@ class Component:
         '''
         if not self.closed:
             _nil = self.disable()
-#           Component._registry.remove(self._log.name)
-            Component._registry.deregister(self)
+#           Component.__registry.remove(self._log.name)
+            Component.__registry.deregister(self)
             self._closed = True
             self._log.debug('closed.')
         else:

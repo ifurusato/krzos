@@ -151,7 +151,8 @@ class Message(object):
         Sets the flag that the given processor has finished processing this message.
         '''
         if processor in self._processors:
-            raise Exception('message {} ({}) already processed by {}.'.format(self.name, self.event.label, processor.name))
+            print(Fore.RED + 'ERROR: message {} ({}) already processed by {}.'.format(self.name, self.event.label, processor.name) + Style.RESET_ALL)
+#           raise Exception('message {} ({}) already processed by {}.'.format(self.name, self.event.label, processor.name))
         else:
             self._processors[processor] = True
 

@@ -79,7 +79,7 @@ class Behaviour(ABC, Subscriber):
         # now process message...
         if not self.suppressed:
             self.execute(message)
-#       self._log.debug('processed message {}'.format(message.name))
+        self._log.debug('processed message {}'.format(message.name))
 
     @abstractmethod
     def execute(self, message):
@@ -99,7 +99,7 @@ class Behaviour(ABC, Subscriber):
         if not self.closed:
             if not self.enabled:
                 Subscriber.enable(self)
-                self._log.info('enabled behaviour {}'.format(self.name))
+                self._log.debug('enabled {} behaviour.'.format(self.name))
 
     def disable(self):
         '''
@@ -107,6 +107,6 @@ class Behaviour(ABC, Subscriber):
         '''
         if self.enabled:
             Subscriber.disable(self)
-            self._log.info('disabled behaviour {}'.format(self.name))
+            self._log.debug('disabled {} behaviour.'.format(self.name))
 
 #EOF

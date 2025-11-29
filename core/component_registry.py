@@ -24,6 +24,7 @@ class ComponentRegistry:
     '''
     def __init__(self, level=Level.INFO):
         self._log = Logger("comp-registry", level)
+        self._verbose = False
         self._dict = OrderedDict()
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -93,7 +94,8 @@ class ComponentRegistry:
         if component.name in self._dict:
             existing = self._dict.get(component.name)
             if ComponentRegistry.is_multiple_inheritor(existing):
-                self._log.info(Style.DIM + 'multiple-inheritor component \'{}\' already in registry.'.format(component.name))
+                if self._verbose:
+                    self._log.info(Style.DIM + 'multiple-inheritor component \'{}\' already in registry.'.format(component.name))
                 return
             else:
                 raise ConfigurationError('component \'{}\' already in registry.'.format(component.name))
@@ -102,7 +104,8 @@ class ComponentRegistry:
             raise TypeError('argument \'{}\' is not a component.'.format(type(component)))
         else:
             self._dict[component.name] = component
-            self._log.info(Style.DIM + 'added component \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
+            if self._verbose:
+                self._log.info(Style.DIM + 'added component \'{}\' ({}) to registry ({:d} total).'.format(component.name, component.uuid, len(self._dict)))
 
     def has(self, name):
         '''
@@ -117,7 +120,8 @@ class ComponentRegistry:
         '''
         if name in self._dict:
             removed = self._dict.pop(name)
-            self._log.info(Fore.WHITE + "removed component '{}' ({}) from registry ({} remaining).".format(name, removed.uuid, len(self._dict)))
+            if self._verbose:
+                self._log.info("removed component '{}' ({}) from registry ({} remaining).".format(name, removed.uuid, len(self._dict)))
             return removed
         else:
             self._log.warning("cannot remove '{}'; not found in registry.".format(name))

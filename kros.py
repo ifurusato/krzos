@@ -187,13 +187,16 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('argument config-file: {}'.format(arguments.config_file))
         self._log.info('argument level:       {}'.format(arguments.level))
 
-        # establish basic subsumption components ┈┈┈┈┈┈┈┈┈┈┈
+        # establish basic subsumption components
 
         self._log.info('configure subsumption components…')
 
         self._message_bus = MessageBus(self._config, self._level)
         self._message_factory = MessageFactory(self._message_bus, self._level)
         self._controller = Controller(self._message_bus, self._level)
+
+        # less noisy on startup
+        self._message_bus.verbose = False
 
         # JSON configuration dump
         if _args['json_dump_enabled']:
@@ -273,7 +276,7 @@ class KROS(Component, FiniteStateMachine):
             from hardware.tinyfx_controller import TinyFxController
 
             self._log.info('configure tinyfx controller…')
-            self._tinyfx = TinyFxController()
+            self._tinyfx = TinyFxController(self._config, level=self._level)
             self._tinyfx.enable()
 
         # create subscribers
@@ -349,18 +352,8 @@ class KROS(Component, FiniteStateMachine):
         if self._tinyfx: # turn on running lights
             if not self._tinyfx.enabled:
                 self._tinyfx.enable()
-            _cfg = self._config.get('kros').get('hardware').get('tinyfx-controller')
-            _enable_mast_light = _cfg.get('enable_mast_light')
-            if _enable_mast_light:
-                self._tinyfx.channel_on(Orientation.MAST)
-            _enable_nav_light = _cfg.get('enable_nav_lights')
-            if _enable_nav_light:
-                self._tinyfx.channel_on(Orientation.PORT)
-                time.sleep(0.1)
-                self._tinyfx.channel_on(Orientation.STBD)
 
         # begin main loop
-
         self._log.info(Fore.WHITE + Style.BRIGHT + 'Press Ctrl-C to exit.')
 
         # we enable ourself if we get this far successfully
@@ -374,7 +367,6 @@ class KROS(Component, FiniteStateMachine):
         self._message_bus.enable()
         # that blocks so we never get here until the end…
         self._log.info('main loop closed.')
-
         # end main loop
 
     def started(self):
@@ -382,6 +374,7 @@ class KROS(Component, FiniteStateMachine):
         A callback executed upon starting the MessageBus.
         '''
         self._log.info(Fore.MAGENTA + 'kros started.')
+        # turn on running lights
 
         _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
         if _motor_ctrl_cfg.get('enable'):
@@ -393,8 +386,9 @@ class KROS(Component, FiniteStateMachine):
             self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
             self._data_log.data('START')
         # print registry of components
-        Player.play('yaay')
+        Player.play('yippee')
         self._component_registry.print_registry()
+#       self._message_bus.verbose = False # TEMP
         # register callback on close
         atexit.register(lambda: self._post_cleanup())
 
@@ -449,6 +443,8 @@ class KROS(Component, FiniteStateMachine):
         try:
             Player.play('woow')
             time.sleep(0.5)
+            if self._tinyfx: # turn on all lights
+                self._tinyfx.off()
             if self._button:
                 self._button.close()
                 self._button = None

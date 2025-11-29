@@ -205,10 +205,12 @@ class DistanceSensor(Component):
             # we know of this warning so make it pretty
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always", RuntimeWarning)
+                GPIO.setmode(GPIO.BCM)
                 GPIO.cleanup(self._pin)
                 for warning in w:
                     msg = Util.ellipsis('{}'.format(warning.message), 33)
                     self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
+                GPIO.cleanup()
             Component.disable(self)
 
     def close(self):

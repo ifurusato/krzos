@@ -118,6 +118,7 @@ class Logger(object):
         self.__ERROR_TOKEN = 'ERROR'
         self.__FATAL_TOKEN = 'FATAL'
         self._mf           = '{}{} : {}{}'
+        self._max_length   = 1024
 
         # create logger ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self.__mutex = threading.Lock()
@@ -170,7 +171,7 @@ class Logger(object):
         if data_logger: # shared data logging ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             with Logger._data_logger_lock:
                 if Logger._data_fh is None:
-                    self.info('🍆 A. creating shared data logger...')
+                    self.info('creating shared data logger…')
                     _project_root = Path(__file__).resolve().parents[1]
                     _log_dir = _project_root / 'log'
                     # make the log directory if it doesn't exist
@@ -188,16 +189,16 @@ class Logger(object):
                     # set format based on metadata flag
                     if Logger.INCLUDE_METADATA:
                         if Logger.USE_ISO_TIMESTAMP:
-                            self.info('🍆 B. using ISO timestamp formatter.')
+                            self.info('using ISO timestamp formatter.')
                             Logger._data_fh.setFormatter(logging.Formatter('%(asctime)s.%(msecs)03dZ,%(name)s,%(message)s', datefmt=self._date_format))
                         else: # use epoch float timestamp
-                            self.info('🍆 C. using epoch float timestamp formatter.')
+                            self.info('using epoch float timestamp formatter.')
                             Logger._data_fh.setFormatter(logging.Formatter('%(created)f,%(name)s,%(message)s'))
                     else:
-                        self.info('🍆 D. using raw data formatter.')
+                        self.info('using raw data formatter.')
                         Logger._data_fh.setFormatter(logging.Formatter('%(message)s'))
                     Logger._data_logger_owner_id = id(self)
-                    self.info('🍆 E. this logger instance is now the owner of the shared data logger.')
+                    self.info('this logger instance is now the owner of the shared data logger.')
             # add the shared handler to this logger instance
             self.__log.addHandler(Logger._data_fh)
 
@@ -299,6 +300,9 @@ class Logger(object):
         '''
         type(self).__suppress = False
 
+    def limit(self, message):
+        return message if len(message) <= self._max_length else message[:self._max_length] + "…"
+
     @property
     def level(self):
         '''
@@ -352,7 +356,7 @@ class Logger(object):
             return
         Logger._log_stats.data_count()
         # convert all arguments to string and join as a CSV line
-        csv_message = ",".join(map(str, args))
+        csv_message = self.limit(",".join(map(str, args)))
         self.__log.log(Level.DATA.value, csv_message)
 
     def debug(self, message):
@@ -362,7 +366,7 @@ class Logger(object):
         if not self.suppressed:
             Logger._log_stats.debug_count()
             with self.__mutex:
-                self.__log.debug(self._mf.format(Logger.__color_debug, self.__DEBUG_TOKEN, message, Logger.__color_reset))
+                self.__log.debug(self._mf.format(Logger.__color_debug, self.__DEBUG_TOKEN, self.limit(message), Logger.__color_reset))
 
     def info(self, message):
         '''
@@ -371,7 +375,7 @@ class Logger(object):
         if not self.suppressed:
             Logger._log_stats.info_count()
             with self.__mutex:
-                self.__log.info(self._mf.format(Logger.__color_info, self.__INFO_TOKEN, message, Logger.__color_reset))
+                self.__log.info(self._mf.format(Logger.__color_info, self.__INFO_TOKEN, self.limit(message), Logger.__color_reset))
 
     def notice(self, message):
         '''
@@ -380,7 +384,7 @@ class Logger(object):
         if not self.suppressed:
             Logger._log_stats.info_count()
             with self.__mutex:
-                self.__log.info(self._mf.format(Logger.__color_notice, self.__INFO_TOKEN, message, Logger.__color_reset))
+                self.__log.info(self._mf.format(Logger.__color_notice, self.__INFO_TOKEN, self.limit(message), Logger.__color_reset))
 
     def warning(self, message):
         '''
@@ -389,7 +393,7 @@ class Logger(object):
         if not self.suppressed:
             Logger._log_stats.warn_count()
             with self.__mutex:
-                self.__log.warning(self._mf.format(Logger.__color_warning, self.__WARN_TOKEN, message, Logger.__color_reset))
+                self.__log.warning(self._mf.format(Logger.__color_warning, self.__WARN_TOKEN, self.limit(message), Logger.__color_reset))
 
     def error(self, message):
         '''

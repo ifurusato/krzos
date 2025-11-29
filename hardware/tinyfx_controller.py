@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-11-24
+# modified: 2025-11-29
 
 import time
 from datetime import datetime as dt
@@ -21,20 +21,27 @@ from core.component import Component
 from core.orientation import Orientation
 from tinyfx.message_util import pack_message, unpack_message
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈[...]
 class TinyFxController(Component):
     NAME = 'tinyfx-ctrl'
     I2C_BUS  = 1      # the I2C bus number; on a Raspberry Pi the default is 1
     I2C_ADDR = 0x43   # the I2C address used to connect to the TinyFX
 
-    def __init__(self, level=Level.INFO):
+    def __init__(self, config=None, level=Level.INFO):
         self._log = Logger(TinyFxController.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        self._i2c_bus     = TinyFxController.I2C_BUS
-        self._i2c_address = TinyFxController.I2C_ADDR
+        if config:
+            _cfg = config.get('kros').get('hardware').get('tinyfx-controller')
+            self._i2c_bus     = _cfg.get('i2c_bus')
+            self._i2c_address = _cfg.get('i2c_address')
+        else:
+            # use defaults
+            self._i2c_bus     = TinyFxController.I2C_BUS
+            self._i2c_address = TinyFxController.I2C_ADDR
         self._bus = smbus2.SMBus(self._i2c_bus)
         self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus, self._i2c_address))
         self._log.info('ready.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _i2c_write_and_read(self, out_msg):
         self._bus.write_i2c_block_data(self._i2c_address, 0, list(out_msg))
@@ -147,17 +154,31 @@ class TinyFxController(Component):
         response = self.send_request('all off')
         self._log.debug('all off response: {}'.format(response))
 
+    def running_lights(self, enable):
+        '''
+        Turn the running lights (PORT, STBD and MAST) on or off.
+        '''
+        response = self.send_request('run {}'.format('on' if enable else 'off'))
+        self._log.info(Style.DIM + 'response: {}'.format(response))
+
     def light(self, orientation, enable):
         '''
         Turn the port running lights on or off.
         '''
+        self._log.debug('light {}: enable? {}'.format(orientation.label, enable))
         match orientation:
+            case Orientation.AFT: # flashing backup light
+                response = self.send_request('ch1 {}'.format('on' if enable else 'off'))
+            case Orientation.FWD: # headlight
+                response = self.send_request('ch2 {}'.format('on' if enable else 'off'))
+            case Orientation.INT: # internal light
+                response = self.send_request('ch3 {}'.format('on' if enable else 'off'))
+            case Orientation.MAST:
+                response = self.send_request('ch4 {}'.format('on' if enable else 'off'))
             case Orientation.PORT:
                 response = self.send_request('ch5 {}'.format('on' if enable else 'off'))
             case Orientation.STBD:
                 response = self.send_request('ch6 {}'.format('on' if enable else 'off'))
-            case Orientation.MAST:
-                response = self.send_request('ch4 {}'.format('on' if enable else 'off'))
             case _: # ignore
                 response = 'ERR'
         self._log.info(Style.DIM + '{} response: {}'.format(orientation.label, response))
@@ -167,7 +188,7 @@ class TinyFxController(Component):
         Enable the TinyFxController.
         '''
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             time.sleep(0.3)
             self._log.info(Fore.YELLOW + 'setting RTC time on TinyFX…')
             self.send_request('time set now')
@@ -181,7 +202,7 @@ class TinyFxController(Component):
         '''
         if self.enabled:
             self.off()
-            Component.disable(self)
+            super().disable()
         else:
             self._log.debug('already disabled.')
 
@@ -190,9 +211,8 @@ class TinyFxController(Component):
         Disable and close the TinyFxController.
         '''
         if not self.closed:
-            self.disable()
             self._bus.close()
-            Component.close(self)
+            super().close()
         else:
             self._log.debug('already closed.')
 
