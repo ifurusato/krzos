@@ -12,7 +12,7 @@
 import RPi.GPIO as GPIO
 from hardware.color import Color
 
-class RGBLED(object):
+class RGBLED:
     '''
     Controls an RGB LED by managing its color and brightness. This is specifically
     designed for the GPIO pins used by the RGB LED on the Pimoroni Display HAT Mini.
@@ -36,6 +36,48 @@ class RGBLED(object):
         self.led_b_pwm.start(100)
         self.set_brightness(brightness_percentage)
 
+    def visualise_intent_vector(self, intent):
+        '''
+        Visualises an intent vector as a VU meter-style color display.
+        
+        The magnitude of the intent vector is mapped to a color gradient
+        from green (low activity) through yellow and orange to red (high activity).
+        
+        :param intent: A tuple (vx, vy, omega) where each value ranges from -1.0 to 1.0. 
+        '''
+        vx, vy, omega = intent
+        print('> intent: ({:.2f}, {:.2f}, {:.2f})'.format(vx, vy, omega))
+        # calculate magnitude as sum of absolute values, normalized to 0.0-1.0
+        # Max possible sum is 3.0 (when all components are at ±1.0)
+        magnitude = (abs(vx) + abs(vy) + abs(omega)) / 3.0
+        magnitude = min(1.0, max(0.0, magnitude))  # clamp to [0.0, 1.0]
+        # map magnitude to color: green -> yellow -> orange -> red
+        # green:  (0, 1, 0)
+        # yellow: (1, 1, 0)
+        # orange: (1, 0.5, 0)
+        # red:    (1, 0, 0)
+        if magnitude < 0.33:
+            # green to yellow: increase red from 0 to 1
+            t = magnitude / 0.33
+            red = t
+            green = 1.0
+            blue = 0.0
+        elif magnitude < 0.66:
+            # yellow to orange: decrease green from 1 to 0.5
+            t = (magnitude - 0.33) / 0.33
+            red = 1.0
+            green = 1.0 - (0.5 * t)
+            blue = 0.0
+        else:
+            # orange to red: decrease green from 0.5 to 0
+            t = (magnitude - 0.66) / 0.34
+            red = 1.0
+            green = 0.5 * (1.0 - t)
+            blue = 0.0
+        # apply brightness and set the color
+        brightness_factor = self._brightness / 100.0
+        self.set_rgb((red * brightness_factor, green * brightness_factor, blue * brightness_factor))
+
     def set_brightness(self, brightness_percentage):
         '''
         Sets the brightness of the RGB LED.
@@ -55,6 +97,7 @@ class RGBLED(object):
         red   = rgb_tuple[0]
         green = rgb_tuple[1]
         blue  = rgb_tuple[2]
+        print("RGB: ({:.2f},{:.2f},{:.2f})".format(red, green, blue))
         self.led_r_pwm.ChangeDutyCycle((1.0 - red) * 100)
         self.led_g_pwm.ChangeDutyCycle((1.0 - green) * 100)
         self.led_b_pwm.ChangeDutyCycle((1.0 - blue) * 100)
@@ -80,5 +123,8 @@ class RGBLED(object):
         self.led_g_pwm.stop()
         self.led_b_pwm.stop()
         GPIO.cleanup()
+
+    def close(self):
+        self.cleanup()
 
 #EOF
