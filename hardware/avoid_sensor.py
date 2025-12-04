@@ -69,10 +69,10 @@ class AvoidSensor(Component):
         '''
         if not self.enabled:
             self._distance_sensor.enable()
-            Component.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
-            self._log.info('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
@@ -80,23 +80,22 @@ class AvoidSensor(Component):
         '''
         if self.enabled:
             self._distance_sensor.disable()
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
         else:
-            self._log.info('already disabled.')
+            self._log.debug('already disabled.')
 
     def close(self):
         '''
         Closes the underlying sensor and frees resources.
         '''
         if not self.closed:
-            self.disable()
             self._distance_sensor.close()
             if self._data_log:
                 self._data_log.data("END")
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
         else:
-            self._log.info('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

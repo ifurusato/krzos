@@ -27,7 +27,7 @@ class FiniteStateMachine:
     directly will raise an exception.
 
     Callbacks registered for the initial state will *not* be invoked during
-    construction. To ensure callbacks run for the initial state, you must
+    construction. To make sure that callbacks run for the initial state, you must
     explicitly trigger the transition to that state *after* registering callbacks,
     typically by calling `go_to(initial_state)` before performing further transitions.
 

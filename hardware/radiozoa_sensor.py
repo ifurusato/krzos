@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-09-08
-# modified: 2025-11-28
+# modified: 2025-12-01
 
 import sys
 from datetime import datetime as dt
@@ -34,6 +34,7 @@ elif SMBUS == 'smbus2':
 
 from core.logger import Logger, Level
 from core.component import Component, MissingComponentError
+from core.illegal_state_error import IllegalStateError
 from core.cardinal import Cardinal
 from hardware.i2c_scanner import I2CScanner
 from hardware.proximity_sensor import ProximitySensor
@@ -64,58 +65,64 @@ class RadiozoaSensor(Component):
             raise ValueError('no configuration provided.')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._level = level
-        # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         self._config = config
-        _cfg_radiozoa        = config.get('kros').get('hardware').get('radiozoa')
-        self._cfg_devices    = _cfg_radiozoa.get('devices')
-        self._i2c_bus_number = _cfg_radiozoa.get('i2c_bus_number')
+        _cfg_radiozoa         = config.get('kros').get('hardware').get('radiozoa')
+        self._cfg_devices     = _cfg_radiozoa.get('devices')
+        self._i2c_bus_number  = _cfg_radiozoa.get('i2c_bus_number')
+        self._ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
         if not isinstance(self._i2c_bus_number, int):
             raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
+        self._enable_reassign_and_connect = _cfg_radiozoa.get('reassign_and_connect', True)
         self._i2c_bus = smbus.SMBus()
         self._i2c_bus.open(bus=self._i2c_bus_number)
         self._log.debug('I2C{} open.'.format(self._i2c_bus_number))
-        self._sensor_count   = 8
+        self._sensor_count    = 8
         self._i2c_scanner = I2CScanner(config=self._config, i2c_bus_number=self._i2c_bus_number, i2c_bus=self._i2c_bus, level=Level.INFO)
-        # variables
+        self._sensor_addresses = [ "0x{:02X}".format(sensor.get('i2c_address')) for sensor in self._cfg_devices.values() ]
+        # state variables
         self._polling_stop_event = Event()
-        self._poll_interval  = -1
-        self._distances      = [None for _ in range(self._sensor_count)]
-        self._distances_lock = Lock()
-        self._polling_thread = None
-        self._polling_loop   = None
-        self._polling_task   = None
-        self._callback       = None
-        # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._poll_interval   = -1
+        self._distances       = [None for _ in range(self._sensor_count)]
+        self._distances_lock  = Lock()
+        self._polling_thread  = None
+        self._polling_loop    = None
+        self._polling_task    = None
+        self._callback        = None
+        # set up IO Expander
         self._ioe = None
         # try to get the existing IOE from ToggleConfig, otherwise create our own
         _component_registry = Component.get_registry()
         _toggle_config = _component_registry.get('toggle-config')
         if _toggle_config:
-            self._log.info(Fore.MAGENTA + 'obtaining IOExpander from ToggleConfig…')
+            self._log.info('obtaining IOExpander from ToggleConfig…')
             self._ioe = _toggle_config.ioe
         else:
-            self._log.info(Fore.MAGENTA + 'creating IOExpander…')
-#           _has_default_i2c_address = self._i2c_scanner.has_hex_address(['0x29']) # default I2C address
-            _ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
-            if self._i2c_scanner.has_hex_address([_ioe_i2c_address]):
+            self._log.info('creating IOExpander…')
+            if self._i2c_scanner.has_hex_address([self._ioe_i2c_address]):
                 try:
                     self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
-                    self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                    self._log.info('found IO Expander at {} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
                 except Exception as e:
                     self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
                     raise
+            elif self._enable_reassign_and_connect:
+                self._reassign_and_connect()
             else:
-                raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                raise MissingComponentError('did not find IO Expander at {} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
         # create all sensors, raise exception if any are missing
         self._proximity_sensors = {}
         self._create_sensors()
-#       self._sensor_by_cardinal = {sensor.cardinal: sensor for sensor in self._proximity_sensors.values()}
         missing = []
         for proximity_sensor in self._proximity_sensors.values():
             if not self._i2c_scanner.has_hex_address(["0x{:02X}".format(proximity_sensor.i2c_address)]):
                 missing.append(proximity_sensor.label)
         if missing:
-            raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
+            if self._enable_reassign_and_connect:
+                self._log.info("missing required Radiozoa sensors: {}; attempting to reassign and connect…".format(", ".join(missing)))
+                self._reassign_and_connect()
+            else:
+                raise MissingComponentError("missing required Radiozoa sensors: {}".format(", ".join(missing)))
         self._log.info('ready.')
 
     @property
@@ -124,6 +131,30 @@ class RadiozoaSensor(Component):
         Return the instance of the IOExpander.
         '''
         return self._ioe
+
+    def _reassign_and_connect(self):
+        self._log.info(Fore.YELLOW + "attempting to reassign and connect…")
+        _default_i2c_address = '0x29'
+        try:
+            from hardware.radiozoa_config import RadiozoaConfig
+
+            radiozoa_config = RadiozoaConfig(self._config, level=Level.INFO)
+            radiozoa_config.configure()
+            radiozoa_config.close()
+        except Exception as e:
+            self._log.error("{} raised during RadiozoaConfig configuration: {}\n{}".format(type(e), e, traceback.format_exc()))
+            raise
+        # re-scan after configuration
+        self._log.info("re-scanning for Radiozoa sensor addresses…")
+        time.sleep(1)
+        has_default = self._i2c_scanner.has_hex_address([_default_i2c_address], force_scan=True)
+        if not has_default:
+            raise MissingComponentError('fatal: did not find IO Expander at {} on I2C{}.'.format(self._ioe_i2c_address, self._i2c_bus_number))
+        missing = [ addr for addr in self._sensor_addresses if not self._i2c_scanner.has_hex_address([addr]) ]
+        if missing:
+            raise MissingComponentError("fatal: missing required Radiozoa sensors: {}".format(", ".join(missing)))
+
+    time.sleep(0.5)
 
     def _get_poll_interval(self):
         '''
@@ -175,23 +206,36 @@ class RadiozoaSensor(Component):
         Raises MissingComponentError if any sensor is not active.
         '''
         self._log.info(Fore.GREEN + 'start ranging…')
-#       for proximity_sensor in self._proximity_sensors.values():
-#           self._log.debug('opening sensor {}…'.format(proximity_sensor.abbrev))
-#           if proximity_sensor.enabled:
-#               proximity_sensor.open()
-#               time.sleep(0.1)
         # confirm all sensors are available and active
         for proximity_sensor in self._proximity_sensors.values():
             self._log.debug('checking availability of sensor {}…'.format(proximity_sensor.abbrev))
             if proximity_sensor.enabled and not proximity_sensor.active:
                 raise MissingComponentError('Sensor {} is inactive.'.format(proximity_sensor.abbrev))
-
         for proximity_sensor in self._proximity_sensors.values():
             self._log.debug('start ranging sensor {}…'.format(proximity_sensor.abbrev))
             if proximity_sensor.enabled:
                 proximity_sensor.start_ranging()
         time.sleep(1) # give the sensors a chance before actually using them
+        # double-check
+        self.check_ranging()
         self._start_polling()
+
+    def check_ranging(self, exception_on_fail=False):
+        '''
+        Returns True if all sensors are ranging.
+
+        If exception_on_fail is True, raise exception rather than return value.
+        '''
+        self._log.warning('checking ranging…')
+        for proximity_sensor in self._proximity_sensors.values():
+            if not proximity_sensor.is_ranging():
+                if exception_on_fail:
+                    raise MissingComponentError('proximity sensor {} is not ranging.'.format(proximity_sensor.abbrev))
+                else:
+                    self._log.warning('proximity sensor {} is not ranging.'.format(proximity_sensor.abbrev))
+                return False
+        self._log.info('ranging checked: ' + Fore.GREEN + 'okay')
+        return True
 
     def _create_sensors(self):
         '''
@@ -297,19 +341,24 @@ class RadiozoaSensor(Component):
                 self._log.info("sensor {} ({}) disabled.".format(label, sensor_id))
 
     def enable(self):
-        all_connected = True
-        for proximity_sensor in self._proximity_sensors.values():
-            self._log.debug('connecting to sensor {}…'.format(proximity_sensor.abbrev))
-            if proximity_sensor.enabled:
-                if not proximity_sensor.connect():
-                    all_connected = False
-        if all_connected:
-            super().enable()
-            # set polling interval based on sensor accuracy mode
-            self._poll_interval = self._get_poll_interval()
-            self._log.info('all sensors connected.')
+        if not self.enabled:
+            all_connected = True
+            for proximity_sensor in self._proximity_sensors.values():
+                self._log.debug('connecting to sensor {}…'.format(proximity_sensor.abbrev))
+                if proximity_sensor.enabled:
+                    if not proximity_sensor.connect():
+                        all_connected = False
+            if all_connected:
+    #           super().enable()
+                Component.enable(self)
+                # set polling interval based on sensor accuracy mode
+                self._poll_interval = self._get_poll_interval()
+                self._log.info('all sensors connected.')
+            else:
+#               self._log.warning('unable to connect to all sensors.')
+                raise IllegalStateError('unable to connect to all sensors.')
         else:
-            self._log.warning('unable to connect to all sensors.')
+            self._log.warning('already enabled.')
 
     def _stop_ranging(self):
         '''
@@ -371,28 +420,32 @@ class RadiozoaSensor(Component):
         print(msg)
 
     def disable(self):
-        self._log.info('disabling…')
-        for proximity_sensor in self._proximity_sensors.values():
+        if self.enabled:
+            self._log.debug('disabling…')
+            for proximity_sensor in self._proximity_sensors.values():
                 proximity_sensor.disable()
-        super().disable()
+            Component.disable(self)
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
-        self._log.info('closing…')
-        self._polling_stop_event.set()
-        if self.closed:
-            self._log.warning('already closed.')
-        else:
+        if not self.closed:
             self._log.info('closing…')
+            self._log.info('closing…')
+            self._polling_stop_event.set()
             try:
-                super().close()
                 self._stop_ranging()
                 self._stop_polling()
+                Component.close(self)
                 self._log.info('closed.')
             except Exception as e:
                 self._log.error("{} raised closing radiozoa: {}".format(type(e), e))
             finally:
                 if not self.closed:
                     self._log.warning('did not close properly, left in ambiguous state.')
-        self._log.info('closed.')
+            self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

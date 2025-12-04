@@ -26,7 +26,7 @@ class TinyFxController(Component):
     I2C_BUS  = 1      # the I2C bus number; on a Raspberry Pi the default is 1
     I2C_ADDR = 0x43   # the I2C address used to connect to the TinyFX
 
-    def __init__(self, config=None, level=Level.INFO):
+    def __init__(self, config=None, i2c_address=None, timeset=True, level=Level.INFO):
         self._log = Logger(TinyFxController.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config:
@@ -37,13 +37,30 @@ class TinyFxController(Component):
             # use defaults
             self._i2c_bus     = TinyFxController.I2C_BUS
             self._i2c_address = TinyFxController.I2C_ADDR
-        self._bus = smbus2.SMBus(self._i2c_bus)
-        self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus, self._i2c_address))
-        self._log.info('ready.')
+        if i2c_address:
+            # arg overrides config
+            self._i2c_address = i2c_address
+        if self._i2c_bus is None:
+            raise ValueError('no I2C bus number provided.')
+        if self._i2c_address is None:
+            raise ValueError('no I2C address provided.')
+        self._timeset = timeset
+        try:
+            self._bus = smbus2.SMBus(self._i2c_bus)
+            self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus, self._i2c_address))
+            self._log.info('ready.')
+        except Exception as e:
+            self._log.error('{} raised opening smbus: {}'.format(type(e), e))
+            raise
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _i2c_write_and_read(self, out_msg):
+        if out_msg is None:
+            raise ValueError('null message.')
+        elif len(out_msg) == 0:
+            self._log.warning('did not send empty message.')
+            return
         self._bus.write_i2c_block_data(self._i2c_address, 0, list(out_msg))
         time.sleep(0.002)
         for _ in range(2):
@@ -70,7 +87,7 @@ class TinyFxController(Component):
         if self.enabled:
             if message.startswith('time set'):
                 now = dt.now()
-                self._log.info('setting time on TinyFX to: {}'.format(now.isoformat()))
+                self._log.info(Fore.GREEN + 'setting time on TinyFX to: {}'.format(now.isoformat()))
                 ts = now.strftime("%Y%m%d-%H%M%S")
                 message = message.replace("now", ts)
             out_msg = pack_message(message)
@@ -84,7 +101,7 @@ class TinyFxController(Component):
                 # don't repeat too quickly
                 time.sleep(0.05)
         else:
-            self._log.warning('disabled.')
+            self._log.warning('cannot send request: disabled.')
 
     def send_data_request(self, message):
         '''
@@ -128,8 +145,14 @@ class TinyFxController(Component):
                 # don't repeat too quickly
                 time.sleep(0.05)
         else:
-            self._log.warning('disabled.')
+            self._log.warning('cannot send data request: disabled.')
             return None
+
+    def play(self, name):
+        '''
+        Play the sound, returning the response ('ACK').
+        '''
+        return self.send_request('play {}'.format(name))
 
     def pir(self):
         '''
@@ -190,11 +213,12 @@ class TinyFxController(Component):
         if not self.enabled:
             super().enable()
             time.sleep(0.3)
-            self._log.info(Fore.YELLOW + 'setting RTC time on TinyFX…')
-            self.send_request('time set now')
+            if self._timeset:
+                self._log.info(Fore.YELLOW + 'setting RTC time on TinyFX…')
+                self.send_request('time set now')
             self._log.info('enabled.')
         else:
-            self._log.debug('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
@@ -210,10 +234,11 @@ class TinyFxController(Component):
         '''
         Disable and close the TinyFxController.
         '''
+        print('TinyFxController.close()             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
         if not self.closed:
-            self._bus.close()
             super().close()
+            self._bus.close()
         else:
-            self._log.debug('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

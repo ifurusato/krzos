@@ -67,16 +67,18 @@ class EyeballsMonitor(Component):
         '''
         return self._manual_eyeball
 
-    def set_eyeballs(self, eyeball):
+    def set_eyeballs(self, eyeball, temporary=False):
         '''
         Manually set the eyeball expression, overriding motor controller monitoring.
 
         Args:
-            eyeball: Eyeball enum value to display
+            eyeball:    Eyeball enum value to display
+            temporary:  if True, sets the display but not the stored value
         '''
         if not isinstance(eyeball, Eyeball):
             raise TypeError('expected Eyeball enum, not {}'.format(type(eyeball)))
-        self._manual_eyeball = eyeball
+        if not temporary:
+            self._manual_eyeball = eyeball
         self._display_eyeball(eyeball)
         self._log.info('manual override set: {}'.format(eyeball.name))
 
@@ -161,30 +163,30 @@ class EyeballsMonitor(Component):
         self._eyeballs.set_matrix(eyeball.array, self._eyeballs._port_rgbmatrix, eyeball.color)
         self._eyeballs.set_matrix(eyeball.array, self._eyeballs._stbd_rgbmatrix, eyeball.color)
         self._eyeballs._show()
-
         self._log.debug('displaying eyeball: {}'.format(eyeball.name))
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             if not self._eyeballs.enabled:
                 self._eyeballs.enable()
             self._log.info('enabled.')
         else:
-            self._log.debug('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             self._eyeballs.blank()
             self._log.info('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         if not self.closed:
-            self.disable()
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

@@ -9,7 +9,7 @@
 # created:  2020-01-14
 # modified: 2025-11-11
 
-class LogStats(object):
+class LogStats:
     '''
     Provides a simple count for each call to the Logger.
     '''

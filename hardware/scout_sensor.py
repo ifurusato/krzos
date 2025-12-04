@@ -258,7 +258,7 @@ class ScoutSensor(Component):
             self._thread = Thread(target=self._control_loop, daemon=True)
             self._thread.start()
         else:
-            self._log.info('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
@@ -273,7 +273,7 @@ class ScoutSensor(Component):
             super().disable()
             self._log.info('disabled and sensor stopped ranging.')
         else:
-            self._log.info('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
@@ -285,6 +285,6 @@ class ScoutSensor(Component):
             super().close()
             self._log.info('closed.')
         else:
-            self._log.info('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

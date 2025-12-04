@@ -19,6 +19,7 @@ from core.logger import Level, Logger
 from core.component import Component
 
 class LuxSensor(Component):
+    NAME = 'lux-sensor'
     '''
     Represents a light sensor component using the LTR559 sensor.
 
@@ -28,7 +29,7 @@ class LuxSensor(Component):
     invoked when the lux value crosses the threshold (both rising and falling edges).
     '''
     def __init__(self, config=None, level=Level.INFO):
-        self._log = Logger('lux-sensor', level)
+        self._log = Logger(LuxSensor.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         _cfg = config['kros'].get('hardware').get('lux_sensor')
         self._lux_threshold = _cfg.get('lux_threshold')

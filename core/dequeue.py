@@ -17,7 +17,7 @@ init(autoreset=True)
 
 from core.stringbuilder import StringBuilder
 
-class DeQueue(object):
+class DeQueue:
 
     FIFO = QUEUE = 0 # use FIFO queue
     LIFO = STACK = 1 # use LIFO queue (like a stack)

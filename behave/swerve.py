@@ -61,7 +61,7 @@ class Swerve(AsyncBehaviour):
         # override poll delay of superclass
         self._poll_delay_ms   = _cfg.get('poll_delay_ms')
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
-        self._log.info(Fore.WHITE + "poll delay: {}ms".format(self._poll_delay_ms))
+        self._log.info("poll delay: {}ms".format(self._poll_delay_ms))
         # distance thresholds (dynamic based on speed)
         self._min_reaction_distance = _cfg.get('min_reaction_distance', 150)  # mm at zero speed
         self._max_reaction_distance = _cfg.get('max_reaction_distance', 500)  # mm absolute max
@@ -78,7 +78,7 @@ class Swerve(AsyncBehaviour):
         self._use_rate_limiting = False
         self._last_vx = 0.0
         self._lateral_easing = Easing.from_string(_cfg.get('lateral_easing', 'SQUARE_ROOT'))
-        self._log.info(Fore.WHITE + 'using {} lateral easing.'.format(self._lateral_easing.name))
+        self._log.info('using {} lateral easing.'.format(self._lateral_easing.name))
         self._min_priority = _cfg.get('min_priority', 0.2)  # priority when far
         self._max_priority = _cfg.get('max_priority', 0.9)  # priority when very close
         self._deadband_threshold = _cfg.get('deadband_threshold', 0.05)  # ignore vx below this
@@ -263,21 +263,21 @@ class Swerve(AsyncBehaviour):
         return (vx, vy, omega)
 
     def enable(self):
-        if self.enabled:
-            self._log.debug("already enabled.")
-            return
-        self._log.info("enabling swerve…")
-        if not self._swerve_sensor.enabled:
-            self._swerve_sensor.enable()
-        AsyncBehaviour.enable(self)
-        self._log.info("swerve enabled.")
+        if not self.enabled:
+            self._log.debug("enabling swerve…")
+            if not self._swerve_sensor.enabled:
+                self._swerve_sensor.enable()
+            super().enable()
+            self._log.info("swerve enabled.")
+        else:
+            self._log.warning("already enabled.")
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug("already disabled.")
-            return
-        self._log.info("disabling swerve…")
-        AsyncBehaviour.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            self._log.debug("disabling swerve…")
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning("already disabled.")
 
 #EOF

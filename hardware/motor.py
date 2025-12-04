@@ -51,7 +51,7 @@ class Motor(Component):
         self._tb = tb
         self._orientation = orientation
         self._log = Logger('motor:{}'.format(orientation.label), level)
-        Component.__init__(self, self._log, suppressed=False, enabled=True)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising {} motor with {} at address 0x{:02X} as motor controller…'.format(
                 orientation.name, type(self._tb).__name__, self._tb.I2cAddress))
         # configuration
@@ -269,11 +269,9 @@ class Motor(Component):
         '''
         Returns True if the motor is entirely stopped, or very nearly stopped.
         '''
-        _current_power = self.get_current_power(settle_to_zero=False)
-        if _current_power:
-            value = isclose(_current_power, 0.0, abs_tol=1e-2)
-            return value
-#           return isclose(_current_power, 0.0, abs_tol=1e-2)
+        current_power = self.get_current_power(settle_to_zero=False)
+        if current_power:
+            return isclose(current_power, 0.0, abs_tol=1e-2)
         else:
             return True
 
@@ -480,25 +478,28 @@ class Motor(Component):
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
-        self._log.info('enabled.')
+            super().enable()
+            self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
-            Component.disable(self)
             self.pid_controller.disable()
+            super().disable()
             self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
         self.off() # in any case
 
     def close(self):
-        # just do it anyway
-        self.stop()
-        if self.enabled:
-            self.disable()
-        if self.__max_applied_power > 0.0:
-            self._log.info('on closing, maximum applied power: {:>5.2f}'.format(self.__max_applied_power))
-        self._log.info('closed.')
+        if not self.closed:
+            self.stop()
+            if self.__max_applied_power > 0.0:
+                self._log.info('on closing, maximum applied power: {:>5.2f}'.format(self.__max_applied_power))
+            super().close()
+            self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

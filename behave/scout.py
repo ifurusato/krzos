@@ -109,10 +109,10 @@ class Scout(AsyncBehaviour):
         self._last_omega             = 0.0
         self._scout_sensor = _component_registry.get(ScoutSensor.NAME)
         if self._scout_sensor is None:
-            self._log.info(Fore.WHITE + 'creating Scout sensor…')
+            self._log.info('creating Scout sensor…')
             self._scout_sensor = ScoutSensor(config, level=Level.INFO)
         else:
-            self._log.info(Fore.WHITE + 'using existing Scout sensor.')
+            self._log.info('using existing Scout sensor.')
         self._max_distance = self._scout_sensor.distance_threshold
         self._imu = None # only needed for ABSOLUTE mode
         if self._heading_mode == HeadingMode.ABSOLUTE:
@@ -436,7 +436,7 @@ class Scout(AsyncBehaviour):
         self._log.info("enabling scout…")
         if self._scout_sensor and not self._scout_sensor.enabled:
             self._scout_sensor.enable()
-        AsyncBehaviour.enable(self)
+        super().enable()
         # initialize encoder value to prevent immediate override
         if self._compass_encoder:
             self._compass_encoder.update()

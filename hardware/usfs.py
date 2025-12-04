@@ -233,7 +233,7 @@ class Usfs(Component):
 #           self._yaw   += self._declination # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
             self._yaw   += self._declination # Pukerua Bay, New Zealand is 20 degrees 36 minutes and 0 seconds on 2025-09-12
             if self._yaw < 0:
-                self._yaw += 360.0  # ensure yaw stays between 0 and 360
+                self._yaw += 360.0  # keep yaw between 0 and 360
             self._roll  *= 180.0 / math.pi
 
     #       print('Quaternion Roll, Pitch, Yaw: %+2.2f %+2.2f %+2.2f' % (roll, pitch, yaw))
@@ -244,7 +244,7 @@ class Usfs(Component):
             else:
                 self._yaw_trim = self._trim_pot.get_scaled_value()
             self._corrected_yaw = self._yaw - self._yaw_trim
-            # ensure yaw stays between 0 and 360
+            # keep yaw between 0 and 360
             if self._corrected_yaw < 0: self._corrected_yaw += 360.0
             elif self._corrected_yaw > 360: self._corrected_yaw -= 360.0
             if self._verbose:
@@ -294,15 +294,15 @@ class Usfs(Component):
             if self.enabled:
                 self._log.warning('USFS already enabled.')
             else:
-                Component.enable(self)
+                super().enable()
 
     def disable(self):
-        Component.disable(self)
+        super().disable()
 
     def close(self):
         '''
         Closes the USFS, calling disable.
         '''
-        Component.close(self)
+        super().close()
 
 #EOF

@@ -75,6 +75,7 @@ class RGBLED:
             green = 0.5 * (1.0 - t)
             blue = 0.0
         # apply brightness and set the color
+        print('magnitude: {:.6f}, t: {:.6f}'.format(magnitude, t))
         brightness_factor = self._brightness / 100.0
         self.set_rgb((red * brightness_factor, green * brightness_factor, blue * brightness_factor))
 
@@ -97,7 +98,6 @@ class RGBLED:
         red   = rgb_tuple[0]
         green = rgb_tuple[1]
         blue  = rgb_tuple[2]
-        print("RGB: ({:.2f},{:.2f},{:.2f})".format(red, green, blue))
         self.led_r_pwm.ChangeDutyCycle((1.0 - red) * 100)
         self.led_g_pwm.ChangeDutyCycle((1.0 - green) * 100)
         self.led_b_pwm.ChangeDutyCycle((1.0 - blue) * 100)

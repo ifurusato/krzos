@@ -35,7 +35,6 @@ class Button(Component):
     :param level:         the log level
     '''
     def __init__(self, config, name=None, level=Level.INFO):
-        print('BUTTON - XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXxx ')
         _cfg = config['kros'].get('hardware').get('button')
         self._pin = _cfg.get('pin')
         _log_name = 'btn-{}'.format(self._pin) if name is None else name
@@ -45,19 +44,17 @@ class Button(Component):
         self._button = None
         self._closed = False
         try:
-            # create Button with pull_up=True (assumes button connects pin to ground)
-            # bounce_time adds debouncing (default 0.01s may be too short)
             self._button = GpioZeroButton(self._pin, pull_up=True, bounce_time=0.05)
             self._button.when_released = self._released
-#           self._button.when_pressed  = lambda: print("released.")
             # patch __del__ to prevent the "GPIO busy" exception during shutdown
             _original_del = self._button.__class__.__del__
+            log = self._log
             def _silent_del(self):
+                nonlocal log
                 try:
                     _original_del(self)
-                except Exception:
-                    print('{} raised in _silent_del: {}'.format(type(e), e))
-                    pass
+                except Exception as e:
+                    log.debug('{} raised in _silent_del: {}'.format(type(e), e))
             self._button.__class__.__del__ = _silent_del
             self._log.info('ready: pushbutton on GPIO pin {:d} using gpiozero.'.format(self._pin))
         except Exception as e:
@@ -92,36 +89,37 @@ class Button(Component):
         '''
         Internal method called when the button is released.
         '''
-        if self._closed:
+        if self.closed:
             return # ignore callbacks during/after shutdown
         self._log.info(Fore.MAGENTA + "button pressed!")
         self.execute_callbacks()
 
     def _close_gpiozero(self):
         '''
-        Properly clean up gpiozero resources.
+        Properly clean up gpiozero resources. A complete PITA.
         '''
         if self._button is None:
-            return
-        try:
-            self._log.info("performing gpiozero cleanup…")
-            # clear callbacks first to prevent new events
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=CallbackSetToNone)
+            return False
+        self._log.info("performing gpiozero cleanup…")
+        # clear callbacks first to prevent new events
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=CallbackSetToNone)
+            if self._button.when_pressed is not None:
                 self._button.when_pressed = None
+            if self._button.when_released is not None:
                 self._button.when_released = None
-            # delay to let pending callbacks complete
-            time.sleep(0.05)
-            try:
-                self._button.close()
-                self._button = None
-            except Exception as e:
-                self._log.info("{} raised closing gpiozero button: {}".format(type(e), e))
-            self._log.info("gpiozero cleanup complete.")
-        except Exception as e:
-            self._log.error("{} raised during gpiozero cleanup: {}".format(type(e).__name__, e))
-            if self._log.level == Level.DEBUG:
-                self._log.debug(traceback.format_exc())
+        # delay to let pending callbacks complete
+        time.sleep(0.05)
+        try:
+            self._button.close()
+            if self._button.closed:
+                print('🐟 a. closed! ')
+            time.sleep(0.2)
+        except Exception as f:
+            self._log.warning(Fore.CYAN + Style.DIM + "{} raised closing button: {}".format(type(f), f))
+        finally:
+            self._button = None
+        return True
 
     @property
     def pin(self):
@@ -143,19 +141,27 @@ class Button(Component):
         Disable the button (stops processing events).
         '''
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
         Permanently close the button and clean up GPIO resources.
         '''
-        if not self._closed:
-            self._log.info('closing button…')
-            self._closed = True
-            self.clear_callbacks()
-            self._close_gpiozero()
-            Component.close(self)  # calls disable
-            self._log.info('closed.')
+        if not self.closed:
+            try:
+                super().close()
+                self.clear_callbacks()
+                if self._close_gpiozero():
+                    Component.get_registry().deregister(self)
+            except Exception as e:
+                self._log.error('{} raised closing button: {}'.format(type(e), e))
+                raise
+            finally:
+                self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

@@ -11,7 +11,7 @@
 
 from machine import Pin
 
-class PassiveInfrared(object):
+class PassiveInfrared:
     def __init__(self, pin=26):
         self._pir_pin = Pin(pin, Pin.IN, Pin.PULL_UP)
 

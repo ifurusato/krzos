@@ -210,21 +210,21 @@ class Roam(AsyncBehaviour):
             self._log.info("intent vector: ({:.2f},{:.2f},{:.2f})".format(vx, vy, omega))
 
     def enable(self):
-        if self.enabled:
-            self._log.debug("already enabled.")
-            return
-        self._log.info("enabling roam…")
-        if not self._roam_sensor.enabled:
-            self._roam_sensor.enable()
-        AsyncBehaviour.enable(self)
-        self._log.info("roam enabled.")
+        if not self.enabled:
+            self._log.debug("enabling roam…")
+            if not self._roam_sensor.enabled:
+                self._roam_sensor.enable()
+            super().enable()
+            self._log.info("roam enabled.")
+        else:
+            self._log.warning("already enabled.")
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug("already disabled.")
-            return
-        self._log.info("disabling roam…")
-        AsyncBehaviour.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            self._log.debug("disabling roam…")
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning("already disabled.")
 
 #EOF

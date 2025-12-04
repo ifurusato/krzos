@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-11
-# modified: 2025-11-29
+# modified: 2025-11-30
 #
 # Odometer for Mecanum-based robot chassis.
 #
@@ -28,18 +28,20 @@
 #
 #   odom = Odometer(config)
 #   odom.update({'pfwd': pf, 'sfwd': sf, 'paft': pa, 'saft': sa}, timestamp)
-#   vx, vy, omega = odom.get_velocity()
-#   x, y, theta = odom.get_pose()
+#   vx, vy, omega = odom.velocity
+#   x, y, theta = odom.pose
 #   odom.reset()
 #
 # See also the legacy Velocity class for notes on robot geometry.
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-import math
+from math import pi as π
+from math import isclose, degrees, cos, sin
 from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
+from core.util import Util
 from core.component import Component
 
 class Odometer(Component):
@@ -47,10 +49,10 @@ class Odometer(Component):
     '''
     Computes robot velocity and pose (odometry) from the step counts of all four drive motors on a Mecanum robot.
 
-    - update():        Call with dict of {motor: absolute_steps} and timestamp (seconds, e.g. time.monotonic()).
-    - get_velocity():  Returns (vx, vy, omega) where vx = forward cm/s, vy = lateral cm/s, omega = rad/s.
-    - get_pose():      Returns (x, y, theta) where x = forward cm, y = lateral cm, theta = heading in radians.
-    - reset():         Resets cumulative pose and previous readings.
+    - update():    Call with dict of {motor: absolute_steps} and timestamp (seconds, e.g. time.monotonic()).
+    - velocity:    Returns (vx, vy, omega) where vx = forward cm/s, vy = lateral cm/s, omega = rad/s.
+    - pose:        Returns (x, y, theta) where x = forward cm, y = lateral cm, theta = heading in radians.
+    - reset():     Resets cumulative pose and previous readings.
     '''
     def __init__(self, config, suppressed=False, enabled=True, level=Level.INFO):
         self._config = config
@@ -62,7 +64,7 @@ class Odometer(Component):
         self._steps_per_rotation     = _cfg.get('steps_per_rotation')
         self._wheel_base_mm          = _cfg.get('wheel_base')
         self._wheel_track_mm         = _cfg.get('wheel_track')
-        self._wheel_circumference_cm = self._wheel_diameter_mm * math.pi / 10.0
+        self._wheel_circumference_cm = self._wheel_diameter_mm * π / 10.0
         self._steps_per_cm = self._steps_per_rotation / self._wheel_circumference_cm
         self._log.info('wheel base:             ' + Fore.GREEN + ' {:4.1f}mm'.format(self._wheel_base_mm))
         self._log.info('wheel track:            ' + Fore.GREEN + ' {:4.1f}mm'.format(self._wheel_track_mm))
@@ -78,12 +80,13 @@ class Odometer(Component):
         self._wheelbase_cm       = self._wheel_base_mm / 10.0
         self._track_cm           = self._wheel_track_mm / 10.0
         self._wheel_radius_cm    = self._wheel_diameter_cm / 2.0
-        self._step_cm            = math.pi * self._wheel_diameter_cm / self._steps_per_rev
+        self._step_cm            = π * self._wheel_diameter_cm / self._steps_per_rev
         self._log.info(
             "wheel diameter: {:.2f}cm, wheelbase: {:.2f}cm, track: {:.2f}cm, steps/rev: {:.2f}".format(
                 self._wheel_diameter_cm, self._wheelbase_cm, self._track_cm, self._steps_per_rev
             )
         )
+        self.__callbacks = []
         # internal state
         self._last_steps = None  # dict of last {motor: step_count}
         self._last_time  = None  # float (seconds)
@@ -97,13 +100,66 @@ class Odometer(Component):
 
     @property
     def steps_per_rotation(self):
+        '''
+        Returns the configured steps per wheel rotation value.
+        '''
         return self._steps_per_rotation
 
     @property
     def steps_per_cm(self):
+        '''
+        Returns the configured steps per cm value, calculated from the robot geometry.
+        '''
         return self._steps_per_cm
 
+    @property
+    def pose(self):
+        '''
+        Returns (x, y, theta): x (forward cm), y (lateral cm), theta (radians).
+        '''
+        return self._x, self._y, self._theta
+
+    @property
+    def velocity(self):
+        '''
+        Returns (vx, vy, omega): vx (forward cm/s), vy (lateral cm/s), omega (rad/s).
+        '''
+        return self._vx, self._vy, self._omega
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def add_callback(self, callback):
+        '''
+        Adds a callback to those triggered by clock ticks when the robot is moving.
+        '''
+        if not callable(callback):
+            raise Exception('callback argument is not a function.')
+        if callback:
+            if callback in self.__callbacks:
+                raise Exception('callback already exists.')
+            self._log.info('added callback: {}.{}()'.format(Util.get_class_name_of_method(callback), callback.__name__))
+            self.__callbacks.append(callback)
+        else:
+            raise TypeError('null callback argument')
+
+    def remove_callback(self, callback):
+        '''
+        Removes a callback from the internal list.
+        '''
+        if callback:
+            if callback in self.__callbacks:
+                self.__callbacks.remove(callback)
+        else:
+            raise TypeError('null callback argument')
+
+    def _callback_method(self):
+        '''
+        The internal method called upon each tick, when the robot is moving.
+        This executes any extant callbacks.
+        '''
+        if self.enabled:
+            for callback in self.__callbacks:
+                callback()
 
     def set_pose(self, x, y, theta):
         '''
@@ -118,7 +174,7 @@ class Odometer(Component):
         self._y = y
         self._theta = theta
         self._log.info('pose set to: x={:.2f}cm, y={:.2f}cm, theta={:.2f}rad ({:.1f}°)'.format(
-            x, y, theta, math.degrees(theta)))
+            x, y, theta, degrees(theta)))
 
     def steps_to_cm(self, steps):
         return steps / self._steps_per_cm
@@ -141,6 +197,8 @@ class Odometer(Component):
         '''
         Call at regular intervals with latest step counts for all four motors and time (seconds).
 
+        This triggers any callbacks at the end of each cycle if there is any movement.
+
         step_counts:  dict with keys: 'pfwd', 'sfwd', 'paft', 'saft'
         timestamp:    floating-point time in seconds (e.g. from time.monotonic())
         '''
@@ -161,73 +219,73 @@ class Odometer(Component):
             d_sfwd = ds_sfwd * self._step_cm
             d_paft = ds_paft * self._step_cm
             d_saft = ds_saft * self._step_cm
-
             # mecanum chassis kinematics - velocities in ROBOT BODY FRAME
             vx = (d_pfwd - d_sfwd - d_paft + d_saft) / 4.0 / dt   # lateral (right+)
             vy = (d_pfwd + d_sfwd + d_paft + d_saft) / 4.0 / dt   # longitudinal (forward+)
             omega = (d_pfwd - d_sfwd + d_paft - d_saft) / (4.0 * ((self._wheelbase_cm + self._track_cm) / 2.0)) / dt
-
             # store body frame velocities
             self._vx = vx
             self._vy = vy
             self._omega = omega
-            
             # integrate pose: transform body frame velocities to odometry frame
-            cos_t = math.cos(self._theta)
-            sin_t = math.sin(self._theta)
-            
+            cos_t = cos(self._theta)
+            sin_t = sin(self._theta)
             # transform body velocity to odometry frame displacement
             dx = (vx * cos_t + vy * sin_t) * dt
             dy = (-vx * sin_t + vy * cos_t) * dt
             dtheta = omega * dt
-            
             self._x += dx
             self._y += dy
             self._theta += dtheta
-            
             # normalize theta to [-π, π]
-            while self._theta > math.pi:
-                self._theta -= 2 * math.pi
-            while self._theta < -math.pi:
-                self._theta += 2 * math.pi
-                
+            while self._theta > π:
+                self._theta -= 2 * π
+            while self._theta < -π:
+                self._theta += 2 * π
         # save per-tick state
         self._last_steps = dict(step_counts)
         self._last_time = timestamp
+        if self.is_moving():
+            self._callback_method()
 
     def print_info(self):
         '''
         Prints the current intent vector and pose.
         ''' 
-        vx, vy, omega = self.get_velocity()
-        x, y, theta = self.get_pose()
-        self._log.info(Style.DIM + 'intent: ({:.2f}, {:.2f}, {:.2f});\tpose: ({:.2f}cm, {:.2f}cm, {:.2f}rad)'.format(vx, vy, omega, x, y, theta))
+        self._log.info(Style.DIM + 'intent: ({:.2f}, {:.2f}, {:.2f});\tpose: ({:.2f}cm, {:.2f}cm, {:.2f}rad)'.format(
+                self._vx, self._vy, self._omega, self._x, self._y, self._theta))
 
-    def get_velocity(self):
+    def is_moving(self):
         '''
-        Returns (vx, vy, omega): vx (forward cm/s), vy (lateral cm/s), omega (rad/s).
+        Returns True if any of (vx, vy, omega) is non-zero using a deadband.
         '''
-        return self._vx, self._vy, self._omega
-
-    def get_pose(self):
-        '''
-        Returns (x, y, theta): x (forward cm), y (lateral cm), theta (radians).
-        '''
-        return self._x, self._y, self._theta
+        if not isclose(self._vy, 0.0, abs_tol=1e-2):
+            return True
+        if not isclose(self._vx, 0.0, abs_tol=1e-2):
+            return True
+        if not isclose(self._omega, 0.0, abs_tol=1e-2):
+            return True
+        return False
 
     def enable(self):
-        if not self.closed:
-            self._enabled = True
+        if not self.enabled:
+            super().enable()
             self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
-            self._enabled = False
+            super().disable()
             self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
-        self.disable()
-        self._closed = True
-        self._log.info('closed.')
+        if not self.closed:
+            super().close()
+            self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

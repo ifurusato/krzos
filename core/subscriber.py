@@ -277,7 +277,7 @@ class Subscriber(Component, FiniteStateMachine):
             FiniteStateMachine.start(self)
             self.enable()
         else:
-            self._log.debug('subscriber {} already started.'.format(self.name))
+            self._log.warning('subscriber {} already started.'.format(self.name))
 
     def disable(self):
         if self.enabled:

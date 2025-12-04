@@ -109,7 +109,7 @@ class Geofence(AsyncBehaviour):
         Returns (vx, vy, omega) tuple.
         '''
         try:
-            x, y, theta = self._odometer.get_pose()
+            x, y, theta = self._odometer.pose
             return self._update_intent_vector(x, y, theta)
         except Exception as e:
             self._log.error("{} thrown while polling: {}".format(type(e), e))
@@ -395,17 +395,17 @@ class Geofence(AsyncBehaviour):
         return (vx, vy, omega)
 
     def enable(self):
-        if self.enabled:
-            self._log.debug("already enabled.")
-            return
-        AsyncBehaviour.enable(self)
-        self._log.info('enabled.')
+        if not self.enabled:
+            super().enable()
+            self._log.info('enabled.')
+        else:
+            self._log.warning("already enabled.")
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug("already disabled.")
-            return
-        AsyncBehaviour.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning("already disabled.")
 
 #EOF

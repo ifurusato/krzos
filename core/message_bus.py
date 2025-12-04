@@ -433,17 +433,18 @@ class MessageBus(Component):
 
     def handle_exception(self, loop, context):
         self._log.error('handle exception on loop: {}'.format(loop))
-#       print('stack trace; {}'.format(traceback.format_exc()))
         # context["message"] will always be there; but context["exception"] may not
         _exception = context.get('exception', context['message'])
         if _exception != None:
-            self._log.error('caught {}: {}\n{}'.format(type(_exception), _exception, traceback.format_exc()))
+#           self._log.error('caught {}: {}\n{}'.format(type(_exception), _exception, traceback.format_exc()))
+            print(Fore.RED + 'ERROR: caught: {}'.format(_exception) + Style.RESET_ALL)
         else:
-            self._log.error('caught exception: {}'.format(context.get('message')))
-        if loop.is_running() and not loop.is_closed():
-            asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
-        else:
-            self._log.warning("loop already shut down.")
+            print(Fore.RED + 'ERROR: caught exception: {}'.format(context.get('message')) + Style.RESET_ALL)
+#           self._log.error('caught exception: {}'.format(context.get('message')))
+#       if loop.is_running() and not loop.is_closed():
+#           asyncio.create_task(self.shutdown(loop), name='shutdown-on-exception')
+#       else:
+#           self._log.warning("loop already shut down.")
 
     async def shutdown(self, signal=None):
         '''
@@ -510,11 +511,13 @@ class MessageBus(Component):
 
     def enable(self):
         if not self.closed and not self.enabled:
-            Component.enable(self)
+            super().enable()
             self._log.info('starting message bus forever loop…')
             # this call will block
             return self._get_event_loop()
 #           self._log.info('exited message bus forever loop.')
+        else:
+            self._log.warning('already enabled.')
         return None
 
     def has_event_loop(self):

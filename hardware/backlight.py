@@ -27,6 +27,7 @@ class Backlight(Component):
         self._log = Logger('backlight', level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._pin = 13 # TODO from config
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self._pin, GPIO.OUT)
         self._log.info('ready.')

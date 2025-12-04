@@ -84,7 +84,7 @@ class Monitor(Component):
         if Util.already_running('monitor_exec.py'):
             raise RuntimeError('monitor is already running.')
         self._message = None
-        # configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # configuration
         _cfg = config['kros'].get('hardware').get('monitor')
         _i2c_port       = _cfg.get('i2c_port')
         _i2c_address    = _cfg.get('i2c_address')
@@ -115,7 +115,7 @@ class Monitor(Component):
         self._font_message    = ImageFont.truetype(_font_file, _font_size_message)
         _contrast             = _cfg.get('contrast')
         self.__callback = None
-        # get device ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # get device
         self._device = None
         try:
 #           self._device = ssd1327(i2c(port=0, address=0x3C), rotate=1) # Zio
@@ -123,7 +123,7 @@ class Monitor(Component):
             self._device.contrast(_contrast)
         except DeviceNotFoundError:
             self._log.error('no monitor available: display not found.')
-        # ADS1015 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # ADS1015
         self._ads1015 = ADS1015()
         chip_type = self._ads1015.detect_chip_type()
         self._log.info('found chip type: {}'.format(chip_type))
@@ -143,20 +143,20 @@ class Monitor(Component):
         self._counter = None
         self._irq_clock = None
         if external_clock is not None:
-            # External Clock ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # external clock
             self._log.info('using supplied external clock for update loop.')
             self.enable()
             self._counter = itertools.count()
             external_clock.add_callback(self.update)
         elif use_thread or _use_thread:
-            # update thread ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # update thread
             self._log.info('using thread for update loop operating at {:d}Hz.'.format(_update_rate_hz))
             self._update_loop_thread = Thread(name='update_loop_thread', target=Monitor._update_loop, args=[self], daemon=True)
             self.enable()
             self._update_loop_thread.start()
             self._rate = Rate(_update_rate_hz, level=Level.INFO)
         else:
-            # IRQ Clock ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            # IRQ clock
             self._irq_clock = _component_registry.get('irq-clock')
             if self._irq_clock is None:
                 self._log.info('using local external clock for update loop.')
@@ -390,18 +390,17 @@ class Monitor(Component):
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             if self._device is None:
                 self._log.info('monitor not enabled (no device).')
             else:
                 self._log.info('enabled monitor.')
         elif self.closed:
             self._log.warning('cannot enable monitor: already closed.')
-            Component.disable(self)
 
     def disable(self):
-        Component.disable(self)
         self.clear()
+        super().disable()
         self._log.info('disabled monitor.')
 
 #EOF

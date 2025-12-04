@@ -62,8 +62,8 @@ class DistanceSensorsPublisher(Publisher):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def enable(self):
-        Publisher.enable(self)
-        if self.enabled:
+        if not self.enabled:
+            super().enable()
             if self.message_bus.get_task_by_name(DistanceSensorsPublisher._LISTENER_LOOP_NAME):
                 self._log.warning('already enabled.')
             else:
@@ -71,7 +71,7 @@ class DistanceSensorsPublisher(Publisher):
                 self.message_bus.loop.create_task(self._dist_listener_loop(lambda: self.enabled), name=DistanceSensorsPublisher._LISTENER_LOOP_NAME)
                 self._log.info('enabled.')
         else:
-            self._log.warning('failed to enable publisher.')
+            self._log.warning('already enabled.')
 
     @staticmethod
     def normalize_distance(dist, min_dist=80, max_dist=300, reverse=False):
@@ -157,13 +157,16 @@ class DistanceSensorsPublisher(Publisher):
                 _component_registry = Component.get_registry()
                 _krzos = _component_registry.get('krzos')
                 _krzos.shutdown()
-
         self._log.info('distance sensors publish loop complete.')
 
     def disable(self):
         '''
         Disable this publisher.
         '''
-        Publisher.disable(self)
+        if self.enabled:
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
 #EOF

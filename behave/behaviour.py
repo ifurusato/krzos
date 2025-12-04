@@ -98,7 +98,7 @@ class Behaviour(ABC, Subscriber):
         '''
         if not self.closed:
             if not self.enabled:
-                Subscriber.enable(self)
+                super().enable()
                 self._log.debug('enabled {} behaviour.'.format(self.name))
 
     def disable(self):
@@ -106,7 +106,7 @@ class Behaviour(ABC, Subscriber):
         The state machine call to disable the behaviour.
         '''
         if self.enabled:
-            Subscriber.disable(self)
+            super().disable()
             self._log.debug('disabled {} behaviour.'.format(self.name))
 
 #EOF

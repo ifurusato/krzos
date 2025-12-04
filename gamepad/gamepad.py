@@ -30,6 +30,9 @@ from core.event import Event
 from core.rate import Rate
 from gamepad.gamepad_mapping import GamepadMapping
 
+class NoSuchDeviceError(Exception):
+    pass
+
 class Gamepad(Component):
     NAME = 'gamepad'
     __EXIT_ON_Y_BUTTON = True
@@ -140,6 +143,7 @@ class Gamepad(Component):
         self._log.info('suppress horizontal events: {}'.format(self._device_path))
         self._gamepad_closed = False
         self._gamepad_device = None
+        self._connection_failed = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -148,16 +152,22 @@ class Gamepad(Component):
     def name(self):
         return Gamepad.NAME
 
+    @property
+    def connection_failed(self):
+        return self._connection_failed
+
     def connect(self):
         '''
         Scan for likely gamepad device, and if found, connect.
         Otherwise we raise an OSError.
         '''
+        if self._connection_failed:
+            raise NoSuchDeviceError('no gamepad device found at: {} (failed)'.format(self._device_path))
         self._log.info('connecting at device path {}…'.format(self._device_path))
         _scan = GamepadScan(self._device_path, self._level)
         if not _scan.check_gamepad_device():
-            self._log.warning('connection warning: gamepad is not the most recent device (configured at: {}).'.format(self._device_path))
-            raise ConnectionError('no gamepad device found.')
+            self._connection_failed = True # don't keep trying
+            raise NoSuchDeviceError('no gamepad device found at: {}'.format(self._device_path))
         self._connect()
 
     @staticmethod
@@ -184,32 +194,17 @@ class Gamepad(Component):
             self._log.info(Fore.YELLOW + 'gamepad: {} at path: {}'.format(self._gamepad_device, self._device_path))
             self._log.info('connected.')
         except Exception as e:
-            Component.disable(self)
-            self._gamepad_device = None
-            raise ConnectionError('unable to connect to input device path {}: {}'.format(self._device_path, e))
+            self.disable()
+            raise NoSuchDeviceError('unable to connect to input device path {}: {}'.format(self._device_path, e))
 
     def enable(self):
         if not self.enabled:
             if not self._gamepad_device:
                 self.connect()
-                Component.enable(self)
+                super().enable()
                 self._log.info('enabled gamepad.')
             else:
                 self._log.warning('already started gamepad.')
-
-    def disable(self):
-        if not self.disabled:
-            Component.disable(self)
-            self._close_gamepad_device()
-            self._log.info('disabled.')
-        else:
-            self._log.warning('already disabled.')
-
-    def close(self):
-        if not self.closed:
-            Component.close(self)
-        else:
-            self._log.warning('already closed.')
 
     async def gamepad_loop(self, callback, f_is_enabled):
         '''
@@ -248,7 +243,7 @@ class Gamepad(Component):
         a gamepad event loop being closed suddenly this is not an issue.
         '''
         try:
-            if self._gamepad_device.fd > -1:
+            if self._gamepad_device and self._gamepad_device.fd > -1:
                 self._log.info('closing gamepad device…')
                 self._gamepad_device.close()
                 self._log.info('gamepad device closed.')
@@ -257,6 +252,7 @@ class Gamepad(Component):
         except Exception as e:
             self._log.info('error closing gamepad device: {}'.format(e))
         finally:
+            self._gamepad_device = None
             self._gamepad_closed = True
 
     def _kill(self):
@@ -266,12 +262,6 @@ class Gamepad(Component):
         _kros = _component_registry.get('kros')
         if _kros:
             _kros.shutdown()
-
-#       _button = _component_registry.get('button')
-#       if _button:
-#           _button.execute_callbacks()
-#       else:
-#           self._log.warning('abnormal exit on Y Button…')
 
     def _handleEvent(self, event):
         '''
@@ -380,6 +370,20 @@ class Gamepad(Component):
             return _message
         return None
 
+    def disable(self):
+        if not self.disabled:
+            super().disable()
+            self._close_gamepad_device()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
+
+    def close(self):
+        if not self.closed:
+            super().close()
+        else:
+            self._log.warning('already closed.')
+
 class GamepadScan:
     '''
     Returns the device with the most recently changed status from /dev/input/event{n}
@@ -437,7 +441,7 @@ class GamepadScan:
             self._log.info('device matches:     {}'.format(self._device_path))
             return True
         else:
-            self._log.warning('does not match:     {}'.format(_latest_device))
+            self._log.warning('gamepad device does not match: {}, configured at: {}'.format(_latest_device, self._device_path))
             return False
 
 #EOF

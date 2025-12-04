@@ -85,7 +85,7 @@ class Motor:
             pwm_channel = config["pwm_channel"]
             self._pwm_channel = pwm_timer.channel(pwm_channel, Timer.PWM_INVERTED, pin=self._pwm_pin)
             self._speed = self.STOPPED # speed as 0-100%
-            self._pwm_channel.pulse_width_percent(0) # Ensure motor starts off
+            self._pwm_channel.pulse_width_percent(0) # confirm motor starts off
             # setup direction GPIO pin
             direction_pin = config["direction_pin"]
             self._direction_pin = Pin(direction_pin, Pin.OUT)

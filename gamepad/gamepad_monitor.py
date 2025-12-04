@@ -31,10 +31,11 @@ class GamepadMonitor(Component):
     the Gamepad, executing a callback if the device disappears. You must call
     enable to establish the callback on the clock.
 
-    :param config:        the application configuration
-    :param gamepad:       the gamepad to monitor
-    :param callback:      the callback to execute if the path goes cold 
-    :param level:         the logging Level
+    Args:
+        config:    the application configuration
+        gamepad:   the gamepad to monitor
+        callback:  the callback to execute if the path goes cold
+        level:     the logging Level
     '''
     def __init__(self, config=None, gamepad=None, callback=None, level=Level.INFO):
         self._log = Logger(GamepadMonitor.NAME, level)
@@ -43,9 +44,6 @@ class GamepadMonitor(Component):
         self._component_registry = Component.get_registry()
         self._clock = self._component_registry.get(IrqClock.NAME)
         if self._clock is None:
-#           self._log.notice('no IRQ clock available; creating instance…')
-#           from hardware.irq_clock import IrqClock
-#           self._clock = IrqClock(config=self._config, level=Level.INFO)
             raise ValueError('no IRQ clock available.')
         self._queue_publisher = self._component_registry.get('pub:queue')
         if self._queue_publisher is None:
@@ -75,12 +73,11 @@ class GamepadMonitor(Component):
             self._log.warning('no queue publisher avaiable: no gamepad available! Time to shut down manually.')
 
     def _poll(self):
-#       if next(self._counter) % 5 == 0: # every second
         if self._gamepad.has_connection():
             self._log.debug('gamepad connected.')
         else:
             self._log.warning('gamepad disconnected!')
-            self._disconnected_callback() 
+            self._disconnected_callback()
             if self._queue_publisher:
                 _message = self._message_factory.create_message(Event.DISCONNECTED, 'gamepad disconnected.')
                 self._queue_publisher.put(_message)
@@ -89,7 +86,7 @@ class GamepadMonitor(Component):
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             self._clock.add_callback(self._poll)
             self._clock.enable()
             self._log.info('enabled gamepad monitor.')
@@ -100,7 +97,7 @@ class GamepadMonitor(Component):
         if self.enabled:
             self._clock.remove_callback(self._poll)
             self._clock.disable()
-            Component.disable(self)
+            super().disable()
             self._log.debug('disabled.')
         else:
             self._log.debug('already disabled.')
@@ -126,7 +123,7 @@ class GamepadMonitor(Component):
                 for _component in _components:
                     self._log.debug("closing & disabling: '{}'…".format(_component.name))
                     _component.close()
-                Component.close(self)
+                super().close()
                 self._log.info('all gamepad components closed.')
             except Exception as e:
                 self._log.error('{} raised closing gamepad components: {}'.format(type(e), e))

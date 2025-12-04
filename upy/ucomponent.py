@@ -12,7 +12,7 @@
 from logger import Logger
 from colorama import Fore, Style
 
-class Component(object):
+class Component:
     '''
     A basic component providing support for enable or disable, suppress or
     release, and close flags.

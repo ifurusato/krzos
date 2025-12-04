@@ -21,10 +21,10 @@ import ioexpander as io
 
 from hardware.vl53l0x import VL53L0X, Vl53l0xAccuracyMode
 from core.component import Component
+from core.illegal_state_error import IllegalStateError
 from core.config_loader import ConfigLoader
 from core.logger import Logger, Level
 
-# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class ProximitySensor(Component):
     '''
     Encapsulates a single VL53L0X proximity sensor.
@@ -69,7 +69,7 @@ class ProximitySensor(Component):
             self._log.info('{} raised during pin setup: {}'.format(type(e).__name__, e))
             raise
 
-    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def id(self):
@@ -121,8 +121,6 @@ class ProximitySensor(Component):
         '''
         return self._tof
 
-    # connection ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def connect(self):
         '''
         Creates the VL53L0X sensor object, changing its I2C address.
@@ -130,6 +128,8 @@ class ProximitySensor(Component):
 
         Returns True if the sensor is active.
         '''
+        if self._active:
+            raise IllegalStateError('VL53L0X {} at 0x{:02X} is already active.'.format(self._label, self._i2c_address))
         try:
             self._log.debug('create VL53L0X {} at 0x{:02X}…'.format(self._label, self._i2c_address))
             self._tof = VL53L0X(i2c_bus=self._i2c_bus, i2c_address=self._i2c_address, label=self._label, accuracy=Vl53l0xAccuracyMode.HIGH_SPEED)
@@ -141,8 +141,6 @@ class ProximitySensor(Component):
         finally:
             self._log.debug('connect complete.')
         return self._active
-
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def get_distance(self):
         '''
@@ -205,6 +203,7 @@ class ProximitySensor(Component):
         '''
         if not self.enabled:
             Component.enable(self)
+#           super().enable()
             if self._tof:
                 self._log.debug('opening sensor {} at 0x{:02X}…'.format(self._label, self._i2c_address))
                 self._tof.open()
@@ -226,7 +225,8 @@ class ProximitySensor(Component):
         except Exception as e:
             self._log.error('{} raised closing the sensor {} at 0x{:02X}: {}'.format(type(e), self._label, self._i2c_address, e))
         finally:
-            Component.close(self)
+#           Component.close(self)
+            super().close()
 
     def __str__(self):
         return "Sensor(id={}, abbrev={}, i2c_address=0x{:02X}, enabled={})".format(

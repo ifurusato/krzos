@@ -275,7 +275,7 @@ class DepthCamera(Component):
         if self.scale_pixel_coordinates:
             x_scaled = np.round(grid[:, 0] * (width / 640)).astype(int)
             y_scaled = np.round(grid[:, 1] * (height / 480)).astype(int)
-            # clamp to ensure indices are in bounds
+            # clamp so that indices are in bounds
             x_scaled = np.clip(x_scaled, 0, width - 1)
             y_scaled = np.clip(y_scaled, 0, height - 1)
             points = np.stack([x_scaled, y_scaled], axis=1)
@@ -453,22 +453,28 @@ class DepthCamera(Component):
             return None
 
     def enable(self):
-        self._log.info('enabling depth camera…')
-        Component.enable(self)
+        if not self.enabled:
+            self._log.info('enabling depth camera…')
+            super().enable()
+        else:
+            self._log.warning('already enabled.')
 
     def disable(self):
-        self._log.info('disabling depth camera…')
-        Component.disable(self)
-        try:
-            if self._pipeline is not None:
-                self._pipeline.stop()
-            self._mono_left_queue = None
-            self._mono_right_queue = None
-            self._depth_queue = None
-            self._color_queue = None
-        except Exception as e:
-            self._log.error("{} raised during DepthCamera cleanup: {}".format(type(e), e))
-        finally:
-            self._log.info('depth camera disabled.')
+        if not self.enabled:
+            self._log.info('disabling depth camera…')
+            try:
+                if self._pipeline is not None:
+                    self._pipeline.stop()
+                self._mono_left_queue = None
+                self._mono_right_queue = None
+                self._depth_queue = None
+                self._color_queue = None
+            except Exception as e:
+                self._log.error("{} raised during DepthCamera cleanup: {}".format(type(e), e))
+            finally:
+                super().disable()
+                self._log.info('depth camera disabled.')
+        else:
+            self._log.warning('already disabled.')
 
 #EOF

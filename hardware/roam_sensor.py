@@ -34,8 +34,8 @@ class RoamSensor(Component):
     ToF sensor to provide a single front-facing distance value optimized for
     obstacle avoidance and speed limiting.
 
-    The fusion logic takes the minimum of the two sensor readings to ensure
-    the robot always reacts to the closest obstacle.
+    The fusion logic takes the minimum of the two sensor readings to make
+    sure that the robot always reacts to the closest obstacle.
     Smoothing is optionally applied to stabilize the output.
 
     If either sensor is not provided, RoamSensor will instantiate its own.
@@ -87,11 +87,6 @@ class RoamSensor(Component):
                 self._fore_sensor = ForeSensor(config, level=Level.INFO)
         if not self._fore_sensor:
             raise Exception('no forward IR sensor available.')
-        if not self._fore_sensor.enabled:
-            self._fore_sensor.enable()
-            time.sleep(0.5)
-        if not self._fore_sensor.enabled:
-            raise Exception('forward IR sensor not enabled.')
         self._last_value     = None
         self._last_read_time = dt.now()
         self._log.info('ready.')
@@ -214,10 +209,10 @@ class RoamSensor(Component):
         if not self.enabled:
             self._fore_sensor.enable()
             self._vl53l5cx.enable()
-            Component.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
-            self._log.info('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
@@ -228,10 +223,10 @@ class RoamSensor(Component):
                 self._fore_sensor.disable()
             if self._vl53l5cx:
                 self._vl53l5cx.disable()
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
         else:
-            self._log.info('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
@@ -243,9 +238,9 @@ class RoamSensor(Component):
                 self._fore_sensor.close()
             if self._vl53l5cx:
                 self._vl53l5cx.close()
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
         else:
-            self._log.info('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

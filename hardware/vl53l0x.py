@@ -42,6 +42,7 @@
 
 import os
 from enum import Enum
+import uuid
 from ctypes import CDLL, CFUNCTYPE, POINTER, c_int, c_uint, pointer, c_ubyte, c_uint8, c_uint32
 # import sysconfig # we use our own library
 
@@ -127,6 +128,7 @@ class VL53L0X:
         self._dev           = None
         self._tof_library   = None
         self._is_ranging    = False
+        self._uuid          = uuid.uuid4()
         # register Address
         self.ADDR_UNIT_ID_HIGH = 0x16 # Serial number high byte
         self.ADDR_UNIT_ID_LOW  = 0x17 # Serial number low byte
@@ -135,7 +137,7 @@ class VL53L0X:
         self.ADDR_I2C_SEC_ADDR = 0x8a # Write new I2C address after unlock
         self._get_tof_library()
         self._log.info(Fore.GREEN + '{} '.format(self._label) + Fore.CYAN
-                + 'sensor ready at 0x{:02X}, with accuracy of {}…'.format(self._i2c_address, self._accuracy_mode))
+                + 'sensor ready at 0x{:02X} ({}), with accuracy of {}…'.format(self._i2c_address, self._uuid, self._accuracy_mode))
 
     @property
     def accuracy_mode(self):
@@ -227,7 +229,7 @@ class VL53L0X:
         self._tof_library.VL53L0X_set_i2c(self._i2c_read_func, self._i2c_write_func)
 
     def start_ranging(self):
-        self._log.debug("starting ranging for '{}' at 0x{:02X}".format(self._label, self._i2c_address))
+        self._log.info("starting ranging for '{}' at 0x{:02X}".format(self._label, self._i2c_address))
         if not self._dev:
             raise Vl53l0xError("Cannot start ranging: device pointer is NULL/zero for '{}' at 0x{:02X}.".format(self._label, self._i2c_address))
         result = self._tof_library.startRanging(self._dev, self._accuracy_mode.value)
@@ -250,7 +252,7 @@ class VL53L0X:
         Get distance from VL53L0X ToF Sensor.
         '''
         if not self._is_ranging:
-            self._log.error("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
+            self._log.error("get_distance called, but sensor '{}' ({}) at 0x{:02X} is not ranging!".format(self._label, self._uuid, self._i2c_address))
             raise Vl53l0xError("get_distance called, but sensor '{}' at 0x{:02X} is not ranging!".format(self._label, self._i2c_address))
         distance = self._tof_library.getDistance(self._dev)
 #       if distance > 4000:

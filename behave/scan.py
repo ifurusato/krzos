@@ -351,13 +351,13 @@ class Scan(AsyncBehaviour):
 
     def enable(self):
         if not self.enabled:
+            self._log.debug('enabling scan…')
             self._vl53l5cx.enable()
             self._rotation_controller.enable()
-            self._log.debug('enabling scan...')
-            AsyncBehaviour.enable(self)
-            self._log.info('scan enabled.')
+            super().enable()
+            self._log.info('enabled.')
         else:
-            self._log.debug('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
@@ -365,12 +365,12 @@ class Scan(AsyncBehaviour):
             self._vl53l5cx.disable()
             self._scan_active = False
             self._data_collection_active = False
-            AsyncBehaviour.disable(self)
             if self._use_matrix:
                 self._matrix11x7.clear()
                 self._matrix11x7.show()
-            self._log.info('scan disabled.')
+            super().disable()
+            self._log.info('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
 
 #EOF

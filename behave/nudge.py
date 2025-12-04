@@ -330,7 +330,7 @@ class Nudge(AsyncBehaviour):
         return (float(self._current_vx), float(self._current_vy), float(self._current_omega))
 
     def stop_loop_action(self):
-        # ensure any registered speed modifier removed on loop stop
+        # confirm any registered speed modifier removed on loop stop
         if self._speed_modifier_registered:
             try:
                 self._motor_controller.remove_speed_modifier(self._speed_modifier_name)
@@ -358,7 +358,6 @@ class Nudge(AsyncBehaviour):
         self._active = False
 
     def close(self):
-        # ensure cleanup
         self.cancel()
         super().close()
 

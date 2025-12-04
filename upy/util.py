@@ -18,7 +18,7 @@ try:
 except Exception:
     pass # not in MicroPython
 
-class Util(object):
+class Util:
     '''
     A collection of static utility methods.
     '''

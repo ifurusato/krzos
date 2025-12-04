@@ -50,15 +50,16 @@ class Avoid(AsyncBehaviour):
                 self._side_threshold_mm, self._aft_threshold_mm, self._avoid_speed))
         self._side_easing = Easing.from_string(_cfg.get('side_easing', 'SQUARE_ROOT'))
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
-        self._use_aft_sensor = _cfg.get('use_aft_sensor', True)
-        self._log.info('side easing: {}; aft easing: {}; use aft sensor: {}'.format(self._side_easing.name, self._aft_easing.name, self._use_aft_sensor))
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = AvoidSensor(config, Orientation.PORT, level=level)
         self._stbd_sensor = AvoidSensor(config, Orientation.STBD, level=level)
-        if self._use_aft_sensor:
+        _use_aft_sensor = _cfg.get('use_aft_sensor', True)
+        if _use_aft_sensor:
             self._aft_sensor = AvoidSensor(config, Orientation.AFT, level=level)
+            self._log.info('side easing: {}; aft easing: {}'.format(self._side_easing.name, self._aft_easing.name))
         else:
-            self._aft_sensor = None # explicitly set to None if not used
+            self._aft_sensor = None
+            self._log.info('side easing: {}; aft easing: none'.format(self._side_easing.name))
         self._boost_when_squeezed  = _cfg.get('boost_when_squeezed', True)
         self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True)
         self._default_priority     = _cfg.get('default_priority', 0.3)
@@ -101,7 +102,7 @@ class Avoid(AsyncBehaviour):
             # poll sensors
             _port_distance = self._port_sensor.get_distance()
             _stbd_distance = self._stbd_sensor.get_distance()
-            _aft_distance = self._aft_sensor.get_distance() if self._use_aft_sensor else None
+            _aft_distance = self._aft_sensor.get_distance() if self._aft_sensor else None
             # calculate and return intent vector
             return self._update_intent_vector(_port_distance, _stbd_distance, _aft_distance)
         except Exception as e:
@@ -119,8 +120,8 @@ class Avoid(AsyncBehaviour):
         Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
 
         Priority scales continuously with obstacle proximity. When squeezed (both
-        port and starboard active), priority is boosted proportionally to ensure
-        lateral balancing isn't overwhelmed by other behaviors' forward motion.
+        port and starboard active), priority is boosted proportionally to make sure
+        that lateral balancing isn't overwhelmed by other behaviors' forward motion.
 
         Uses easing functions to scale avoidance force with distance.
 
@@ -151,19 +152,20 @@ class Avoid(AsyncBehaviour):
             stbd_active = True
         # squeeze detection
         self._squeezed = port_active and stbd_active
-        # aft sensor: obstacle closer → push forward (positive vy)
-        if aft_distance is not None and aft_distance < self._aft_threshold_mm:
-            normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
-            aft_scale = self._aft_easing.apply(normalised)
-            if aft_scale > 0.05: # ignore weak signals below 5%
-                vy += aft_scale * self._avoid_speed
-                aft_urgency = aft_scale
+        # aft sensor (optional): obstacle closer → push forward (positive vy)
+        if self._aft_sensor:
+            if aft_distance is not None and aft_distance < self._aft_threshold_mm:
+                normalised = 1.0 - (aft_distance / self._aft_threshold_mm)
+                aft_scale = self._aft_easing.apply(normalised)
+                if aft_scale > 0.05: # ignore weak signals below 5%
+                    vy += aft_scale * self._avoid_speed
+                    aft_urgency = aft_scale
         # calculate priority from maximum sensor urgency
         # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
         max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
         self._priority = 0.3 + (max_urgency * 0.7)
         self._priority = min(self._max_urgency, self._priority) # clamp to maximum
-        # squeeze boost: ensure lateral balancing dominates when threading narrow gaps
+        # squeeze boost: make sure that lateral balancing dominates when threading narrow gaps
         if self._squeezed:
             if self._boost_when_squeezed:
                 # squeeze severity based on tightest constraint (minimum of side urgencies)
@@ -216,25 +218,25 @@ class Avoid(AsyncBehaviour):
                     _squeeze_indicator))
 
     def enable(self):
-        if self.enabled:
-            self._log.debug('already enabled.')
-            return
-        self._port_sensor.enable()
-        self._stbd_sensor.enable()
-        if self._use_aft_sensor and self._aft_sensor:
-            self._aft_sensor.enable()
-        AsyncBehaviour.enable(self)
-        self._log.info('enabled.')
+        if not self.enabled:
+            self._port_sensor.enable()
+            self._stbd_sensor.enable()
+            if self._aft_sensor:
+                self._aft_sensor.enable()
+            super().enable()
+            self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug('already disabled.')
-            return
-        self._port_sensor.disable()
-        self._stbd_sensor.disable()
-        if self._use_aft_sensor and self._aft_sensor:
-            self._aft_sensor.disable()
-        AsyncBehaviour.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            self._port_sensor.disable()
+            self._stbd_sensor.disable()
+            if self._aft_sensor:
+                self._aft_sensor.disable()
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
 #EOF

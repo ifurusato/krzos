@@ -87,8 +87,8 @@ class Player(Component):
 
         :param name: the sound name to play
         '''
-        self._log.info('play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name))
-        response = self._tinyfx_controller.send_request('play {}'.format(name))
+        self._log.info('play: ' + Fore.GREEN + '{}'.format(name))
+        response = self._tinyfx_controller.play(name)
         if self._verbose:
             if response == 'OK':
                 self._log.info(Style.DIM + 'response: {}'.format(response))
@@ -102,7 +102,7 @@ class Player(Component):
         if not self.enabled:
             if self._tinyfx_controller:
                 self._tinyfx_controller.enable()
-            Component.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
             self._log.debug('already enabled.')
@@ -114,7 +114,7 @@ class Player(Component):
         if self.enabled:
             if self._tinyfx_controller:
                 self._tinyfx_controller.disable()
-            Component.disable(self)
+            super().disable()
 
     def close(self):
         '''
@@ -123,6 +123,6 @@ class Player(Component):
         if not self.closed:
             if self._tinyfx_controller:
                 self._tinyfx_controller.close()
-            Component.close(self)
+            super().close()
 
 #EOF

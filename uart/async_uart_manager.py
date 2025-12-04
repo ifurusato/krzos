@@ -57,7 +57,7 @@ class AsyncUARTManager:
 
     def _send_packet_sync(self, payload):
         packet_bytes = payload.to_bytes()
-        # ensure sync header is present for robust protocol
+        # check sync header is present for robust protocol
         if not packet_bytes.startswith(Payload.SYNC_HEADER):
             packet_bytes = Payload.SYNC_HEADER + packet_bytes[len(Payload.SYNC_HEADER):]
         self._serial.write(packet_bytes)

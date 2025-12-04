@@ -19,7 +19,7 @@ init()
 from core.logger import Logger, Level
 from hardware.i2c_scanner import I2CScanner
 
-class RadiozoaConfig(object):
+class RadiozoaConfig:
     '''
     Configures all VL53L0X sensors on the Radiozoa sensor board to their unique I2C
     addresses by toggling XSHUT pins and setting addresses as specified in the

@@ -31,7 +31,7 @@ class HeadingTask(Component):
     '''
     def __init__(self,
                  config,
-                 motor_controller, 
+                 motor_controller,
                  external_clock,
                  imu,
                  target_heading,
@@ -75,13 +75,13 @@ class HeadingTask(Component):
         if self.enabled:
             self._log.warning('already enabled.')
             return
-        self._log.info(Fore.CYAN + f"Enabling HeadingTask to {self._target_heading:.1f}° (persistent={self._persistent})...")
+        self._log.info("enabling HeadingTask to {:.1f}° (persistent={})…".format(self._target_heading, self._persistent))
         super().enable()
         self._running = True
         self._motor_controller.set_steering_mode(SteeringMode.ROTATE)
         self._in_deadband = False
         self._settled = 0
-        self._log.info(Fore.CYAN + "Using external clock for HeadingTask timing.")
+        self._log.info("using external clock for HeadingTask timing.")
         self._external_clock.add_callback(self._external_clock_callback)
 
     def _external_clock_callback(self):
@@ -93,21 +93,21 @@ class HeadingTask(Component):
         '''
         One tick of the PID loop, called by external clock.
         '''
-        self._log.info(Fore.WHITE + Style.BRIGHT + "_run_loop_tick")
+        self._log.info("_run_loop_tick")
         self._imu.poll()
         current_yaw = self._imu.corrected_yaw
         _yaw_trim = self._imu.yaw_trim
         error = self.shortest_angle_diff(self._target_heading, current_yaw)
         self._log.info(          'current: {:6.2f}'.format(current_yaw)
-                + Fore.MAGENTA + ' | target: {:6.2f}'.format(self._target_heading) 
-                + Fore.RED     + ' | error: {:+6.2f}'.format(error) 
+                + Fore.MAGENTA + ' | target: {:6.2f}'.format(self._target_heading)
+                + Fore.RED     + ' | error: {:+6.2f}'.format(error)
                 + Fore.GREEN   + ' | trim: {:+6.2f}'.format(_yaw_trim))
 
         if self._in_deadband:
             if abs(error) > self._hysteresis:
-                self._in_deadband = False  # Resume control if error exceeds hysteresis
+                self._in_deadband = False  # resume control if error exceeds hysteresis
                 self._settled = 0
-                self._log.info(Fore.MAGENTA + f"Error left deadband (>{self._hysteresis:.2f}), resuming control.")
+                self._log.error("error left deadband (>{:.2f}), resuming control.".format(self._hysteresis))
             else:
                 self._motor_controller.set_speed(Orientation.PORT, 0.0)
                 self._motor_controller.set_speed(Orientation.STBD, 0.0)
@@ -119,8 +119,8 @@ class HeadingTask(Component):
             self._motor_controller.set_speed(Orientation.STBD, 0.0)
             self._in_deadband = True
             if not self._persistent and self._settled >= self._settle_cycles:
-                self._log.info(Fore.GREEN + f"Heading achieved for {self._settled} cycles, disabling.")
-                self.disable()  # Will cleanup
+                self._log.info("heading achieved for {} cycles, disabling.".format(self._settled))
+                self.disable() # will cleanup
         else:
             self._settled = 0
             output = max(min(self._kp * error, self._max_speed), -self._max_speed)
@@ -131,7 +131,7 @@ class HeadingTask(Component):
         '''
         Disable the HeadingTask, stop motors, cleanup, and remove external clock callback.
         '''
-        self._log.info(Fore.YELLOW + "Disabling HeadingTask.")
+        self._log.info("disabling HeadingTask…")
         self._running = False
         self._external_clock.remove_callback(self._external_clock_callback)
         super().disable()
@@ -141,7 +141,7 @@ class HeadingTask(Component):
         '''
         Suppress the HeadingTask and cleanup.
         '''
-        self._log.info(Fore.YELLOW + "Suppressing HeadingTask.")
+        self._log.info("suppressing HeadingTask…")
         self._running = False
         self._external_clock.remove_callback(self._external_clock_callback)
         super().suppress()
@@ -151,14 +151,14 @@ class HeadingTask(Component):
         '''
         Cleanup any motor lambdas/settings used by the task.
         '''
-        self._log.info(Fore.CYAN + "Cleaning up HeadingTask (removing rotation lambdas).")
+        self._log.info("cleaning up HeadingTask (removing rotation lambdas)…")
         self._motor_controller.reset_rotating()
 
     def close(self):
         '''
         Permanently close and disable the HeadingTask.
         '''
-        self._log.info(Fore.YELLOW + "Closing HeadingTask.")
+        self._log.info("closing HeadingTask…")
         self._running = False
         self._external_clock.remove_callback(self._external_clock_callback)
         self._cleanup()

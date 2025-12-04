@@ -52,13 +52,17 @@ class QueuePublisher(Publisher):
         if not self.is_active:
             self._log.warning('message {} ignored: queue publisher inactive.'.format(message.name))
         else:
-            self._queue.put(message)
-#           self._queue.put_nowait(message) # for synchronous calls
+            NO_WAIT = True # TENTATIVE for synchronous calls
+            if NO_WAIT:
+                self._queue.put_nowait(message) 
+            else:
+                self._queue.put(message)
             self._log.info('put message \'{}\' ({}) into queue ({:d} {})'.format(
                     message.event.name, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
 
     def enable(self):
         if not self.enabled:
+#           super().enable()
             Publisher.enable(self)
             if self._message_bus.get_task_by_name(QueuePublisher._PUBLISHER_LOOP):
                 raise Exception('already enabled.')
@@ -77,7 +81,7 @@ class QueuePublisher(Publisher):
                 self._log.debug('[{:03d}] begin publisher loop…'.format(_count))
                 if not self.suppressed:
                     while not self._queue.empty():
-                        await asyncio.sleep(0)
+                        await asyncio.sleep(0) # TENTATIVE
                         _message = self._queue.poll()
                         await Publisher.publish(self, _message)
                         self._log.info('[{:03d}] published message '.format(_count)

@@ -9,7 +9,7 @@
 # created:  2021-09-02
 # modified: 2021-09-02
 
-class Ranger(object):
+class Ranger:
     '''
     A simple range converter class, e.g.:
 

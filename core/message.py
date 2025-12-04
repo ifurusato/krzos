@@ -24,7 +24,7 @@ from core.event import Event
 from core.direction import Direction
 from core.speed import Speed
 
-class Message(object):
+class Message:
 
     ID_CHARACTERS = string.ascii_uppercase + string.digits
 
@@ -242,7 +242,7 @@ class Message(object):
         else:
             self._subscribers[subscriber] = True
 
-class Payload(object):
+class Payload:
     '''
     A Message's payload, containing the Event (with priority) and an optional
     value. The value can be an int, a float, or a tuple containing two ints or

@@ -65,7 +65,7 @@ class DistanceSensors(Component):
         '''
         for _sensor in self._sensors.values():
             _sensor.enable()
-        Component.enable(self)
+        super().enable()
         self._log.info('enabled.')
 
     @property
@@ -142,9 +142,9 @@ class DistanceSensors(Component):
         '''
         Disable the three sensors as well as this class.
         '''
-        Component.disable(self)
         for _sensor in self._sensors.values():
             _sensor.disable()
+        super().disable()
         self._log.info('disabled.')
 
 #EOF

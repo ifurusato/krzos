@@ -213,7 +213,7 @@ class MovementController(Component):
         # notify phase change
         self._notify_phase_change(prev_phase, self._movement_phase)
         # initialize baseline pose from odometer
-        x, y, theta = self._odometer.get_pose()
+        x, y, theta = self._odometer.pose
         self._baseline_x = x
         self._baseline_y = y
         # register intent vector with motor controller
@@ -297,7 +297,7 @@ class MovementController(Component):
         Calculate accumulated distance in cm from odometer pose changes.
         Uses Euclidean distance which works regardless of robot heading.
         '''
-        x, y, theta = self._odometer.get_pose()
+        x, y, theta = self._odometer.pose
         dx = x - self._baseline_x
         dy = y - self._baseline_y
         # Euclidean distance from baseline
@@ -309,7 +309,7 @@ class MovementController(Component):
         Calculate accumulated distance in cm from odometer pose changes.
         Distance is calculated relative to baseline pose in the direction of movement.
         '''
-        x, y, theta = self._odometer.get_pose()
+        x, y, theta = self._odometer.pose
         dx = x - self._baseline_x
         dy = y - self._baseline_y
         # project displacement onto movement direction
@@ -371,7 +371,7 @@ class MovementController(Component):
             # capture actual accel distance
             self._accel_distance = accumulated_distance
             # reset baseline - MOVE starts here
-            x, y, theta = self._odometer.get_pose()
+            x, y, theta = self._odometer.pose
             self._baseline_x = x
             self._baseline_y = y
             self._log.info('acceleration complete at {:.1f}cm, starting constant movement'.format(
@@ -396,7 +396,7 @@ class MovementController(Component):
             # capture actual move distance
             self._move_distance = accumulated_distance
             # reset baseline for decel phase
-            x, y, theta = self._odometer.get_pose()
+            x, y, theta = self._odometer.pose
             self._baseline_x = x
             self._baseline_y = y
             total_so_far = self._accel_distance + self._move_distance
@@ -473,11 +473,11 @@ class MovementController(Component):
             self._notify_phase_change(prev_phase, self._movement_phase)
 
     def enable(self):
-        if self.enabled:
+        if not self.enabled:
+            super().enable()
+            self._log.info('enabled.')
+        else:
             self._log.warning('already enabled.')
-            return
-        Component.enable(self)
-        self._log.info('enabled.')
 
     def disable(self):
         '''
@@ -485,29 +485,30 @@ class MovementController(Component):
         
         Removes and zeros intent vector in MotorController.
         '''
-        if not self.enabled:
+        if self.enabled:
+            self._log.debug('disabling movement controller…')
+            # cancel any active movement (zeros vector and removes registration)
+            if self._movement_phase != MovementPhase.IDLE and self._movement_phase != MovementPhase.INACTIVE:
+                self.cancel_movement()
+            self._intent_vector = (0.0, 0.0, 0.0)
+            if self._intent_vector_registered:
+                try:
+                    self._motor_controller.remove_intent_vector(MovementController.NAME)
+                    self._log.info('intent vector removed (disable)')
+                except Exception as e:
+                    self._log.warning('could not remove intent vector: {} (may have been removed by MotorController)'.format(e))
+                self._intent_vector_registered = False
+            self._movement_phase = MovementPhase.INACTIVE
+            super().disable()
+            self._log.info('disabled.')
+        else:
             self._log.warning('already disabled.')
-            return
-        self._log.info('disabling movement controller…')
-        # cancel any active movement (zeros vector and removes registration)
-        if self._movement_phase != MovementPhase.IDLE and self._movement_phase != MovementPhase.INACTIVE:
-            self.cancel_movement()
-        self._intent_vector = (0.0, 0.0, 0.0)
-        if self._intent_vector_registered:
-            try:
-                self._motor_controller.remove_intent_vector(MovementController.NAME)
-                self._log.info('intent vector removed (disable)')
-            except Exception as e:
-                self._log.warning('could not remove intent vector: {} (may have been removed by MotorController)'.format(e))
-            self._intent_vector_registered = False
-        self._movement_phase = MovementPhase.INACTIVE
-        Component.disable(self)
-        self._log.info('disabled.')
 
     def close(self):
         if not self.closed:
-            self.disable()
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

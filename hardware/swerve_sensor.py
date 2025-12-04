@@ -197,24 +197,24 @@ class SwerveSensor(Component):
             else:
                 self._log.info('computed non-floor rows: {} (calibrated floor: {}, extended floor: {}, excluded: {})'.format(
                     self._non_floor_rows, calibrated_floor_rows, extended_floor_rows, self._exclude_rows))
-            Component.enable(self)
+            super().enable()
             self._log.info('swerve sensor enabled.')
         else:
-            self._log.info('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             self._log.info('swerve sensor disabled.')
         else:
-            self._log.info('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         self.disable()
         if not self.closed:
-            Component.close(self)
+            super().close()
             self._log.info('swerve sensor closed.')
         else:
-            self._log.info('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

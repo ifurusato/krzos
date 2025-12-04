@@ -108,20 +108,20 @@ class ForeSensor(Component):
         Enables the sensor.
         '''
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
-            self._log.info('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
         Disables the sensor.
         '''
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
         else:
-            self._log.info('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
@@ -129,9 +129,9 @@ class ForeSensor(Component):
         '''
         self.disable()
         if not self.closed:
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
         else:
-            self._log.info('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

@@ -33,7 +33,7 @@ class State(Enum):
 class IllegalStateError(RuntimeError):
     pass
 
-class FiniteStateMachine(object):
+class FiniteStateMachine:
     '''
     Implementation of a Finite State Machine (FSM).
 

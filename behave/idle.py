@@ -112,26 +112,25 @@ class Idle(Behaviour, Publisher):
         return (dt.now() - self._last_activity_time).total_seconds()
 
     def enable(self):
-        if self.enabled:
-            self._log.debug('already enabled.')
-            return
-        self._log.info('enabling idle…')
-        Behaviour.enable(self)
-        Publisher.enable(self)
-        # initialize activity timer
-        self._last_activity_time = dt.now()
-        self._last_idle_publish_time = None
-        # create async listener loop task
-        if self._message_bus.get_task_by_name(Idle._LISTENER_LOOP_NAME):
-            self._log.warning('idle listener loop task already exists.')
+        if not self.enabled:
+            self._log.debug('enabling idle…')
+            super().enable()
+            # initialize activity timer
+            self._last_activity_time = dt.now()
+            self._last_idle_publish_time = None
+            # create async listener loop task
+            if self._message_bus.get_task_by_name(Idle._LISTENER_LOOP_NAME):
+                self._log.warning('idle listener loop task already exists.')
+            else:
+                self._log.info('creating idle listener loop task…')
+                self._idle_loop_running = True
+                self._idle_task = self._message_bus.loop.create_task(
+                    self._idle_listener_loop(lambda: self.enabled),
+                    name=Idle._LISTENER_LOOP_NAME
+                )
+            self._log.info('enabled.')
         else:
-            self._log.info('creating idle listener loop task…')
-            self._idle_loop_running = True
-            self._idle_task = self._message_bus.loop.create_task(
-                self._idle_listener_loop(lambda: self.enabled),
-                name=Idle._LISTENER_LOOP_NAME
-            )
-        self._log.info('enabled.')
+            self._log.warning('already enabled.')
 
     def reset_activity_timer(self):
         '''
@@ -263,32 +262,31 @@ class Idle(Behaviour, Publisher):
         pass
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug('already disabled.')
-            return
-        self._log.info('disabling idle…')
-        # cancel the async task before calling Behaviour.disable()
-        if self._idle_task and not self._idle_task.done():
-            self._log.debug('cancelling idle listener loop task…')
-            self._idle_task.cancel()
-            # don't wait for it - just cancel and move on
-        # clear eyeballs if currently showing SLEEPY
-        if self._eyeballs_monitor and self._last_idle_publish_time is not None:
-            self._eyeballs_monitor.clear_eyeballs()
-        self._idle_loop_running = False
-        Behaviour.disable(self)
-        Publisher.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            self._log.debug('disabling idle…')
+            # cancel the async task before calling Behaviour.disable()
+            if self._idle_task and not self._idle_task.done():
+                self._log.debug('cancelling idle listener loop task…')
+                self._idle_task.cancel()
+                # don't wait for it - just cancel and move on
+            # clear eyeballs if currently showing SLEEPY
+            if self._eyeballs_monitor and self._last_idle_publish_time is not None:
+                self._eyeballs_monitor.clear_eyeballs()
+            self._idle_loop_running = False
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
         Permanently close the Idle behaviour.
         '''
         if not self.closed:
-            self._log.info('closing idle…')
-            self.disable()  # will cancel task
-            Behaviour.close(self)
-            Publisher.close(self)
+            self._log.debug('closing idle…')
+            super().close()
             self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

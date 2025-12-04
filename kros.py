@@ -61,6 +61,7 @@ from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
 #from hardware.sound import Sound
 #from hardware.system_subscriber import SystemSubscriber
+from hardware.tinyfx_controller import TinyFxController
 
 from behave.behaviour_manager import BehaviourManager
 
@@ -111,6 +112,7 @@ class KROS(Component, FiniteStateMachine):
         self._motor_controller    = None
         self._system_publisher    = None
         self._system_subscriber   = None
+        self._behaviour_manager   = None
 
         self._data_logging        = False
         self._data_log            = None
@@ -243,10 +245,12 @@ class KROS(Component, FiniteStateMachine):
 
         self._compass_encoder = CompassEncoder(self._config)
 
-        self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
-        # fixed trim determined via observation
-        self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
-        self._usfs.set_verbose(False)
+        self._usfs = None
+        if _cfg.get('enable_usfs'):
+            self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
+            # fixed trim determined via observation
+            self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
+            self._usfs.set_verbose(False)
 
 #       _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
 #       if _enable_vl53l5cx:
@@ -273,8 +277,6 @@ class KROS(Component, FiniteStateMachine):
 
         _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
         if _enable_tinyfx_controller:
-            from hardware.tinyfx_controller import TinyFxController
-
             self._log.info('configure tinyfx controller…')
             self._tinyfx = TinyFxController(self._config, level=self._level)
             self._tinyfx.enable()
@@ -285,7 +287,7 @@ class KROS(Component, FiniteStateMachine):
 
         # gamepad support
 
-        if _args['gamepad_enabled'] or _cfg.get('enable_gamepad_publisher'): # or 'g' in _pubs:
+        if _args['gamepad_enabled'] or _cfg.get('enable_gamepad'): # or 'g' in _pubs:
             self._gamepad_publisher = GamepadPublisher(self._config, self._message_bus, self._message_factory, exit_on_complete=True, level=self._level)
 #           self._gamepad_controller = GamepadController(self._message_bus, self._level)
 
@@ -307,7 +309,7 @@ class KROS(Component, FiniteStateMachine):
 
         if _enable_behaviours:
             self._log.info('creating behaviour manager…')
-            self._behaviour_mgr = BehaviourManager(self._config, self._message_bus, self._message_factory, self._level)
+            self._behaviour_manager = BehaviourManager(self._config, self._message_bus, self._message_factory, self._level)
 
         # finish up
 
@@ -358,7 +360,7 @@ class KROS(Component, FiniteStateMachine):
 
         # we enable ourself if we get this far successfully
         self._log.info('beginning main os loop…')
-        Component.enable(self)
+        super().enable()
         FiniteStateMachine.enable(self)
         # now in main application loop until quit or Ctrl-C…
         self._message_bus.add_callback_on_start(self.started)
@@ -391,19 +393,6 @@ class KROS(Component, FiniteStateMachine):
 #       self._message_bus.verbose = False # TEMP
         # register callback on close
         atexit.register(lambda: self._post_cleanup())
-
-    def _post_cleanup(self):
-        '''
-        Called by atexit upon close of the application.
-        '''
-        self._log.info(Fore.MAGENTA + 'kros cleanup: closing log…')
-        # close all logging now
-        if self._data_log:
-            self._data_log.data('END')
-        self._log.close()
-        self._report_remaining_frames()
-        # print final message using the Logger formatting
-        self._fake_logger_info(Fore.MAGENTA + 'application closed.')
 
     def get_config(self):
         '''
@@ -442,9 +431,6 @@ class KROS(Component, FiniteStateMachine):
         '''
         try:
             Player.play('woow')
-            time.sleep(0.5)
-            if self._tinyfx: # turn on all lights
-                self._tinyfx.off()
             if self._button:
                 self._button.close()
                 self._button = None
@@ -452,9 +438,9 @@ class KROS(Component, FiniteStateMachine):
             if self._data_log:
                 self._data_log.data('SHUTDOWN')
             self.close()
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'shutdown complete.')
+            self._fake_logger_info('shutdown complete.', color=Fore.WHITE+Style.BRIGHT)
         except Exception as e:
-            print(Fore.RED + 'ERROR: {} raised shutting down: {}'.format(type(e), e) + Style.RESET_ALL)
+            self._fake_logger_info('ERROR: {} raised shutting down: {}'.format(type(e), e), color=Fore.RED)
 
     def disable(self):
         '''
@@ -469,12 +455,33 @@ class KROS(Component, FiniteStateMachine):
                 self._log.info('disabling…')
             if self._irq_clock and not self._irq_clock.disabled:
                 self._irq_clock.disable()
-            Component.disable(self)
+            super().disable()
             FiniteStateMachine.disable(self)
             self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
         return True
+
+    def _post_cleanup(self):
+        '''
+        Called by atexit after the close of the application.
+        '''
+        if self._tinyfx: # turn off all lights
+            if self._tinyfx.enabled:
+                self._log.info(Fore.YELLOW + 'tinyfx signing off…')
+                self._tinyfx.play('cricket')
+                time.sleep(0.334)
+            else:
+                self._log.warning('tinyfx already disabled.')
+            self._tinyfx.off()
+        self._log.info('closing log…')
+        # close all logging now
+        if self._data_log:
+            self._data_log.data('END')
+        self._log.close()
+        self._report_remaining_frames()
+        # print final message using the Logger formatting
+        self._fake_logger_info(Fore.MAGENTA + 'application closed.')
 
     @property
     def closing(self):
@@ -493,56 +500,66 @@ class KROS(Component, FiniteStateMachine):
             try:
                 self._closing = True
                 self._log.info('closing…')
+                if self._behaviour_manager:
+                    self._behaviour_manager.close()
                 if self._gamepad_enabled:
                     _gamepad_monitor = self._component_registry.get(GamepadMonitor.NAME)
                     if _gamepad_monitor:
                         _gamepad_monitor.close()
                     else:
                         self._log.warning("could not find gamepad monitor! ('{}') in registry.".format(GamepadMonitor.NAME))
-                if self._tinyfx:
-                    self._tinyfx.off()
                 if self._motor_controller:
                     self._motor_controller.close()
-                self._log.info('closing subscribers and publishers…')
+                self._log.info(Fore.MAGENTA + 'closing subscribers and publishers…')
                 # closes all remaining components that are not a publisher, subscriber, the message bus or kros itself…
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
                         # already gone
                         self._log.info(Style.DIM + 'component \'{}\' not found in registry.'.format(_name))
-                    elif not isinstance(_component, Publisher) and not isinstance(_component, Subscriber) \
-                            and _component != self and _component != self._message_bus:
-                        self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
-                        _component.close()
+                    elif not isinstance(_component, Publisher) \
+                            and not isinstance(_component, Subscriber) \
+                            and not isinstance(_component, TinyFxController) \
+                            and not isinstance(_component, Player) \
+                            and _component != self \
+                            and _component != self._message_bus:
+                        if not _component.closed:
+                            self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                            _component.close()
                 if self._irq_clock and not self._irq_clock.closed:
                     self._irq_clock.close()
-                time.sleep(0.1)
-                self._log.info('closing other components…')
+#               time.sleep(0.1)
+                self._log.info(Fore.MAGENTA + 'closing other components…')
                 # closes any remaining non-message bus or kros…
                 for _name in self._component_registry.names:
                     _component = self._component_registry.get(_name)
                     if _component is None:
                         # already gone (e.g., behaviours)
                         self._log.debug('component \'{}\' not found in registry.'.format(_name))
-                    elif _component != self and _component != self._message_bus:
-                        self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
-                        _component.close()
-                        self._component_registry.deregister(_component)
+                    elif _component != self \
+                            and not isinstance(_component, TinyFxController) \
+                            and not isinstance(_component, Player) \
+                            and _component != self._message_bus:
+                        if not _component.closed:
+                            self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                            _component.close()
+                            self._component_registry.deregister(_component)
                 _open_count = self._component_registry.count_open_components()
-                if _open_count > 2: # we expect kros and the message bus to still be open
+                if _open_count > 4: # we expect kros, message bus, tinyfx and player to still be open
                     self._log.warning('waiting for components to close…; {} are still open.'.format(_open_count))
-                    self.wait_for_components_to_close()
+                    self._component_registry.print_registry()
                     _open_count = self._component_registry.count_open_components()
-                    if _open_count > 2:
+                    if _open_count > 4: # we expect player and tinyfx controller to remain open
+                        self.wait_for_components_to_close()
                         self._log.info('finished waiting for components to close; {} remain open:'.format(_open_count))
                         for _name in self._component_registry.names:
                             self._log.info('    {}'.format(_name))
+#               if self._tinyfx:
+#                   self._tinyfx.off()
                 self._log.info(Fore.MAGENTA + 'closing kros…')
-                self._log.info(Fore.WHITE + '🍊 1/5. kros close.' + Style.RESET_ALL)
-                Component.close(self) # will call disable()
-                self._log.info(Fore.WHITE + '🍊 2/5. kros close.' + Style.RESET_ALL)
+                super().close() # will call disable()
                 FiniteStateMachine.close(self)
-                self._log.info(Fore.WHITE + '🍊 3/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '1/3. kros close.' + Style.RESET_ALL)
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
@@ -550,11 +567,11 @@ class KROS(Component, FiniteStateMachine):
                     self._log.info(Fore.MAGENTA + 'message bus closed.')
                 else:
                     self._log.warning('message bus not closed.')
-                self._log.info(Fore.WHITE + '🍊 4/5. kros close.' + Style.RESET_ALL)
+                self._log.info(Fore.WHITE + '2/3. kros close.' + Style.RESET_ALL)
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
-                print(Fore.WHITE + '🍊 5/5. kros close.' + Style.RESET_ALL)
+                self._fake_logger_info(Fore.WHITE + '3/3. kros close.')
                 self._closing = False
 
     def _report_remaining_frames(self):
@@ -575,14 +592,14 @@ class KROS(Component, FiniteStateMachine):
             else:
                 self._fake_logger_info(Fore.WHITE + 'no threads remain upon closing.')
 
-    def _fake_logger_info(self, message):
+    def _fake_logger_info(self, message, color=Fore.CYAN):
         '''
         Used when logger is no longer available, print message using the Logger formatting.
         '''
         print(Logger.timestamp_now() + Fore.RESET + ' {:<16} : '.format('kros')
-                + Fore.CYAN + Style.NORMAL + 'INFO  : {}\n'.format(message) + Style.RESET_ALL)
+                + color + Style.NORMAL + 'INFO  : {}\n'.format(message) + Style.RESET_ALL)
 
-    def wait_for_components_to_close(self, check_interval=0.1, timeout=3.0):
+    def wait_for_components_to_close(self, check_interval=0.01, timeout=3.0):
         '''
         Waits until all non-Publisher, non-Subscriber components (excluding
         the application and the message bus) report that they are closed.
@@ -599,7 +616,7 @@ class KROS(Component, FiniteStateMachine):
                 and not isinstance(c, Subscriber)
                 and c != self
                 and c != self._message_bus
-                and not c.closed()
+                and not c.closed
             ]
             if not remaining:
                 self._log.info("all relevant components have closed.")

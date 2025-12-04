@@ -12,6 +12,8 @@
 import itertools
 import asyncio
 import time
+import traceback
+from threading import Event as ThreadEvent
 from math import isclose
 from random import choice, expovariate, randint, uniform
 from datetime import datetime as dt
@@ -28,6 +30,7 @@ from behave.behaviour import Behaviour
 from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
+from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
 from hardware.player import Player
 from hardware.tinyfx_controller import TinyFxController
@@ -83,6 +86,12 @@ class Thoughts(Behaviour):
         self._sleeping_sound    = _cfg.get('sleeping_sound')
         self._active_sounds     = _cfg.get('active_sounds', [])
         self._enable_light_ctrl = _cfg.get('enable_light_ctrl')
+        # TODO config
+        self._bored_limit_min   = 10   # how long before we get bored?
+        self._sleep_limit_min   = 17   # how many cycles before falling asleep?
+        self._deep_sleep_limit_min = 5 # how many cycles asleep before falling into deep sleep?
+        self._snore_limit_min   = 7    # how many snores?
+        self._snore_rate_min    = 8    # how fast to snore?
         if not self._active_sounds:
             raise ValueError('no sounds configured.')
         self._log.info('configured {} sounds; max activity: {:4.2f}; activity scale: {:4.2f}; jitter: {:4.2f}; max freq: {:4.2f}Hz; rate limit: {:d}ms'.format(
@@ -98,13 +107,24 @@ class Thoughts(Behaviour):
             self._log.info('odometer not available; relying on message activity alone.')
         else:
             self._log.info('odometer available; will monitor for movement.')
+            self._odometer.add_callback(self._odometer_callback)
+        self._lux_threshold = _cfg.get('lux_threshold')
+        self._lux_sensor = _component_registry.get(LuxSensor.NAME)
+        if self._lux_sensor is None:
+            try:
+                self._lux_sensor = LuxSensor(config)
+            except Exception:
+                self._log.warning('unable to open lux sensor.')
+        self._darkness_state = False
         self._motor_controller = _component_registry.get(MotorController.NAME)
         # state tracking
+        self._count = 0
         self._counter = itertools.count()
         self._last_activity_time = None
         self._last_called = 0
         self._last_name = None
         self._next_play_time = 0.0
+        self._stop_event = ThreadEvent()
         # subscribe to all non-IDLE events to detect activity
         self._thoughts_task = None
         self._loop_running = False
@@ -113,16 +133,17 @@ class Thoughts(Behaviour):
         # get tinyfx
         self._tinyfx = None
         # behavioural states
+        self._bored            = False
+        self._sleeping         = False
         self._idle_count       = 0
         self._snore_count      = 0
         self._sleep_count      = 0
-        self._bored            = False
-        self._sleeping         = False
-        self._bored_limit      = randint(10, 16)  # how long before we get bored?
-        self._sleep_limit      = randint(17, 23)  # how many cycles before falling asleep?
-        self._deep_sleep_limit = randint( 5,  8)  # how many cycles asleep before falling into deep sleep?
-        self._snore_limit      = randint( 7, 10)  # how many snores?
-        self._snore_rate       = randint( 8, 11)  # how fast to snore?
+        self._bored_limit      = 0 # how long before we get bored?
+        self._sleep_limit      = 0 # how many cycles before falling asleep?
+        self._deep_sleep_limit = 0 # how many cycles asleep before falling into deep sleep?
+        self._snore_limit      = 0 # how many snores?
+        self._snore_rate       = 0 # how fast to snore?
+        self._reset_sleepiness()   # set to initial values
         self._reverse_count    = 0
         self._reverse_limit    = 2                # how many cycles backwards before we notice?
         self._reversing        = False
@@ -156,28 +177,35 @@ class Thoughts(Behaviour):
         return (dt.now() - self._last_activity_time).total_seconds()
 
     def enable(self):
-        if self.enabled:
-            self._log.debug('already enabled.')
-            return
-        self._log.info('enabling random thoughts…')
-        Behaviour.enable(self)
-        # initialize activity timer
-        self._mark_activity()
-        self._next_play_time = time.monotonic()
-        _component_registry = Component.get_registry()
-        self._tinyfx = _component_registry.get(TinyFxController.NAME)
-        self._set_running_lights(True)
-        # create async listener loop task
-        if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
-            self._log.warning('loop task already exists.')
+        if not self.enabled:
+            self._log.info('enabling random thoughts…')
+            self._stop_event.clear()
+            super().enable()
+            # initialize activity timer
+            self._mark_activity()
+            self._next_play_time = time.monotonic()
+            _component_registry = Component.get_registry()
+            self._tinyfx = _component_registry.get(TinyFxController.NAME)
+            self._set_running_lights(True)
+            # create async listener loop task
+            if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
+                self._log.warning('loop task already exists.')
+            else:
+                self._log.info('creating loop task…')
+                self._loop_running = True
+                self._thoughts_task = self._message_bus.loop.create_task(
+                    self._thoughts_listener_loop(lambda: self.enabled),
+                    name=Thoughts._LISTENER_LOOP_NAME
+                )
+            self._log.info('enabled.')
         else:
-            self._log.info('creating loop task…')
-            self._loop_running = True
-            self._thoughts_task = self._message_bus.loop.create_task(
-                self._thoughts_listener_loop(lambda: self.enabled),
-                name=Thoughts._LISTENER_LOOP_NAME
-            )
-        self._log.info('enabled.')
+            self._log.warning('already enabled.')
+
+    def _odometer_callback(self):
+        if self._count % 10 == 0: # every 10 seconds
+            self._log.info(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
+        else:
+            self._log.info(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
 
     def _play_sound(self, name):
         if not self._suppress_sounds:
@@ -185,17 +213,31 @@ class Thoughts(Behaviour):
         else:
             self._log.info(Style.DIM + "not playing sound '{}'".format(name))
 
-    def _mark_activity(self):
-        self._idle_count  = 0
-        self._snore_count = 0
-        self._sleep_count = 0
+    def _reset_sleepiness(self):
+        '''
+        Resets all state variables related to sleepiness.
+        '''
         self._last_activity_time = dt.now()
         self._last_idle_publish_time = None
         self._sleeping    = False
         self._bored       = False
+        self._idle_count  = 0
+        self._snore_count = 0
         self._sleep_count = 0
         self._idle_count  = 0
         self._snore_count = 0
+        self._bored_limit = randint(self._bored_limit_min, self._bored_limit_min + 6)
+        self._sleep_limit = randint(self._sleep_limit_min, self._sleep_limit_min + 6)
+        self._deep_sleep_limit = randint(self._deep_sleep_limit_min, self._deep_sleep_limit_min + 3)
+        self._snore_limit = randint(self._snore_limit_min, self._snore_limit_min + 3)
+        self._snore_rate  = randint(self._snore_rate_min, self._snore_rate_min + 3)
+
+    def _mark_activity(self):
+        '''
+        Called to mark any activity and keep the robot awake.
+        '''
+        self._log.info(Fore.GREEN + 'marked activity.')
+        self._reset_sleepiness()
         self._reset_eyeballs()
 
     def _toggle_interior_light(self):
@@ -221,6 +263,9 @@ class Thoughts(Behaviour):
 
     def _set_running_lights(self, enable):
         if self._enable_light_ctrl:
+            if enable == self._running_lights_state:
+                self._log.info('running lights already set to: ' + Style.DIM +'{}'.format('on' if enable else 'off'))
+                return
             self._log.info('set running lights: ' + Fore.GREEN +'{}'.format('on' if enable else 'off'))
             _saved = self._suppress_random_sounds
             self._suppress_random_sounds = True
@@ -239,11 +284,17 @@ class Thoughts(Behaviour):
 
     def _reset_eyeballs(self):
         _eyeballs = self._eyeballs_monitor.get_eyeballs()
-        if _eyeballs == Eyeball.NEUTRAL \
+        if _eyeballs is None:
+            self._log.info('no manual setting for eyeballs, setting blank…')
+            self._eyeballs_monitor.set_eyeballs(Eyeball.BLANK, temporary=True)
+        elif _eyeballs == Eyeball.NEUTRAL \
                 or _eyeballs == Eyeball.BORED \
                 or _eyeballs == Eyeball.SLEEPY \
                 or _eyeballs == Eyeball.DEEP_SLEEP:
-            self._eyeballs_monitor.clear_eyeballs()
+            self._log.info('clearing eyeballs…')
+            self._eyeballs_monitor.set_eyeballs(Eyeball.BLANK, temporary=True)
+        else:
+            self._log.warning('did not reset eyeballs from {}'.format(_eyeballs))
 
     async def _thoughts_listener_loop(self, f_is_enabled):
         '''
@@ -255,10 +306,9 @@ class Thoughts(Behaviour):
         - Message bus traffic (via process_message())
         '''
         self._log.info('loop started (threshold: {:d}s)'.format(self._idle_threshold_sec))
-        try:
-            while f_is_enabled():
-                _count = next(self._counter)
-#               self._log.info("is '{}' released by toggle? {}".format(self.name, self.is_released_by_toggle()))
+        while f_is_enabled() and not self._stop_event.is_set():
+            try:
+                self._count = next(self._counter)
                 if self.has_toggle_assignment():
                     if self.suppressed and self.is_released_by_toggle():
                         self._log.info(Fore.WHITE + Style.BRIGHT + 'releasing…')
@@ -268,12 +318,12 @@ class Thoughts(Behaviour):
                         self.suppress()
                 if self.suppressed:
                     if self._verbose:
-                        self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(_count))
+                        self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(self._count))
                     await asyncio.sleep(self._loop_delay_sec)
                     continue
                 # check odometer for movement activity
                 if self._odometer:
-                    vx, vy, omega = self._odometer.get_velocity()
+                    vx, vy, omega = self._odometer.velocity
                     _raw_activity = abs(vx) + abs(vy) + abs(omega)
                     if isclose(_raw_activity, 0.0, abs_tol=0.001):
                         _style = Style.DIM
@@ -282,6 +332,7 @@ class Thoughts(Behaviour):
                         self._reverse_count = 0
                         self._update_reverse_state()
                     else:
+                        self._idle_count = 0
                         if vy < 0:
                             self._reverse_count += 1
                             self._update_reverse_state()
@@ -290,7 +341,6 @@ class Thoughts(Behaviour):
                             self._update_reverse_state()
                         # reset, there's been activity
                         _style = Style.NORMAL
-                        self._mark_activity()
                     # normalize and scale activity
                     _normalized = _raw_activity / self._max_activity
                     _activity = _normalized * self._activity_scale
@@ -299,21 +349,23 @@ class Thoughts(Behaviour):
                     _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM
                     _bored_style    = Style.NORMAL if ( self._bored and not self._sleeping ) else Style.DIM
                     _sleeping_style = Style.NORMAL if self._sleeping else Style.DIM
+                    _deep_sleep_style = Style.NORMAL if self._sleep_count > self._deep_sleep_limit else Style.DIM
                     self._log.info(Fore.BLUE + _style + '[{:05d}] activity: {:4.2f} (raw: {:4.2f});'.format(
-                           _count, _activity, _raw_activity)
+                           self._count, _activity, _raw_activity)
                            + Style.NORMAL
-                           + Fore.WHITE   + _idle_style     + ' idle: {};'.format(self._idle_count)
-                           + Fore.YELLOW  + _bored_style    + ' bored: {};'.format(self._bored_limit)
-                           + Fore.BLUE    + _sleeping_style + ' sleep: {};'.format(self._sleep_limit)
-                           + Fore.BLACK   + ' snore: {}'.format(self._snore_rate)
+                           + Fore.WHITE   + _idle_style       + ' idle: {:4d};'.format(self._idle_count)
+                           + Fore.YELLOW  + _bored_style      + ' bored: {};'.format(self._bored_limit)
+                           + Fore.BLUE    + _sleeping_style   + ' sleep: {};'.format(self._sleep_limit)
+                           + Fore.MAGENTA + _deep_sleep_style + ' deep sleep: {};'.format(self._deep_sleep_limit)
+                           + Fore.BLACK   + Style.DIM         + ' snore: {}'.format(self._snore_rate)
                     )
                     if self._idle_count == 0: # activity ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._maybe_play_random_sound(_activity)
-                        self._reset_eyeballs()
+                        self._mark_activity()
 
                     elif self._sleeping: # sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                        if _count % self._snore_rate == 0: # every n seconds, snore
-                            self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(_count))
+                        if self._count % self._snore_rate == 0: # every n seconds, snore
+                            self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(self._count))
                             self._snore_count += 1
                             if self._snore_count < self._snore_limit:
                                 self._play_sound('snore')
@@ -353,23 +405,46 @@ class Thoughts(Behaviour):
                 elapsed_sec = self.elapsed_seconds
                 if elapsed_sec >= self._idle_threshold_sec:
                     if self._verbose:
-                        self._log.info(Fore.BLUE + Style.DIM + '[{:05d}] idle ({:.1f}s)'.format(_count, elapsed_sec))
+                        self._log.info(Fore.BLUE + Style.DIM + '[{:05d}] idle ({:.1f}s)'.format(self._count, elapsed_sec))
                 else:
                     if self._verbose:
-                        self._log.info(Fore.BLUE + '[{:05d}] active ({:.1f}s since last activity)'.format(_count, elapsed_sec))
+                        self._log.info(Fore.BLUE + '[{:05d}] active ({:.1f}s since last activity)'.format(self._count, elapsed_sec))
+                self._check_light_level()
                 if self._sleep_count > 0:
                     # randomly longer
                     await asyncio.sleep(self._loop_delay_sec * uniform(1.2, 2.0))
                 else:
                     await asyncio.sleep(self._loop_delay_sec)
 
-        except asyncio.CancelledError:
-            self._log.info('thoughts listener loop cancelled.')
-            raise
-        finally:
-            self._log.info('f_enabled on finally? {}'.format(f_is_enabled()))
-            self._log.info('self.enabled on finally? {}'.format(self.enabled))
-            self._log.info('thoughts listener loop complete.')
+            except asyncio.CancelledError:
+                self._log.info('thoughts listener loop cancelled.')
+                return
+            except Exception as e:
+                self._log.error('{} raised in loop: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                raise
+        self._log.info(Style.DIM + 'exited thoughts listener loop; f_enabled? {}; stop event set? {}'.format(f_is_enabled(), self._stop_event.is_set()))
+
+    def _check_light_level(self):
+        '''
+        After two ticks, begins checking the lux level. If it has changed,
+        enable/disable the headlight.
+        '''
+        if self._tinyfx and self._lux_sensor and self._count > 2:
+            _lux_level = self._lux_sensor.lux
+            _is_dark = _lux_level < self._lux_threshold
+            if self._sleeping:
+                _is_dark = False # if sleeping do not turn on the lights
+            if self._darkness_state != _is_dark: # things have changed
+                self._log.info(Fore.MAGENTA + '💮 lux level: {}; is dark? {}; was dark? {}'.format(
+                        _lux_level, _is_dark, self._darkness_state))
+                _saved = self._suppress_random_sounds
+                self._suppress_random_sounds = True
+                try:
+                    time.sleep(0.33)
+                    self._tinyfx.light(Orientation.FWD, _is_dark)
+                finally:
+                    self._suppress_random_sounds = _saved
+                    self._darkness_state = _is_dark
 
     def _update_reverse_state(self):
         '''
@@ -379,8 +454,14 @@ class Thoughts(Behaviour):
         self._suppress_random_sounds = self._reverse_count > 0
         reversing = self._reverse_count >= self._reverse_limit
         if reversing == self._reversing:
-            return # no change of state
-        elif reversing:
+            if self._motor_controller and self._motor_controller.is_stopped:
+                self._log.info('👿 A. update reversing: motor stopped.')
+                reversing = False
+            else:
+                self._log.info('👿 B. update reversing; motor not stopped.')
+                return # no change of state
+        if reversing:
+            self._log.info('👿 C. update reversing.')
             if self._tinyfx:
                 self._tinyfx.light(Orientation.AFT, True)
                 time.sleep(0.1)
@@ -389,6 +470,7 @@ class Thoughts(Behaviour):
                 self._log.warning('no tinyfx.')
             self._log.info(Fore.GREEN + 'reversing… ({})'.format(self._reverse_count))
         else:
+            self._log.info('👿 D. update reversing.')
             if self._tinyfx:
                 self._tinyfx.light(Orientation.AFT, False)
             else:
@@ -507,27 +589,27 @@ class Thoughts(Behaviour):
             self._log.error('{} raised in pir: {}'.format(type(e), e))
 
     def disable(self):
-        if not self.enabled:
-            self._log.debug('already disabled.')
-            return
-        self._log.info('disabling thoughts…')
-        self._set_running_lights(False)
-        self._motor_controller.set_show_battery(True)
-        # cancel the async task before calling Behaviour.disable()
-        if self._thoughts_task and not self._thoughts_task.done():
-            self._log.debug('cancelling thoughts listener loop task…')
-            self._thoughts_task.cancel()
-        self._loop_running = False
-        Behaviour.disable(self)
-        self._log.info('disabled.')
+        if self.enabled:
+            self._log.debug('disabling…')
+            self._stop_event.set()
+            self._set_running_lights(False)
+            self._motor_controller.set_show_battery(True)
+            # cancel the async task before calling Behaviour.disable()
+            if self._thoughts_task and not self._thoughts_task.done():
+                self._log.debug('cancelling thoughts listener loop task…')
+                self._thoughts_task.cancel()
+            self._loop_running = False
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
-        '''
-        Permanently close the behaviour.
-        '''
         if not self.closed:
-            self._log.debug('closing thoughts…')
-            Behaviour.close(self)
+            self._log.debug('closing…')
+            super().close()
             self._log.info('closed.')
+        else:
+            self._log.warning('already closed.')
 
 #EOF

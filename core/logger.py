@@ -72,7 +72,7 @@ class ExcludeDataFilter(logging.Filter):
     def filter(self, record):
         return record.levelno != Level.DATA.value
 
-class Logger(object):
+class Logger:
     _log_stats = LogStats() # singleton
     _fh        = None # optional file handler
 

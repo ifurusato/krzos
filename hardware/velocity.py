@@ -22,8 +22,11 @@ from core.event import Event
 from core.message import Message
 from core.orientation import Orientation
 
-class Velocity(object):
+class Velocity:
     '''
+    IMPORTANT: this class is no longer in use, and remains for legacy
+    documentation purposes.
+
     Velocity is a property of a motor, and therefore this class is meant
     to be instantiated on a motor. It is used to calculate velocity by
     capturing the step count from a motor encoder, where a specific number

@@ -12,6 +12,7 @@
 import time
 import numpy as np
 import itertools
+import traceback
 from math import isclose
 import asyncio
 from colorama import init, Fore, Style
@@ -96,6 +97,8 @@ class Radiozoa(AsyncBehaviour):
             self._radiozoa_sensor = RadiozoaSensor(config, level=Level.INFO)
         else:
             self._log.info('using existing Radiozoa sensor.')
+#       self._radiozoa_sensor.enable()
+        self._ranging = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -104,10 +107,38 @@ class Radiozoa(AsyncBehaviour):
     def is_ballistic(self):
         return False
 
+    def enable(self):
+        if not self.enabled:
+            self._ranging = True
+            self._radiozoa_sensor.enable()
+            if not self._radiozoa_sensor.check_ranging():
+                self._log.warning('not all sensors are ranging.')
+                return
+#           super().enable()
+            AsyncBehaviour.enable(self)
+            self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
+
+    def disable(self):
+        if self.enabled:
+            self._log.info(Fore.YELLOW + 'a. disabling…')
+            self._ranging = False
+            self._log.info(Fore.YELLOW + 'b. disabling…')
+            time.sleep(0.1)
+            self._log.info(Fore.YELLOW + 'c. disabling…')
+            self._radiozoa_sensor.disable()
+            self._log.info(Fore.YELLOW + 'd. disabling…')
+            super().disable()
+            self._log.info(Fore.YELLOW + 'e. disabled.')
+        else:
+            self._log.warning('already disabled.')
+
     def execute(self, message):
         raise NotImplementedError('execute unsupported in Radiozoa.')
 
     def start_loop_action(self):
+        self._log.info("starting loop…")
         pass
 
     def stop_loop_action(self):
@@ -126,28 +157,30 @@ class Radiozoa(AsyncBehaviour):
 
     async def _poll(self):
         try:
-            if self._use_dynamic_speed:
-                if next(self._counter) % 5 == 0:
-                    self._dynamic_set_default_speed()
-            distances = self._radiozoa_sensor.get_distances()
-            if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
-                # stop when sensors are unavailable or out of range
-                self._smoothed_vector = np.array([0.0, 0.0])
-                self._priority = 0.3
-                return (0.0, 0.0, 0.0)
-            else:
-                vx, vy, omega = self._update_intent_vector(distances)
-                if abs(vx) < self._deadband and abs(vy) < self._deadband:
-                    if self._verbose:
-                        self._display_info(vx, vy, message= Fore.BLACK + 'deadband')
+            if self._ranging:
+                if self._use_dynamic_speed:
+                    if next(self._counter) % 5 == 0:
+                        self._dynamic_set_default_speed()
+                distances = self._radiozoa_sensor.get_distances()
+                if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
+                    # stop when sensors are unavailable or out of range
+                    self._smoothed_vector = np.array([0.0, 0.0])
+                    self._priority = 0.3
                     return (0.0, 0.0, 0.0)
                 else:
-                    if self._verbose:
-                        self._display_info(vx, vy, message='polled')
-                    return (vx, vy, omega)
-#               return self._update_intent_vector(distances)
+                    vx, vy, omega = self._update_intent_vector(distances)
+                    if abs(vx) < self._deadband and abs(vy) < self._deadband:
+                        if self._verbose:
+                            self._display_info(vx, vy, message= Fore.BLACK + 'deadband')
+                        return (0.0, 0.0, 0.0)
+                    else:
+                        if self._verbose:
+                            self._display_info(vx, vy, message='polled')
+                        return (vx, vy, omega)
+#                   return self._update_intent_vector(distances)
+            await asyncio.sleep(0.005)
         except Exception as e:
-            self._log.error("{} thrown while polling: {}".format(type(e), e))
+            self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             # Set stop event to exit the loop gracefully
             self._stop_event.set()
             return (0.0, 0.0, 0.0)

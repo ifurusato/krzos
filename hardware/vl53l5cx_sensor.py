@@ -13,8 +13,9 @@ import traceback
 import time
 import numpy as np
 from datetime import datetime as dt
-import multiprocessing
-from multiprocessing import Process, Queue, Event
+#import multiprocessing
+from multiprocessing import Process, Queue
+from multiprocessing import Event as MultiProcessingEvent
 from colorama import init, Fore, Style
 init()
 
@@ -22,7 +23,7 @@ import hardware.vl53l5cx as vl53l5cx
 from hardware.vl53l5cx import RANGING_MODE_CONTINUOUS
 
 from core.component import Component
-from core.event import Event as KrosEvent
+from core.event import Event
 from core.logger import Logger, Level
 from core.boot_session_marker import BootSessionMarker
 from core.message_factory import MessageFactory
@@ -108,7 +109,7 @@ class Vl53l5cxSensor(Component):
         self._stale_data_timeout_sec = _cfg.get('stale_data_timeout_sec', 0.5)
         _queue_maxsize = 50 # was 20 config?
         self._queue = Queue(maxsize=_queue_maxsize)
-        self._stop_event = Event()
+        self._stop_event = MultiProcessingEvent()
         self._process = None
         self._log.info('initialising VL53L5CX hardware{} on I2C bus {}…'.format(' (skip firmware upload)' if _skip_init else '', _i2c_bus_number))
         _start_time = dt.now()
@@ -249,7 +250,8 @@ class Vl53l5cxSensor(Component):
                 start = dt.now()
                 while not self._vl53.data_ready() and (dt.now() - start).total_seconds() < self._vl53_read_timeout_sec:
                     time.sleep(0.01)
-            super().enable()
+#           super().enable()
+            Component.enable(self)
             if self._use_multiprocessing:
                 # start multiprocessing polling process
                 if self._process is None or not self._process.is_alive():
@@ -297,7 +299,7 @@ class Vl53l5cxSensor(Component):
                 queue_publisher = self._get_queue_publisher()
                 message_factory = self._get_message_factory()
                 if queue_publisher and message_factory:
-                    message = message_factory.create_message(KrosEvent.BLIND, False)
+                    message = message_factory.create_message(Event.BLIND, False)
                     queue_publisher.put(message)
             self._unreliable_frame_counter = 0
             self._is_blind = False
@@ -311,7 +313,7 @@ class Vl53l5cxSensor(Component):
                 queue_publisher = self._get_queue_publisher()
                 message_factory = self._get_message_factory()
                 if queue_publisher and message_factory:
-                    message = message_factory.create_message(KrosEvent.BLIND, True)
+                    message = message_factory.create_message(Event.BLIND, True)
                     queue_publisher.put(message)
         
         return arr
@@ -526,9 +528,9 @@ class Vl53l5cxSensor(Component):
             except Exception as e:
                 self._log.warning('error stopping ranging: {}'.format(e))
             super().disable()
-            self._log.info('VL53L5CX hardware disabled and stopped ranging.')
+            self._log.info('VL53L5CX disabled and stopped ranging.')
         else:
-            self._log.info('VL53L5CX hardware already disabled.')
+            self._log.debug('already disabled.')
 
     def close(self):
         if not self.closed:
@@ -536,8 +538,8 @@ class Vl53l5cxSensor(Component):
             if self._vl53:
                 self._vl53.close() # note: custom method in local copy
             super().close()
-            self._log.info('VL53L5CX hardware closed.')
+            self._log.info('closed.')
         else:
-            self._log.info('VL53L5CX hardware already closed.')
+            self._log.warning('already closed.')
 
 #EOF

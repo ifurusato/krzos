@@ -133,25 +133,33 @@ class Component:
         '''
         Enable this Component.
         '''
-        if not self.closed:
+        if self.closed:
+            self._log.warning('cannot enable: already closed.')
+        elif not self._enabled:
             self._enabled = True
             self._log.debug('enabled.')
         else:
-            self._log.warning('cannot enable: already closed.')
+            self._log.warning('already enabled.')
 
     def suppress(self):
         '''
         Suppresses this Component.
         '''
-        self._suppressed = True
-        self._log.debug('suppressed.')
+        if not self.suppressed:
+            self._suppressed = True
+            self._log.debug('suppressed.')
+        else:
+            self._log.warning('already suppressed.')
 
     def release(self):
         '''
         Releases (un-suppresses) this Component.
         '''
-        self._suppressed = False
-        self._log.debug('released.')
+        if self.suppressed:
+            self._suppressed = False
+            self._log.debug('released.')
+        else:
+            self._log.warning('already released.')
 
     def disable(self):
         '''
@@ -162,7 +170,7 @@ class Component:
             self._enabled = False
             self._log.debug('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
         return True
 
     def close(self):
@@ -171,13 +179,14 @@ class Component:
         This returns a True value to force currency.
         '''
         if not self.closed:
-            _nil = self.disable()
+            if self.enabled:
+                _nil = self.disable()
 #           Component.__registry.remove(self._log.name)
             Component.__registry.deregister(self)
             self._closed = True
             self._log.debug('closed.')
         else:
-            self._log.debug('already closed.')
+            self._log.warning('already closed.')
         return True
 
 class MissingComponentError(Exception):

@@ -13,6 +13,7 @@ import time
 import asyncio
 import numpy as np
 import itertools
+from datetime import datetime as dt
 from threading import current_thread, Thread, Event as ThreadEvent
 from colorama import init, Fore, Style
 init()
@@ -156,10 +157,11 @@ class AsyncBehaviour(Behaviour):
         Does not start the async loop - that happens on release().
         '''
         if not self.enabled:
+#           super().enable()
             Behaviour.enable(self)
-            self._log.info('enabled.')
+            self._log.debug('enabled.')
         else:
-            self._log.debug("already enabled.")
+            self._log.warning("already enabled.")
 
     async def process_message(self, message):
         '''
@@ -224,7 +226,7 @@ class AsyncBehaviour(Behaviour):
 #               self._stop_loop()
             self._log.info('suppressed.')
         else:
-            self._log.debug("already suppressed.")
+            self._log.warning("already suppressed.")
 
     def release(self):
         '''
@@ -241,23 +243,7 @@ class AsyncBehaviour(Behaviour):
                 self._start_loop()
             self._log.info("released.")
         else:
-            self._log.debug("already released.")
-
-    def disable(self):
-        '''
-        Permanently disable the Behaviour, stopping the loop.
-        '''
-        if self.enabled:
-            self._log.debug("disabling…")
-            self.clear_intent_vector()
-            self._stop_event.set()
-            # stop the loop if it's running
-            if self._loop_instance:
-                self._stop_loop()
-            Behaviour.disable(self)
-            self._log.info('disabled.')
-        else:
-            self._log.debug("already disabled.")
+            self._log.warning("already released.")
 
     def start_loop_action(self):
         '''
@@ -291,7 +277,7 @@ class AsyncBehaviour(Behaviour):
         Intent vector is set only once per iteration, after multiplier application.
         Data logging occurs after multiplier, before motor controller reads the value.
         '''
-        self._log.info("async loop started with {}ms delay…".format(self._poll_delay_ms))
+        self._log.debug("async loop started with {}ms delay…".format(self._poll_delay_ms))
         try:
             self.start_loop_action()
             while not self._stop_event.is_set():
@@ -352,9 +338,12 @@ class AsyncBehaviour(Behaviour):
         if not self._loop_instance:
             self._log.debug('no loop instance to stop.')
             return
-        self._log.debug("shutting down event loop…")
+        self._stop_event.set()
+        time.sleep(0.1) # give it a moment
+        self._log.info(Fore.MAGENTA + 'stopping {} polling loop…'.format(self.name))
+        _poll_stop_timeout_ms = 15
+        _start_time = dt.now()
         try:
-            self._log.debug('closing {} polling loop…'.format(self.name))
             # check if we're being called from the loop's own thread
             _is_loop_thread = (self._thread and self._thread == current_thread())
             if not _is_loop_thread:
@@ -362,7 +351,7 @@ class AsyncBehaviour(Behaviour):
                 self._loop_instance.call_soon_threadsafe(self._shutdown)
                 # wait for thread to finish
                 if self._thread and self._thread.is_alive():
-                    self._thread.join(timeout=1.0)
+                    self._thread.join(timeout=_poll_stop_timeout_ms / 1000)
                 # stop the loop if it's running
                 if self._loop_instance and self._loop_instance.is_running():
                     self._loop_instance.call_soon_threadsafe(self._loop_instance.stop)
@@ -378,12 +367,13 @@ class AsyncBehaviour(Behaviour):
                 self._loop_instance.close()
                 self._log.debug('{} polling loop closed.'.format(self.name))
             else:
-                self._log.debug('loop already closed')
+                self._log.warning('loop already closed')
         except Exception as e:
             self._log.error("{} raised stopping loop: {}".format(type(e), e))
         finally:
             self._loop_instance = None
-            self._log.debug('event loop shut down.')
+            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+            self._log.info(Fore.MAGENTA + '{} polling loop stopped; {}ms elapsed.'.format(self.name, _elapsed_ms))
 
     def _shutdown(self):
         '''
@@ -403,6 +393,21 @@ class AsyncBehaviour(Behaviour):
             self._log.error("{} raised during shutdown: {}".format(type(e), e))
         self._log.debug('task shutdown complete.')
 
+    def disable(self):
+        '''
+        Permanently disable the Behaviour, stopping the loop.
+        '''
+        if self.enabled:
+            self._log.debug("disabling…")
+            self.clear_intent_vector()
+            # stop the loop if it's running
+            if self._loop_instance:
+                self._stop_loop()
+            super().disable()
+            self._log.debug('disabled.')
+        else:
+            self._log.warning("already disabled.")
+
     def close(self):
         '''
         Permanently close the Behaviour.
@@ -411,8 +416,9 @@ class AsyncBehaviour(Behaviour):
             if self._data_log:
                 self._data_log.data("END")
                 # note: it's not up to us to close the shared data logger
-            self.disable()
-            Behaviour.close(self)
-            self._log.info('closed.')
+            super().close()
+            self._log.debug('closed.')
+        else:
+            self._log.warning("already closed.")
 
 #EOF

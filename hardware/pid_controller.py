@@ -50,7 +50,7 @@ class PIDController(Component):
         self._log = Logger('pid-ctrl:{}'.format(self._orientation.label), level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         self._counter = itertools.count() # TEMP
-        # PID configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        # PID configuration
         _cfg = config['kros'].get('motor').get('pid_controller')
         _kp         = _cfg.get('kp') # proportional gain
         _ki         = _cfg.get('ki') # integral gain
@@ -248,10 +248,9 @@ class PIDController(Component):
     def enable(self):
         if self.closed:
             self._log.warning('cannot enable PID loop: already closed.')
+        elif self.enabled:
+            self._log.warning('PID loop already enabled.')
         else:
-            if self.enabled:
-                self._log.warning('PID loop already enabled.')
-            else:
-                Component.enable(self)
+            super().enable()
 
 #EOF

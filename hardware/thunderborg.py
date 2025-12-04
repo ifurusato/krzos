@@ -41,6 +41,7 @@
 
 import io, fcntl, types
 import time
+import traceback
 from colorama import init, Fore, Style
 init()
 
@@ -282,8 +283,9 @@ class ThunderBorg:
                 self._log.error('missing ThunderBorg at 0x{:02X} [5]'.format(self.i2cAddress))
         except KeyboardInterrupt:
             raise
-        except:
+        except Exception as e:
             self.foundChip = False
+            self._log.error('{} raised initialising ThunderBorg at 0x{:02X}: {}\n{}'.format(type(e), self.i2cAddress, e, traceback.format_exc()))
             self._log.error('missing ThunderBorg at 0x{:02X} [6]'.format(self.i2cAddress))
 
         # See if we are missing chips
@@ -348,7 +350,7 @@ class ThunderBorg:
             except Exception as e:
                 self._log.error(f"Exception during RawRead: {e}")
             retryCount -= 1
-#           time.sleep(0.005) # add short delay between attempts (maybe 0.01)
+            time.sleep(0.010) # add short delay between attempts
         raise IOError('I2C read for command {} failed'.format(command))
 
     @property

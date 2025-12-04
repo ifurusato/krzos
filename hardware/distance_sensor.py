@@ -189,6 +189,7 @@ class DistanceSensor(Component):
             if self._external_clock:
                 self._log.info('adding callback to external clock…')
                 self._external_clock.add_callback(self._external_callback_method)
+#           super().enable()
             Component.enable(self)
             self._log.info('enabled.')
         else:
@@ -211,13 +212,12 @@ class DistanceSensor(Component):
                     msg = Util.ellipsis('{}'.format(warning.message), 33)
                     self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
                 GPIO.cleanup()
-            Component.disable(self)
+            super().disable()
 
     def close(self):
         '''
         Stop the loop if running, then close the sensor.
         '''
-        self.disable()
-        Component.close(self)
+        super().close()
 
 #EOF

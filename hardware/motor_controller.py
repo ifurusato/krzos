@@ -95,6 +95,8 @@ class MotorController(Component):
             self._sfwd_data_log = Logger('sfwd'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
             self._paft_data_log = Logger('paft'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
             self._saft_data_log = Logger('saft'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
+        # optional vector post processor
+        self._post_processor = None
         # odometer
         self._odometer = Odometer(config)
         # eyeballs monitor
@@ -176,6 +178,13 @@ class MotorController(Component):
         self._log.info(Fore.GREEN + 'ready with {} motors.'.format(len(self._all_motors)))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def set_post_processor(self, post_processor):
+        '''
+        Sets the intent vector post-processor to the argument, removing it if
+        the argument is None.
+        '''
+        self._post_processor = post_processor
 
     def set_show_battery(self, enable):
         '''
@@ -290,7 +299,7 @@ class MotorController(Component):
         if priority_lambda is not None and priority_lambda.__name__ != "<lambda>":
             raise TypeError('expected lambda function for priority, not {}'.format(type(priority_lambda)))
 
-        self._log.info('adding intent vector: {}'.format(name))
+        self._log.debug('adding intent vector: {}'.format(name))
         self._intent_vectors[name] = {
             'vector': vector_lambda,
             'priority': priority_lambda if priority_lambda else lambda: 0.3
@@ -342,7 +351,7 @@ class MotorController(Component):
         Priority-weighted blending of all intent vectors, scaled by vector magnitude.
 
         Each behavior's vector is weighted by its dynamic priority value multiplied
-        by the magnitude of its intent vector. This ensures that inactive or weakly
+        by the magnitude of its intent vector. This makes sure that inactive or weakly
         contributing behaviors (small magnitude) don't dilute the blend as much as
         strongly contributing behaviors.
 
@@ -351,8 +360,8 @@ class MotorController(Component):
 
         Returns a tuple (vx, vy, omega) representing the blended intent vector.
         '''
-        if not self._intent_vectors:
-            return (0.0, 0.0, 0.0)
+#       if not self._intent_vectors:
+#           return (0.0, 0.0, 0.0)
         weighted_sum = [0.0, 0.0, 0.0]
         total_weight = 0.0
         for name, entry in self._intent_vectors.items():
@@ -455,11 +464,10 @@ class MotorController(Component):
         Enables the motors. This issues a warning if already enabled, but
         no harm is done in calling it repeatedly.
         '''
-        if self.enabled:
-            self._log.debug('already enabled.')
-        else:
+        if not self.enabled:
             self._log.info('enabling motor controller…')
             Component.enable(self)
+#           super().enable()
             if self._eyeballs_monitor:
                 self._eyeballs_monitor.enable()
             if self._data_log:
@@ -476,6 +484,8 @@ class MotorController(Component):
                 if not self.loop_is_running:
                     self._start_loop()
             self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
 
     def _start_loop(self):
         '''
@@ -573,7 +583,13 @@ class MotorController(Component):
           - apply controller-level speed modifiers (in registration order)
           - write final speeds into Motor.target_speed and call update_target_speed()
         '''
-        intent = self._blend_intent_vectors()
+
+        if not self._intent_vectors:
+            intent = (0.0, 0.0, 0.0)
+        else:
+            intent = self._blend_intent_vectors()
+        if self._post_processor:
+            intent = self._post_processor.process_intent_vector(intent)
         if len(intent) != 3:
             raise ValueError('expected 3 values, not {}.'.format(len(intent)))
         # apply time-based slew limiting
@@ -724,6 +740,7 @@ class MotorController(Component):
         '''
         for _motor in self._all_motors:
             if _motor.target_speed > 0.0:
+                print('💛 motor target speed: {:5.2f}'.format(_motor.target_speed))
                 return False
         return True
 
@@ -905,19 +922,21 @@ class MotorController(Component):
             coast < brake < halt < stop < emergency_stop
         A more urgent brake request interrupts a less urgent one.
         '''
-        self._log.debug('brake {} with step {}'.format(name, step))
+        self._log.info('🍀 a. brake {} with step {}'.format(name, step))
         if self.is_stopped:
+            self._log.info('🍀 b. already stopped: brake {} with step {}'.format(name, step))
             self._log.info('already stopped.')
             self._braking_active = False
             self._current_brake_step = None
             self._is_braked = True
             return
         if self._braking_active:
+            self._log.info('🍀 c. braking active: brake {} with step {}'.format(name, step))
             if self._current_brake_step is not None and step <= self._current_brake_step:
                 self._log.info('brake request with step {} ignored; already braking with step {}'.format(step, self._current_brake_step))
                 return
             else:
-                self._log.info('brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
+                self._log.info('🍀 d. brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
         self._braking_active = True
         self._is_braked = False
         self._current_brake_step = step
@@ -950,6 +969,7 @@ class MotorController(Component):
                 self._braking_event.set()  # Signal completion
                 return MotorController.BRAKE_LAMBDA_NAME
             return modified
+        self._log.info('🍀 e. adding brake modified for {} with step {}'.format(name, step))
         self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
         self.add_speed_modifier('{}-{}'.format(MotorController.BRAKE_LAMBDA_NAME, name),
                 (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)
@@ -997,21 +1017,28 @@ class MotorController(Component):
 
     def disable(self):
         '''
-        Disable the motors.
+        Disable the motor controller, first braking the motors to a stop.
         '''
         if self.enabled:
             if self._eyeballs_monitor:
                 self._eyeballs_monitor.disable()
             if not self.is_stopped:
                 if self._use_graceful_stop:
+                    self._log.info('🍀 calling coast…')
                     self._brake('coast', step=self._coast_step, closing=True)
                 else:
+                    self._log.info('🍀 calling brake…')
                     self._brake('stop', step=self._stop_step, closing=True)
-                time.sleep(3)
+                self._log.info('🍀 waiting 3 seconds…')
+                time.sleep(1.5)
+#               self.set_speeds(0.0, 0.0, 0.0, 0.0)
+                time.sleep(1.5)
+            else:
+                self._log.info('🍀 motors were already stopped.')
             if not self.is_stopped_target:
                 self._log.warning('calling emergency stop after failing to stop normally…')
                 self.emergency_stop()
-            Component.disable(self)
+            super().disable()
             [ motor.disable() for motor in self._all_motors ]
             if self._external_clock:
                 self._log.debug('disabling by removing external clock callback…')
@@ -1035,10 +1062,10 @@ class MotorController(Component):
                 self._sfwd_data_log.data('END')
                 self._paft_data_log.data('END')
                 self._saft_data_log.data('END')
-            Component.close(self)
-            self._log.info('motor controller closed.')
+            super().close()
+            self._log.info('closed.')
         else:
-            self._log.warning('motor controller already closed.')
+            self._log.warning('already closed.')
 
     def print_info(self, count, vx, vy, omega):
         self._simple = True

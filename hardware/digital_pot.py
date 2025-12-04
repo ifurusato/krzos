@@ -224,7 +224,7 @@ class DigitalPotentiometer(Component):
             while _count < 10 and not self.__reset():
                 self._log.info("[{:d}] waiting for digital potentiometer reset…")
                 time.sleep(0.1)
-            Component.disable(self)
+            super().disable()
             self._log.debug('successfully disabled.')
         else:
             self._log.warning("already disabled.")

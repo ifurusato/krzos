@@ -46,10 +46,10 @@ class ToggleConfig(Component):
         # uses the Radiozoa configuration since we're using the same IOExpander
         _radiozoa_sensor = _component_registry.get('radiozoa-sensor') # hard-coded name
         if _radiozoa_sensor:
-            self._log.info(Fore.MAGENTA + 'obtaining IOExpander from RadiozoaSensor…')
+            self._log.info('obtaining IOExpander from RadiozoaSensor…')
             self._ioe = _radiozoa_sensor.ioe
         else:
-            self._log.info(Fore.MAGENTA + 'creating IOExpander…')
+            self._log.info('creating IOExpander…')
             import pkg_resources
             SMBUS='smbus2'
             for dist in pkg_resources.working_set:
@@ -199,23 +199,23 @@ class ToggleConfig(Component):
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
-            self._log.debug('already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         if not self.disabled:
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         if not self.closed:
-            Component.close(self)
+            super().close()
             self._log.info('closed.')
         else:
-            self._log.debug('already closed.')
+            self._log.warning('already closed.')
 
 #EOF

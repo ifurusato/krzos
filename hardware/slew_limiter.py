@@ -19,7 +19,7 @@ from core.component import Component
 class SlewLimiter(Component):
     '''
     A time-based slew limiter that limits the rate of change of intent vectors
-    (vx, vy, omega) to ensure smooth robot motion. Operates at the MotorController
+    (vx, vy, omega) to smooth the robot's motion. Operates at the MotorController
     level to coordinate all four motors' acceleration/deceleration together.
 
     Rate limits are specified per second and scaled by actual elapsed time between
@@ -151,14 +151,14 @@ class SlewLimiter(Component):
 
     def enable(self):
         if not self.enabled:
-            Component.enable(self)
+            super().enable()
             # reset timing on enable to avoid large initial elapsed time
             self._last_time = time.perf_counter()
             self._log.info('enabled.')
 
     def disable(self):
         if self.enabled:
-            Component.disable(self)
+            super().disable()
             self._log.info('disabled.')
 
 #EOF

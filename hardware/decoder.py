@@ -28,7 +28,7 @@ init()
 
 from core.logger import Logger, Level
 
-class Decoder(object):
+class Decoder:
     '''
     Class to decode mechanical rotary encoder pulses, implemented
     using gpiozero's RotaryEncoder class.

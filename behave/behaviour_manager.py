@@ -180,17 +180,21 @@ class BehaviourManager(Subscriber):
             for _behaviour in self.get_behaviours():
                 _settings = _behaviour_cfg.get(_behaviour.name, {})
                 if _settings.get('enable', False):
-                    _behaviour.enable()
-                    self._log.info(Fore.GREEN + "{} behaviour enabled.".format(_behaviour.name))
+                    if not _behaviour.enabled:
+                        _behaviour.enable()
+                        self._log.info(Fore.GREEN + "{} behaviour enabled.".format(_behaviour.name))
                 else:
-                    _behaviour.disable()
-                    self._log.info(Style.DIM + "{} behaviour disabled.".format(_behaviour.name))
+                    if not _behaviour.disabled:
+                        _behaviour.disable()
+                        self._log.info(Style.DIM + "{} behaviour disabled.".format(_behaviour.name))
                 if _settings.get('release', False):
+#                   if not _behaviour.released:
                     _behaviour.release()
                     self._log.info(Fore.GREEN + "{} behaviour released.".format(_behaviour.name))
                 else:
-                    _behaviour.suppress()
-                    self._log.info(Style.DIM + "{} behaviour suppressed.".format(_behaviour.name))
+                    if not _behaviour.suppressed:
+                        _behaviour.suppress()
+                        self._log.info(Style.DIM + "{} behaviour suppressed.".format(_behaviour.name))
 
     def disable_all_behaviours(self):
         '''
@@ -198,15 +202,16 @@ class BehaviourManager(Subscriber):
         '''
         self._log.info('disable all behaviours…')
         for _behaviour in self.get_behaviours():
-            _behaviour.disable()
-            self._log.info('{} behaviour disabled.'.format(_behaviour.name))
+            if not _behaviour.disabled:
+                _behaviour.disable()
+                self._log.info('{} behaviour disabled.'.format(_behaviour.name))
         self._was_suppressed = None
 
     def suppress(self):
         '''
         Suppresses the Behaviour Manager as well as any registered Behaviours.
         '''
-        Component.suppress(self)
+        super().suppress()
         self.suppress_all_behaviours()
         self._log.info('suppressed.')
 
@@ -366,18 +371,18 @@ class BehaviourManager(Subscriber):
         '''
         self._log.info('enabling behaviour manager…')
         if self._release_on_startup:
-#           self.release_all_behaviours()
             self.enable_all_behaviours()
         self.print_info()
+#       super().enable()
         Subscriber.enable(self)
 
     def disable(self):
         '''
         Disable the behaviour manager and all behaviours.
         '''
-        self._log.info('disabling behaviour manager and all behaviours…')
-#       self.suppress_all_behaviours()
+        self._log.info('disabling behaviour manager…')
         self.disable_all_behaviours()
+#       super().disable()
         Subscriber.disable(self)
 
     def close(self):
@@ -389,6 +394,6 @@ class BehaviourManager(Subscriber):
                 self._data_log.data('END')
                 # note: it's not up to us to close the shared data logger
             self.close_all_behaviours()
-            Subscriber.close(self) # will call disable
+            super().close()
 
 #EOF

@@ -85,12 +85,10 @@ class Eyeballs(Component):
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def enable(self):
-        Component.enable(self)
-
-    def close(self):
-        self._rgbmatrix.clear_all()
-        self._rgbmatrix.close()
-        self._log.info('closed.')
+        if not self.enabled:
+            super().enable()
+        else:
+            self._log.debug('already enabled.')
 
     def show(self, movement: PalpebralMovement):
         '''
@@ -238,7 +236,7 @@ class Eyeballs(Component):
         Displays randomly-colored bulging eyes.
         '''
         _delay = 0.05
-        _colors = [ 
+        _colors = [
             Color.RED, Color.GREEN, Color.BLUE, Color.CYAN, Color.MAGENTA, Color.YELLOW,
             Color.TURQUOISE, Color.ORANGE, Color.VIOLET, Color.CORAL, Color.YELLOW_GREEN,
             Color.TANGERINE, Color.FUCHSIA ]
@@ -318,5 +316,13 @@ class Eyeballs(Component):
         self.set_matrix(_eyeball.array, self._stbd_rgbmatrix, _eyeball.color)
         self._show()
 
+    def close(self):
+        if not self.closed:
+            self._rgbmatrix.clear_all()
+            self._rgbmatrix.close()
+            super().close()
+            self._log.info('closed.')
+        else:
+            self._log.debug('already closed.')
 
 #EOF

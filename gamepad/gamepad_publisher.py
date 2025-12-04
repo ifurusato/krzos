@@ -28,7 +28,7 @@ from core.message_bus import MessageBus
 from core.publisher import Publisher
 from hardware.sound import Sound
 from hardware.tinyfx_controller import TinyFxController
-from gamepad.gamepad import Gamepad
+from gamepad.gamepad import Gamepad, NoSuchDeviceError
 from gamepad.gamepad_monitor import GamepadMonitor
 
 class GamepadPublisher(Publisher):
@@ -84,12 +84,12 @@ class GamepadPublisher(Publisher):
             self._log.info('enabling gamepad (async)…')
             try:
                 _count = 0
-                while not self._gamepad.has_connection():
+                while not self._gamepad.has_connection() and not self._gamepad.connection_failed:
                     _count += 1
                     if _count == 1:
                         self._log.info('connecting to gamepad…')
                     else:
-                        self._log.warning('gamepad not connected; re-trying… [{:d}]'.format(_count))
+                        self._log.info('gamepad not connected; re-trying… [{:d}]'.format(_count))
                     try:
                         await asyncio.to_thread(self._gamepad.connect)
                     except Exception as e:
@@ -99,6 +99,8 @@ class GamepadPublisher(Publisher):
                         if self._play_sound and self._tinyfx:
                             await asyncio.to_thread(lambda: self._tinyfx.play(Sound.SKADOODLE))
                         break
+            except NoSuchDeviceError as e:
+                self._log.warning('no gamepad device: {}'.format(e))
             except ConnectionError as e:
                 self._log.warning('unable to connect to gamepad: {}'.format(e))
                 self._gamepad = None
@@ -107,12 +109,13 @@ class GamepadPublisher(Publisher):
                 self._gamepad = None
         else:
             self._log.info('no gamepad available.')
+            return
 
-        self._monitor = GamepadMonitor(self._config, self._gamepad, self._disappearance_callback, self._level)
         if self._gamepad is None:
             self._monitor.no_connection()
         else:
             if self._gamepad.has_connection():
+                self._monitor = GamepadMonitor(self._config, self._gamepad, self._disappearance_callback, self._level)
                 if self._gamepad:
                     try:
                         self._gamepad.enable()
@@ -124,11 +127,11 @@ class GamepadPublisher(Publisher):
                             raise Exception('gamepad not enabled: lost connection?')
                     except Exception as e:
                         self._log.error('failed to start gamepad loop: {}'.format(e))
-                        Publisher.disable(self)
+                        super().disable()
                         self._log.info('disabled: no gamepad.')
                     self._monitor.enable()
                 else:
-                    Publisher.disable(self)
+                    super.disable()
                     self._log.info('disabled: no gamepad.')
             else:
                 self._log.warning('no gamepad connection.')
@@ -147,8 +150,8 @@ class GamepadPublisher(Publisher):
             self.suppress()
 
     def enable(self):
-        Publisher.enable(self)
-        if self.enabled:
+        if not self.enabled:
+            super().enable()
             if self._message_bus.get_task_by_name(GamepadPublisher._PUBLISH_LOOP_NAME):
                 self._log.warning('already enabled.')
                 return
@@ -173,8 +176,7 @@ class GamepadPublisher(Publisher):
                 except Exception as e:
                     self._log.error('failed to schedule delayed connect: {}'.format(e))
         else:
-            Publisher.disable(self)
-            raise Exception('unable to enable.')
+            self._log.warning('already enabled.')
 
     async def __gamepad_publish_loop(self, message):
         try:
@@ -190,10 +192,10 @@ class GamepadPublisher(Publisher):
                 self._log.debug('cancelling gamepad publishing task…')
                 self._gamepad_task.cancel()
                 self._gamepad_task = None
-            Publisher.disable(self)
+            super().disable()
             self._log.info('disabled.')
         else:
-            self._log.debug('already disabled.')
+            self._log.warning('already disabled.')
 
     def _print_event(self, color, event, value):
         self._log.info('event:\t' + color + Style.BRIGHT + '{}; value: {}'.format(event.name, value))
