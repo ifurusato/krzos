@@ -71,7 +71,3 @@ def accumulate(iterable, func=lambda x, y: x + y):
         acc = func(acc, element)
         yield acc
 
-        if start >= stop:
-            return
-
-#EOF

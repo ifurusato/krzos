@@ -3,7 +3,6 @@
 
 from machine import bitstream
 
-
 class NeoPixel:
     ORDER_MAP = {
         "RGB": (0, 1, 2),
@@ -62,3 +61,4 @@ class NeoPixel:
         # BITSTREAM_TYPE_HIGH_LOW = 0
         bitstream(self.pin, 0, self.timing, self.buf)
 
+#EOF

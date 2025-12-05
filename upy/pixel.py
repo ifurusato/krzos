@@ -4,32 +4,30 @@
 # Copyright 2024 by Murray Altheim. All rights reserved. This file is part of
 # the Robot Operating System project and is released under the "Apache Licence,
 # Version 2.0". Please see the LICENSE file included as part of this package.
-#   
+#
 # author:   Murray Altheim
 # created:  2025-05-23
-# modified: 2025-07-14
+# modified: 2025-12-03
 
 import time
-import pyb
+import machine
 from neopixel import NeoPixel
 
 from colorama import Fore, Style
-from logger import Logger, Level
 from colors import *
 
 class Pixel:
-    def __init__(self, config=None, pixel_count=1, color_order='GRB', brightness=0.33):
-        self._log = Logger('pixel', Level.INFO)
-        if config is None:
-            pin = 'E1'
-        else:
-            pin = config['kros']['pixel']['pin']
+    def __init__(self, pin=None, pixel_count=1, color_order='GRB', brightness=0.33):
+        if pin is None:
+            raise ValueError('pin must be specified.')
+#       pin = 5
         self._pixel_count = pixel_count
         self._pixel_index = 0
         self._brightness = brightness
-        self._neopixel = NeoPixel(pyb.Pin(pin, pyb.Pin.OUT), pixel_count, color_order=color_order, brightness=brightness)
+        # def __init__(self, pin, n, bpp=3, timing=1, color_order="RGB", brightness=1.0):
+        self._neopixel = NeoPixel(machine.Pin(pin, machine.Pin.OUT), pixel_count, color_order=color_order, brightness=brightness)
         self.set_color(index=None, color=None)
-        self._log.info(Fore.GREEN + 'neopixel ready on pin {}.'.format(pin))
+        print(Fore.GREEN + 'neopixel ready on pin {}.'.format(pin) + Style.RESET_ALL)
 
     @property
     def pixel_count(self):
@@ -38,6 +36,29 @@ class Pixel:
     @property
     def brightness(self):
         return self._brightness
+
+    def rainbow_cycle(self, delay=0.05, steps=-1):
+        '''
+        Cycle a single NeoPixel through the colors of the rainbow.
+
+        This function steps through hues from 0.0 to 1.0, converts them to RGB,
+        and writes the result to the specified pixel.
+
+        :param np:             (NeoPixel) An instance of the NeoPixel class.
+        :param delay:          (float) Time in seconds to wait between color updates. Default is 0.01.
+        :param steps:          (int) Number of color steps to cycle through the rainbow.
+                                     Higher = smoother. Default is 255. If -1 runs indefinitely.
+        '''
+        step = 0
+        while True:
+            hue = (step % steps) / steps if steps != -1 else (step % 360) / 360
+            color = Pixel.hsv_to_rgb(hue)
+            self._neopixel[self._pixel_index] = color
+            self._neopixel.write()
+            time.sleep(delay)
+            step += 1
+            if steps != -1 and step >= steps:
+                break
 
     def set_color(self, index=None, color=None):
         '''
@@ -60,29 +81,6 @@ class Pixel:
             self._neopixel[i] = (0, 0, 0) # turn off each LED
         self._neopixel.write()       # apply the changes
 #       time.sleep(0.05) # rest a bit
-
-    def rainbow_cycle(self, delay=0.05, steps=-1):
-        '''
-        Cycle a single NeoPixel through the colors of the rainbow.
-
-        This function steps through hues from 0.0 to 1.0, converts them to RGB,
-        and writes the result to the specified pixel.
-
-        :param np:             (NeoPixel) An instance of the NeoPixel class.
-        :param delay:          (float) Time in seconds to wait between color updates. Default is 0.01.
-        :param steps:          (int) Number of color steps to cycle through the rainbow. 
-                                     Higher = smoother. Default is 255. If -1 runs indefinitely.
-        '''
-        step = 0
-        while True:
-            hue = (step % steps) / steps if steps != -1 else (step % 360) / 360
-            color = Pixel.hsv_to_rgb(hue)
-            self._neopixel[self.pixel_index] = color
-            self._neopixel.write()
-            time.sleep(delay)
-            step += 1
-            if steps != -1 and step >= steps:
-                break
 
     @staticmethod
     def hsv_to_rgb(h, s=1.0, v=1.0):

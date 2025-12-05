@@ -11,26 +11,6 @@
 #
 # RGB color constants
 
-#                        R    G    B
-#COLOR_BLACK         = (  0,   0,   0)
-#COLOR_RED           = (255,   0,   0)
-#COLOR_GREEN         = (  0, 255,   0)
-#COLOR_BLUE          = (  0,   0, 255)
-#COLOR_CYAN          = (  0, 255, 255)
-#COLOR_MAGENTA       = (255,   0, 255)
-#COLOR_YELLOW        = (250, 150,   0)
-
-#COLOR_DARK_RED      = ( 32,   0,   0)
-#COLOR_DARK_GREEN    = (  0,  32,   0)
-#COLOR_DARK_BLUE     = (  0,   0,  32)
-#COLOR_DARK_CYAN     = (  0,  32,  32)
-#COLOR_DARK_MAGENTA  = ( 32,   0,  32)
-#COLOR_DARK_YELLOW   = ( 64,  32,   0)
-
-#COLOR_ORANGE        = (220, 105,   0)
-#COLOR_INDIGO        = (  0,  75, 130)
-#COLOR_VIOLET        = (138,  43, 226)
-
 class Color:
     _registry = []
 
@@ -63,6 +43,19 @@ class Color:
     def all_colors(cls):
         return cls._registry
 
+    @classmethod
+    def get(cls, name: str):
+        '''
+        Return a Color whose name matches the lowercase key.
+        '''
+        key = name.lower().replace("_", " ")
+        for c in cls._registry:
+            # normalize stored name: strip leading "COLOR_" and lowercase
+            norm = c.name.lower().replace("color_", "").replace("_", " ")
+            if norm == key:
+                return c
+        return None
+
 COLOR_BLACK         = Color("COLOR_BLACK",        (  0,   0,   0))
 COLOR_RED           = Color("COLOR_RED",          (255,   0,   0))
 COLOR_GREEN         = Color("COLOR_GREEN",        (  0, 255,   0))
@@ -78,9 +71,12 @@ COLOR_DARK_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  32,  32))
 COLOR_DARK_MAGENTA  = Color("COLOR_DARK_MAGENTA", ( 32,   0,  32))
 COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 64,  32,   0))
 
-COLOR_ORANGE        = Color("COLOR_ORANGE",       (220, 105,   0))
+COLOR_ORANGE        = Color("COLOR_ORANGE",       (220,  33,   0))
 COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  75, 130))
 COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
+COLOR_DEEP_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  11,  11))
+COLOR_PINK          = Color("COLOR_PINK",         (255,  50,  40))
+COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
+COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
 
 #EOF
-

@@ -68,7 +68,7 @@ class IrqClock(Component):
                 try:
                     self._log.info('initialising gpiozero DigitalInputDevice…')
                     # STM32 output is likely push-pull, so pull_up=False is correct
-                    self._input = DigitalInputDevice(self._pin, pull_up=False)
+                    self._input = DigitalInputDevice(self._pin, pull_up=True)
                     self._input.when_deactivated = self._callback_method  # on falling edge
                     self._log.info('configured IRQ clock via gpiozero on pin {}.'.format(self._pin))
                 except Exception as e:
