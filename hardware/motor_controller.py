@@ -132,6 +132,15 @@ class MotorController(Component):
             self._rate = None
             self._log.info('using external clock.')
         self._log.info('loop frequency: {}Hz ({:4.2f}s)'.format(self._loop_freq_hz, self._loop_delay_sec))
+        # motor power smoothing configuration
+        _smoothing_cfg = _cfg.get('motor_power_smoothing')
+        self._motor_power_smoothing_enabled = _smoothing_cfg.get('enabled', False)
+        self._motor_power_smoothing_alpha = _smoothing_cfg.get('alpha', 0.5)
+        self._last_motor_speeds = [0.0, 0.0, 0.0, 0.0]
+        if self._motor_power_smoothing_enabled:
+            self._log.info('motor power smoothing enabled with alpha={:.2f}'.format(self._motor_power_smoothing_alpha))
+        else:
+            self._log.info('motor power smoothing disabled')
         # motor controller
         self._closed_loop = None
         self._all_motors  = []
@@ -571,6 +580,29 @@ class MotorController(Component):
         '''
         self._motor_loop_callback = callback
 
+    def _smooth_motor_powers(self, speeds):
+        '''
+        Apply exponential moving average to motor powers to absorb timing jitter. 
+        operates on [pfwd, sfwd, paft, saft] after kinematics and normalization.
+
+        Returns smoothed list of 4 motor speeds.
+        
+        Args:
+            param speeds:  list of 4 motor speeds from mecanum kinematics
+        '''
+        alpha = self._motor_power_smoothing_alpha
+        smoothed = []
+        for i, (last, curr) in enumerate(zip(self._last_motor_speeds, speeds)):
+            s = alpha * last + (1 - alpha) * curr
+            # zero-crossing protection: if target is stopping, force smooth to zero
+            # prevents robot from drifting due to smoothing lag
+            if abs(curr) < 0.02:  # target is at or near zero
+                if abs(s) < 0.05:  # smoothed value is small
+                    s = 0.0
+            smoothed.append(s)
+        self._last_motor_speeds = smoothed
+        return smoothed
+
     def _motor_tick(self):
         '''
         The shared logic for a single motor control loop iteration, used by
@@ -607,6 +639,11 @@ class MotorController(Component):
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
+
+        # 🍀 new motor power smoothing
+        if self._motor_power_smoothing_enabled:
+            speeds = self._smooth_motor_powers(speeds)
+
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))
@@ -1038,6 +1075,8 @@ class MotorController(Component):
             if not self.is_stopped_target:
                 self._log.warning('calling emergency stop after failing to stop normally…')
                 self.emergency_stop()
+            # reset smoothing state
+            self._last_motor_speeds = [0.0, 0.0, 0.0, 0.0]
             super().disable()
             [ motor.disable() for motor in self._all_motors ]
             if self._external_clock:
