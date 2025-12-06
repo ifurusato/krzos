@@ -13,7 +13,7 @@ krosd:
 kros:
     application:                                           # application-level configuration
         await_pushbutton:                 False            # await pushbutton on startup
-        data_logging:                     False            # enable data logging
+        data_logging:                      True            # enable data logging
     arguments:                                             # CLI arguments are copied here (required section)
         nada:                             False            # placeholder
     component:
