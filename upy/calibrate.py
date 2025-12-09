@@ -14,7 +14,9 @@ for mod in ['main', 'calibrate', 'test_pmw3901', 'test_paa5100', 'pmw3901']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-RESOLUTION_FACTOR = 0.009868
+#RESOLUTION_FACTOR = 0.009868
+#RESOLUTION_FACTOR = 0.009871
+RESOLUTION_FACTOR = 0.009537
 
 # .............................................................
 
@@ -114,13 +116,13 @@ if cumulative > 10:
                 pass
 
             x, y = odom.position
-            error = abs(abs(y) - 50.0)
+            error = abs(abs(x) - 50.0)
             error_pct = error / 50.0 * 100.0
 
             print("\n\nValidation Results:")
             print("  Expected: 50cm")
-            print("  Measured: {:.2f}cm".format(abs(y)))
-            print("  Error: {:.2f}cm ({:.1f}%)".format(error, error_pct))
+            print("  Measured: {:.2f}cm".format(abs(x)))
+            print("  Error:    {:.2f}cm ({:.1f}%)".format(error, error_pct))
 
             if error < 2.0:
                 print("  Status: EXCELLENT ✓")

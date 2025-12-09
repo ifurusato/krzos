@@ -1,69 +1,75 @@
-# optical_flow_odometer.py
+#!/micropython
+# -*- coding: utf-8 -*-
 #
-# MicroPython Odometer using PAA5100JE optical flow sensor.
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
 #
-# Supports both polling mode and interrupt-driven mode for efficiency.
+# author:   Murray Altheim
+# created:  2025-12-09
+# modified: 2025-12-09
 
 import time
 from machine import Pin
 
 class Odometer:
+    RESOLUTION_FACTOR = 0.009734
     '''
-    Computes robot velocity and position from a PAA5100JE optical flow sensor.
+    MicroPython Odometer that computes velocity and position using a PAA5100JE
+    near optical flow sensor.
+
+    Supports both polling mode and interrupt-driven mode for efficiency.
 
     Measures translation only - rotation must come from encoders or IMU.
 
     Modes:
-    - Polling mode:     Call update() regularly in your main loop
-    - IRQ mode:        Attach IRQ pin, updates happen automatically on motion events
+    - Polling mode:  Call update() regularly in your main loop
+    - IRQ mode:      Attach IRQ pin, updates happen automatically on motion events
 
-    - velocity:        Returns (vx, vy) where vx = lateral cm/s, vy = forward cm/s
-    - position:       Returns (x, y) where x = lateral cm, y = forward cm (body frame)
+    - velocity:      Returns (vx, vy) where vx = lateral cm/s, vy = forward cm/s
+    - position:      Returns (x, y) where x = lateral cm, y = forward cm (body frame)
     - reset():       Resets cumulative position and timing
     - calibrate():   Adjusts resolution factor based on known vs measured distance
     '''
-
-    def __init__(self, sensor, irq_pin=None, resolution_factor=1.0, timeout=1.0):
+    def __init__(self, sensor, irq_pin=None, resolution_factor=None, timeout=1.0):
         '''
         Initialize the optical flow odometer.
 
-        : param sensor:               PAA5100 instance (already configured with correct orientation)
-        :param irq_pin:            Optional Pin instance for interrupt-driven updates
-        :param resolution_factor:   Scaling factor for sensor readings (adjust via calibration)
-        :param timeout:            Sensor read timeout in seconds
+        Args:
+            sensor:             PAA5100 instance (already configured with correct orientation)
+            irq_pin:            Optional Pin instance for interrupt-driven updates
+            resolution_factor:  Scaling factor for sensor readings (adjust via calibration)
+            timeout:            Sensor read timeout in seconds
         '''
         self._sensor = sensor
         self._irq_pin = irq_pin
-        self._resolution_factor = resolution_factor
+        self._resolution_factor = resolution_factor if resolution_factor is not None else Odometer.RESOLUTION_FACTOR
         self._timeout = timeout
-
-        # Internal state
+        # internal state
         self._last_time = None   # float (seconds from time.ticks_ms())
         self._x = 0.0            # lateral position (cm) - positive = starboard
         self._y = 0.0            # forward position (cm) - positive = forward
         self._vx = 0.0           # lateral velocity (cm/s)
         self._vy = 0.0           # forward velocity (cm/s)
-
-        # Calibration tracking
+        # calibration tracking
         self._cumulative_x = 0.0
         self._cumulative_y = 0.0
-
-        # Callbacks
+        # callbacks
         self._callbacks = []
         self._enabled = True
         self._closed = False
-
         # IRQ setup
         self._irq_mode = False
         if irq_pin is not None:
             self._setup_irq(irq_pin)
-
         print("odometer initialized")
         print("  resolution factor: {:.6f}".format(resolution_factor))
         print("  mode: {}".format("IRQ-driven" if self._irq_mode else "Polling"))
 
     def _setup_irq(self, irq_pin):
-        '''Setup interrupt-driven mode'''
+        '''
+        Set up interrupt-driven mode.
+        '''
         try:
             # Attach IRQ handler to pin (rising edge = motion detected)
             irq_pin.irq(trigger=Pin.IRQ_RISING, handler=self._irq_handler)
@@ -75,7 +81,9 @@ class Odometer:
             self._irq_mode = False
 
     def _irq_handler(self, pin):
-        '''IRQ callback - called when sensor detects motion'''
+        '''
+        IRQ callback - called when sensor detects motion.
+        '''
         if self._enabled and not self._closed:
             # Call update from IRQ context
             self.update()
@@ -90,7 +98,9 @@ class Odometer:
 
     @property
     def irq_mode(self):
-        '''Returns True if using interrupt-driven updates'''
+        '''
+        Returns True if using interrupt-driven updates.
+        '''
         return self._irq_mode
 
     @property
@@ -143,46 +153,36 @@ class Odometer:
         '''
         if not self._enabled:
             return
-
         current_time = time.ticks_ms() / 1000.0  # convert to seconds
-
         try:
-            # Read sensor - returns (x, y) in sensor units
-            # With your orientation:  x = lateral, y = forward
+            # read sensor - returns (x, y) in sensor units
+            # with your orientation:  x = lateral, y = forward
             raw_x, raw_y = self._sensor.get_motion(timeout=self._timeout)
-
-            # Apply resolution factor to convert sensor units to cm
+            # apply resolution factor to convert sensor units to cm
             dx_cm = raw_x * self._resolution_factor
             dy_cm = raw_y * self._resolution_factor
-
             if self._last_time is not None:
                 dt = current_time - self._last_time
-
                 if dt > 0.0:
-                    # Calculate velocities in body frame
+                    # calculate velocities in body frame
                     self._vx = dx_cm / dt  # lateral velocity
                     self._vy = dy_cm / dt  # forward velocity
-
-                    # Integrate position in body frame
+                    # integrate position in body frame
                     self._x += dx_cm
                     self._y += dy_cm
-
-                    # Track cumulative movement for calibration
+                    # track cumulative movement for calibration
                     self._cumulative_x += abs(dx_cm)
                     self._cumulative_y += abs(dy_cm)
-
-                    # Trigger callbacks if moving
+                    # trigger callbacks if moving
                     if self.is_moving():
                         self._trigger_callbacks()
-
             self._last_time = current_time
-
         except RuntimeError:
-            # Sensor timeout or no motion detected
-            # Set velocities to zero but don't update position
+            # sensor timeout or no motion detected
+            # set velocities to zero but don't update position
             self._vx = 0.0
             self._vy = 0.0
-            # Keep last_time to maintain timing continuity
+            # keep last_time to maintain timing continuity
 
     def calibrate(self, known_distance_cm, measured_distance_cm=None):
         '''
@@ -196,39 +196,33 @@ class Odometer:
         Or manually specify measured distance:
             calibrate(known_distance_cm=100.0, measured_distance_cm=98.5)
 
-        :param known_distance_cm:      Actual distance traveled (ground truth)
-        :param measured_distance_cm:  Distance measured by sensor (if None, uses current cumulative)
+        Args:
+            known_distance_cm:     Actual distance traveled (ground truth)
+            measured_distance_cm:  Distance measured by sensor (if None, uses current cumulative)
         '''
         # Debug: Print cumulative values
         print("DEBUG: _cumulative_x={:.2f}, _cumulative_y={:.2f}".format(
             self._cumulative_x, self._cumulative_y))
-
         if measured_distance_cm is None:
             # Use cumulative distance traveled
             measured_distance_cm = (self._cumulative_x**2 + self._cumulative_y**2)**0.5
             print("DEBUG:  Calculated measured_distance={:.2f}cm".format(measured_distance_cm))
-
         if measured_distance_cm == 0.0:
             print("ERROR: No movement detected for calibration")
             print("       Make sure you called update() during movement!")
             return
-
         # Calculate correction factor
         correction = known_distance_cm / measured_distance_cm
         old_factor = self._resolution_factor
-
         print("DEBUG: correction factor = {:.2f} / {:.2f} = {:.6f}".format(
             known_distance_cm, measured_distance_cm, correction))
-
         self._resolution_factor *= correction
-
         print("\nCalibration complete:")
         print("  Known distance:       {:.2f}cm".format(known_distance_cm))
         print("  Measured distance:    {:.2f}cm".format(measured_distance_cm))
         print("  Old factor:           {:.6f}".format(old_factor))
         print("  New factor:           {:.6f}".format(self._resolution_factor))
         print("  Correction applied:   {:.4f}x".format(correction))
-
         if abs(correction - 1.0) < 0.01:
             print("\n  WARNING: Correction is very close to 1.0 - no change needed!")
 
@@ -249,7 +243,8 @@ class Odometer:
         '''
         Returns True if velocity magnitude exceeds threshold.
 
-        :param threshold: Minimum velocity in cm/s to consider "moving"
+        Args:
+            threshold:  Minimum velocity in cm/s to consider "moving"
         '''
         velocity_magnitude = (self._vx**2 + self._vy**2)**0.5
         return velocity_magnitude > threshold
@@ -278,7 +273,8 @@ class Odometer:
         '''
         Adds a callback to be triggered when the robot is moving.
 
-        :param callback: Function to call (no arguments)
+        Args:
+            callback: Function to call (no arguments)
         '''
         if not callable(callback):
             raise ValueError("Callback must be callable")
