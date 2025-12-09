@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/micropython
 # -*- coding: utf-8 -*-
 #
 # Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
@@ -12,6 +12,7 @@ import sys
 import time
 from colors import*
 from color_store import ColorStore
+from pmw3901_rp2040 import create_paa5100
 
 class Controller:
     '''
@@ -34,6 +35,8 @@ class Controller:
         self._blink_direction = 1
         self._blink_color     = COLOR_AMBER
         self._ring_colors = [COLOR_BLACK] * 24
+        # instantiate the PAA5100 wrapper and enable Pimoroni secret_sauce init
+        self._nofs, self._irq_pin = create_paa5100()
         print('ready.')
 
     def set_strip(self, strip):
@@ -56,6 +59,16 @@ class Controller:
         Delegates to process() for handling.
         '''
         return self.process(cmd)
+
+    def get_motion(self):
+        try:
+            x, y = self._nofs.get_motion(timeout=1.0)
+            print("motion: ({}, {})".format(x, y))
+#           time.sleep_ms(200)
+            return x, y
+        except Exception as e:
+            print("motion read error: {}".format(e))
+            return None, None
 
     def tick(self, delta_ms):
         '''
@@ -280,4 +293,8 @@ class Controller:
         for index in range(8):
             self._strip.set_color(index, COLOR_BLACK)
 
+    def sensor_led_off(self):
+        if elf._nofs:
+            self._nofs.disable_sensor_led()
+    
 #EOF

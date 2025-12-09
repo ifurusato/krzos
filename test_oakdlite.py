@@ -31,6 +31,7 @@ def test_oakd_lite_available():
 
         # check for available devices
         devices = dai.Device.getAllAvailableDevices()
+        __log.info(Fore.GREEN + 'found {} devices.'.format(len(devices)))
         oak_d_lite_found = len(devices) > 0
         if REQUIRE_OAK_D_LITE:
             assert oak_d_lite_found, "no OAK-D Lite (DepthAI) devices found"

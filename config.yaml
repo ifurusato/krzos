@@ -128,10 +128,10 @@ kros:
             release:                    False              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             # boundary definition (in cm)
-            min_x:                          0.0            # west boundary (cm)
-            max_x:                        200.0            # east boundary (cm)
-            min_y:                          0.0            # south boundary (cm)
-            max_y:                        200.0            # north boundary (cm)
+            min_x:                       -200.0            # cm, west boundary
+            max_x:                        200.0            # cm, east boundary
+            min_y:                       -200.0            # cm, south boundary
+            max_y:                        200.0            # cm, north boundary
             # initial robot pose (sets odometer origin)
             initial_x:                      0.0            # starting x position (cm), e.g., 10cm east of west edge
             initial_y:                      5.0            # starting y position (cm), e.g., 20cm north of south edge
@@ -140,9 +140,11 @@ kros:
             margin:                        50.0            # cm - start reacting this far from boundary
             max_lateral_force:              0.8            # maximum vx magnitude
             max_rotation_force:             0.5            # maximum omega magnitude
+            escape_rotation_speed:          0.6            # omega during critical escape
+            escape_priority:                0.95           # priority during critical mode
             easing:              'SQUARE_ROOT'             # force scaling with distance
             min_priority:                   0.3            # priority when far
-            max_priority:                   0.95           # priority at boundary (very high)
+            max_priority:                   0.8            # priority at boundary (very high)
         thoughts:
             enable:                        True            # enable thoughts behaviour
             release:                       True            # release thoughts behaviour on startup
@@ -162,9 +164,13 @@ kros:
                 - 'blip'
                 - 'borah'
                 - 'chatter'
+                - 'chuckle'
                 - 'dwerp'
                 - 'dwoit'
                 - 'earpit'
+                - 'futz-1'
+                - 'futz-2'
+                - 'futz-3'
                 - 'glitch'
                 - 'gwolp'
                 - 'ippurt'
@@ -176,6 +182,8 @@ kros:
                 - 'skadoodle'
                 - 'skid-fzzt'
                 - 'skiff'
+                - 'squirrel-alarm'
+                - 'squirrel-bark'
                 - 'tititicha'
                 - 'tweak'
                 - 'twiddle-pop'
@@ -320,6 +328,10 @@ kros:
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)
             subpixel:                     False            # better accuracy for longer distance, fractional disparity 32-levels
             left_right_check:              True            # better handling for occlusions
+        paa5100je:                                         # PAA5100JE Optical Flow Sensor
+            rotation:                       180            # permitted values: 0, 90, 180 or 270 
+            x_trim:                         1.0            # percentage X trim (as a multiplier)
+            y_trim:                         0.92           # percentage Y trim (as a multiplier)
         button:                                            # GPIO or IO Expander-based simple button or switch
             pin:                             24            # GPIO pin used
         digital_potentiometer:                             # IO Expander-based Digital Potentiometer breakout
@@ -527,7 +539,7 @@ kros:
             required:                     False
           - address:                       0x28
             name:         "MPU9250 + BMP280 IMU"
-            required:                      True
+            required:                     False
           - address:                       0x29
             name:    "VL53L5CX 8x8 Ranging ToF Sensor"
             required:                      True

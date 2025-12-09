@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-10-05
-# modified: 2025-11-20
+# modified: 2025-12-08
 
 import sys, traceback
 import time
@@ -180,6 +180,8 @@ class MotorController(Component):
         _min_speed           = -1 * _max_speed
         self._log.info('motor speed clamped at {} to {}.'.format(_min_speed, _max_speed))
         self._clamp          = lambda n: max(min(_max_speed, n), _min_speed)
+        # behavior-specific speed multipliers for throttling
+        self._intent_vector_multipliers = {}
         self._print_info_done = False
         _closed_loop         = _cfg.get('closed_loop')
         self.set_closed_loop(_closed_loop)
@@ -324,6 +326,16 @@ class MotorController(Component):
             del self._intent_vectors[name]
             self._log.info('removed intent vector: {}'.format(name))
 
+    def set_behavior_speed_multiplier(self, behavior_name, multiplier):
+        '''
+        Set a speed multiplier for a specific behavior's intent vector.
+        multiplier: 0.0-1.0, where 1.0 = full speed, 0.0 = stopped
+
+        This modifies the behavior's contribution during blending.
+        '''
+        self._intent_vector_multipliers[behavior_name] = max(0.0, min(1.0, multiplier))
+        self._log.info('set {} speed multiplier to {:.2f}'.format(behavior_name, multiplier))
+
     def diag_blend_intent_vectors(self):
         if not self._intent_vectors:
             return (0.0, 0.0, 0.0)
@@ -369,17 +381,28 @@ class MotorController(Component):
 
         Returns a tuple (vx, vy, omega) representing the blended intent vector.
         '''
+        ENABLE_BEHAVIOUR_SPEED_MULTIPLIER = True
 #       if not self._intent_vectors:
 #           return (0.0, 0.0, 0.0)
         weighted_sum = [0.0, 0.0, 0.0]
         total_weight = 0.0
         for name, entry in self._intent_vectors.items():
-            vector = entry['vector']()
-            priority = entry['priority']()
-            if len(vector) != 3:
-                raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
-            # calculate vector magnitude to determine how actively this behavior is contributing
-            magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
+            if ENABLE_BEHAVIOUR_SPEED_MULTIPLIER:
+                vector = entry['vector']()
+                priority = entry['priority']()
+                if len(vector) != 3:
+                    raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
+                # apply behavior-specific speed multiplier
+                multiplier = self._intent_vector_multipliers.get(name, 1.0)
+                vector = tuple(v * multiplier for v in vector)
+                magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
+            else:
+                vector = entry['vector']()
+                priority = entry['priority']()
+                if len(vector) != 3:
+                    raise Exception('expected length of 3, not {}; {}'.format(len(vector), vector))
+                # calculate vector magnitude to determine how actively this behavior is contributing
+                magnitude = (vector[0]**2 + vector[1]**2 + vector[2]**2)**0.5
             # contribution is priority scaled by magnitude: inactive behaviors contribute proportionally less
             contribution = priority * magnitude
             total_weight += contribution
@@ -582,11 +605,11 @@ class MotorController(Component):
 
     def _smooth_motor_powers(self, speeds):
         '''
-        Apply exponential moving average to motor powers to absorb timing jitter. 
+        Apply exponential moving average to motor powers to absorb timing jitter.
         operates on [pfwd, sfwd, paft, saft] after kinematics and normalization.
 
         Returns smoothed list of 4 motor speeds.
-        
+
         Args:
             param speeds:  list of 4 motor speeds from mecanum kinematics
         '''
@@ -959,21 +982,21 @@ class MotorController(Component):
             coast < brake < halt < stop < emergency_stop
         A more urgent brake request interrupts a less urgent one.
         '''
-        self._log.info('🍀 a. brake {} with step {}'.format(name, step))
+        self._log.info('brake {} with step {}'.format(name, step))
         if self.is_stopped:
-            self._log.info('🍀 b. already stopped: brake {} with step {}'.format(name, step))
+            self._log.info('already stopped: brake {} with step {}'.format(name, step))
             self._log.info('already stopped.')
             self._braking_active = False
             self._current_brake_step = None
             self._is_braked = True
             return
         if self._braking_active:
-            self._log.info('🍀 c. braking active: brake {} with step {}'.format(name, step))
+            self._log.info('braking active: brake {} with step {}'.format(name, step))
             if self._current_brake_step is not None and step <= self._current_brake_step:
                 self._log.info('brake request with step {} ignored; already braking with step {}'.format(step, self._current_brake_step))
                 return
             else:
-                self._log.info('🍀 d. brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
+                self._log.info('brake request with step {} interrupting slower brake with step {}'.format(step, self._current_brake_step))
         self._braking_active = True
         self._is_braked = False
         self._current_brake_step = step
@@ -1006,7 +1029,7 @@ class MotorController(Component):
                 self._braking_event.set()  # Signal completion
                 return MotorController.BRAKE_LAMBDA_NAME
             return modified
-        self._log.info('🍀 e. adding brake modified for {} with step {}'.format(name, step))
+        self._log.info('adding brake modified for {} with step {}'.format(name, step))
         self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)
         self.add_speed_modifier('{}-{}'.format(MotorController.BRAKE_LAMBDA_NAME, name),
                 (lambda speeds, _fn=_brake_modifier: _fn(speeds)), exclusive=True)

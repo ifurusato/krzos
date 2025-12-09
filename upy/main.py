@@ -27,9 +27,17 @@ for mod in ['main', 'i2c_slave', 'controller']:
         del sys.modules[mod]
 
 def main():
+    SDA_PIN    = 2
+    SCL_PIN    = 3
+    STRIP_PIN  = 0
+    RING_PIN   = 1
+    CLOCK_PIN  = 4
+
+    IS_PICO    = True
     I2C_SLAVE  = True
     CYCLE_TEST = False
-    BLINK      = True
+    BLINK      = False
+
     timer0 = None
     timer1 = None
     timer2 = None
@@ -41,23 +49,29 @@ def main():
         controller = Controller()
 
         count = 24
-        ring = Pixel(pin='B14', pixel_count=count, brightness=0.1)
-        strip = Pixel(pin='B12', pixel_count=8, brightness=0.1)
-
-        clock_pin = Pin('C12', Pin.OUT)
-
-#       def tick():
-#           clock_pin.value(not clock_pin.value())
+        ring = Pixel(pin=RING_PIN, pixel_count=count, brightness=0.1)
+        strip = Pixel(pin=STRIP_PIN, pixel_count=8, brightness=0.1)
 
         # set up 50Hz timer0 on pin GP4 (requires 2x frequency since toggle is half freq)
+        clock_pin = Pin(CLOCK_PIN, Pin.OUT)
         timer0 = Timer(hard=True)
         timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: clock_pin.value(not clock_pin.value()))
-#       timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: tick())
         
         if BLINK:
             timer1 = Timer()
             timer1.init(freq=2, mode=Timer.PERIODIC, callback=controller.step)
-            strip.set_color(index=0, color=COLOR_AMBER)
+            strip.set_color(index=0, color=COLOR_ORANGE)
+        else:
+            led = Pin(25, Pin.OUT)   # Onboard LED
+
+            def blink():
+                led.on()
+                time.sleep_ms(20)
+                led.off()
+
+            # otherwise use the onboard LED
+            timer1 = Timer()
+            timer1.init(freq=0.5, mode=Timer.PERIODIC, callback=lambda t: blink())
         
         if CYCLE_TEST:
     #       cycler = BlinkPattern(ring, count, offset=12, auto_rotate=True)
@@ -71,7 +85,10 @@ def main():
 
         if I2C_SLAVE:
             # set up I2C slave
-            slave = I2CSlave(i2c_id=1, i2c_address=0x45)
+            if IS_PICO:
+                slave = I2CSlave(scl_pin=SCL_PIN, sda_pin=SDA_PIN)
+            else:
+                slave = I2CSlave(scl_pin='A1', sda_pin='A2')
             controller.set_strip(strip)
             controller.set_ring(ring)
             slave.add_callback(controller.process)
