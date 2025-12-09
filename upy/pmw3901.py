@@ -9,13 +9,14 @@ import machine
 WAIT = -1 # sentinel for waits in vendor sequences
 
 class PMW3901:
-    REG_PRODUCT_ID = 0x00
-    REG_MOTION     = 0x02
-    REG_DELTA_X    = 0x03
-    REG_DELTA_Y    = 0x04
-    REG_SQUAL      = 0x05
-    REG_PIXEL_SUM  = 0x06
-    REG_SHUTTER    = 0x07
+    REG_PRODUCT_ID  = 0x00
+    REG_MOTION      = 0x02
+    REG_DELTA_X     = 0x03
+    REG_DELTA_Y     = 0x04
+    REG_SQUAL       = 0x05
+    REG_PIXEL_SUM   = 0x06
+    REG_SHUTTER     = 0x07
+    REG_ORIENTATION = 0x5B
     '''
     MicroPython PMW3901 driver with PAA5100 support and Pimoroni "secret_sauce" init.
 
@@ -114,11 +115,48 @@ class PMW3901:
 
     def set_rotation(self, deg):
         if deg not in (0, 90, 180, 270):
-            raise ValueError("rotation must be one of 0,90,180,270")
+            raise ValueError("rotation must be one of 0, 90, 180, 270")
         self._rotation = deg
 
-    def set_orientation(self, orientation):
-        self._orientation = orientation
+    def set_rotation(self, deg):
+        '''
+        Set orientation of PMW3901 in increments of 90 degrees. 
+        
+        Args:
+            deg:  rotation in multiple of 90 degrees
+        '''
+        if deg == 0:
+            self.set_orientation(invert_x=True, invert_y=True, swap_xy=True)
+        elif deg == 90:
+            self.set_orientation(invert_x=False, invert_y=True, swap_xy=False)
+        elif deg == 180:
+            self.set_orientation(invert_x=False, invert_y=False, swap_xy=True)
+        elif deg == 270:
+            self.set_orientation(invert_x=True, invert_y=False, swap_xy=False)
+        else:
+            raise ValueError("Degrees must be one of 0, 90, 180 or 270")
+        self._rotation = deg
+
+    def set_orientation(self, invert_x=True, invert_y=True, swap_xy=True):
+        '''
+        Set orientation of PMW3901 manually.
+        
+        Swapping is performed before flipping.
+        
+        Args:
+            invert_x:  invert the X axis
+            invert_y:  invert the Y axis
+            swap_xy:   swap the X/Y axes
+        '''
+        value = 0
+        if swap_xy:
+            value |= 0b10000000
+        if invert_y:
+            value |= 0b01000000
+        if invert_x: 
+            value |= 0b00100000
+        self. write_register(self.REG_ORIENTATION, value)
+        self._orientation = value
 
     def reset(self, reset_pin=None, active_low=True):
         if reset_pin is None:
@@ -369,12 +407,12 @@ class PAA5100(PMW3901):
         raise RuntimeError("Timed out waiting for motion data.")
 
     def enable_sensor_led(self, value=None):
-        """
+        '''
         Minimal enable: restores saved LED register or writes provided value.
 
         - If `value` is None this uses self._saved_led_reg (must exist if not passing value).
         - Writes reg 0x6F on page 0x14 and restores page 0x00.
-        """
+        '''
         v = value if value is not None else self._saved_led_reg
         self.write_register(0x7F, 0x14)
         self.write_register(0x6F, v)

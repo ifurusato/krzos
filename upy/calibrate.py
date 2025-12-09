@@ -1,20 +1,26 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Calibration test script for Odometer with PAA5100 MicroPython driver.
+# Calibration script for Odometer with PAA5100
 # Uses RP2040 wrapper with IRQ support
 
 import sys
-import machine, time
+import time
 from pmw3901_rp2040 import create_paa5100
 from odometer import Odometer
 
-# ------------------------------------
-
 # auto-clear: remove cached modules to force reload
-for mod in ['main', 'test_pmw3901', 'test_paa5100', 'pmw3901']:
+for mod in ['main', 'calibrate', 'test_pmw3901', 'test_paa5100', 'pmw3901']:
     if mod in sys.modules:
         del sys.modules[mod]
+
+RESOLUTION_FACTOR = 0.009868
+
+# .............................................................
+
+print("="*60)
+print("OPTICAL FLOW ODOMETER CALIBRATION")
+print("="*60)
 
 # instantiate the PAA5100 wrapper and enable Pimoroni secret_sauce init
 nofs, irq_pin = create_paa5100()
@@ -23,11 +29,12 @@ nofs.set_orientation(invert_x=True, invert_y=True, swap_xy=False)
 print("product ID: {}, revision: {}".format(hex(nofs.id), hex(nofs.revision)))
 time.sleep_ms(50)
 
-print("="*60)
-print("OPTICAL FLOW ODOMETER CALIBRATION")
-print("="*60)
+# Configure orientation for your 180° rotated mounting
+print("Setting orientation (180° rotation, facing down)...")
+nofs.set_orientation(invert_x=True, invert_y=True, swap_xy=False)
 
-odom = Odometer(nofs, irq_pin=irq_pin, resolution_factor=0.025)
+# Create odometer (IRQ mode if irq_pin is provided)
+odom = Odometer(nofs, irq_pin=irq_pin, resolution_factor=RESOLUTION_FACTOR)
 
 print("\n" + "="*60)
 print("CALIBRATION PROCEDURE")
@@ -46,24 +53,23 @@ print("")
 try:
     update_count = 0
     last_print = time.ticks_ms()
-    
+
     while True:
         # In IRQ mode, update() is called automatically, but calling it again doesn't hurt
         # In polling mode, this is essential
         if not odom.irq_mode:
             odom.update()
-        
+
         update_count += 1
-        
+
         # Print status every 200ms
         current = time.ticks_ms()
         if time.ticks_diff(current, last_print) > 200:
             x, y = odom.position
             cumulative = odom.get_cumulative_distance()
-            print("x={: 6.2f}cm, y={:6.2f}cm | dist={:6.2f}cm". format(
-                x, y, cumulative))
+            print("x={: 6.2f}cm, y={:6.2f}cm | dist={:6.2f}cm".format(x, y, cumulative))
             last_print = current
-        
+
         time.sleep_ms(20)  # 50Hz in polling mode, less critical in IRQ mode
 
 except KeyboardInterrupt:
@@ -74,18 +80,18 @@ cumulative = odom.get_cumulative_distance()
 
 print("\nFinal Results:")
 print("  Position: x={:.2f}cm, y={:.2f}cm".format(x, y))
-print("  Cumulative distance: {:. 2f}cm".format(cumulative))
+print("  Cumulative distance: {:.2f}cm".format(cumulative))
 print("  Update count: {}".format(update_count))
 
 if cumulative > 10:
     print("\nCalibrating based on Y-axis (forward) movement...")
-    odom.calibrate(known_distance_cm=100.0, measured_distance_cm=abs(y))
+    odom.calibrate(known_distance_cm=100.0, measured_distance_cm=abs(x))
     new_factor = odom.get_resolution_factor()
-    
+
     print("\n" + "="*60)
     print("*** SAVE THIS TO YOUR CONFIG:  {:.6f} ***".format(new_factor))
     print("="*60)
-    
+
     # Validation test
     print("\n\nWould you like to validate?  (y/n)")
     try:
@@ -94,35 +100,35 @@ if cumulative > 10:
             print("\n" + "="*60)
             print("VALIDATION TEST")
             print("="*60)
-            
+
             odom.reset()
             print("\nMove robot 50cm forward")
             print("Press Ctrl-C when done")
-            
+
             try:
                 while True:
                     if not odom.irq_mode:
                         odom.update()
                     time.sleep_ms(20)
-            except KeyboardInterrupt: 
+            except KeyboardInterrupt:
                 pass
-            
+
             x, y = odom.position
             error = abs(abs(y) - 50.0)
             error_pct = error / 50.0 * 100.0
-            
+
             print("\n\nValidation Results:")
             print("  Expected: 50cm")
-            print("  Measured: {:.2f}cm". format(abs(y)))
+            print("  Measured: {:.2f}cm".format(abs(y)))
             print("  Error: {:.2f}cm ({:.1f}%)".format(error, error_pct))
-            
+
             if error < 2.0:
                 print("  Status: EXCELLENT ✓")
             elif error < 5.0:
                 print("  Status: GOOD ✓")
             else:
                 print("  Status:  Needs improvement")
-    except: 
+    except:
         pass
 else:
     print("\nERROR: Not enough movement detected!")
