@@ -99,10 +99,6 @@ class TinyFxController(I2CMaster):
         '''
         if not self.enabled:
             super().enable()
-            time.sleep(0.3)
-            if self._timeset:
-                self._log.info(Fore.YELLOW + 'setting RTC time on TinyFX…')
-                self.send_request('time set now')
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')

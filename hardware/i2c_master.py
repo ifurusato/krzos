@@ -81,7 +81,7 @@ class I2CMaster(Component):
         if self.enabled:
             if message.startswith('time set'):
                 now = dt.now()
-                self._log.info(Fore.GREEN + 'setting time on TinyFX to: {}'.format(now.isoformat()))
+                self._log.info(Fore.GREEN + 'setting time to: {}'.format(now.isoformat()))
                 ts = now.strftime("%Y%m%d-%H%M%S")
                 message = message.replace("now", ts)
             out_msg = pack_message(message)
@@ -148,6 +148,10 @@ class I2CMaster(Component):
         '''
         if not self.enabled:
             super().enable()
+            time.sleep(0.3)
+            if self._timeset:
+                self._log.info(Fore.YELLOW + 'setting RTC time…')
+                self.send_request('time set now')
         else:
             self._log.warning('already enabled.')
 

@@ -16,7 +16,9 @@ for mod in ['main', 'calibrate', 'test_pmw3901', 'test_paa5100', 'pmw3901']:
 
 #RESOLUTION_FACTOR = 0.009868
 #RESOLUTION_FACTOR = 0.009871
-RESOLUTION_FACTOR = 0.009537
+#RESOLUTION_FACTOR = 0.009537  # lounge wood floor
+#RESOLUTION_FACTOR = 0.003212  # fine grain wood
+RESOLUTION_FACTOR = 0.002647   # fine grain wood
 
 # .............................................................
 

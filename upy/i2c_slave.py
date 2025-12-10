@@ -7,11 +7,11 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-05
+# modified: 2025-11-24
 
 import sys
 import time
-from machine import I2CTarget, Pin
+from machine import Pin, I2CTarget
 
 try:
     from upy.message_util import pack_message, unpack_message
@@ -21,7 +21,7 @@ except ImportError:
 __I2C_ID      = 1
 __I2C_SDA_PIN = 2
 __I2C_SCL_PIN = 3
-__I2C_ADDRESS = 0x39
+__I2C_ADDRESS = 0x41
 __BUF_LEN     = 258
 
 class I2CSlave:
@@ -30,10 +30,11 @@ class I2CSlave:
     '''
     def __init__(self, i2c_id=None, i2c_address=None, scl_pin=None, sda_pin=None):
         # configuration
-        self._i2c_id      = i2c_id      if i2c_id      else __I2C_ID
+        self._i2c_id      = i2c_id if i2c_id else __I2C_ID
         self._i2c_address = i2c_address if i2c_address else __I2C_ADDRESS
-        self._i2c_scl_pin = scl_pin     if scl_pin     else __I2C_SCL_PIN
-        self._i2c_sda_pin = sda_pin     if sda_pin     else __I2C_SDA_PIN
+        self._i2c_scl_pin = scl_pin if scl_pin else __I2C_SCL_PIN 
+        self._i2c_sda_pin = sda_pin if sda_pin else __I2C_SDA_PIN
+
         # state variables
         self._i2c = None
         self._single_chunk = bytearray(32)
@@ -58,9 +59,9 @@ class I2CSlave:
         triggers = (I2CTarget.IRQ_WRITE_REQ | I2CTarget.IRQ_END_WRITE |
                     I2CTarget.IRQ_READ_REQ | I2CTarget.IRQ_END_READ)
         # STM32: configure for your board; pins are pre-set for each bus
-        self._i2c = I2CTarget(self._i2c_id, self._i2c_address)
+#       self._i2c = I2CTarget(self._i2c_id, self._i2c_address)
         # RP2040:
-#       self._i2c = I2CTarget(self._i2c_id, self._i2c_address, scl=Pin(self._i2c_scl_pin), sda=Pin(self._i2c_sda_pin))
+        self._i2c = I2CTarget(self._i2c_id, self._i2c_address, scl=Pin(self._i2c_scl_pin), sda=Pin(self._i2c_sda_pin))
         self._i2c.irq(self._irq_handler, trigger=triggers, hard=True)
         print('I2C slave enabled at on I2C{} address {:#04x}'.format(self._i2c_id, self._i2c_address))
 

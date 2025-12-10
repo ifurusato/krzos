@@ -11,6 +11,8 @@
 
 import time
 from machine import Pin
+from logger import Logger, Level
+#from pmw3901_rp2040 import create_paa5100
 
 class Odometer:
     RESOLUTION_FACTOR = 0.009734
@@ -31,40 +33,46 @@ class Odometer:
     - reset():       Resets cumulative position and timing
     - calibrate():   Adjusts resolution factor based on known vs measured distance
     '''
-    def __init__(self, sensor, irq_pin=None, resolution_factor=None, timeout=1.0):
+    def __init__(self, sensor=None, irq_pin=None, resolution_factor=None, timeout=1.0):
         '''
         Initialize the optical flow odometer.
 
         Args:
-            sensor:             PAA5100 instance (already configured with correct orientation)
+            sensor:             PAA5100 instance (optional or already configured with correct orientation)
             irq_pin:            Optional Pin instance for interrupt-driven updates
             resolution_factor:  Scaling factor for sensor readings (adjust via calibration)
             timeout:            Sensor read timeout in seconds
         '''
-        self._sensor = sensor
-        self._irq_pin = irq_pin
-        self._resolution_factor = resolution_factor if resolution_factor is not None else Odometer.RESOLUTION_FACTOR
+        self._log = Logger('odometer', level=Level.INFO)
+        if sensor:
+            self._nofs = sensor
+            self._irq_pin = irq_pin
+        else:
+            # use defaults for the RP2040
+            from pmw3901_rp2040 import create_paa5100
+
+            self._nofs, self._irq_pin = create_paa5100()
+            self._nofs.set_orientation(invert_x=True, invert_y=True, swap_xy=False)
+        self.set_resolution_factor(resolution_factor)
         self._timeout = timeout
         # internal state
-        self._last_time = None   # float (seconds from time.ticks_ms())
-        self._x = 0.0            # lateral position (cm) - positive = starboard
-        self._y = 0.0            # forward position (cm) - positive = forward
-        self._vx = 0.0           # lateral velocity (cm/s)
-        self._vy = 0.0           # forward velocity (cm/s)
+        self._last_time    = None  # float (seconds from time.ticks_ms())
+        self._x            = 0.0   # lateral position (cm) - positive = starboard
+        self._y            = 0.0   # forward position (cm) - positive = forward
+        self._vx           = 0.0   # lateral velocity (cm/s)
+        self._vy           = 0.0   # forward velocity (cm/s)
         # calibration tracking
         self._cumulative_x = 0.0
         self._cumulative_y = 0.0
-        # callbacks
-        self._callbacks = []
-        self._enabled = True
-        self._closed = False
+        self._callbacks    = []
+        self._enabled      = True
+        self._closed       = False
         # IRQ setup
         self._irq_mode = False
         if irq_pin is not None:
             self._setup_irq(irq_pin)
-        print("odometer initialized")
-        print("  resolution factor: {:.6f}".format(resolution_factor))
-        print("  mode: {}".format("IRQ-driven" if self._irq_mode else "Polling"))
+        self._log.info("mode: {}".format("IRQ-driven" if self._irq_mode else "polling"))
+        self._log.info('ready.')
 
     def _setup_irq(self, irq_pin):
         '''
@@ -74,10 +82,10 @@ class Odometer:
             # Attach IRQ handler to pin (rising edge = motion detected)
             irq_pin.irq(trigger=Pin.IRQ_RISING, handler=self._irq_handler)
             self._irq_mode = True
-            print("  IRQ attached to pin {}".format(irq_pin))
+            self._log.info("  IRQ attached to pin {}".format(irq_pin))
         except Exception as e:
-            print("  Warning: Could not setup IRQ:  {}".format(e))
-            print("  Falling back to polling mode")
+            self._log.info("  Warning: Could not setup IRQ:  {}".format(e))
+            self._log.info("  Falling back to polling mode.")
             self._irq_mode = False
 
     def _irq_handler(self, pin):
@@ -122,12 +130,13 @@ class Odometer:
         Set the robot's position to specific coordinates.
         Used for initialization or resetting odometry.
 
-        :param x:  lateral position in cm
-        :param y: forward position in cm
+        Args:
+            x:  lateral position in cm
+            y: forward position in cm
         '''
         self._x = x
         self._y = y
-        print("Position set to:  x={:.2f}cm, y={:.2f}cm".format(x, y))
+        self._log.info("position set to:  x={:.2f}cm, y={:.2f}cm".format(x, y))
 
     def reset(self):
         '''
@@ -140,7 +149,7 @@ class Odometer:
         self._vy = 0.0
         self._cumulative_x = 0.0
         self._cumulative_y = 0.0
-        print("Odometry reset.")
+        self._log.info("reset.")
 
     def update(self):
         '''
@@ -157,7 +166,7 @@ class Odometer:
         try:
             # read sensor - returns (x, y) in sensor units
             # with your orientation:  x = lateral, y = forward
-            raw_x, raw_y = self._sensor.get_motion(timeout=self._timeout)
+            raw_x, raw_y = self._nofs.get_motion(timeout=self._timeout)
             # apply resolution factor to convert sensor units to cm
             dx_cm = raw_x * self._resolution_factor
             dy_cm = raw_y * self._resolution_factor
@@ -200,31 +209,28 @@ class Odometer:
             known_distance_cm:     Actual distance traveled (ground truth)
             measured_distance_cm:  Distance measured by sensor (if None, uses current cumulative)
         '''
-        # Debug: Print cumulative values
-        print("DEBUG: _cumulative_x={:.2f}, _cumulative_y={:.2f}".format(
-            self._cumulative_x, self._cumulative_y))
+        self._log.debug("cumulative_x={:.2f}, cumulative_y={:.2f}".format(self._cumulative_x, self._cumulative_y))
         if measured_distance_cm is None:
-            # Use cumulative distance traveled
+            # use cumulative distance traveled
             measured_distance_cm = (self._cumulative_x**2 + self._cumulative_y**2)**0.5
-            print("DEBUG:  Calculated measured_distance={:.2f}cm".format(measured_distance_cm))
+            self._log.debug("calculated measured_distance={:.2f}cm".format(measured_distance_cm))
         if measured_distance_cm == 0.0:
-            print("ERROR: No movement detected for calibration")
-            print("       Make sure you called update() during movement!")
+            self._log.error("no movement detected for calibration.")
             return
-        # Calculate correction factor
+        # calculate correction factor
         correction = known_distance_cm / measured_distance_cm
         old_factor = self._resolution_factor
-        print("DEBUG: correction factor = {:.2f} / {:.2f} = {:.6f}".format(
+        self._log.debug("correction factor = {:.2f} / {:.2f} = {:.6f}".format(
             known_distance_cm, measured_distance_cm, correction))
         self._resolution_factor *= correction
-        print("\nCalibration complete:")
-        print("  Known distance:       {:.2f}cm".format(known_distance_cm))
-        print("  Measured distance:    {:.2f}cm".format(measured_distance_cm))
-        print("  Old factor:           {:.6f}".format(old_factor))
-        print("  New factor:           {:.6f}".format(self._resolution_factor))
-        print("  Correction applied:   {:.4f}x".format(correction))
+        self._log.info("\ncalibration complete:")
+        self._log.info("  known distance:       {:.2f}cm".format(known_distance_cm))
+        self._log.info("  measured distance:    {:.2f}cm".format(measured_distance_cm))
+        self._log.info("  old factor:           {:.6f}".format(old_factor))
+        self._log.info("  new factor:           {:.6f}".format(self._resolution_factor))
+        self._log.info("  correction applied:   {:.4f}x".format(correction))
         if abs(correction - 1.0) < 0.01:
-            print("\n  WARNING: Correction is very close to 1.0 - no change needed!")
+            self._log.warning("correction is very close to 1.0 - no change needed!")
 
     def get_resolution_factor(self):
         '''
@@ -232,12 +238,21 @@ class Odometer:
         '''
         return self._resolution_factor
 
-    def set_resolution_factor(self, factor):
+    def set_resolution_factor(self, resolution_factor):
         '''
-        Set the resolution factor manually (e.g., loaded from config).
+        Set the resolution factor manually. If the argument is None, sets to the hard-coded default.
         '''
-        self._resolution_factor = factor
-        print("Resolution factor set to:  {:.6f}".format(factor))
+        self._resolution_factor = resolution_factor if resolution_factor is not None else Odometer.RESOLUTION_FACTOR
+        self._log.info("resolution factor: {:.6f}".format(self._resolution_factor))
+
+    def set_sensor_led(self, enable):
+        '''
+        Turns the NOFS's illumination on or off.
+        '''
+        if enable:
+            self._nofs.enable_sensor_led()
+        else:
+            self._nofs.disable_sensor_led()
 
     def is_moving(self, threshold=0.1):
         '''
@@ -266,7 +281,7 @@ class Odometer:
         '''
         Prints the current velocity vector and position.
         '''
-        print("velocity: ({:.2f}, {:.2f}); position: ({:.2f}cm, {:.2f}cm)".format(
+        self._log.info("velocity: ({:.2f}, {:.2f}); position: ({:.2f}cm, {:.2f}cm)".format(
             self._vx, self._vy, self._x, self._y))
 
     def add_callback(self, callback):
@@ -277,10 +292,10 @@ class Odometer:
             callback: Function to call (no arguments)
         '''
         if not callable(callback):
-            raise ValueError("Callback must be callable")
+            raise ValueError("callback must be callable")
         if callback not in self._callbacks:
             self._callbacks.append(callback)
-            print("Added callback: {}".format(callback))
+            self._log.info("added callback: {}".format(callback))
 
     def remove_callback(self, callback):
         '''
@@ -297,7 +312,7 @@ class Odometer:
             try:
                 callback()
             except Exception as e:
-                print("Callback error: {}".format(e))
+                self._log.error("{} raised in callback: {}".format(type(e), e))
 
     def enable(self):
         '''
@@ -305,7 +320,9 @@ class Odometer:
         '''
         if not self._enabled:
             self._enabled = True
-            print("Odometer enabled.")
+            self._log.info("enabled.")
+        else:
+            self._log.warning("already enabled.")
 
     def disable(self):
         '''
@@ -313,7 +330,9 @@ class Odometer:
         '''
         if self._enabled:
             self._enabled = False
-            print("Odometer disabled.")
+            self._log.info("disabled.")
+        else:
+            self._log.warning("disabled.")
 
     def close(self):
         '''
@@ -328,6 +347,8 @@ class Odometer:
                     self._irq_pin.irq(handler=None)
                 except:
                     pass
-            print("Odometer closed.")
+            self._log.info("closed.")
+        else:
+            self._log.warning("already closed.")
 
 #EOF

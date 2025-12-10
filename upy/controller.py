@@ -10,9 +10,11 @@
 
 import sys
 import time
+from machine import RTC
+
 from colors import*
 from color_store import ColorStore
-from pmw3901_rp2040 import create_paa5100
+from odometer import Odometer
 
 class Controller:
     '''
@@ -35,8 +37,16 @@ class Controller:
         self._blink_direction = 1
         self._blink_color     = COLOR_AMBER
         self._ring_colors = [COLOR_BLACK] * 24
-        # instantiate the PAA5100 wrapper and enable Pimoroni secret_sauce init
-        self._nofs, self._irq_pin = create_paa5100()
+        # instantiate the odometer
+        self._odometer = Odometer()
+        # heartbeat feature
+        self._heartbeat_enabled     = True
+        self._heartbeat_on_time_ms  = 50
+        self._heartbeat_off_time_ms = 2950
+        self._heartbeat_timer = 0
+        self._heartbeat_state = False
+        self._position = '0 0'
+        self._velocity = '0 0'
         print('ready.')
 
     def set_strip(self, strip):
@@ -60,21 +70,39 @@ class Controller:
         '''
         return self.process(cmd)
 
-    def get_motion(self):
-        try:
-            x, y = self._nofs.get_motion(timeout=1.0)
-            print("motion: ({}, {})".format(x, y))
-#           time.sleep_ms(200)
-            return x, y
-        except Exception as e:
-            print("motion read error: {}".format(e))
-            return None, None
+    def _update_odometry(self):
+        '''
+        Called to update the position and velocity variables from the Odometer.
+        '''
+        x, y = self._odometer.position
+        vx, vy = self._odometer.velocity
+        self._position = '{} {}'.format(int(x), int(y))
+        self._velocity = '{} {}'.format(int(vx), int(vy))
+#       print("position: '{}'; velocity: '{}'".format(self._position, self._velocity))
 
     def tick(self, delta_ms):
         '''
         Can be called from main to update based on a delta in milliseconds.
         '''
-        pass
+        if self._heartbeat_enabled:
+            self._heartbeat(delta_ms)
+
+    def _heartbeat(self, delta_ms):
+        '''
+        Regulates the ticks so that the Odometer is not called too frequently.
+        It updates about once per second.
+        '''
+        self._heartbeat_timer += delta_ms
+        if self._heartbeat_state:
+            if self._heartbeat_timer >= self._heartbeat_on_time_ms:
+                self._update_odometry()
+                self._heartbeat_state = False
+                self._heartbeat_timer = 0
+        else:
+            if self._heartbeat_timer >= self._heartbeat_off_time_ms:
+                self._odometer.update()
+                self._heartbeat_state = True
+                self._heartbeat_timer = 0
 
     def step(self, t):
         if self._enable_blink:
@@ -137,12 +165,56 @@ class Controller:
         self._ring.set_color(index, color)
         self._ring_colors[index] = color
 
+    def _parse_timestamp(self, ts):
+        year    = int(ts[0:4])
+        month   = int(ts[4:6])
+        day     = int(ts[6:8])
+        hour    = int(ts[9:11])
+        minute  = int(ts[11:13])
+        second  = int(ts[13:15])
+        weekday = 0
+        subsecs = 0
+        return (year, month, day, weekday, hour, minute, second, subsecs)
+
+    def _rtc_to_iso(self, dt):
+        return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
+
+    def _set_time(self, timestamp):
+        try:
+            print('BEFORE: {}'.format(self._rtc_to_iso(RTC().datetime())))
+            RTC().datetime(self._parse_timestamp(timestamp))
+            print('AFTER:  {}'.format(self._rtc_to_iso(RTC().datetime())))
+            return 'ACK' 
+        except Exception as e:
+            print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
+            return 'ERR'
+
     def process(self, cmd):
         '''
         Processes the callback from the I2C slave, returning 'ACK', 'NACK'
         or 'ERR'. Data requests are for 'pir' and use three transactions, 
         the first is followed by 'get' and then 'clear', somewhat arbitrary
         tokens that return the previous response and then clear the buffer.
+
+        Commands:
+            odo pos
+                vel
+                reset
+                led on | off
+                rf get 
+                rf set <value> | None
+            time get | set <timestamp>
+            strip off | <color>
+                  <n> <color>
+            ring off | <color>
+                  <n> <color>
+            rotate <n> | on | off
+            blink on | off
+            save <name> <red> <green> <blue>
+            rgb <n> <red> <green> <blue>
+            heading <degrees> <color>
+            get
+            clear
         '''
         try:
             print("cmd: '{}'".format(cmd))
@@ -155,7 +227,52 @@ class Controller:
             _arg3 = parts[3] if len(parts) > 3 else None
             _arg4 = parts[4] if len(parts) > 4 else None
 
-            if _arg0 == "strip":
+            # odometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            if _arg0 == "odo":
+                if _arg1 == "pos":
+                    response = self._position
+                    return response
+                elif _arg1 == "vel":
+                    response = self._velocity
+                    return response
+                elif _arg1 == "reset":
+                    self._odometer.reset()
+                    return 'ACK'
+                elif _arg1 == "led":
+                    if _arg2 == "on":
+                        self._odometer.set_sensor_led(True)
+                        return 'ACK'
+                    elif _arg2 == "off":
+                        self._odometer.set_sensor_led(False)
+                        return 'ACK'
+                elif _arg1 == "rf":
+                    if _arg2 == "get":
+                        return self._odometer.get_resolution_factor()
+                    elif _arg2 == "set":
+                        if _arg3 is None:
+                            self._odometer.set_resolution_factor(None)
+                            return 'ACK'
+                        else:
+                            try:
+                                resolution_factor = float(_arg3)
+                                self._odometer.set_resolution_factor(resolution_factor)
+                                return 'ACK'
+                            except Exception as e:
+                                self._log.error('{} raised setting resolution factor: {}'.format(type(e), e))
+                                return 'ERR'
+                return 'ERR'
+
+            # RTC ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            elif _arg0 == "time":
+                print('time: {}, {}'.format(_arg1, _arg2))
+                if _arg1 == 'set':
+                    return self._set_time(_arg2)
+                elif _arg1 == 'get':
+                    return "2025" # TEMP
+                return 'ERR'
+
+            # LEDs ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            elif _arg0 == "strip":
                 if self._strip:
                     if _arg1 == 'all':
                         # e.g., strip all blue
@@ -268,10 +385,13 @@ class Controller:
                 color = self.get_color(_arg2, _arg3)
                 self._ring.set_color(index, color)
                 return 'ACK'
+
+            # get/set ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             elif _arg0 == "get":
                 return 'ACK' # called on 2nd request for data
             elif _arg0 == "clear":
                 return 'ACK' # called on 3rd request for data
+
             else:
                 print("unrecognised command: '{}'{}{}{}".format(
                         cmd,
@@ -294,7 +414,7 @@ class Controller:
             self._strip.set_color(index, COLOR_BLACK)
 
     def sensor_led_off(self):
-        if elf._nofs:
-            self._nofs.disable_sensor_led()
+        if elf._odometer:
+            self._odometer.sensor_led_off()
     
 #EOF

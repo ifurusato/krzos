@@ -92,9 +92,9 @@ class Diagnostics:
             files_to_test: A list of filenames to run pytest on.
         '''
         if not files_to_test:
-            self._log.warning("no unit test files found to run.")
+            self._log.warning("no test files found to run.")
             return False
-        self._log.info("running unit tests on the following functions:")
+        self._log.info("running tests on the following functions:")
         max_width = max(len(f) for f in files_to_test)
         for _file in files_to_test:
             unit_tests = self._get_marked_tests(_file)
@@ -110,7 +110,7 @@ class Diagnostics:
                 for test_name in unit_tests:
                     command.append("{}.py::{}".format(os.path.splitext(_file)[0], test_name))
             if len(command) == 3:
-                self._log.warning("no unit tests found to run.")
+                self._log.warning("no tests found to run.")
                 return False
             # run pytest, suppress output on success only
 #           result = subprocess.run(command, capture_output=True, text=True, check=False)
@@ -126,7 +126,7 @@ class Diagnostics:
             # log non-pytest messages
             self._log.info("Finished running pytest on {} files.".format(len(files_to_test)))
             if result.returncode == 0:
-                self._log.info(Fore.GREEN + "all unit tests passed successfully.")
+                self._log.info(Fore.GREEN + "all tests passed successfully.")
                 self._led_control.set_color(Color.GREEN)
                 time.sleep(3)
                 return False
@@ -159,9 +159,9 @@ class Diagnostics:
             there_were_errors = False
             test_files = self._find_test_files()
             if not test_files:
-                self._log.warning("no unit test files found.")
+                self._log.warning("no test files found.")
             elif test_files:
-                self._log.debug("found the following unit test files:")
+                self._log.debug("found the following test files:")
                 for _file in test_files:
                     self._log.debug(Fore.BLUE + "    {}".format(_file))
                 if run_tests:
@@ -169,7 +169,7 @@ class Diagnostics:
                 else:
                     self._log.info(Fore.YELLOW + "diagnostics called with '--skip-tests' argument.")
             else:
-                self._log.warning("no unit test files were found in the current directory.")
+                self._log.warning("no test files were found in the current directory.")
         except subprocess.CalledProcessError:
             sys.exit(1)
         finally:
