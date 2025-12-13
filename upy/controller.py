@@ -245,6 +245,7 @@ class Controller:
                     return msg
                 elif _arg1 == "vel":
                     msg = '{} {}'.format(self._last_update_ts, self._velocity)
+                    msg = '1765628599 -1234 -1234'
                     print("message: '{}'".format(msg))
                     return msg
                 elif _arg1 == "reset":
@@ -396,6 +397,10 @@ class Controller:
                 index = self.heading_to_pixel(degrees)
                 color = self.get_color(_arg2, _arg3)
                 self._ring.set_color(index, color)
+                return 'ACK'
+
+            # ping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+            elif _arg0 == "ping":
                 return 'ACK'
 
             # get/set ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
