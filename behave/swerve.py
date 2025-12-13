@@ -128,6 +128,8 @@ class Swerve(AsyncBehaviour):
         '''
         The asynchronous poll, returns the intent vector.
         '''
+        if self.suppressed or self.disabled:
+            return (0.0, 0.0, 0.0)
         try:
             return self._update_intent_vector()
         except Exception as e:

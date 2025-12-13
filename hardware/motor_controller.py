@@ -519,6 +519,28 @@ class MotorController(Component):
         else:
             self._log.warning('already enabled.')
 
+    def check_clock_active(self, timeout_sec=0.2):
+        '''
+        Check if external clock ticks are arriving within the expected interval. 
+        Returns True if at least one tick is received within timeout_sec, False otherwise.
+        
+        Args:
+            timeout_sec:   maximum time to wait for a tick (default 0.2s, ~4x loop period)
+        '''
+        if not self._external_clock:
+            self._log.warning('no external clock configured; cannot check clock status.')
+            return False
+        initial_count = next(self._external_clock._counter)
+        time.sleep(timeout_sec)
+        final_count = next(self._external_clock._counter)
+        ticks_received = final_count - initial_count
+        if ticks_received > 0:
+            self._log.info('clock active: {} ticks detected within {:4.2f}s'.format(ticks_received, timeout_sec))
+            return True
+        else:
+            self._log.warning('no clock ticks detected within {:4.2f}s'.format(timeout_sec))
+            return False
+
     def _start_loop(self):
         '''
         Start the loop Thread.
@@ -784,8 +806,9 @@ class MotorController(Component):
     @property
     def is_stopped(self):
         '''
-        Returns True if the speed of all motors is zero, False if any are
-        moving, i.e., if the motor power of any motor is greater than zero.
+        Returns True if the speed (current power) of all motors is zero, False
+        if any are moving, i.e., if the motor power of any motor is greater than
+        zero.
         '''
         for _motor in self._all_motors:
             if not _motor.is_stopped:
@@ -795,12 +818,11 @@ class MotorController(Component):
     @property
     def is_stopped_target(self):
         '''
-        Returns True if the target speed of all motors is zero, False if any
-        have a non-zero target speed.
+        Returns True if the target speed of all motors is (close to) zero,
+        False if any have a non-zero target speed.
         '''
         for _motor in self._all_motors:
-            if _motor.target_speed > 0.0:
-                print('💛 motor target speed: {:5.2f}'.format(_motor.target_speed))
+            if not _motor.is_stopped_target_speed:
                 return False
         return True
 

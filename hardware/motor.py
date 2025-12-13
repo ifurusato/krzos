@@ -265,41 +265,23 @@ class Motor(Component):
         self._log.info('set maximum power ratio: {:<5.2f}'.format(self.__max_power_ratio))
 
     @property
+    def is_stopped_target_speed(self):
+        '''
+        Returns True if the motor's target speed is close to or equal to zero.
+        '''
+        return isclose(self.target_speed, 0.0, abs_tol=1e-2)
+
+    @property
     def is_stopped(self):
         '''
-        Returns True if the motor is entirely stopped, or very nearly stopped.
+        Returns True if the motor is nearly stopped based on power,
+        considering the motor's deadband.
         '''
         current_power = self.get_current_power(settle_to_zero=False)
         if current_power:
             return isclose(current_power, 0.0, abs_tol=1e-2)
         else:
             return True
-
-    @property
-    def is_in_motion(self):
-        '''
-        Returns True if the motor is moving, i.e., if the current power
-        setting of the motor is not equal to zero. Note that this returns
-        False if the value is very close to zero.
-        '''
-#       return self.get_current_power() != 0.0
-        return not isclose(self.get_current_power(settle_to_zero=False), 0.0, abs_tol=1e-2)
-
-    @property
-    def is_moving_ahead(self):
-        '''
-        Returns True if the motor is moving ahead (forward), i.e., if the
-        current power setting of the motor is greater than zero.
-        '''
-        return self.get_current_power() > 0.0
-
-    @property
-    def is_moving_astern(self):
-        '''
-        Returns True if the motor is moving astern (reverse), i.e., if the
-        current power setting of the motor is less than zero.
-        '''
-        return self.get_current_power() < 0.0
 
     def update_target_speed(self):
         '''
@@ -309,8 +291,6 @@ class Motor(Component):
         Returns the calculated motor speed after setting motor power to the value.
         '''
         if self.enabled:
-#           for callback in self.__callbacks:
-#               callback()
             # we start with the current value of the target speed
             self.__modified_target_speed = self.__target_speed
             _returned_value = 0.0

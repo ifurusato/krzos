@@ -413,6 +413,7 @@ class MessageBus(Component):
 
         NOTE: calls to this function should be await'd.
         '''
+        self._log.info('🐹 publish message: ' + Fore.GREEN + '{}'.format(message.event))
         # TENTATIVE: is this the breaker?
 #       _publish_task = asyncio.create_task(self._queue.put(message), name='publish-message-{}'.format(message.name))
         await self._queue.put(message)

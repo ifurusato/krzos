@@ -53,11 +53,11 @@ class AsyncBehaviour(Behaviour):
         self._ramp_down_step = 1.0 / (_ramp_down_duration_sec / self._poll_delay_sec) if _ramp_down_duration_sec > 0 else 1.0
         self._log.info("blind mode ramp down step: {:.4f}".format(self._ramp_down_step))
         # state flags
-        self._intent_vector   = (0.0, 0.0, 0.0)
+        self._intent_vector     = (0.0, 0.0, 0.0)
         self._use_dynamic_priority = False
-        self._priority        = 0.3  # default priority
+        self._priority          = 0.3  # default priority
         self._intent_vector_registered = False
-        self._hold_at_zero    = False
+        self._hold_at_zero      = False
         self._intent_multiplier = 1.0
         # event loop
         self._loop_instance   = None
@@ -282,9 +282,10 @@ class AsyncBehaviour(Behaviour):
             self.start_loop_action()
             while not self._stop_event.is_set():
                 if not self.enabled:
-                    self._log.debug("behaviour disabled during loop, exiting… [BEFORE]")
+                    self._log.debug("behaviour disabled during loop, exiting…")
                     break
-                if self.has_toggle_assignment():
+                if not self._behaviour_manager.is_ballistic() and self.has_toggle_assignment():
+                    # we only alter suppressed states if nobody has gone ballistic
                     if self.suppressed and self.is_released_by_toggle():
                         self._log.info('releasing…')
                         self.release()
@@ -319,7 +320,7 @@ class AsyncBehaviour(Behaviour):
                         )
                 await asyncio.sleep(self._poll_delay_sec)
                 if not self.enabled:
-                    self._log.debug("behaviour disabled during loop, exiting… [AFTER]")
+                    self._log.debug("behaviour disabled during loop, exiting…")
                     break
 
         except asyncio.CancelledError:

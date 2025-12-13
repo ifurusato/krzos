@@ -113,7 +113,7 @@ class Button(Component):
         try:
             self._button.close()
             if self._button.closed:
-                print('🐟 a. closed! ')
+                self._log.debug('closed.')
             time.sleep(0.2)
         except Exception as f:
             self._log.warning(Fore.CYAN + Style.DIM + "{} raised closing button: {}".format(type(f), f))

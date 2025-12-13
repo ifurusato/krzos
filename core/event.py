@@ -87,10 +87,10 @@ class Event(Enum):
     # gamepad events ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     GAMEPAD                = ( 30, "gamepad",                  10,   Group.GAMEPAD )
 
-    A_BUTTON               = ( 31, "a-cross",                  10,   Group.GAMEPAD)
-    B_BUTTON               = ( 32, "b-circle",                 10,   Group.GAMEPAD)
-    X_BUTTON               = ( 33, "x-triangle",               10,   Group.GAMEPAD)
-    Y_BUTTON               = ( 34, "y-square",                 10,   Group.GAMEPAD)
+    A_BUTTON               = ( 31, "a-button",                 10,   Group.GAMEPAD)
+    B_BUTTON               = ( 32, "b-button",                 10,   Group.GAMEPAD)
+    X_BUTTON               = ( 33, "x-button",                 10,   Group.GAMEPAD)
+    Y_BUTTON               = ( 34, "y-button",                 10,   Group.GAMEPAD)
 
     L1_BUTTON              = ( 35, "l1",                       10,   Group.GAMEPAD)
     L2_BUTTON              = ( 36, "l2",                       10,   Group.GAMEPAD) # unassigned

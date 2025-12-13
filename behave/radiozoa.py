@@ -156,6 +156,8 @@ class Radiozoa(AsyncBehaviour):
             self._log.debug("set default speed: {:4.2f}".format(self._default_speed))
 
     async def _poll(self):
+        if self.suppressed or self.disabled:
+            return (0.0, 0.0, 0.0)
         try:
             if self._ranging:
                 if self._use_dynamic_speed:

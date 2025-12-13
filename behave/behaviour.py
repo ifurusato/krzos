@@ -20,6 +20,7 @@ from core.message import Message
 from core.message_bus import MessageBus
 from core.message_factory import MessageFactory
 from core.subscriber import Subscriber
+from hardware.player import Player
 
 class Behaviour(ABC, Subscriber):
     NAME = 'behaviour'
@@ -42,6 +43,7 @@ class Behaviour(ABC, Subscriber):
         self._message_factory = message_factory
         # get instance of BehaviourManager
         self._behaviour_manager = Component.get_registry().get('behave-mgr') # hard-coded to avoid circular ref
+        self._enable_sound_fx    = False
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -80,6 +82,16 @@ class Behaviour(ABC, Subscriber):
         if not self.suppressed:
             self.execute(message)
         self._log.debug('processed message {}'.format(message.name))
+
+    def enable_sound_fx(self, enable):
+        '''
+        Enable/disable the playing of sound effects.
+        '''
+        self._enable_sound_fx = enable
+
+    def play_sound(self, name):
+        if self._enable_sound_fx:
+            Player.play(name)
 
     @abstractmethod
     def execute(self, message):

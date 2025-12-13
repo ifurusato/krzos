@@ -26,13 +26,13 @@ from core.event import Event, Group
 from core.orientation import Orientation
 from core.rate_limited import rate_limited
 from core.subscriber import Subscriber
+from core.queue_publisher import QueuePublisher
 from behave.behaviour import Behaviour
 from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
-from hardware.player import Player
 from hardware.tinyfx_controller import TinyFxController
 
 class Thoughts(Behaviour):
@@ -40,8 +40,8 @@ class Thoughts(Behaviour):
     _LISTENER_LOOP_NAME = '__thoughts_listener_loop'
     '''
     Monitors robot activity and plays sounds ("random thoughts") via the TinyFX
-    (using Player) at roughly a frequency corresponding to the message traffic
-    and motor speed, monitored via the Odometer.
+    at roughly a frequency corresponding to the message traffic and motor speed,
+    monitored via the Odometer.
 
     Because this Behaviour is tasked with expression, it is also responsible
     for the robot's running lights.
@@ -99,6 +99,12 @@ class Thoughts(Behaviour):
         self._poll_pir = False # not currently functional
         # components
         _component_registry = Component.get_registry()
+        # queue publisher
+        self._enable_publishing = True
+        self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
+        if self._queue_publisher is None:
+            raise MissingComponentError('queue publisher not available for Scan.')
+        # others…
         self._eyeballs_monitor = _component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
@@ -145,9 +151,8 @@ class Thoughts(Behaviour):
         self._snore_rate       = 0 # how fast to snore?
         self._reset_sleepiness()   # set to initial values
         self._reverse_count    = 0
-        self._reverse_limit    = 2                # how many cycles backwards before we notice?
+        self._reverse_limit    = 2 # how many cycles backwards before we notice?
         self._reversing        = False
-        self._suppress_sounds  = False
         self._suppress_random_sounds = False
         self._interior_light_state  = False
         self._running_lights_state  = False
@@ -202,16 +207,11 @@ class Thoughts(Behaviour):
             self._log.warning('already enabled.')
 
     def _odometer_callback(self):
-        if self._count % 10 == 0: # every 10 seconds
-            self._log.info(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
-        else:
-            self._log.info(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
-
-    def _play_sound(self, name):
-        if not self._suppress_sounds:
-            Player.play(name)
-        else:
-            self._log.info(Style.DIM + "not playing sound '{}'".format(name))
+        if self._verbose:
+            if self._count % 10 == 0: # every 10 seconds
+                self._log.info(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
+            else:
+                self._log.info(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
 
     def _reset_sleepiness(self):
         '''
@@ -368,26 +368,26 @@ class Thoughts(Behaviour):
                             self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(self._count))
                             self._snore_count += 1
                             if self._snore_count < self._snore_limit:
-                                self._play_sound('snore')
+                                self.play_sound('snore')
                                 self._snore_rate = randint(8, 11) # change snore rate
                             else:
                                 if self._poll_pir: # check for human/cat activity
                                     self.pir()
                                 elif self._sleep_count > self._deep_sleep_limit:
                                     self._eyeballs_monitor.set_eyeballs(Eyeball.DEEP_SLEEP)
-                                    self._play_sound('quiet-breathing')
+                                    self.play_sound('quiet-breathing')
                                 else:
                                     self._sleep_count += 1
                                     self._set_running_lights(False)
                                     time.sleep(0.1)
-                                    self._play_sound('breathing')
+                                    self.play_sound('breathing')
 
                     elif self._idle_count % self._sleep_limit == 0: # start sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._log.info(Fore.BLUE + 'sleeping…')
                         self._sleeping    = True
                         self._sleep_limit = randint(21, 31) # reset to different threshold
                         self._log.info(Fore.BLUE + 'sleeping at: {}.'.format(self._sleep_limit))
-                        self._play_sound(self._sleeping_sound)
+                        self.play_sound(self._sleeping_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.SLEEPY)
 
                     elif not self._bored and self._idle_count % self._bored_limit == 0: # bored ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -395,7 +395,7 @@ class Thoughts(Behaviour):
                         self._bored = True
                         self._bored_limit = randint(11, 17)
 #                       self._log.info(Fore.BLUE 'bored at: {}.'.format(self._bored_limit))
-                        self._play_sound(self._bored_sound)
+                        self.play_sound(self._bored_sound)
                         self._eyeballs_monitor.set_eyeballs(Eyeball.BORED)
 
                     else:
@@ -432,8 +432,10 @@ class Thoughts(Behaviour):
         if self._tinyfx and self._lux_sensor and self._count > 2:
             _lux_level = self._lux_sensor.lux
             _is_dark = _lux_level < self._lux_threshold
+            if not self._running_lights_state:
+                _is_dark = False
             if self._sleeping:
-                _is_dark = False # if sleeping do not turn on the lights
+                _is_dark = False
             if self._darkness_state != _is_dark: # things have changed
                 self._log.info(Fore.MAGENTA + '💮 lux level: {}; is dark? {}; was dark? {}'.format(
                         _lux_level, _is_dark, self._darkness_state))
@@ -446,6 +448,26 @@ class Thoughts(Behaviour):
                     self._suppress_random_sounds = _saved
                     self._darkness_state = _is_dark
 
+    def _publish_message(self, message):
+        '''
+        Publishes the message.
+        '''
+        if self._enable_publishing:
+            self._log.info("👿 publishing {} message…".format(message.event))
+            try:
+                self._queue_publisher.put(message)
+                self._log.info("👿 {} message published.".format(message.event))
+            except Exception as e:
+                self._log.error('{} encountered when publishing message: {}\n{}'.format(
+                    type(e), e, traceback.format_exc()))
+        else:
+            self._log.warning('👿 publishing disabled.')
+
+    def _publish_stuck(self):
+        self._log.info('👿 publish STUCK message.')
+        message = self._message_factory.create_message(Event.STUCK, 'thoughts')
+        self._publish_message(message)
+
     def _update_reverse_state(self):
         '''
         If the robot has been reversing for enough loop cycles, turn on the backup lights.
@@ -455,27 +477,27 @@ class Thoughts(Behaviour):
         reversing = self._reverse_count >= self._reverse_limit
         if reversing == self._reversing:
             if self._motor_controller and self._motor_controller.is_stopped:
-                self._log.info('👿 A. update reversing: motor stopped.')
+                self._log.debug('update reversing: motor stopped.')
                 reversing = False
             else:
-                self._log.info('👿 B. update reversing; motor not stopped.')
+                self._log.debug('update reversing; motor not stopped.')
                 return # no change of state
         if reversing:
-            self._log.info('👿 C. update reversing.')
+            self._log.debug('update reversing.')
             if self._tinyfx:
                 self._tinyfx.light(Orientation.AFT, True)
                 time.sleep(0.1)
-                self._play_sound('backing')
+                self.play_sound('backing')
             else:
                 self._log.warning('no tinyfx.')
-            self._log.info(Fore.GREEN + 'reversing… ({})'.format(self._reverse_count))
+            self._log.debug(Fore.GREEN + 'reversing… ({})'.format(self._reverse_count))
         else:
-            self._log.info('👿 D. update reversing.')
+            self._log.debug('update reversing.')
             if self._tinyfx:
                 self._tinyfx.light(Orientation.AFT, False)
             else:
                 self._log.warning('no tinyfx.')
-            self._log.info(Fore.GREEN + Style.DIM + 'no longer reversing… ({})'.format(self._reverse_count))
+            self._log.debug(Fore.GREEN + Style.DIM + 'no longer reversing… ({})'.format(self._reverse_count))
         self._reversing = reversing
 
     def _maybe_play_random_sound(self, activity):
@@ -491,7 +513,7 @@ class Thoughts(Behaviour):
                 if now >= self._next_play_time:
                     name = choice([n for n in self._active_sounds if n != self._last_name])
                     self._log.info(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
-                    self._play_sound(name)
+                    self.play_sound(name)
                     self._last_name = name
                     interval = expovariate(frequency / self._jitter_factor)
                     self._next_play_time = now + interval
@@ -518,16 +540,29 @@ class Thoughts(Behaviour):
     def execute(self, message):
         '''
         Nudge operates via process_message() as a Subscriber.
+
+        Mapping:
+            A_BUTTON:   no action
+            B_BUTTON:   no action
+            X_BUTTON:   no action
+            Y_BUTTON:   shut down robot
+            L1_BUTTON:  toggle running lights
+            L2_BUTTON:  toggle interior light
+            R1_BUTTON:  play 'ugh'
+            R2_BUTTON:  suppress/release sound effects
+            DPAD_LEFT:  used by Nudge
+            DPAD_RIGHT: used by Nudge
         '''
-        self._log.info(Style.DIM + '🌼 execute message.')
         event = message.event
+        self._log.info(Style.DIM + '🌼 execute message with event: {}'.format(event))
         match(event):
             case Event.A_BUTTON:
                 self._log.info(Style.DIM + 'A_BUTTON.')
+                self._publish_stuck()
             case Event.B_BUTTON:
-                self._log.info(Style.DIM + 'B_BUTTON.')
+                self._log.debug(Style.DIM + 'B_BUTTON.')
             case Event.X_BUTTON:
-                self._log.info(Style.DIM + 'X_BUTTON.')
+                self._log.debug(Style.DIM + 'X_BUTTON.')
             case Event.Y_BUTTON:
                 self._log.info(Style.DIM + 'Y_BUTTON. exit.')
             case Event.L1_BUTTON:
@@ -538,7 +573,7 @@ class Thoughts(Behaviour):
                 self._toggle_interior_light()
             case Event.R1_BUTTON:
                 self._log.info(Fore.MAGENTA + 'R1_BUTTON. play sound ugh')
-                self._play_sound('ugh')
+                self.play_sound('ugh')
             case Event.R2_BUTTON:
                 self._suppress_sounds = not self._suppress_sounds
                 if self._suppress_sounds:
@@ -546,37 +581,37 @@ class Thoughts(Behaviour):
                 else:
                     self._log.info(Fore.GREEN + 'R2_BUTTON. sounds are not suppressed.')
             case Event.START_BUTTON:
-                self._log.info(Style.DIM + 'START_BUTTON.')
+                self._log.debug(Style.DIM + 'START_BUTTON.')
             case Event.SELECT_BUTTON:
-                self._log.info(Style.DIM + 'SELECT_BUTTON.')
+                self._log.debug(Style.DIM + 'SELECT_BUTTON.')
             case Event.HOME_BUTTON:
-                self._log.info(Style.DIM + 'HOME_BUTTON.')
+                self._log.debug(Style.DIM + 'HOME_BUTTON.')
             case Event.DPAD_HORIZONTAL:
-                self._log.info(Style.DIM + 'DPAD_HORIZONTAL.')
+                self._log.debug(Style.DIM + 'DPAD_HORIZONTAL.')
             case Event.DPAD_LEFT:
-                self._log.info(Style.DIM + 'DPAD_LEFT. (used by nudge)')
+                self._log.debug(Style.DIM + 'DPAD_LEFT. (used by nudge)')
                 # used by nudge
             case Event.DPAD_RIGHT:
-                self._log.info(Style.DIM + 'DPAD_RIGHT. (used by nudge)')
+                self._log.debug(Style.DIM + 'DPAD_RIGHT. (used by nudge)')
                 # used by nudge
             case Event.DPAD_VERTICAL:
-                self._log.info(Style.DIM + 'DPAD_VERTICAL.')
+                self._log.debug(Style.DIM + 'DPAD_VERTICAL.')
             case Event.DPAD_UP:
-                self._log.info(Style.DIM + 'DPAD_UP. (used by nudge)')
+                self._log.debug(Style.DIM + 'DPAD_UP. (used by nudge)')
                 # used by nudge
             case Event.DPAD_DOWN:
-                self._log.info(Style.DIM + 'DPAD_DOWN. (used by nudge)')
+                self._log.debug(Style.DIM + 'DPAD_DOWN. (used by nudge)')
                 # used by nudge
             case Event.L3_VERTICAL:
-                self._log.info(Style.DIM + 'L3_VERTICAL.')
+                self._log.debug(Style.DIM + 'L3_VERTICAL.')
             case Event.L3_HORIZONTAL:
-                self._log.info(Style.DIM + 'L3_HORIZONTAL.')
+                self._log.debug(Style.DIM + 'L3_HORIZONTAL.')
             case Event.R3_VERTICAL:
-                self._log.info(Style.DIM + 'R3_VERTICAL.')
+                self._log.debug(Style.DIM + 'R3_VERTICAL.')
             case Event.R3_HORIZONTAL:
-                self._log.info(Style.DIM + 'R3_HORIZONTAL.')
+                self._log.debug(Style.DIM + 'R3_HORIZONTAL.')
             case _:
-                self._log.info(Style.DIM + 'UNRECOGNISED.')
+                self._log.warning('unrecognised event: {}'.format(event))
 
     def pir(self):
         try:

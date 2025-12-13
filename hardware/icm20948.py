@@ -523,7 +523,6 @@ class Icm20948(Component):
         if self._amin is None or self._amax is None:
             amin = list(self.__icm20948.read_magnetometer_data())
             amax = list(self.__icm20948.read_magnetometer_data())
-            print('💛 __icm20948 is None? {}; amin: {}; amax: {}'.format(self.__icm20948 == None, amin, amax))
             self._amin = amin
             self._amax = amax
         mag = list(self.__icm20948.read_magnetometer_data())

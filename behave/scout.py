@@ -200,6 +200,8 @@ class Scout(AsyncBehaviour):
         '''
         The asynchronous poll, returns the intent vector.
         '''
+        if self.suppressed or self.disabled:
+            return (0.0, 0.0, 0.0)
         try:
             if next(self._counter) % 5 == 0:
                 if self._use_dynamic_heading:

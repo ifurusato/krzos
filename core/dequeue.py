@@ -120,7 +120,10 @@ class DeQueue:
         '''
         self.put(item)
 
-    def put(self, item):
+    def put_nowait(self, item):
+        self.put(item, block=False)
+
+    def put(self, item, block=True):
         '''
         Put the item onto the queue.
 
@@ -130,7 +133,7 @@ class DeQueue:
         if self.full():
             raise Full()
         if item:
-            self._queue.put(item)
+            self._queue.put(item, block)
 
     def pop(self):
         '''

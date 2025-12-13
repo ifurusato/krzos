@@ -20,7 +20,6 @@ from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.subscriber import Subscriber
 from behave.async_behaviour import AsyncBehaviour
-from hardware.player import Player
 from hardware.motor_controller import MotorController
 
 class Nudge(AsyncBehaviour):
@@ -105,11 +104,11 @@ class Nudge(AsyncBehaviour):
         elif time_ms == 0:
             self.cancel()
         elif orientation is Orientation.PORT or orientation is Orientation.STBD:
-            Player.play('zzt')
+            self.play_sound('zzt')
             hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vx_ms_default
             self._nudge_lateral(orientation, hold_ms)
         elif orientation is Orientation.FWD or orientation is Orientation.AFT:
-            Player.play('tweak')
+            self.play_sound('tweak')
             hold_ms = int(time_ms) if time_ms and time_ms > 0 else self._hold_vy_ms_default
             self._nudge_longitudinal(orientation, hold_ms)
         else:
@@ -206,55 +205,53 @@ class Nudge(AsyncBehaviour):
         event = message.event
         match(event):
             case Event.A_BUTTON:
-                self._log.info(Style.DIM + '🌸 A_BUTTON.')
+                self._log.debug('A_BUTTON.')
             case Event.B_BUTTON:
-                self._log.info(Style.DIM + '🌸 B_BUTTON.')
+                self._log.debug('B_BUTTON.')
             case Event.X_BUTTON:
-                self._log.info(Style.DIM + '🌸 X_BUTTON.')
+                self._log.debug('X_BUTTON.')
             case Event.Y_BUTTON:
-                self._log.info(Style.DIM + '🌸 Y_BUTTON.')
+                self._log.debug('Y_BUTTON.')
             case Event.L1_BUTTON:
-                self._log.info(Style.DIM + 'L1_BUTTON.')
+                self._log.debug('L1_BUTTON.')
             case Event.L2_BUTTON:
-                self._log.info(Style.DIM + 'L2_BUTTON.')
+                self._log.debug('L2_BUTTON.')
             case Event.R1_BUTTON:
-                self._log.info(Style.DIM + 'R1_BUTTON.')
+                self._log.debug('R1_BUTTON.')
             case Event.R2_BUTTON:
-                self._log.info(Style.DIM + 'R2_BUTTON.')
+                self._log.debug('R2_BUTTON.')
             case Event.START_BUTTON:
-                self._log.info(Style.DIM + 'START_BUTTON.')
+                self._log.debug('START_BUTTON.')
             case Event.SELECT_BUTTON:
-                self._log.info(Style.DIM + 'SELECT_BUTTON.')
+                self._log.debug('SELECT_BUTTON.')
             case Event.HOME_BUTTON:
-                self._log.info(Style.DIM + 'HOME_BUTTON.')
+                self._log.debug('HOME_BUTTON.')
             case Event.DPAD_HORIZONTAL:
-                self._log.info(Style.DIM + '🌸 DPAD_HORIZONTAL.')
+                self._log.debug('DPAD_HORIZONTAL.')
             case Event.DPAD_LEFT:
-                self._log.info(Style.DIM + '🌸 DPAD_LEFT.')
+                self._log.info('DPAD_LEFT.')
                 # nudge the opposite way
                 self.nudge(Orientation.STBD, self._hold_vx_ms_default)
             case Event.DPAD_RIGHT:
-                self._log.info(Style.DIM + '🌸 DPAD_RIGHT.')
+                self._log.info('DPAD_RIGHT.')
                 # nudge the opposite way
                 self.nudge(Orientation.PORT, self._hold_vx_ms_default)
             case Event.DPAD_VERTICAL:
-                self._log.info(Style.DIM + '🌸 DPAD_VERTICAL.')
+                self._log.debug('DPAD_VERTICAL.')
             case Event.DPAD_UP:
-                self._log.info(Style.DIM + '🌸 DPAD_UP.')
+                self._log.info('DPAD_UP.')
                 self.nudge(Orientation.FWD, self._hold_vy_ms_default)
             case Event.DPAD_DOWN:
-                self._log.info(Style.DIM + '🌸 DPAD_DOWN.')
+                self._log.info('DPAD_DOWN.')
                 self.nudge(Orientation.AFT, self._hold_vy_ms_default)
             case Event.L3_VERTICAL:
-                self._log.info(Style.DIM + '🌸 L3_VERTICAL.')
+                self._log.debug('L3_VERTICAL.')
             case Event.L3_HORIZONTAL:
-                self._log.info(Style.DIM + '🌸 L3_HORIZONTAL.')
+                self._log.debug('L3_HORIZONTAL.')
             case Event.R3_VERTICAL:
-                self._log.info(Style.DIM + '🌸 R3_VERTICAL.')
-            case Event.R3_HORIZONTAL:
-                self._log.info(Style.DIM + '🌸 R3_HORIZONTAL.')
+                self._log.debug('R3_VERTICAL.')
             case _:
-                self._log.info(Style.DIM + 'UNRECOGNISED.')
+                self._log.warning('unrecognised event: {}'.format(event))
 
     def _nudge_speed_modifier(self, speeds):
         '''
@@ -275,6 +272,8 @@ class Nudge(AsyncBehaviour):
         Called by AsyncBehaviour loop. Returns the current intent vector (vx, vy, omega).
         This method drives ramping logic and the transient hold timing.
         '''
+        if self.suppressed or self.disabled:
+            return (0.0, 0.0, 0.0)
         now = time.monotonic()
         # if targets changed, start new ramp
         if self._target_vx != self._prev_target_vx or self._target_vy != self._prev_target_vy or self._target_omega != self._prev_target_omega:

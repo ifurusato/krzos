@@ -98,6 +98,8 @@ class Avoid(AsyncBehaviour):
         pass
 
     async def _poll(self):
+        if self.suppressed or self.disabled:
+            return (0.0, 0.0, 0.0)
         try:
             # poll sensors
             _port_distance = self._port_sensor.get_distance()

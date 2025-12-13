@@ -119,10 +119,12 @@ class Scan(AsyncBehaviour):
         Called when STUCK message received via message bus.
         '''
         if message.event is Event.STUCK:
-            self._log.info('STUCK event received, initiating scan…')
+            self._log.info('💜 💜 💜 💜 💜 STUCK event received, initiating scan…')
             if not self._scan_active:
+                # suppress other behaviours
                 if self.suppressed:
-                    self.release()  # resume polling
+                    self.release() # resume polling
+                self._behaviour_manager.go_ballistic(self)
                 self._initiate_scan()
             else:
                 self._log.warning('scan already in progress, ignoring STUCK event')
@@ -156,10 +158,13 @@ class Scan(AsyncBehaviour):
         Calculates total rotation needed for 360° of constant-speed data collection.
         '''
         self._log.info(Fore.GREEN + 'initiating scan…')
+        self._scan_active = True
+        print('_initiate_scane()   💜 💜 💜 💜 💜 💜 🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢 ')
+        time.sleep(3)
+        self.play_sound('ping')
         # mark where we started
         self._stuck_heading_marker = self._rotation_controller.push_heading_marker('stuck')
         self._scan_readings = []
-        self._scan_active = True
         self._data_collection_active = False
         # calculate total rotation needed: accel + 360° scan + decel
         accel = self._rotation_controller.accel_degrees
@@ -192,8 +197,7 @@ class Scan(AsyncBehaviour):
 
         Returns (0.0, 0.0, 0.0) because RotationController handles the rotation intent.
         '''
-        if not self._scan_active:
-            self._log.debug('poll: scan not active')
+        if self.suppressed or self.disabled or not self._scan_active:
             return (0.0, 0.0, 0.0)
         try:
             # poll rotation controller
@@ -329,8 +333,8 @@ class Scan(AsyncBehaviour):
         '''
         Publishes a SCAN message containing the heading value.
         '''
-        self._log.info("publishing scan message with heading '{:.1f}°'…".format(heading))
         if self._enable_publishing:
+            self._log.info("publishing scan message with heading '{:.1f}°'…".format(heading))
             try:
                 _message = self._message_factory.create_message(Event.SCAN, heading)
                 self._queue_publisher.put(_message)

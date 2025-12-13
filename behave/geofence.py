@@ -117,6 +117,9 @@ class Geofence(AsyncBehaviour):
         Check current position and orchestrate escape behavior if near boundaries.
         Returns (vx, vy, omega) tuple.
         '''
+        if self.suppressed:
+            return
+        print('geofence: _poll')
         try:
             x, y, theta = self._odometer.pose
             urgency, world_fx, world_fy = self._calculate_boundary_state(x, y)

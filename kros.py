@@ -340,6 +340,15 @@ class KROS(Component, FiniteStateMachine):
             self._log.warning('already started.')
             # could toggle callback on pushbutton?
             return
+        if self._motor_controller:
+            if self._motor_controller.check_clock_active(timeout_sec=1.0):
+                self._log.info('external clock active.')
+            else:
+                Player.play('buzz')
+                self._log.error('cannot start: external clock is not active.')
+                self.shutdown()
+                return
+
         self._log.heading('starting', 'starting k-series robot operating system (kros)…', '[2/2]' )
         FiniteStateMachine.start(self)
 
@@ -376,8 +385,8 @@ class KROS(Component, FiniteStateMachine):
         A callback executed upon starting the MessageBus.
         '''
         self._log.info(Fore.MAGENTA + 'kros started.')
-        # turn on running lights
-
+        if self._queue_publisher and not self._queue_publisher.enabled:
+            self._queue_publisher.enable()
         _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
         if _motor_ctrl_cfg.get('enable'):
             self._log.info('enable motor controller…')

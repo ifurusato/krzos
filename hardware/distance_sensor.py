@@ -88,6 +88,7 @@ class DistanceSensor(Component):
         Polls the GPIO pin to measure pulse width in microseconds.
         Returns None on timeout or if the measured pulse is too short (glitch).
         '''
+#       GPIO.setmode(GPIO.BCM)
         idle = GPIO.input(self._pin)
         # wait for start edge
         deadline = time.perf_counter() + 0.05
@@ -206,11 +207,13 @@ class DistanceSensor(Component):
             # we know of this warning so make it pretty
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always", RuntimeWarning)
+                print('GPIO.cleanup called [1].')
                 GPIO.setmode(GPIO.BCM)
                 GPIO.cleanup(self._pin)
                 for warning in w:
                     msg = Util.ellipsis('{}'.format(warning.message), 33)
                     self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
+                print('GPIO.cleanup called [2].')
                 GPIO.cleanup()
             super().disable()
 
