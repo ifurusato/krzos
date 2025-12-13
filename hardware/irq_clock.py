@@ -62,8 +62,8 @@ class IrqClock(Component):
         return IrqClock.NAME
 
     def enable(self):
-        Component.enable(self)
-        if self.enabled:
+        if not self.enabled:
+            Component.enable(self)
             if not self._initd:
                 try:
                     self._log.info('initialising gpiozero DigitalInputDevice…')
@@ -77,7 +77,7 @@ class IrqClock(Component):
                 finally:
                     self._initd = True
         else:
-            self._log.warning('unable to enable IRQ clock.')
+            self._log.warning('IRQ clock already enabled.')
 
     def add_callback(self, callback):
         '''

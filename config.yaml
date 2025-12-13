@@ -323,6 +323,8 @@ kros:
             toggle2:                      'roam'           # behaviour assignment(s) to toggle 2
             toggle3:              'avoid swerve'           # behaviour assignment(s) to toggle 3
             toggle4:                'scan scout'           # behaviour assignment(s) to toggle 4
+        nofs_odometer:
+            i2c_address:                   0x41            # I²C address for the device
         depth_camera:
             preset_mode:              'ROBOTICS'           # preset depth camera mode
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)

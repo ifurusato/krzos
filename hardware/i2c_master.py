@@ -10,7 +10,7 @@
 # modified: 2025-12-05
 
 import time
-from datetime import datetime as dt
+from datetime import datetime as dt, timezone
 import smbus2
 import traceback
 from colorama import init, Fore, Style
@@ -80,7 +80,8 @@ class I2CMaster(Component):
         '''
         if self.enabled:
             if message.startswith('time set'):
-                now = dt.now()
+#               now = dt.now() # as local time
+                now = dt.now(timezone.utc) # as UTC time
                 self._log.info(Fore.GREEN + 'setting time to: {}'.format(now.isoformat()))
                 ts = now.strftime("%Y%m%d-%H%M%S")
                 message = message.replace("now", ts)

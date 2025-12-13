@@ -159,7 +159,7 @@ class Scan(AsyncBehaviour):
         '''
         self._log.info(Fore.GREEN + 'initiating scan…')
         self._scan_active = True
-        print('_initiate_scane()   💜 💜 💜 💜 💜 💜 🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢🤢 ')
+        print('_initiate_scane()   💜 💜 💜 💜 💜 💜 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 ')
         time.sleep(3)
         self.play_sound('ping')
         # mark where we started
@@ -205,13 +205,16 @@ class Scan(AsyncBehaviour):
             # delegate phase handling to RotationController
             phase = self._rotation_controller.rotation_phase
             if phase == RotationPhase.ACCEL:
+                print('_initiate_scane()   ACCEL 💜 💜 🤢 🤢 🤢 🤢 ')
                 self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
             elif phase == RotationPhase.ROTATE:
+                print('_initiate_scane()   ROTATE 💜 💜 🤢 🤢 🤢 🤢 ')
                 self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
                 # capture VL53L5CX data during constant-speed rotation
                 if self._data_collection_active:
                     self._capture_sensor_data(accumulated_rotation, current_time)
             elif phase == RotationPhase.DECEL:
+                print('_initiate_scane()   DECEL 💜 💜 🤢 🤢 🤢 🤢 ')
                 self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
             if self._verbose and next(self._counter) % 5 == 0:
                 self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(

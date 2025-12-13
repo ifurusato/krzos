@@ -37,6 +37,7 @@ class Controller:
         self._blink_direction = 1
         self._blink_color     = COLOR_AMBER
         self._ring_colors = [COLOR_BLACK] * 24
+        self._last_update_ts = self._get_time()
         # instantiate the odometer
         self._odometer = Odometer()
         # heartbeat feature
@@ -73,12 +74,14 @@ class Controller:
     def _update_odometry(self):
         '''
         Called to update the position and velocity variables from the Odometer.
+        This also updates the stored timestamp, regardless of whether the NOFS
+        has altered the values.
         '''
         x, y = self._odometer.position
         vx, vy = self._odometer.velocity
         self._position = '{} {}'.format(int(x), int(y))
         self._velocity = '{} {}'.format(int(vx), int(vy))
-#       print("position: '{}'; velocity: '{}'".format(self._position, self._velocity))
+        self._last_update_ts = self._get_time()
 
     def tick(self, delta_ms):
         '''
@@ -179,6 +182,13 @@ class Controller:
     def _rtc_to_iso(self, dt):
         return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
 
+    def _get_time(self):
+        '''
+        Return the current timestamp as an integer representing the
+        number of seconds since the Unix epoch.
+        '''
+        return time.time()
+
     def _set_time(self, timestamp):
         try:
             print('BEFORE: {}'.format(self._rtc_to_iso(RTC().datetime())))
@@ -230,11 +240,13 @@ class Controller:
             # odometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             if _arg0 == "odo":
                 if _arg1 == "pos":
-                    response = self._position
-                    return response
+                    msg = '{} {}'.format(self._last_update_ts, self._position)
+                    print("message: '{}'".format(msg))
+                    return msg
                 elif _arg1 == "vel":
-                    response = self._velocity
-                    return response
+                    msg = '{} {}'.format(self._last_update_ts, self._velocity)
+                    print("message: '{}'".format(msg))
+                    return msg
                 elif _arg1 == "reset":
                     self._odometer.reset()
                     return 'ACK'
