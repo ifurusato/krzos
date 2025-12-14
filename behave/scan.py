@@ -75,6 +75,7 @@ class Scan(AsyncBehaviour):
             self._matrix11x7 = Matrix11x7()
             self._matrix11x7.set_brightness(_medium_brightness)
         # scan state (uses RotationController's phase tracking)
+        self._last_phase  = None
         self._scan_active = False
         self._data_collection_active = False
         # heading markers for coordinate calculation
@@ -150,6 +151,8 @@ class Scan(AsyncBehaviour):
             self._log.info(Fore.GREEN + 'rotation complete, processing scan data')
             self._process_and_publish_results()
             self._scan_active = False
+            # release any ballistic-suppressed behaviours
+            self._behaviour_manager.release_all_behaviours()
             self.suppress() # we're done so suppress until we receive another STUCK message
 
     def _initiate_scan(self):
@@ -157,9 +160,8 @@ class Scan(AsyncBehaviour):
         Begin scan sequence using RotationController.
         Calculates total rotation needed for 360° of constant-speed data collection.
         '''
-        self._log.info(Fore.GREEN + 'initiating scan…')
+        self._log.info(Fore.GREEN + '💜 initiating scan…')
         self._scan_active = True
-        print('_initiate_scane()   💜 💜 💜 💜 💜 💜 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 🤢 ')
         time.sleep(3)
         self.play_sound('ping')
         # mark where we started
@@ -205,16 +207,22 @@ class Scan(AsyncBehaviour):
             # delegate phase handling to RotationController
             phase = self._rotation_controller.rotation_phase
             if phase == RotationPhase.ACCEL:
-                print('_initiate_scane()   ACCEL 💜 💜 🤢 🤢 🤢 🤢 ')
+                if phase != self._last_phase:
+                    self._log.info('💜 phase change: scan acceleration')
+                self._last_phase = RotationPhase.ACCEL
                 self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
             elif phase == RotationPhase.ROTATE:
-                print('_initiate_scane()   ROTATE 💜 💜 🤢 🤢 🤢 🤢 ')
+                if phase != self._last_phase:
+                    self._log.info('💜 phase change: scan rotation')
+                self._last_phase = RotationPhase.ROTATE
                 self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
                 # capture VL53L5CX data during constant-speed rotation
                 if self._data_collection_active:
                     self._capture_sensor_data(accumulated_rotation, current_time)
             elif phase == RotationPhase.DECEL:
-                print('_initiate_scane()   DECEL 💜 💜 🤢 🤢 🤢 🤢 ')
+                if phase != self._last_phase:
+                    self._log.info('💜 phase change: scan deceleration')
+                self._last_phase = RotationPhase.DECEL
                 self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
             if self._verbose and next(self._counter) % 5 == 0:
                 self._log.info('phase: {}; accumulated: {:.1f}°; omega: {:.3f}'.format(

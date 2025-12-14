@@ -11,6 +11,7 @@
 
 import time
 import warnings
+import traceback
 from collections import deque
 import RPi.GPIO as GPIO
 from colorama import init, Fore, Style
@@ -201,21 +202,22 @@ class DistanceSensor(Component):
         Disable the sensor and clean up resources.
         '''
         if self.enabled:
-            if self._external_clock:
-                self._log.info('removing callback from external clock…')
-                self._external_clock.remove_callback(self._external_callback_method)
-            # we know of this warning so make it pretty
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always", RuntimeWarning)
-                print('GPIO.cleanup called [1].')
-                GPIO.setmode(GPIO.BCM)
-                GPIO.cleanup(self._pin)
-                for warning in w:
-                    msg = Util.ellipsis('{}'.format(warning.message), 33)
-                    self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
-                print('GPIO.cleanup called [2].')
-                GPIO.cleanup()
-            super().disable()
+            try:
+                if self._external_clock:
+                    self._log.info('removing callback from external clock…')
+                    self._external_clock.remove_callback(self._external_callback_method)
+                # we know of this warning so make it pretty
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always", RuntimeWarning)
+                    GPIO.setmode(GPIO.BCM)
+                    GPIO.cleanup(self._pin)
+                    for warning in w:
+                        msg = Util.ellipsis('{}'.format(warning.message), 33)
+                        self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
+                    GPIO.cleanup()
+                super().disable()
+            except Exception as e:
+                self._log.error('{} raised disabling distance sensor: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
     def close(self):
         '''

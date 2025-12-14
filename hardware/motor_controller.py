@@ -660,7 +660,6 @@ class MotorController(Component):
           - apply controller-level speed modifiers (in registration order)
           - write final speeds into Motor.target_speed and call update_target_speed()
         '''
-
         if not self._intent_vectors:
             intent = (0.0, 0.0, 0.0)
         else:

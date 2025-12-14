@@ -42,7 +42,7 @@ class IrqClock(Component):
     '''
     def __init__(self, config, level=Level.INFO):
         self._log = Logger(IrqClock.NAME, level)
-        Component.__init__(self, self._log, suppressed=False, enabled=True)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('hardware').get('irq_clock')
@@ -54,6 +54,8 @@ class IrqClock(Component):
         self._pin           = _cfg.get('pin')
         self._verbose       = False
         self._input         = None
+        self._use_pullup    = True # False on STM32, True on RP2040 (?)
+        self._use_leading_edge = False
         self._log.info('IRQ clock pin:\t{}'.format(self._pin))
         self._log.info('ready.')
 
@@ -62,14 +64,21 @@ class IrqClock(Component):
         return IrqClock.NAME
 
     def enable(self):
+        print('xx.a')
         if not self.enabled:
+            print('xx.a')
             Component.enable(self)
             if not self._initd:
+                print('xx.a')
                 try:
-                    self._log.info('initialising gpiozero DigitalInputDevice…')
                     # STM32 output is likely push-pull, so pull_up=False is correct
-                    self._input = DigitalInputDevice(self._pin, pull_up=True)
-                    self._input.when_deactivated = self._callback_method  # on falling edge
+                    self._input = DigitalInputDevice(self._pin, pull_up=self._use_pullup)
+                    if self._use_leading_edge:
+                        self._log.info('initialising gpiozero DigitalInputDevice on leading edge…')
+                        self._input.when_activated = self._callback_method  # on leading edge
+                    else:
+                        self._log.info('initialising gpiozero DigitalInputDevice on falling edge…')
+                        self._input.when_deactivated = self._callback_method  # on falling edge
                     self._log.info('configured IRQ clock via gpiozero on pin {}.'.format(self._pin))
                 except Exception as e:
                     self._log.error('unable to enable IRQ clock: {}'.format(e))

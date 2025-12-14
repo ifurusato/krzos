@@ -94,11 +94,11 @@ kros:
             enable:                      True              # enable scan behaviour
             release:                     True              # release scan behaviour on startup
             verbose:                    False              # verbose messaging
-            accel_time:                     2.0            # seconds to ramp up rotational speed
+            accel_time:                     1.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
             default_priority:               0.6            # default behaviour priority
@@ -154,7 +154,7 @@ kros:
             activity_scale:                   1.0          # multiplier to dial activity up/down
             jitter_factor:                    2.5          # exponential timing jitter
             max_frequency:                    0.8          # at full activity, calls per second
-            lux_threshold:                   12.0          # light/dark threshold (a dark room)
+            lux_threshold:                    7.0          # light/dark threshold (a dark room) was 12.0
             rate_limit_ms:                  1500           # minimum milliseconds between sound plays
             bored_sound:               'hunhhhhh'          # sound to make when bored ('sigh' or 'hunhhhhh')
             sleeping_sound:               'snore'          # sound to make when sleeping
