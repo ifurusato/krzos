@@ -58,7 +58,7 @@ class I2CSlave:
         '''
         triggers = (I2CTarget.IRQ_WRITE_REQ | I2CTarget.IRQ_END_WRITE |
                     I2CTarget.IRQ_READ_REQ | I2CTarget.IRQ_END_READ)
-        # STM32: configure for specific board; pins are pre-set for each bus
+        # STM32: configure for your board; pins are pre-set for each bus
 #       self._i2c = I2CTarget(self._i2c_id, self._i2c_address)
         # RP2040:
         self._i2c = I2CTarget(self._i2c_id, self._i2c_address, scl=Pin(self._i2c_scl_pin), sda=Pin(self._i2c_sda_pin))
@@ -78,15 +78,14 @@ class I2CSlave:
         self._callback = callback
 
     def _irq_handler(self, i2c):
-        flags = i2c. irq().flags()
-        if flags & I2CTarget.IRQ_WRITE_REQ: 
-            n = i2c. readinto(self._single_chunk)
+        flags = i2c.irq().flags()
+        if flags & I2CTarget.IRQ_WRITE_REQ:
+            n = i2c.readinto(self._single_chunk)
             if n and n > 0:
                 for i in range(n):
-                    if self._rx_len < __BUF_LEN:  # only change:  add bounds check
-                        self._rx_buf[self._rx_len] = self._single_chunk[i]
-                        self._rx_len += 1
-        if flags & I2CTarget.IRQ_END_WRITE: 
+                    self._rx_buf[self._rx_len] = self._single_chunk[i]
+                    self._rx_len += 1
+        if flags & I2CTarget.IRQ_END_WRITE:
             self._last_rx_len = self._rx_len
             self._new_cmd = True
         if flags & I2CTarget.IRQ_READ_REQ:
@@ -125,7 +124,6 @@ class I2CSlave:
                         response = "ACK"
                 else:
                     response = "ACK"
-                print("response: '{}'".format(response))  # ← ADD THIS
 
             except Exception as e:
                 print("ERROR: {} raised during unpacking/processing: {}".format(type(e), e))

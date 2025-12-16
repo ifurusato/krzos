@@ -52,10 +52,15 @@ def main():
         ring = Pixel(pin=RING_PIN, pixel_count=count, brightness=0.1)
         strip = Pixel(pin=STRIP_PIN, pixel_count=8, brightness=0.1)
 
+        def tick():
+            print('tick')
+            clock_pin.value(not clock_pin.value())
+
         # set up 50Hz timer0 on pin GP4 (requires 2x frequency since toggle is half freq)
         clock_pin = Pin(CLOCK_PIN, Pin.OUT)
         timer0 = Timer(hard=True)
         timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: clock_pin.value(not clock_pin.value()))
+#       timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: tick())
         
         if BLINK:
             timer1 = Timer()

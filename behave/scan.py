@@ -81,6 +81,7 @@ class Scan(AsyncBehaviour):
         # heading markers for coordinate calculation
         self._stuck_heading_marker = None
         self._scan_start_marker = None
+        self._scan_rotation = 0.0  # total degrees rotated during scan
         # queue publisher
         self._enable_publishing = False
         self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
@@ -149,11 +150,11 @@ class Scan(AsyncBehaviour):
         elif new_phase == RotationPhase.IDLE:
             # rotation complete
             self._log.info(Fore.GREEN + 'rotation complete, processing scan data')
+            # scan rotation complete 
+            self._log. info(Fore.GREEN + 'scan rotation complete, processing scan data')
+            # remove this callback before processing (which will add a new callback for final rotation)
+            self._rotation_controller.remove_phase_change_callback(self._on_rotation_phase_change)
             self._process_and_publish_results()
-            self._scan_active = False
-            # release any ballistic-suppressed behaviours
-            self._behaviour_manager.release_all_behaviours()
-            self.suppress() # we're done so suppress until we receive another STUCK message
 
     def _initiate_scan(self):
         '''
@@ -162,7 +163,7 @@ class Scan(AsyncBehaviour):
         '''
         self._log.info(Fore.GREEN + '💜 initiating scan…')
         self._scan_active = True
-        time.sleep(3)
+        time.sleep(2)
         self.play_sound('ping')
         # mark where we started
         self._stuck_heading_marker = self._rotation_controller.push_heading_marker('stuck')
@@ -178,6 +179,8 @@ class Scan(AsyncBehaviour):
         self._rotation_controller.add_phase_change_callback(self._on_rotation_phase_change)
         # request rotation
         self._rotation_controller.rotate(total_rotation, Rotation.CLOCKWISE)
+        # store the total scan rotation for use in rotate_to_chosen_heading
+        self._scan_rotation = total_rotation
         self._log.info(Fore.GREEN + 'scan initiated')
 
     def start_loop_action(self):
@@ -236,6 +239,24 @@ class Scan(AsyncBehaviour):
             self.disable()
             return (0.0, 0.0, 0.0)
 
+    def _register_intent_vector(self):
+        '''
+        Overrides AsyncBeheaviour's method to not register this behaviour's intent vector
+        with the motor controller, as it relies on the RotationController for movement.
+        '''
+        if not self._motor_controller:
+            return
+        if self._intent_vector_registered:
+            self._log.warning('intent vector already registered with motor controller.')
+            return
+#       self._motor_controller.add_intent_vector(
+#           self.name,
+#           lambda: self._intent_vector,
+#           lambda: self.priority
+#       )
+        self._intent_vector_registered = True
+        self._log.info('intent vector lambda not registered with motor controller.')
+
     def _capture_sensor_data(self, accumulated_rotation, current_time):
         '''
         Capture VL53L5CX sensor reading during constant-speed rotation.
@@ -268,7 +289,8 @@ class Scan(AsyncBehaviour):
         '''
         # process captured data
         self._scan_slices = self._process_scan_data()
-        self._analyze_scan_and_choose_heading()
+        chosen_heading = self._analyze_scan_and_choose_heading()
+        self.rotate_to_chosen_heading(chosen_heading)
 
     def _process_scan_data(self):
         '''
@@ -335,10 +357,158 @@ class Scan(AsyncBehaviour):
             self._log.warning('no valid scan data, defaulting to 0° heading')
         # display final chosen heading on matrix
         self._display_distance(int(chosen_heading))
-        # publish SCAN message with chosen heading
-        self._publish_message(chosen_heading)
+#       # publish SCAN message with chosen heading
+#       self._publish_message(chosen_heading)
         # cleanup: remove phase change callback
         self._rotation_controller.remove_phase_change_callback(self._on_rotation_phase_change)
+        return chosen_heading
+
+    def rotate_to_chosen_heading(self, chosen_heading):
+        '''
+        Rotate to the chosen heading determined by scan analysis.
+        Chosen heading is relative to when data collection started (after accel phase).
+        '''
+        # chosen_heading is relative to start of data collection (after accel)
+        # we need to account for the accel phase offset
+        accel_rotation = self._rotation_controller._accel_rotation  # degrees rotated during accel
+        # Absolute heading we want to reach (relative to scan start)
+        target_absolute_heading = accel_rotation + chosen_heading
+        # jotal rotation we've done
+        total_scan_rotation = self._scan_rotation
+        # rotation needed from current position
+        heading_difference = target_absolute_heading - total_scan_rotation
+        # normalize to -180 to +180
+        while heading_difference > 180.0:
+            heading_difference -= 360.0
+        while heading_difference < -180.0:
+            heading_difference += 360.0
+        rotation_amount = abs(heading_difference)
+        # minimum rotation check
+        min_rotation = self._rotation_controller.accel_degrees + self._rotation_controller.decel_degrees + 5.0
+        if rotation_amount < min_rotation: 
+            self._log.info('rotation amount {:.1f}° too small (minimum {:.1f}°), skipping rotation'.format(rotation_amount, min_rotation))
+            return
+        # determine direction
+        direction = Rotation.CLOCKWISE if heading_difference > 0 else Rotation.COUNTER_CLOCKWISE
+        self._log.info('rotating {:.1f}° {} to chosen heading {:.1f}°'. format(rotation_amount, direction. name, chosen_heading))
+        # register for phase change notifications
+        self._rotation_controller.add_phase_change_callback(self._on_final_rotation_phase_change)
+        # execute rotation
+        self._rotation_controller.rotate(rotation_amount, direction)
+
+    def m_rotate_to_chosen_heading(self, chosen_heading):
+        '''
+        Rotate to the chosen heading determined by scan analysis.
+        Chosen heading is relative to the scan start position (in degrees into the scan).
+        Robot is currently at scan_end = scan_start + total_rotation.
+        '''
+        # calculate where we need to go relative to where we are now
+        # chosen_heading is degrees into scan (e.g., 336.9°)
+        # total scan rotation was self._scan_rotation degrees (e.g., 400°)
+        total_scan_rotation = self._scan_rotation  # the total degrees rotated during scan
+        # rotation needed from current position
+        heading_difference = chosen_heading - total_scan_rotation
+        # normalize to -180 to +180
+        while heading_difference > 180.0:
+            heading_difference -= 360.0
+        while heading_difference < -180.0:
+            heading_difference += 360.0
+        # minimum rotation to satisfy accel + decel requirements
+        min_rotation = self._rotation_controller.accel_degrees + self._rotation_controller.decel_degrees + 5.0
+        rotation_amount = abs(heading_difference)
+        if rotation_amount < min_rotation:
+            self._log.info('rotation amount {:.1f}° too small (minimum {:.1f}°), skipping rotation'.format(rotation_amount, min_rotation))
+            return
+        # determine direction
+        direction = Rotation.CLOCKWISE if heading_difference > 0 else Rotation.COUNTER_CLOCKWISE
+        self._log.info('rotating {:.1f}° {} to chosen heading {:.1f}°'.format(rotation_amount, direction.name, chosen_heading))
+        # register for phase change notifications
+        self._rotation_controller.add_phase_change_callback(self._on_final_rotation_phase_change)
+        # execute rotation
+        self._rotation_controller.rotate(rotation_amount, direction)
+
+    def b_rotate_to_chosen_heading(self, chosen_heading):
+        '''
+        Rotate to the chosen heading determined by scan analysis.
+        Chosen heading is relative to the scan start position (in degrees into the scan).
+        Robot is currently at scan_end = scan_start + total_rotation. 
+        '''
+        # Calculate where we need to go relative to where we are now
+        # chosen_heading is degrees into scan (e.g., 336.9°)
+        # total scan rotation was self._scan_rotation degrees (e.g., 400°)
+        total_scan_rotation = self._scan_rotation  # The total degrees rotated during scan
+        # rotation needed from current position
+        heading_difference = chosen_heading - total_scan_rotation
+        # normalize to -180 to +180
+        while heading_difference > 180.0:
+            heading_difference -= 360.0
+        while heading_difference < -180.0:
+            heading_difference += 360.0
+        # minimum rotation to satisfy accel + decel requirements
+        min_rotation = self._rotation_controller.accel_degrees + self._rotation_controller. decel_degrees + 5.0
+        rotation_amount = abs(heading_difference)
+        if rotation_amount < min_rotation:
+            self._log. info('rotation amount {:.1f}° too small (minimum {:.1f}°), skipping rotation'.format(
+                rotation_amount, min_rotation))
+            return
+        # determine direction
+        direction = Rotation.CLOCKWISE if heading_difference > 0 else Rotation.COUNTER_CLOCKWISE
+        self._log.info('rotating {:.1f}° {} to chosen heading {:.1f}°'. format(rotation_amount, direction. name, chosen_heading))
+        # register for phase change notifications
+        self._rotation_controller.add_phase_change_callback(self._on_final_rotation_phase_change)
+        # execute rotation
+        self._rotation_controller.rotate(rotation_amount, direction)
+
+    def x_rotate_to_chosen_heading(self, chosen_heading):
+        '''
+        Rotate to the chosen heading determined by scan analysis.
+        Chosen heading is relative to the scan start position.
+        '''
+        self._log.info(Fore.YELLOW + '🍯 rotate to chosen heading: {:.1f}°'.format(chosen_heading))
+
+        # get current heading (should be back at scan start position after 360° rotation)
+        current_heading = self._rotation_controller.get_current_heading()
+        # calculate heading difference
+        heading_difference = (chosen_heading - current_heading) % 360.0
+        # minimum rotation to satisfy accel + decel requirements
+        min_rotation = self._rotation_controller.accel_degrees + self._rotation_controller.decel_degrees + 5.0  # 45° minimum
+        if heading_difference < min_rotation and (360.0 - heading_difference) >= min_rotation:
+            # too close to current heading - skip rotation
+            self._log.info('chosen heading {:.1f}° too close to current heading {:.1f}° (difference {:.1f}°), skipping rotation'.format(
+                chosen_heading, current_heading, heading_difference))
+            return
+        # choose shortest rotation direction
+        if heading_difference > 180.0:
+            rotation_amount = 360.0 - heading_difference
+            direction = Rotation.COUNTER_CLOCKWISE
+        else: 
+            rotation_amount = heading_difference
+            direction = Rotation. CLOCKWISE
+        # check if rotation amount meets minimum requirement
+        if rotation_amount < min_rotation:
+            self._log.info('rotation amount {:.1f}° too small (minimum {:.1f}°), skipping rotation'.format(
+                rotation_amount, min_rotation))
+            return
+        self._log.info('rotating {:.1f}° {} to chosen heading {:.1f}°'.format(
+            rotation_amount, direction. name, chosen_heading))
+        # register for phase change notifications for this rotation
+        self._rotation_controller. add_phase_change_callback(self._on_final_rotation_phase_change)
+        # execute rotation
+        self._rotation_controller. rotate(rotation_amount, direction)
+
+    def _on_final_rotation_phase_change(self, old_phase, new_phase):
+        '''
+        Callback for final rotation to chosen heading.
+        '''
+        if new_phase == RotationPhase.IDLE:
+            self._log.info(Fore.GREEN + '🍀 final rotation complete, now facing chosen heading.')
+            # cleanup
+            self._rotation_controller.remove_phase_change_callback(self._on_final_rotation_phase_change)
+            # we're done scanning and repositioning
+            self._scan_active = False
+            self._behaviour_manager.release_all_behaviours()
+            self.suppress()
+            self._log.info(Fore.GREEN + '🍀 scan complete and suppressed.')
 
     def _publish_message(self, heading):
         '''

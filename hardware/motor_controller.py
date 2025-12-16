@@ -683,11 +683,9 @@ class MotorController(Component):
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
-
-        # 🍀 new motor power smoothing
+        # new motor power smoothing
         if self._motor_power_smoothing_enabled:
             speeds = self._smooth_motor_powers(speeds)
-
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))

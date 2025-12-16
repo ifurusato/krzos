@@ -239,15 +239,13 @@ class Controller:
 
             # odometer ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             if _arg0 == "odo":
+
                 if _arg1 == "pos":
-                    msg = '{} {}'.format(self._last_update_ts, self._position)
-                    print("message: '{}'".format(msg))
-                    return msg
+                    return self._position
                 elif _arg1 == "vel":
-                    msg = '{} {}'.format(self._last_update_ts, self._velocity)
-                    msg = '1765628599 -1234 -1234'
-                    print("message: '{}'".format(msg))
-                    return msg
+                    return self._velocity
+                elif _arg1 == "ts":
+                    return str(self._last_update_ts)
                 elif _arg1 == "reset":
                     self._odometer.reset()
                     return 'ACK'

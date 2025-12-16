@@ -64,12 +64,9 @@ class IrqClock(Component):
         return IrqClock.NAME
 
     def enable(self):
-        print('xx.a')
         if not self.enabled:
-            print('xx.a')
             Component.enable(self)
             if not self._initd:
-                print('xx.a')
                 try:
                     # STM32 output is likely push-pull, so pull_up=False is correct
                     self._input = DigitalInputDevice(self._pin, pull_up=self._use_pullup)

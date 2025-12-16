@@ -80,7 +80,7 @@ class AsyncBehaviour(Behaviour):
             rotation_circle_cm = np.pi * self._wheel_track_mm / 10.0
             steps_per_degree_theoretical = (rotation_circle_cm / wheel_circumference_cm * self._steps_per_rotation) / 360.0
             self._steps_per_degree = _cfg.get('steps_per_degree', steps_per_degree_theoretical)
-            self._log.info('steps_per_degree set to: {}'.format(self._steps_per_degree))
+            self._log.info('💮 steps_per_degree set to: {}'.format(self._steps_per_degree))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

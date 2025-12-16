@@ -143,13 +143,13 @@ class Odometer:
         Resets the odometer cumulative position and timing state.
         '''
         self._last_time = None
-        self._x = 0.0
-        self._y = 0.0
+        self._x  = 0.0
+        self._y  = 0.0
         self._vx = 0.0
         self._vy = 0.0
         self._cumulative_x = 0.0
         self._cumulative_y = 0.0
-        self._log.info("reset.")
+        self._log.info('💜 reset.')
 
     def update(self):
         '''
