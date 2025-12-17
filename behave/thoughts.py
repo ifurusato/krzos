@@ -99,32 +99,32 @@ class Thoughts(Behaviour):
             len(self._active_sounds), self._max_activity, self._activity_scale, self._jitter_factor, self._max_frequency, self._rate_delay_ms))
         self._poll_pir = False # not currently functional
         # components
-        _component_registry = Component.get_registry()
+        self._component_registry = Component.get_registry()
         # queue publisher
         self._enable_publishing = True
-        self._queue_publisher = _component_registry.get(QueuePublisher.NAME)
+        self._queue_publisher = self._component_registry.get(QueuePublisher.NAME)
         if self._queue_publisher is None:
             raise MissingComponentError('queue publisher not available for Scan.')
         # others…
-        self._eyeballs_monitor = _component_registry.get(EyeballsMonitor.NAME)
+        self._eyeballs_monitor = self._component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
-        self._odometer = _component_registry.get(Odometer.NAME)
+        self._odometer = self._component_registry.get(Odometer.NAME)
         if self._odometer is None:
             self._log.info('odometer not available; relying on message activity alone.')
         else:
             self._log.info('odometer available; will monitor for movement.')
             self._odometer.add_callback(self._odometer_callback)
         self._lux_threshold = _cfg.get('lux_threshold')
-        self._lux_sensor = _component_registry.get(LuxSensor.NAME)
+        self._lux_sensor = self._component_registry.get(LuxSensor.NAME)
         if self._lux_sensor is None:
             try:
                 self._lux_sensor = LuxSensor(config)
             except Exception:
                 self._log.warning('unable to open lux sensor.')
         self._darkness_state = False
-        self._motor_controller = _component_registry.get(MotorController.NAME)
-        self._rotation_controller = _component_registry.get(RotationController.NAME)
+        self._motor_controller = self._component_registry.get(MotorController.NAME)
+        self._rotation_controller = self._component_registry.get(RotationController.NAME)
         # state tracking
         self._count = 0
         self._counter = itertools.count()
@@ -191,8 +191,7 @@ class Thoughts(Behaviour):
             # initialize activity timer
             self._mark_activity()
             self._next_play_time = time.monotonic()
-            _component_registry = Component.get_registry()
-            self._tinyfx = _component_registry.get(TinyFxController.NAME)
+            self._tinyfx = self._component_registry.get(TinyFxController.NAME)
             self._set_running_lights(True)
             # create async listener loop task
             if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
@@ -592,7 +591,8 @@ class Thoughts(Behaviour):
             case Event.SELECT_BUTTON:
                 self._log.debug(Style.DIM + 'SELECT_BUTTON.')
             case Event.HOME_BUTTON:
-                self._log.debug(Style.DIM + 'HOME_BUTTON.')
+                self._log.info(Fore.GREEN + 'HOME_BUTTON. print registry.')
+                self._component_registry.print_registry()
             case Event.DPAD_HORIZONTAL:
                 self._log.debug(Style.DIM + 'DPAD_HORIZONTAL.')
             case Event.DPAD_LEFT:

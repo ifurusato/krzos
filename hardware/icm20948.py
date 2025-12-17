@@ -361,7 +361,7 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
                     if _count % 5 == 0:
                         self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
                 except Exception as e:
@@ -386,7 +386,7 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
                     if self.calibration_check(_heading_radians):
                         break
                     if _count % 5 == 0:
@@ -429,7 +429,7 @@ class Icm20948(Component):
         self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
         if self._play_sound:
             pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n'.format(self._calibration_rotation))
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic {}° rotation for calibration…\n'.format(self._calibration_rotation))
         if not self._rotation_controller.enabled:
             self._rotation_controller.enable()
         try:
@@ -460,7 +460,7 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
                     if self.calibration_check(_heading_radians):
                         break
                     if _count % 5 == 0:
@@ -733,6 +733,7 @@ class Icm20948(Component):
                 mag[i] /= self._amax[i] - self._amin[i]
             except ZeroDivisionError:
                 pass
+#           self._log.info(Style.DIM + 'amin: {:4.2f}; amax: {:4.2f}; mag: {:4.2f}'.format(self._amin[i], self._amax[i], mag[i]))
             mag[i] -= 0.5
         self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])
         if calibrating:
@@ -747,6 +748,7 @@ class Icm20948(Component):
             self._radians += self._fixed_heading_trim
         if self._radians < 0:
             self._radians += 2 * math.pi
+#       self._log.info(Style.DIM + 'read heading: {:4.2f}'.format(math.degrees(self._radians)))
         return self._radians
 
     def enable(self):

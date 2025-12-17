@@ -263,8 +263,9 @@ class RotationController(Component):
         Returns:
             True if rotation completed successfully, False if cancelled/timed out
         '''
-        self._log.info(Fore.MAGENTA + '💜 absolute rotation to {:.1f}°…'.format(_rotation_degrees))
+        self._log.info(Fore.MAGENTA + '💜 absolute rotation to {:.1f}°…'.format(target_heading_degrees))
         from hardware.icm20948 import Icm20948
+        from behave.behaviour_manager import BehaviourManager
 
         _component_registry = Component.get_registry()
         _icm20948 = _component_registry.get(Icm20948.NAME)
@@ -272,6 +273,10 @@ class RotationController(Component):
             raise MissingComponentError('icm20948 required for absolute rotation.')
         if not _icm20948.is_calibrated:
             raise Exception('icm20948 must be calibrated before absolute rotation.')
+        # suppress behaviours
+        _behaviour_manager = _component_registry.get(BehaviourManager.NAME)
+        if _behaviour_manager:
+            _behaviour_manager.suppress_all_behaviours()
         # get current heading from IMU
         _current_heading = _icm20948.mean_heading
         # calculate shortest rotation direction and degrees
@@ -295,6 +300,8 @@ class RotationController(Component):
         else:
             self._log.info('rotation complete: target: {}°, actual: {}°, error: {:.1f}°'.format(
                 target_heading_degrees, _final_heading, _error))
+        if _behaviour_manager:
+            _behaviour_manager.release_all_behaviours()
         return _success and _error <= 5.0
 
     def rotate(self, degrees, direction=Rotation.CLOCKWISE):
