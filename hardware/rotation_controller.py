@@ -5,9 +5,9 @@
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
-# author:   Murray Altheim
+# author:    Murray Altheim
 # created:  2025-11-07
-# modified: 2025-11-07
+# modified: 2025-12-17
 
 import time
 from enum import Enum
@@ -24,16 +24,16 @@ class RotationPhase(Enum):
     '''
     Represents the phases of a rotation operation.
     '''
-    INACTIVE  = ( 0, 'inactive'  )
-    IDLE      = ( 1, 'idle'  )
-    ACCEL     = ( 2, 'accel' )
-    ROTATE    = ( 3, 'rotate' )
-    DECEL     = ( 4, 'decel' )
+    INACTIVE  = (0, 'inactive')
+    IDLE      = (1, 'idle')
+    ACCEL     = (2, 'accel')
+    ROTATE    = (3, 'rotate')
+    DECEL     = (4, 'decel')
 
     def __init__(self, num, name):
         self._name = name
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def name(self):
@@ -86,7 +86,7 @@ class RotationController(Component):
         self._steps_per_degree = _cfg.get('steps_per_degree', 6.256)
         self._log.info('rotation speed: {:.1f}°/sec'.format(self._rotation_speed))
         self._log.info('max acceleration: {:.1f}°/s²'.format(self._max_acceleration))
-        self._log.info('accel: {:.1f}° in {:.2f}s'.format(self._accel_degrees, self._accel_time))
+        self._log.info('accel:  {:.1f}° in {:.2f}s'.format(self._accel_degrees, self._accel_time))
         self._log.info('decel: {:.1f}° in {:.2f}s'.format(self._decel_degrees, self._decel_time))
         self._log.info('steps_per_degree: {:.3f}'.format(self._steps_per_degree))
         # rotation state variables
@@ -116,7 +116,7 @@ class RotationController(Component):
         self._heading_markers = []
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def is_rotating(self):
@@ -237,7 +237,7 @@ class RotationController(Component):
 
         Args:
             degrees: Total rotation angle (including accel and decel phases)
-            direction: Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
+            direction:  Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
         '''
         if degrees <= (self._accel_degrees + self._decel_degrees):
             raise ValueError('rotation {} too small for accel ({}) + decel ({})'.format(
@@ -278,8 +278,56 @@ class RotationController(Component):
             )
             self._intent_vector_registered = True
             self._log.info('intent vector registered with motor controller')
-        self._log.info('encoder baselines: PFWD={}, SFWD={}, PAFT={}, SAFT={}'.format(
+        self._log.info('encoder baselines:  PFWD={}, SFWD={}, PAFT={}, SAFT={}'.format(
             self._baseline_pfwd, self._baseline_sfwd, self._baseline_paft, self._baseline_saft))
+
+    def rotate_blocking(self, degrees, direction=Rotation.CLOCKWISE, poll_rate_hz=20):
+        '''
+        Synchronously rotate the specified degrees. Blocks until rotation completes.
+        This is a convenience method that handles the phase loop internally.
+
+        Args:
+            degrees: Total rotation angle (including accel and decel phases)
+            direction:  Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
+            poll_rate_hz:  Polling frequency for phase updates
+
+        Returns:
+            True if rotation completed successfully, False if cancelled/timed out
+        '''
+        # initiate rotation
+        self.rotate(degrees, direction)
+
+        # polling loop
+        _poll_interval = 1.0 / poll_rate_hz
+        _timeout = 60.0  # safety timeout in seconds
+        _start = time.time()
+
+        while self.is_rotating:
+            # safety timeout
+            if time.time() - _start > _timeout:
+                self._log.error('rotation timeout after {:.1f}s'.format(_timeout))
+                self.cancel_rotation()
+                return False
+
+            # poll and get current state
+            current_time, elapsed, accumulated_rotation = self.poll()
+
+            # handle current phase
+            if self._rotation_phase == RotationPhase.ACCEL:
+                self.handle_accel_phase(elapsed, accumulated_rotation, current_time)
+
+            elif self._rotation_phase == RotationPhase.ROTATE:
+                self.handle_rotate_phase(accumulated_rotation, current_time)
+
+            elif self._rotation_phase == RotationPhase.DECEL:
+                decel_complete = self.handle_decel_phase(elapsed, accumulated_rotation)
+                if decel_complete:
+                    break
+
+            # wait for next poll cycle
+            time.sleep(_poll_interval)
+
+        return self._rotation_phase == RotationPhase.IDLE
 
     def _get_accumulated_rotation(self):
         '''
@@ -291,14 +339,14 @@ class RotationController(Component):
         current_sfwd = self._motor_sfwd.steps
         current_paft = self._motor_paft.steps
         current_saft = self._motor_saft.steps
-        # for CW rotation: port wheels go forward (+), starboard wheels go backward (-)
-        # for CCW rotation: port wheels go backward (-), starboard wheels go forward (+)
+        # for CW rotation:  port wheels go forward (+), starboard wheels go backward (-)
+        # for CCW rotation:  port wheels go backward (-), starboard wheels go forward (+)
         if self._rotation_direction == Rotation.CLOCKWISE:
             rotation_steps = ((current_pfwd - self._baseline_pfwd) +
                               (current_paft - self._baseline_paft) -
                               (current_sfwd - self._baseline_sfwd) -
                               (current_saft - self._baseline_saft)) / 4.0
-        else: # COUNTER_CLOCKWISE
+        else:  # COUNTER_CLOCKWISE
             rotation_steps = ((current_sfwd - self._baseline_sfwd) +
                               (current_saft - self._baseline_saft) -
                               (current_pfwd - self._baseline_pfwd) -
@@ -309,7 +357,7 @@ class RotationController(Component):
     def poll(self):
         '''
         Execute one rotation control step. Call repeatedly from async loop.
-        Returns: (current_time, elapsed, accumulated_rotation)
+        Returns:  (current_time, elapsed, accumulated_rotation)
         '''
         if self._rotation_phase == RotationPhase.INACTIVE or self._rotation_phase == RotationPhase.IDLE:
             return (time.time(), 0.0, 0.0)
@@ -318,39 +366,9 @@ class RotationController(Component):
         accumulated_rotation = self._get_accumulated_rotation()
         return (current_time, elapsed, accumulated_rotation)
 
-    def k_handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
-        '''
-        Handle acceleration phase: ramp up to full rotation speed. 
-        Exits when accel_degrees rotation is complete.
-        '''
-        poll_interval = 0.05  # seconds (20Hz)
-        omega_increment_rad = self._max_acceleration_rad * poll_interval
-        # Increment omega each tick up to max speed
-        if self._current_omega < self._rotation_speed_rad:
-            self._current_omega += omega_increment_rad
-            if self._current_omega > self._rotation_speed_rad:
-                self._current_omega = self._rotation_speed_rad
-        omega = self._current_omega
-        # apply direction
-        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE: 
-            omega = -omega
-        self._intent_vector = (0.0, 0.0, omega)
-        # Exit accel phase when we've rotated accel_degrees
-        if accumulated_rotation >= self._accel_degrees:
-            old_phase = self._rotation_phase
-            self._rotation_phase = RotationPhase.ROTATE
-            self._start_time = current_time
-            self._accel_rotation = accumulated_rotation
-            self._baseline_pfwd = self._motor_pfwd.steps
-            self._baseline_sfwd = self._motor_sfwd.steps
-            self._baseline_paft = self._motor_paft.steps
-            self._baseline_saft = self._motor_saft.steps
-            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(self._accel_rotation))
-            self._notify_phase_change(old_phase, self._rotation_phase)
-
     def handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
         '''
-        Handle acceleration phase: ramp up to full rotation speed.
+        Handle acceleration phase:  ramp up to full rotation speed.
         Uses configured max_acceleration rate, incremented each poll cycle.
         '''
         # Calculate omega increment per poll cycle using max_acceleration
@@ -364,84 +382,25 @@ class RotationController(Component):
                 self._current_omega = self._rotation_speed_rad
         omega = self._current_omega
         # apply direction
-        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE: 
-            omega = -omega
-        self._intent_vector = (0.0, 0.0, omega)
-        # angle-based transition detection
-        if accumulated_rotation >= self._accel_degrees:
-            old_phase = self._rotation_phase
-            self._rotation_phase = RotationPhase.ROTATE
-            self._start_time = current_time
-            self._accel_rotation = accumulated_rotation
-            self._baseline_pfwd = self._motor_pfwd.steps
-            self._baseline_sfwd = self._motor_sfwd.steps
-            self._baseline_paft = self._motor_paft.steps
-            self._baseline_saft = self._motor_saft.steps
-            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(self._accel_rotation))
-            self._notify_phase_change(old_phase, self._rotation_phase)
-
-    def a_handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
-        '''
-        Handle acceleration phase: ramp up to full rotation speed.
-        Increments omega each tick until target speed reached.
-        '''
-        # increment omega each tick
-        if self._current_omega < self._rotation_speed_rad:
-            self._current_omega += self._omega_increment
-            if self._current_omega > self._rotation_speed_rad:
-                self._current_omega = self._rotation_speed_rad
-        omega = self._current_omega
-        # apply direction
-        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE: 
-            omega = -omega
-        self._intent_vector = (0.0, 0.0, omega)
-        # angle-based transition detection
-        if accumulated_rotation >= self._accel_degrees:
-            old_phase = self._rotation_phase
-            self._rotation_phase = RotationPhase.ROTATE
-            self._start_time = current_time
-            self._accel_rotation = accumulated_rotation
-            self._baseline_pfwd = self._motor_pfwd.steps
-            self._baseline_sfwd = self._motor_sfwd.steps
-            self._baseline_paft = self._motor_paft.steps
-            self._baseline_saft = self._motor_saft.steps
-            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(self._accel_rotation))
-            self._notify_phase_change(old_phase, self._rotation_phase)
-
-    def x_handle_accel_phase(self, elapsed, accumulated_rotation, current_time):
-        '''
-        Handle acceleration phase: ramp up to full rotation speed.
-        Uses time-based ramping with configured max acceleration rate.
-        Transitions based on angle for precision.
-        '''
-        # time-based acceleration with max rate limit
-        # omega = a * t, capped at v_max
-        omega = min(self._max_acceleration_rad * elapsed, self._rotation_speed_rad)
-        # apply direction
         if self._rotation_direction == Rotation.COUNTER_CLOCKWISE:
             omega = -omega
         self._intent_vector = (0.0, 0.0, omega)
         # angle-based transition detection
         if accumulated_rotation >= self._accel_degrees:
-            # transition to ROTATE
             old_phase = self._rotation_phase
             self._rotation_phase = RotationPhase.ROTATE
             self._start_time = current_time
-            # capture actual accel rotation
             self._accel_rotation = accumulated_rotation
-            # reset encoder baselines - ROTATE starts here
             self._baseline_pfwd = self._motor_pfwd.steps
             self._baseline_sfwd = self._motor_sfwd.steps
             self._baseline_paft = self._motor_paft.steps
             self._baseline_saft = self._motor_saft.steps
-            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(
-                self._accel_rotation))
-            # notify phase change
+            self._log.info('acceleration complete at {:.1f}°, starting constant rotation'.format(self._accel_rotation))
             self._notify_phase_change(old_phase, self._rotation_phase)
 
     def handle_rotate_phase(self, accumulated_rotation, current_time):
         '''
-        Handle rotate phase:  maintain constant rotation speed for rotate_target degrees.
+        Handle rotate phase: maintain constant rotation speed for rotate_target degrees.
         '''
         # maintain constant rotation speed
         omega = self._rotation_speed_rad
@@ -460,46 +419,8 @@ class RotationController(Component):
             self._baseline_paft = self._motor_paft.steps
             self._baseline_saft = self._motor_saft.steps
             total_so_far = self._accel_rotation + self._rotate_rotation
-            self._log.info('starting deceleration at {:.1f}° (rotate target: {:.1f}°, total target: {:.1f}°)'.format(
+            self._log.info('starting deceleration at {:.1f}° (rotate target:  {:.1f}°, total target: {:.1f}°)'.format(
                 total_so_far, self._rotate_target, self._total_target_rotation))
-            self._notify_phase_change(old_phase, self._rotation_phase)
-            return True
-        return False
-
-    def k_handle_decel_phase(self, elapsed, accumulated_rotation):
-        '''
-        Handle deceleration phase: ramp down to stop.
-        Uses configured max_acceleration rate, decremented each poll cycle. 
-        '''
-        poll_interval = 0.05  # seconds (20Hz)
-        omega_decrement_rad = self._max_acceleration_rad * poll_interval
-        # Decrement omega each tick down to zero
-        if self._current_omega > 0.0:
-            self._current_omega -= omega_decrement_rad
-            if self._current_omega < 0.0:
-                self._current_omega = 0.0
-        omega = self._current_omega
-        # apply direction
-        if self._rotation_direction == Rotation.COUNTER_CLOCKWISE: 
-            omega = -omega
-        self._intent_vector = (0.0, 0.0, omega)
-        # complete when omega reaches zero
-        if self._current_omega == 0.0:
-            self._intent_vector = (0.0, 0.0, 0.0)
-            if self._intent_vector_registered:
-                self._motor_controller.remove_intent_vector(RotationController.NAME)
-                self._intent_vector_registered = False
-                self._log.info('intent vector removed (rotation complete)')
-            total_rotation = self._accel_rotation + self._rotate_rotation + accumulated_rotation
-            self._log. info('rotation complete: accel={:.1f}°, rotate={:.1f}°, decel={:.1f}°, total={:.1f}° (target={:.1f}°, error={:.1f}°)'.format(
-                self._accel_rotation, self._rotate_rotation, accumulated_rotation,
-                total_rotation, self._total_target_rotation, total_rotation - self._total_target_rotation))
-            if self._rotation_direction == Rotation.CLOCKWISE:
-                self._current_heading_offset = (self._current_heading_offset + total_rotation) % 360.0
-            else:
-                self._current_heading_offset = (self._current_heading_offset - total_rotation) % 360.0
-            old_phase = self._rotation_phase
-            self._rotation_phase = RotationPhase.IDLE
             self._notify_phase_change(old_phase, self._rotation_phase)
             return True
         return False
@@ -509,7 +430,7 @@ class RotationController(Component):
         Handle deceleration phase: ramp down to stop.
         Uses time-based ramping with configured max acceleration rate.
         Completes based on angle or when omega reaches zero.
-        Returns: True if deceleration complete, False otherwise
+        Returns:  True if deceleration complete, False otherwise
         '''
         # time-based deceleration with max rate limit
         # omega = v_max - a * t, floored at 0
@@ -527,9 +448,9 @@ class RotationController(Component):
                 self._motor_controller.remove_intent_vector(RotationController.NAME)
                 self._intent_vector_registered = False
                 self._log.info('intent vector removed (rotation complete)')
-            # calculate total rotation: accel + rotate + decel
+            # calculate total rotation:  accel + rotate + decel
             total_rotation = self._accel_rotation + self._rotate_rotation + accumulated_rotation
-            self._log.info('rotation complete: accel={:.1f}°, rotate={:.1f}°, decel={:.1f}°, total={:.1f}° (target={:.1f}°, error={:.1f}°)'.format(
+            self._log.info('rotation complete:  accel={:.1f}°, rotate={:.1f}°, decel={:.1f}°, total={:.1f}° (target={:.1f}°, error={:.1f}°)'.format(
                 self._accel_rotation, self._rotate_rotation, accumulated_rotation,
                 total_rotation, self._total_target_rotation, total_rotation - self._total_target_rotation))
             # update cumulative heading (account for direction)
