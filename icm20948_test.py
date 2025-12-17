@@ -74,7 +74,7 @@ try:
     _icm20948.enable()
     if CALIBRATE:
         if not _icm20948.is_calibrated:
-            _icm20948.calibrate()
+            _icm20948.bench_calibrate()
 #   _icm20948.include_heading(HEADING_TEST)
 #   _icm20948.set_poll_rate_hz(2)
 

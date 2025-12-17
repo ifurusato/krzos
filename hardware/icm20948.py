@@ -472,6 +472,13 @@ class Icm20948(Component):
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 _rate.wait()
+
+            if self._adjust_trim and self._digital_pot:
+                try:
+                    input(Fore.WHITE + Style.BRIGHT + "Adjust heading trim, then press Return to continue…" + Style.RESET_ALL)
+                except EOFError:
+                    pass
+
         finally:
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
             if self.is_calibrated:
