@@ -53,6 +53,7 @@ from hardware.irq_clock import IrqClock
 from hardware.compass_encoder import CompassEncoder
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
+from hardware.rotation_controller import RotationController, RotationPhase
 from hardware.player import Player
 from hardware.system import System
 from hardware.usfs import Usfs
@@ -93,7 +94,7 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('…')
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         FiniteStateMachine.__init__(self, self._log, KROS.NAME)
-        # configuration…
+        # components…
         self._config              = None
         self._component_registry  = None
         self._system              = None
@@ -112,12 +113,13 @@ class KROS(Component, FiniteStateMachine):
         self._tinyfx              = None
         self._eyeballs            = None
         self._motor_controller    = None
+        self._rotation_controller = None
         self._system_publisher    = None
         self._system_subscriber   = None
         self._behaviour_manager   = None
-
-        self._data_logging        = False
         self._data_log            = None
+        # configuration…
+        self._data_logging        = False
         self._gamepad_enabled     = False
         self._started             = False
         self._closing             = False
@@ -247,18 +249,6 @@ class KROS(Component, FiniteStateMachine):
 
         self._compass_encoder = CompassEncoder(self._config)
 
-        self._usfs = None
-        if _cfg.get('enable_usfs'):
-            self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
-            # fixed trim determined via observation
-            self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
-            self._usfs.set_verbose(False)
-
-        if _cfg.get('enable_icm20948'):
-            self._icm20948 = Icm20948(self._config, level=Level.INFO)
-            self._icm20948.include_accel_gyro(True)
-#           self._icm20948.enable()
-
 #       _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
 #       if _enable_vl53l5cx:
 #           self._log.info('creating VL53L5CX sensor…')
@@ -304,8 +294,23 @@ class KROS(Component, FiniteStateMachine):
 
         # create motor controller
 
-        self._log.info('starting motor controller…')
+        self._log.info('creating motor controller…')
         self._motor_controller = MotorController(self._config, external_clock=self._irq_clock, level=self._level)
+
+        self._log.info('creating rotation controller…')
+        self._rotation_controller = RotationController(self._config, self._motor_controller, level=Level.INFO)
+
+        # create IMUs
+
+        if _cfg.get('enable_usfs'):
+            self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
+            # fixed trim determined via observation
+            self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
+            self._usfs.set_verbose(False)
+
+        if _cfg.get('enable_icm20948'):
+            self._icm20948 = Icm20948(self._config, level=Level.INFO)
+            self._icm20948.include_accel_gyro(True)
 
         # create behaviours
 
@@ -396,8 +401,11 @@ class KROS(Component, FiniteStateMachine):
             self._queue_publisher.enable()
         _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
         if _motor_ctrl_cfg.get('enable'):
-            self._log.info('enable motor controller…')
+            self._log.info('🤢 enable motor controller…')
             self._motor_controller.enable()
+            if self._rotation_controller:
+                self._log.info('🤢 enable rotation controller…')
+                self._rotation_controller.enable()
         else:
             self._log.warning('motor controller disabled.')
         if self._icm20948:
@@ -405,6 +413,8 @@ class KROS(Component, FiniteStateMachine):
         if self._data_logging:
             self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
             self._data_log.data('START')
+        if self._behaviour_manager:
+            self._behaviour_manager.enable()
         # print registry of components
         Player.play('yippee')
         self._component_registry.print_registry()

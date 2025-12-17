@@ -44,7 +44,7 @@ class BehaviourManager(Subscriber):
     :param level:        the logging level
     '''
     def __init__(self, config, message_bus=None, message_factory=None, level=Level.INFO):
-        Subscriber.__init__(self, BehaviourManager.NAME, config, message_bus=message_bus, suppressed=False, enabled=True, level=Level.INFO)
+        Subscriber.__init__(self, BehaviourManager.NAME, config, message_bus=message_bus, suppressed=False, enabled=False, level=Level.INFO)
         self._config = config
         if not isinstance(message_factory, MessageFactory):
             raise ValueError('wrong type for message factory argument: {}'.format(type(message_factory)))

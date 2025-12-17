@@ -29,12 +29,13 @@ from core.convert import Convert
 from core.component import Component
 from core.logger import Logger, Level
 from core.orientation import Orientation
+from core.rotation import Rotation
 from core.rate import Rate
 from core.ranger import Ranger
+from hardware.digital_pot import DigitalPotentiometer
 from hardware.i2c_scanner import I2CScanner
 from hardware.rgbmatrix import RgbMatrix, DisplayType
-#from hardware.sound import Sound
-#from hardware.player import Player
+from hardware.rotation_controller import RotationController
 
 IN_MIN  = 0.0       # minimum analog value from IO Expander
 IN_MAX  = 3.3       # maximum analog value from IO Expander
@@ -90,13 +91,17 @@ class Icm20948(Component):
         self._heading_trim = self._fixed_heading_trim # initial value if adjusting
         self._digital_pot = None
         self._trim_adjust = 0.0
+        _component_registry = Component.get_registry()
         if self._adjust_trim:
-            _component_registry = Component.get_registry()
             # configure potentiometer
-            self._digital_pot = _component_registry.get('digital-pot')
+            self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
             if self._digital_pot:
                 self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
                 self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
+        self._rotation_controller = _component_registry.get(RotationController.NAME)
+        if self._rotation_controller is None:
+            self._log.error('rotation controller not found in registry; motion calibration disabled.')
+            self._motion_calibrate = False
         # add numeric display
         self._low_brightness    = 0.15
         self._medium_brightness = 0.25
@@ -315,17 +320,14 @@ class Icm20948(Component):
         '''
         return self._formatted_heading
 
-    def calibrate(self):
+    def bench_calibrate(self):
         '''
-        Manually calibrate the sensor by looping while the sensor is rotated
-        through a 360° motion, then leave it to rest for a few seconds. This
-        times out after 60 seconds.
+        Manually calibrate the sensor by looping while the sensor is rotated through a 360°
+        motion, then leave it to rest for a few seconds. This times out after 60 seconds.
 
-        There is a ballistic behaviour in MotionController to perform this
-        same function.
+        There is a ballistic behaviour in MotionController to perform this same function.
 
-        Returns True or False upon completion (in addition to setting the
-        class variable).
+        Returns True or False upon completion (in addition to setting the class variable).
         '''
         _start_time = dt.now()
         self._heading_count = 0
@@ -349,7 +351,7 @@ class Icm20948(Component):
                 _count = next(_counter)
                 if _count > _limit:
                     break
-                try: 
+                try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
                     r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
@@ -357,7 +359,7 @@ class Icm20948(Component):
                         self._log.info(Fore.CYAN + '[{: 03d}] calibrating (min/max)…'.format(_count))
                 except Exception as e:
                     self._log.error('{} encountered, exiting:   {}\n{}'.format(type(e), e, traceback.format_exc()))
-                
+
                 import sys
                 import select
                 if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
@@ -386,7 +388,7 @@ class Icm20948(Component):
                                 + Fore.YELLOW + '{:4.2f}°; '.format(_heading_degrees)
                                 + Fore.CYAN + Style.DIM + '(calibrated?  {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
                         )
-                except Exception as e: 
+                except Exception as e:
                     self._log.error('{} encountered, exiting:  {}\n{}'.format(type(e), e, traceback.format_exc()))
                 _rate.wait()
 
@@ -402,17 +404,93 @@ class Icm20948(Component):
                     pass
         return self.is_calibrated
 
+    def motion_calibrate(self):
+        '''
+        Programmatically calibrate the sensor by commanding the robot to rotate
+        through a 360° motion, then measuring stability. This times out after 60 seconds.
+
+        This method uses the RotationController to perform the rotation.
+
+        Returns True or False upon completion (in addition to setting the class variable).
+        '''
+        print(Fore.MAGENTA + '🍆 a. ' + Style.RESET_ALL)
+        _start_time = dt.now()
+        self._heading_count = 0
+        _rate = Rate(self._poll_rate_hz, Level.ERROR)
+        _counter = itertools.count()
+        _count = 0
+        _limit = 1800 # 1 minute
+        self._amin = list(self.__icm20948.read_magnetometer_data())
+        self._amax = list(self.__icm20948.read_magnetometer_data())
+        self._log.info(Fore.YELLOW + 'calibrating to stability threshold:  {}…'.format(self._stability_threshold))
+        if self._play_sound:
+            pass
+        print(Fore.MAGENTA + '🍆 b. ' + Style.RESET_ALL)
+        if not self._rotation_controller.enabled:
+            print(Fore.MAGENTA + '🍆 c. ' + Style.RESET_ALL)
+            self._rotation_controller.enable()
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n    beginning automatic 360° rotation for calibration…\n')
+        try:
+            # start rotation
+            self._rotation_controller.rotate(360.0, Rotation.COUNTER_CLOCKWISE)
+            # poll during rotation to capture min/max
+            self._log.info(Fore.YELLOW + '🎃 is rotating? {}; enabled? {}'.format(self._rotation_controller.is_rotating, self.enabled))
+            while self._rotation_controller.is_rotating and self.enabled:
+                _count = next(_counter)
+                print(Fore.MAGENTA + '🍆 d. [{}] loop.'.format(_count) + Style.RESET_ALL)
+                if _count > _limit:
+                    break
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+                    if _count % 5 == 0:
+                        self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
+                except Exception as e:
+                    self._log.error('{} encountered, exiting:   {}\n{}'.format(type(e), e, traceback.format_exc()))
+                _rate.wait()
+            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
+            self.clear_queue()
+            _counter = itertools.count()
+            while self.enabled:
+                _count = next(_counter)
+                if self.is_calibrated or _count > _limit:
+                    break
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+                    if self.calibration_check(_heading_radians):
+                        break
+                    if _count % 5 == 0:
+                        self._log.info(
+                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {: 4.2f} < {: 4.2f}? ; '.format(_count, self._stdev, self._stability_threshold)
+                                + Fore.YELLOW + '{: 4.2f}°; '.format(_heading_degrees)
+                                + Fore.CYAN + Style.DIM + '(calibrated?  {}; over limit?  {})'.format(self.is_calibrated, _count > _limit)
+                        )
+                except Exception as e:
+                    self._log.error('{} encountered, exiting:   {}\n{}'.format(type(e), e, traceback.format_exc()))
+                _rate.wait()
+        finally:
+            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+            if self.is_calibrated:
+                self._log.info(Fore.GREEN + 'IMU calibrated:   elapsed:  {: d}ms'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+            elif self.enabled:
+                self._log.error('unable to calibrate IMU after {: d}ms elapsed.'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+        return self.is_calibrated
+
     def x_calibrate(self):
         '''
-        Manually calibrate the sensor by looping while the sensor is rotated
-        through a 360° motion, then leave it to rest for a few seconds. This
-        times out after 60 seconds.
+        Manually calibrate the sensor by looping while the sensor is rotated through a 360°
+        motion, then leave it to rest for a few seconds. This times out after 60 seconds.
 
-        There is a ballistic behaviour in MotionController to perform this
-        same function.
+        There is a ballistic behaviour in MotionController to perform this same function.
 
-        Returns True or False upon completion (in addition to setting the
-        class variable).
+        Returns True or False upon completion (in addition to setting the class variable).
         '''
         _start_time = dt.now()
         self._heading_count = 0
@@ -450,9 +528,9 @@ class Icm20948(Component):
 
             while self.enabled:
                 _count = next(_counter)
-                if self.is_calibrated or _count > _limit: 
+                if self.is_calibrated or _count > _limit:
                     break
-                try: 
+                try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
                     r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
@@ -532,7 +610,7 @@ class Icm20948(Component):
         sin_mean = sin_sum / n
         cos_mean = cos_sum / n
         r = math.sqrt(sin_mean**2 + cos_mean**2)
-        if r > 0.999999: 
+        if r > 0.999999:
             return 0.0
         if r < 0.0001:
             return π
@@ -563,7 +641,7 @@ class Icm20948(Component):
         _rate = Rate(self._poll_rate_hz, Level.ERROR)
         if self._amin is None or self._amax is None:
             raise Exception('compass not calibrated yet, call calibrate() first.')
-        while enabled: 
+        while enabled:
             self.poll()
             if callback:
                 callback()
@@ -663,24 +741,24 @@ class Icm20948(Component):
             self._amin = amin
             self._amax = amax
         mag = list(self.__icm20948.read_magnetometer_data())
-        if self._include_accel_gyro: 
+        if self._include_accel_gyro:
             self._accel[0], self._accel[1], self._accel[2], self._gyro[0], self._gyro[1], self._gyro[2] = self.__icm20948.read_accelerometer_gyro_data()
         for i in range(3):
             v = mag[i]
             if v < amin[i]:
                 amin[i] = v
-            if v > amax[i]: 
+            if v > amax[i]:
                 amax[i] = v
             mag[i] -= amin[i]
             try:
                 mag[i] /= amax[i] - amin[i]
-            except ZeroDivisionError: 
+            except ZeroDivisionError:
                 pass
             mag[i] -= 0.5
         self._radians = math.atan2(mag[self._axes[0]],mag[self._axes[1]])
         if calibrating:
             pass
-        elif self._adjust_trim and self._digital_pot: 
+        elif self._adjust_trim and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._heading_trim = self._fixed_heading_trim + self._trim_adjust
             if self._show_rgbmatrix5x5:
@@ -696,6 +774,13 @@ class Icm20948(Component):
         if not self.closed:
             if not self.enabled:
                 Component.enable(self)
+                # check calibration flags
+                if self._motion_calibrate and not self._is_calibrated:
+                    self._log.info('beginning motion calibration…')
+                    self.motion_calibrate()
+                elif self._bench_calibrate and not self._is_calibrated:
+                    self._log.info('beginning bench calibration…')
+                    self.bench_calibrate()
                 self._log.info('enabled.')
             else:
                 self._log.warning('already enabled.')

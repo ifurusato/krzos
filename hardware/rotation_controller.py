@@ -61,7 +61,7 @@ class RotationController(Component):
         self._log = Logger(RotationController.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         if motor_controller is None:
-            raise ValueError('motor_controller cannot be None')
+            raise ValueError('motor controller is required.')
         self._motor_controller = motor_controller
         # get motor references
         self._motor_pfwd = self._motor_controller.get_motor(Orientation.PFWD)
@@ -571,7 +571,7 @@ class RotationController(Component):
 
     def enable(self):
         if not self.enabled:
-            super().enable()
+            Component.enable(self)
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')
