@@ -63,7 +63,8 @@ try:
 #   elif _i2c_scanner.has_address([0x0E]):
 #       _pot = DigitalPotentiometer(_config, i2c_address=0x0E, level=Level.INFO)
     if _pot:
-        _pot.set_output_range(-90.0, 90.0)
+#       _pot.set_output_range(-0.5 * π, 0.5 * π)  # ±90° adjustment range
+        _pot.set_output_range(-π, π)              # ±180° adjustment range
 
     _rgbmatrix = None
 

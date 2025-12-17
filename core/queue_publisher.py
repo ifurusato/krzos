@@ -51,37 +51,37 @@ class QueuePublisher(Publisher):
     def put(self, message):
         if self.enabled:
             if not self.is_active:
-                self._log.warning('🦊 message {} ignored: queue publisher inactive.'.format(message.name))
+                self._log.warning('message {} ignored: queue publisher inactive.'.format(message.name))
             else:
                 NO_WAIT = True # TENTATIVE for synchronous calls
                 if NO_WAIT:
                     self._queue.put_nowait(message) 
                 else:
                     self._queue.put(message)
-                self._log.info('🦊 put message \'{}\' ({}) into queue ({:d} {})'.format(
+                self._log.info('put message \'{}\' ({}) into queue ({:d} {})'.format(
                         message.event.name, message.name, self._queue.size, 'item' if self._queue.size == 1 else 'items'))
         else:
-            self._log.warning('🦊 queue publisher disabled.')
+            self._log.warning('queue publisher disabled.')
 
     def enable(self):
         if not self.enabled:
-            self._log.info('🦊 enable queue publisher.')
+            self._log.info('enable queue publisher.')
 #           super().enable()
             Publisher.enable(self)
             if self._message_bus.get_task_by_name(QueuePublisher._PUBLISHER_LOOP):
                 raise Exception('already enabled.')
             elif self._message_bus.loop is None:
-                self._log.warning('🦊 no message bus loop available.')
+                self._log.warning('no message bus loop available.')
 #               raise Exception('no message bus loop available.')
             else:
                 self._log.info('creating task for publisher loop…')
                 self._message_bus.loop.create_task(self._publisher_loop(lambda: self.enabled), name=QueuePublisher._PUBLISHER_LOOP)
                 self._log.info('enabled.')
         else:
-            self._log.warning('🦊 failed to enable publisher loop.')
+            self._log.warning('failed to enable publisher loop.')
 
     async def _publisher_loop(self, f_is_enabled):
-        self._log.info('🦊 starting queue publisher loop: ' + Fore.YELLOW + ( '(suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
+        self._log.info('starting queue publisher loop: ' + Fore.YELLOW + ( '(suppressed, type \'m\' to release)' if self.suppressed else '(released)') )
         try:
             while f_is_enabled():
                 _count = next(self._counter)
@@ -97,9 +97,9 @@ class QueuePublisher(Publisher):
                                 + Fore.YELLOW + '{}'.format(_message.payload.value))
                 await asyncio.sleep(self._publish_delay_sec)
         except asyncio.CancelledError:
-            self._log.info("🦊 publisher loop cancelled.")
+            self._log.info("publisher loop cancelled.")
             raise
         finally:
-            self._log.info('🦊 publisher loop complete.')
+            self._log.info('publisher loop complete.')
 
 #EOF

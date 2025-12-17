@@ -56,6 +56,7 @@ from hardware.motor_controller import MotorController
 from hardware.player import Player
 from hardware.system import System
 from hardware.usfs import Usfs
+from hardware.icm20948 import Icm20948
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
@@ -105,6 +106,7 @@ class KROS(Component, FiniteStateMachine):
         self._digital_pot         = None
         self._compass_encoder     = None
         self._usfs                = None
+        self._icm20948            = None
         self._vl53_sensor         = None
         self._radiozoa_sensor     = None
         self._tinyfx              = None
@@ -252,6 +254,11 @@ class KROS(Component, FiniteStateMachine):
             self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
             self._usfs.set_verbose(False)
 
+        if _cfg.get('enable_icm20948'):
+            self._icm20948 = Icm20948(self._config, level=Level.INFO)
+            self._icm20948.include_accel_gyro(True)
+#           self._icm20948.enable()
+
 #       _enable_vl53l5cx = _cfg.get('enable_vl53l5cx')
 #       if _enable_vl53l5cx:
 #           self._log.info('creating VL53L5CX sensor…')
@@ -393,6 +400,8 @@ class KROS(Component, FiniteStateMachine):
             self._motor_controller.enable()
         else:
             self._log.warning('motor controller disabled.')
+        if self._icm20948:
+            self._icm20948.enable()
         if self._data_logging:
             self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
             self._data_log.data('START')

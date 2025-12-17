@@ -21,7 +21,8 @@ kros:
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
-        enable_usfs:                      False            # enable USFS IMU
+        enable_usfs:                       True            # enable USFS IMU
+        enable_icm20948:                   True            # enable ICM20948 IMU
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -424,18 +425,18 @@ kros:
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled
-            vertical_mount:                True            # vertical like Pimoroni, or horizontal like Adafruit
-            bench_calibrate:               True            # if true, calibrate the IMU manually while on the rotating bench
-            motion_calibrate:             False            # if true, calibrate the IMU by the robot rotating in place
+            vertical_mount:               False            # True: vertical like Pimoroni, or False: horizontal like Adafruit
+            bench_calibrate:              False            # if true, calibrate the IMU manually while on the rotating bench
+            motion_calibrate:              True            # if true, calibrate the IMU by the robot rotating in place
             show_console:                  True            # if true, show data on console (same as verbose)
             show_rgbmatrix5x5:             True            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
-            adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
+            adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                    0.0             # pitch trim for level
             roll_trim:                     4.0             # roll trim for level
             heading_trim:                  1.55            # heading trim adjustment (in radians) to set north (was 0.15 on MR01)
             queue_length:                   100            # length of heading data queue
-            stability_threshold:              7.0          # max standard deviation to determine stability
+            stability_threshold:              0.05         # max standard deviation (2.9° in radians) to determine stability
             cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians)
 #           cardinal_tolerance:               0.0523599    # tolerance to cardinal points (3° in radians)
             include_accel_gyro:            True            # if true, poll heading data

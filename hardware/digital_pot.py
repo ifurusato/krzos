@@ -135,7 +135,7 @@ class DigitalPotentiometer(Component):
         if not isinstance(out_max, float):
             raise ValueError('wrong type for out_max argument: {}'.format(type(out_max)))
         self._out_max = out_max
-        self._log.info('output range:\t{:>5.2f}-{:<5.2f}'.format(self._out_min, self._out_max))
+        self._log.info('output range: ' + Fore.GREEN + '{:>5.2f} - {:<5.2f}'.format(self._out_min, self._out_max))
 
     @property
     def value(self):
