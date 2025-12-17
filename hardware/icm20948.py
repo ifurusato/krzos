@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-05-20
-# modified: 2025-12-17
+# modified: 2025-12-18
 
 import time
 import traceback
@@ -48,6 +48,7 @@ OUT_MAX = π / RANGE_DIVISOR         # maximum scaled output value
 HALF_PI = π / 2.0
 
 class Icm20948(Component):
+    NAME = 'icm20948'
     '''
     Wraps the functionality of an ICM20948 IMU largely as a compass, though
     pitch and roll are also available. This includes optional trim adjustment,
@@ -59,7 +60,7 @@ class Icm20948(Component):
     :param level:           the log level
     '''
     def __init__(self, config, rgbmatrix=None, level=Level.INFO):
-        self._log = Logger('icm20948', level)
+        self._log = Logger(Icm20948.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising icm20948…')
         if not isinstance(config, dict):
