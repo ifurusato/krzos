@@ -121,12 +121,12 @@ class Icm20948(Component):
         # general orientation
         _vertical_mount = _cfg.get('vertical_mount')
         if _vertical_mount: # orientation of Pimoroni board mounted vertically, Y along front-rear axis of robot
-            self._log.info('🚺 using vertical mount.')
+            self._log.info('using vertical mount.')
             self._X = 0
             self._Y = 1
             self._Z = 2
         else: # orientation of Adafruit board mounted horizontally, Z vertical, X along front-rear axis of robot
-            self._log.info('🚺 using horizontal mount.')
+            self._log.info('using horizontal mount.')
             self._X = 2
             self._Y = 1
             self._Z = 0
@@ -561,99 +561,6 @@ class Icm20948(Component):
                     pass
             elif self.enabled:
                 self._log.error('unable to calibrate IMU after {:d}ms elapsed.'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-        return self.is_calibrated
-
-    def x_motion_calibrate(self):
-        '''
-        Programmatically calibrate the sensor by commanding the robot to rotate
-        through a 360° motion, then measuring stability. This times out after 60 seconds.
-
-        This method uses the RotationController to perform the rotation.
-
-        Returns True or False upon completion (in addition to setting the class variable).
-        '''
-        _start_time = dt.now()
-        self._heading_count = 0
-        _rate = Rate(self._poll_rate_hz, Level.ERROR)
-        _counter = itertools.count()
-        _count = 0
-        _limit = 1800 # 1 minute
-        self._amin = None # list(self.__icm20948.read_magnetometer_data())
-        self._amax = None # list(self.__icm20948.read_magnetometer_data())
-        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
-        if self._play_sound:
-            pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n    beginning automatic 360° rotation for calibration…\n')
-
-        if not self._rotation_controller.enabled:
-            self._rotation_controller.enable()
-
-        USE_THREADING = True
-        try:
-            if USE_THREADING:
-                # start rotation in background
-                _rotation_thread = Thread(target=lambda: self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE))
-                _rotation_thread.start()
-
-                # poll IMU during rotation to capture min/max
-                _counter_rotation = itertools.count()
-                while self._rotation_controller.is_rotating and self.enabled:
-                    _count = next(_counter_rotation)
-                    try:
-                        _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                        if _count % 5 == 0:
-                            self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
-                    except Exception as e:
-                        self._log.error('{} encountered: {}'.format(type(e), e))
-                    _rate.wait()
-
-                # wait for rotation to complete
-                _rotation_thread.join()
-            else:
-                # perform blocking rotation - handles all phases internally
-                _success = self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE)
-
-                if not _success:
-                    self._log.error('rotation failed during calibration')
-                    return False
-
-            # allow robot to fully settle after rotation
-            time.sleep(2.0)
-
-            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
-            self.clear_queue()
-            _counter = itertools.count()
-
-            while self.enabled:
-                _count = next(_counter)
-                if self.is_calibrated or _count > _limit:
-                    break
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
-                    if self.calibration_check(_heading_radians):
-                        break
-                    if _count % 5 == 0:
-                        self._log.info(
-                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}?; '.format(_count, self._stdev, self._stability_threshold)
-                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
-                                + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
-                        )
-                except Exception as e:
-                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-                _rate.wait()
-
-        finally:
-            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-            if self.is_calibrated:
-                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-            elif self.enabled:
-                self._log.error('unable to calibrate IMU after {: d}ms elapsed.'.format(_elapsed_ms))
                 if self._play_sound:
                     pass
         return self.is_calibrated

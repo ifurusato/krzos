@@ -15,7 +15,7 @@ import numpy as np
 from colorama import init, Fore, Style
 init()
 
-from core.component import Component
+from core.component import Component, MissingComponentError
 from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.rotation import Rotation
@@ -248,6 +248,23 @@ class RotationController(Component):
         self._current_heading_offset = 0.0
         self._heading_markers.clear()
         self._log.info('heading reset to 0.0°')
+
+    def rotate_absolute(self, heading):
+        '''
+        Rotate to exactly the specified compass heading in degrees, choosing
+        the direction of rotation that requires the least amount of rotation.
+
+        This uses the ICM20848 if available. If not available, raises 
+        a MissingComponentError.
+        '''
+        from hardware.icm20948 import Icm20948
+
+        _component_registry = Component.get_registry()
+        _icm20948 = _component_registry.get(Icm20948.NAME)
+        if not _icm20948:
+            raise MissingComponentError('icm20948 required for absolute rotation.')
+        # TODO
+        pass
 
     def rotate(self, degrees, direction=Rotation.CLOCKWISE):
         '''
