@@ -14,6 +14,7 @@ import traceback
 import itertools
 import math, statistics
 from math import pi as π
+from threading import Thread
 from collections import deque
 from datetime import datetime as dt
 from colorsys import hsv_to_rgb
@@ -422,8 +423,8 @@ class Icm20948(Component):
         _counter = itertools.count()
         _count = 0
         _limit = 1800 # 1 minute
-        self._amin = list(self.__icm20948.read_magnetometer_data())
-        self._amax = list(self.__icm20948.read_magnetometer_data())
+        self._amin = None # list(self.__icm20948.read_magnetometer_data())
+        self._amax = None # list(self.__icm20948.read_magnetometer_data())
         self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
         if self._play_sound:
             pass
@@ -432,13 +433,34 @@ class Icm20948(Component):
         if not self._rotation_controller.enabled:
             self._rotation_controller.enable()
 
+        USE_THREADING = True
         try:
-            # perform blocking rotation - handles all phases internally
-            _success = self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE)
+            if USE_THREADING:
+                # start rotation in background
+                _rotation_thread = Thread(target=lambda: self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE))
+                _rotation_thread.start()
+                
+                # poll IMU during rotation to capture min/max
+                _counter_rotation = itertools.count()
+                while self._rotation_controller.is_rotating and self.enabled:
+                    _count = next(_counter_rotation)
+                    try:
+                        _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                        if _count % 5 == 0:
+                            self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
+                    except Exception as e:
+                        self._log.error('{} encountered:  {}'. format(type(e), e))
+                    _rate.wait()
+                
+                # wait for rotation to complete
+                _rotation_thread.join()
+            else:
+                # perform blocking rotation - handles all phases internally
+                _success = self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE)
 
-            if not _success:
-                self._log.error('rotation failed during calibration')
-                return False
+                if not _success:
+                    self._log.error('rotation failed during calibration')
+                    return False
 
             # allow robot to fully settle after rotation  
             time.sleep(2.0)
@@ -630,26 +652,24 @@ class Icm20948(Component):
         Does the work of obtaining the heading value in radians.
         '''
         if self._amin is None or self._amax is None:
-            amin = list(self.__icm20948.read_magnetometer_data())
-            amax = list(self.__icm20948.read_magnetometer_data())
-            self._amin = amin
-            self._amax = amax
+            self._amin = list(self.__icm20948.read_magnetometer_data())
+            self._amax = list(self.__icm20948.read_magnetometer_data())
         mag = list(self.__icm20948.read_magnetometer_data())
-        if self._include_accel_gyro:
+        if self._include_accel_gyro: 
             self._accel[0], self._accel[1], self._accel[2], self._gyro[0], self._gyro[1], self._gyro[2] = self.__icm20948.read_accelerometer_gyro_data()
         for i in range(3):
             v = mag[i]
-            if v < amin[i]:
-                amin[i] = v
-            if v > amax[i]:
-                amax[i] = v
-            mag[i] -= amin[i]
+            if v < self._amin[i]:
+                self._amin[i] = v
+            if v > self._amax[i]:
+                self._amax[i] = v
+            mag[i] -= self._amin[i]
             try:
-                mag[i] /= amax[i] - amin[i]
-            except ZeroDivisionError:
+                mag[i] /= self._amax[i] - self._amin[i]
+            except ZeroDivisionError: 
                 pass
             mag[i] -= 0.5
-        self._radians = math.atan2(mag[self._axes[0]],mag[self._axes[1]])
+        self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])
         if calibrating:
             pass
         elif self._adjust_trim and self._digital_pot:
