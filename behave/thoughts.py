@@ -33,6 +33,7 @@ from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
+from hardware.rotation_controller import RotationController
 from hardware.tinyfx_controller import TinyFxController
 
 class Thoughts(Behaviour):
@@ -123,6 +124,7 @@ class Thoughts(Behaviour):
                 self._log.warning('unable to open lux sensor.')
         self._darkness_state = False
         self._motor_controller = _component_registry.get(MotorController.NAME)
+        self._rotation_controller = _component_registry.get(RotationController.NAME)
         # state tracking
         self._count = 0
         self._counter = itertools.count()
@@ -257,6 +259,10 @@ class Thoughts(Behaviour):
                 self._suppress_random_sounds = _saved
         else:
             self._log.info('light control disabled.')
+
+    def _rotate_to_heading(self):
+        if self._rotation_controller:
+            self._rotation_controller.rotate_absolute(0)
 
     def _toggle_running_lights(self):
         self._set_running_lights(not self._running_lights_state)
@@ -560,7 +566,8 @@ class Thoughts(Behaviour):
                 self._log.info(Style.DIM + 'A_BUTTON.')
                 self._publish_stuck()
             case Event.B_BUTTON:
-                self._log.debug(Style.DIM + 'B_BUTTON.')
+                self._log.debug(Style.DIM + 'B_BUTTON. rotate north')
+                self._rotate_to_heading()
             case Event.X_BUTTON:
                 self._log.debug(Style.DIM + 'X_BUTTON.')
             case Event.Y_BUTTON:

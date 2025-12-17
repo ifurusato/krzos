@@ -249,22 +249,53 @@ class RotationController(Component):
         self._heading_markers.clear()
         self._log.info('heading reset to 0.0°')
 
-    def rotate_absolute(self, heading):
+    def rotate_absolute(self, target_heading_degrees):
         '''
         Rotate to exactly the specified compass heading in degrees, choosing
         the direction of rotation that requires the least amount of rotation.
 
-        This uses the ICM20848 if available. If not available, raises 
-        a MissingComponentError.
+        This uses the ICM20948 to determine current heading and track progress.
+        If not available, raises a MissingComponentError.
+
+        Args:
+            target_heading_degrees: Target compass heading (0-359°)
+
+        Returns:
+            True if rotation completed successfully, False if cancelled/timed out
         '''
+        self._log.info(Fore.MAGENTA + '💜 absolute rotation to {:.1f}°…'.format(_rotation_degrees))
         from hardware.icm20948 import Icm20948
 
         _component_registry = Component.get_registry()
         _icm20948 = _component_registry.get(Icm20948.NAME)
         if not _icm20948:
             raise MissingComponentError('icm20948 required for absolute rotation.')
-        # TODO
-        pass
+        if not _icm20948.is_calibrated:
+            raise Exception('icm20948 must be calibrated before absolute rotation.')
+        # get current heading from IMU
+        _current_heading = _icm20948.mean_heading
+        # calculate shortest rotation direction and degrees
+        _delta = (target_heading_degrees - _current_heading + 180) % 360 - 180
+        _rotation_degrees = abs(_delta)
+        _direction = Rotation.CLOCKWISE if _delta > 0 else Rotation.COUNTER_CLOCKWISE
+        # validate rotation is large enough for accel/decel
+        if _rotation_degrees < (self._accel_degrees + self._decel_degrees):
+            self._log.warning('rotation of {:.1f}° too small, adjusting to minimum'.format(_rotation_degrees))
+            _rotation_degrees = self._accel_degrees + self._decel_degrees + 10.0
+        self._log.info('rotating from {}° to {}° ({:.1f}° {})'.format(
+            _current_heading, target_heading_degrees, _rotation_degrees, _direction.name))
+        # perform rotation using existing blocking method
+        _success = self.rotate_blocking(_rotation_degrees, _direction)
+        # verify we reached target (within tolerance)
+        _final_heading = _icm20948.mean_heading
+        _error = abs((_final_heading - target_heading_degrees + 180) % 360 - 180)
+        if _error > 5.0: # tolerance: 5°
+            self._log.warning('rotation completed but heading error: {:.1f}° (target: {}°, actual: {}°)'.format(
+                _error, target_heading_degrees, _final_heading))
+        else:
+            self._log.info('rotation complete: target: {}°, actual: {}°, error: {:.1f}°'.format(
+                target_heading_degrees, _final_heading, _error))
+        return _success and _error <= 5.0
 
     def rotate(self, degrees, direction=Rotation.CLOCKWISE):
         '''
@@ -272,7 +303,7 @@ class RotationController(Component):
         Total rotation (including accel/decel) = degrees.
 
         Args:
-            degrees: Total rotation angle (including accel and decel phases)
+            degrees:    Total rotation angle (including accel and decel phases)
             direction:  Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
         '''
         if degrees <= (self._accel_degrees + self._decel_degrees):

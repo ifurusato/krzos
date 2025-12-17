@@ -436,7 +436,8 @@ kros:
             roll_trim:                     4.0             # roll trim for level
             heading_trim:                  1.55            # heading trim adjustment (in radians) to set north (was 0.15 on MR01)
             queue_length:                   100            # length of heading data queue
-            stability_threshold:              0.05         # max standard deviation (2.9° in radians) to determine stability
+            calibration_rotation:           540            # how many degrees to rotate during calibration?
+            stability_threshold:              0.08         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
             cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians)
 #           cardinal_tolerance:               0.0523599    # tolerance to cardinal points (3° in radians)
             include_accel_gyro:            True            # if true, poll heading data

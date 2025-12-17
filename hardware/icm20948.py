@@ -102,6 +102,7 @@ class Icm20948(Component):
             if self._digital_pot:
                 self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
                 self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
+        self._calibration_rotation = _cfg.get('calibration_rotation')
         self._rotation_controller = _component_registry.get(RotationController.NAME)
         if self._rotation_controller is None:
             self._log.error('rotation controller not found in registry; motion calibration disabled.')
@@ -428,7 +429,7 @@ class Icm20948(Component):
         self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
         if self._play_sound:
             pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n')
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n'.format(self._calibration_rotation))
         if not self._rotation_controller.enabled:
             self._rotation_controller.enable()
         try:
@@ -439,12 +440,12 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     if _count % 5 == 0:
-                        self._log.info(Fore.CYAN + '[{: 03d}] calibrating (min/max)…'.format(_count))
+                        self._log.info(Style.DIM + '[{: 03d}] calibrating (min/max)…'.format(_count))
                 except Exception as e:
                     self._log.error('{} encountered: {}'.format(type(e), e))
             self._rotation_controller.add_poll_callback(_imu_poll_callback)
             # use blocking rotation - callback handles IMU polling
-            self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE)
+            self._rotation_controller.rotate_blocking(self._calibration_rotation, Rotation.COUNTER_CLOCKWISE)
             # clear callback
             self._rotation_controller.remove_poll_callback(_imu_poll_callback)
             # allow robot to settle
