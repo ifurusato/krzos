@@ -95,7 +95,8 @@ class RotationController(Component):
         self._intent_vector = (0.0, 0.0, 0.0)
         self._priority = 0.0
         self._intent_vector_registered = False
-        # phase change callbacks
+        # callbacks
+        self._poll_callbacks = []
         self._phase_change_callbacks = []
         # encoder baselines for rotation tracking
         self._baseline_pfwd = 0
@@ -159,6 +160,24 @@ class RotationController(Component):
         Returns the configured deceleration distance in degrees.
         '''
         return self._decel_degrees
+
+    def add_poll_callback(self, callback):
+        '''
+        Register a callback to be invoked on every poll() call during active rotation.
+        Callback signature: callback()
+        '''
+        if not callable(callback):
+            raise TypeError('callback must be callable')
+        self._poll_callbacks.append(callback)
+        self._log.info('added poll callback')
+
+    def remove_poll_callback(self, callback):
+        '''
+        Remove a previously registered poll callback.
+        '''
+        if callback in self._poll_callbacks:
+            self._poll_callbacks. remove(callback)
+            self._log.info('removed poll callback')
 
     def add_phase_change_callback(self, callback):
         '''
@@ -364,6 +383,12 @@ class RotationController(Component):
         current_time = time.time()
         elapsed = current_time - self._start_time
         accumulated_rotation = self._get_accumulated_rotation()
+        # call all registered poll callbacks
+        for callback in self._poll_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                self._log.error('error in poll callback: {}'.format(e))
         return (current_time, elapsed, accumulated_rotation)
 
     def handle_accel_phase(self, elapsed, accumulated_rotation, current_time):

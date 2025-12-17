@@ -12,6 +12,7 @@
 import time
 import traceback
 import itertools
+import asyncio
 import math, statistics
 from math import pi as π
 from threading import Thread
@@ -37,7 +38,7 @@ from core.ranger import Ranger
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.i2c_scanner import I2CScanner
 from hardware.rgbmatrix import RgbMatrix, DisplayType
-from hardware.rotation_controller import RotationController
+from hardware.rotation_controller import RotationController, RotationPhase
 
 IN_MIN  = 0.0       # minimum analog value from IO Expander
 IN_MAX  = 3.3       # maximum analog value from IO Expander
@@ -411,6 +412,161 @@ class Icm20948(Component):
     def motion_calibrate(self):
         '''
         Programmatically calibrate the sensor by commanding the robot to rotate
+        through a 360° motion, then measuring stability.
+
+        Returns True or False upon completion (in addition to setting the class variable).
+        '''
+        _start_time = dt.now()
+        self._heading_count = 0
+        _rate = Rate(self._poll_rate_hz, Level.ERROR)
+        _counter = itertools.count()
+        _count = 0
+        _limit = 1800
+        self._amin = None
+        self._amax = None
+        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
+        if self._play_sound:
+            pass
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n')
+        if not self._rotation_controller.enabled:
+            self._rotation_controller.enable()
+        try:
+            # set up poll callback to capture IMU data during rotation
+            _imu_counter = itertools.count()
+            def _imu_poll_callback():
+                _count = next(_imu_counter)
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    if _count % 5 == 0:
+                        self._log.info(Fore.CYAN + '[{: 03d}] calibrating (min/max)…'.format(_count))
+                except Exception as e:
+                    self._log.error('{} encountered: {}'.format(type(e), e))
+            self._rotation_controller.add_poll_callback(_imu_poll_callback)
+            # use blocking rotation - callback handles IMU polling
+            self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE)
+            # clear callback
+            self._rotation_controller.remove_poll_callback(_imu_poll_callback)
+            # allow robot to settle
+            time.sleep(2.0)
+            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
+            self.clear_queue()
+            _counter = itertools.count()
+            while self.enabled:
+                _count = next(_counter)
+                if self.is_calibrated or _count > _limit:
+                    break
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+                    if self.calibration_check(_heading_radians):
+                        break
+                    if _count % 5 == 0:
+                        self._log.info(
+                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}?  ; '.format(_count, self._stdev, self._stability_threshold)
+                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
+                                + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit?  {})'.format(self.is_calibrated, _count > _limit)
+                        )
+                except Exception as e:
+                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                _rate.wait()
+        finally:
+            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+            if self.is_calibrated:
+                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+            elif self.enabled:
+                self._log.error('unable to calibrate IMU after {:d}ms elapsed.'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+        return self.is_calibrated
+
+    def motion_calibrate_almost(self):
+        '''
+        Programmatically calibrate the sensor by commanding the robot to rotate
+        through a 360° motion, then measuring stability.
+
+        Returns True or False upon completion (in addition to setting the class variable).
+        '''
+        async def _calibration_sequence():
+            # initiate rotation (non-blocking)
+            self._rotation_controller.rotate(360.0, Rotation.COUNTER_CLOCKWISE)
+            # polling loop at 20Hz
+            _counter_rotation = itertools.count()
+            while self._rotation_controller.is_rotating and self.enabled:
+                _count = next(_counter_rotation)
+                # poll IMU to capture min/max
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    if _count % 5 == 0:
+                        self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
+                except Exception as e:
+                    self._log.error('{} encountered: {}'.format(type(e), e))
+                # poll and handle rotation phases
+                current_time, elapsed, accumulated_rotation = self._rotation_controller.poll()
+                if self._rotation_controller.rotation_phase == RotationPhase.ACCEL:
+                    self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
+                elif self._rotation_controller.rotation_phase == RotationPhase.ROTATE:
+                    self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
+                elif self._rotation_controller.rotation_phase == RotationPhase.DECEL:
+                    decel_complete = self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
+                    if decel_complete:
+                        break
+                await asyncio.sleep(0.05) # 20Hz polling
+            # allow robot to settle
+            await asyncio.sleep(2.0)
+            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
+            self.clear_queue()
+            _counter = itertools.count()
+            _limit = 1800
+            while self.enabled:
+                _count = next(_counter)
+                if self.is_calibrated or _count > _limit:
+                    break
+                try:
+                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
+                    if self.calibration_check(_heading_radians):
+                        break
+                    if _count % 5 == 0:
+                        self._log.info(
+                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}? ; '.format(_count, self._stdev, self._stability_threshold)
+                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
+                                + Fore.CYAN + Style.DIM + '(calibrated?  {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
+                        )
+                except Exception as e:
+                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                await asyncio.sleep(0.05) # 20Hz polling
+        # main synchronous method body
+        _start_time = dt.now()
+        self._heading_count = 0
+        self._amin = None
+        self._amax = None
+        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
+        if self._play_sound:
+            pass
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n')
+        if not self._rotation_controller.enabled:
+            self._rotation_controller.enable()
+        try:
+            asyncio.run(_calibration_sequence())
+        finally:
+            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
+            if self.is_calibrated:
+                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+            elif self.enabled:
+                self._log.error('unable to calibrate IMU after {:d}ms elapsed.'.format(_elapsed_ms))
+                if self._play_sound:
+                    pass
+        return self.is_calibrated
+
+    def x_motion_calibrate(self):
+        '''
+        Programmatically calibrate the sensor by commanding the robot to rotate
         through a 360° motion, then measuring stability. This times out after 60 seconds.
 
         This method uses the RotationController to perform the rotation.
@@ -439,7 +595,7 @@ class Icm20948(Component):
                 # start rotation in background
                 _rotation_thread = Thread(target=lambda: self._rotation_controller.rotate_blocking(360.0, Rotation.COUNTER_CLOCKWISE))
                 _rotation_thread.start()
-                
+
                 # poll IMU during rotation to capture min/max
                 _counter_rotation = itertools.count()
                 while self._rotation_controller.is_rotating and self.enabled:
@@ -449,9 +605,9 @@ class Icm20948(Component):
                         if _count % 5 == 0:
                             self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
                     except Exception as e:
-                        self._log.error('{} encountered:  {}'. format(type(e), e))
+                        self._log.error('{} encountered: {}'.format(type(e), e))
                     _rate.wait()
-                
+
                 # wait for rotation to complete
                 _rotation_thread.join()
             else:
@@ -462,7 +618,7 @@ class Icm20948(Component):
                     self._log.error('rotation failed during calibration')
                     return False
 
-            # allow robot to fully settle after rotation  
+            # allow robot to fully settle after rotation
             time.sleep(2.0)
 
             self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
@@ -655,7 +811,7 @@ class Icm20948(Component):
             self._amin = list(self.__icm20948.read_magnetometer_data())
             self._amax = list(self.__icm20948.read_magnetometer_data())
         mag = list(self.__icm20948.read_magnetometer_data())
-        if self._include_accel_gyro: 
+        if self._include_accel_gyro:
             self._accel[0], self._accel[1], self._accel[2], self._gyro[0], self._gyro[1], self._gyro[2] = self.__icm20948.read_accelerometer_gyro_data()
         for i in range(3):
             v = mag[i]
@@ -666,7 +822,7 @@ class Icm20948(Component):
             mag[i] -= self._amin[i]
             try:
                 mag[i] /= self._amax[i] - self._amin[i]
-            except ZeroDivisionError: 
+            except ZeroDivisionError:
                 pass
             mag[i] -= 0.5
         self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])

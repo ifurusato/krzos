@@ -345,8 +345,8 @@ class KROS(Component, FiniteStateMachine):
     def start(self, dummy=None):
         '''
         This first disables the Pi's status LEDs, establishes the message bus,
-        arbitrator, controller, enables the set of features, then starts the main
-        OS loop.
+        arbitrator, controller, enables the set of components such as the motor
+        controller, rotation controller, IMUs, then starts the main OS loop.
         '''
         if self._started:
             self._log.warning('already started.')
@@ -371,6 +371,18 @@ class KROS(Component, FiniteStateMachine):
         if self._irq_clock:
             self._log.info('enabling external clock…')
             self._irq_clock.enable()
+
+        _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
+        if _motor_ctrl_cfg.get('enable'):
+            self._log.info('enable motor controller…')
+            self._motor_controller.enable()
+            if self._rotation_controller:
+                self._log.info('enable rotation controller…')
+                self._rotation_controller.enable()
+        else:
+            self._log.warning('motor controller disabled.')
+        if self._icm20948:
+            self._icm20948.enable()
 
         if self._tinyfx: # turn on running lights
             if not self._tinyfx.enabled:
@@ -399,24 +411,18 @@ class KROS(Component, FiniteStateMachine):
         self._log.info(Fore.MAGENTA + 'kros started.')
         if self._queue_publisher and not self._queue_publisher.enabled:
             self._queue_publisher.enable()
-        _motor_ctrl_cfg = self._config.get('kros').get('motor_controller')
-        if _motor_ctrl_cfg.get('enable'):
-            self._log.info('🤢 enable motor controller…')
-            self._motor_controller.enable()
-            if self._rotation_controller:
-                self._log.info('🤢 enable rotation controller…')
-                self._rotation_controller.enable()
-        else:
-            self._log.warning('motor controller disabled.')
-        if self._icm20948:
-            self._icm20948.enable()
+
+        # OLD LOCATION OF MOTOR CONTROLLER / ROTATION CONTROLLER / ICM20948
+
         if self._data_logging:
             self._data_log = Logger('kros', log_to_file=True, data_logger=True, level=Level.INFO)
             self._data_log.data('START')
         if self._behaviour_manager:
             self._behaviour_manager.enable()
-        # print registry of components
+
         Player.play('yippee')
+
+        # print registry of components
         self._component_registry.print_registry()
 #       self._message_bus.verbose = False # TEMP
         # register callback on close
