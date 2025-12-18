@@ -423,6 +423,7 @@ kros:
             show_target_info:              True            # show log line with target info
         usfs:
             declination:                     23.04         # declination at operating location
+            swap_pitch_roll:               True            # if True, swap pitch and roll
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled

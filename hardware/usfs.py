@@ -94,6 +94,7 @@ class Usfs(Component):
             self.close()
         self._use_matrix = matrix11x7 != None
         self._verbose    = False # if true display to console
+        self._swap_pitch_roll  = _cfg.get('swap_pitch_roll')# if True, swap pitch and roll
         self._pitch            = 0.0
         self._roll             = 0.0
         self._yaw              = 0.0
