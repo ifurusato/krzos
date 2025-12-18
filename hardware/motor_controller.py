@@ -1103,17 +1103,17 @@ class MotorController(Component):
                 self._eyeballs_monitor.disable()
             if not self.is_stopped:
                 if self._use_graceful_stop:
-                    self._log.info('🍀 calling coast…')
+                    self._log.info('calling coast…')
                     self._brake('coast', step=self._coast_step, closing=True)
                 else:
-                    self._log.info('🍀 calling brake…')
+                    self._log.info('calling brake…')
                     self._brake('stop', step=self._stop_step, closing=True)
-                self._log.info('🍀 waiting 3 seconds…')
+                self._log.info('waiting 3 seconds…')
                 time.sleep(1.5)
 #               self.set_speeds(0.0, 0.0, 0.0, 0.0)
                 time.sleep(1.5)
             else:
-                self._log.info('🍀 motors were already stopped.')
+                self._log.info('motors were already stopped.')
             if not self.is_stopped_target:
                 self._log.warning('calling emergency stop after failing to stop normally…')
                 self.emergency_stop()

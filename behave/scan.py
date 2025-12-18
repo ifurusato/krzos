@@ -501,14 +501,14 @@ class Scan(AsyncBehaviour):
         Callback for final rotation to chosen heading.
         '''
         if new_phase == RotationPhase.IDLE:
-            self._log.info(Fore.GREEN + '🍀 final rotation complete, now facing chosen heading.')
+            self._log.info(Fore.GREEN + 'final rotation complete, now facing chosen heading.')
             # cleanup
             self._rotation_controller.remove_phase_change_callback(self._on_final_rotation_phase_change)
             # we're done scanning and repositioning
             self._scan_active = False
             self._behaviour_manager.release_all_behaviours()
             self.suppress()
-            self._log.info(Fore.GREEN + '🍀 scan complete and suppressed.')
+            self._log.info(Fore.GREEN + 'scan complete and suppressed.')
 
     def _publish_message(self, heading):
         '''

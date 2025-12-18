@@ -227,7 +227,7 @@ class BehaviourManager(Subscriber):
         Disable all behaviours except the argument. This sets the ballistic flag True,
         which is reset when release_all_behaviours is called.
         '''
-        self._log.info('💙 go ballistic…')
+        self._log.info('going ballistic with {} behaviour…'.format(behaviour.name if behaviour else 'no'))
         self._is_ballistic = True
         self.suppress_all_behaviours(store_states=True, ballistic_behaviour=behaviour)
 
@@ -277,14 +277,13 @@ class BehaviourManager(Subscriber):
         determine whether a given Behaviour is released.
         '''
         try:
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'A. release all behaviours…  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
             if self.closed:
                 self._log.warning('cannot release behaviours: behaviour manager is closed.')
                 return
             elif not self.enabled:
                 self._log.warning('cannot release behaviours: behaviour manager is disabled.')
                 return
-            self._log.info(Fore.WHITE + Style.BRIGHT + 'B. release all behaviours…  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ')
+            self._log.info('release all behaviours…')
             _idle_behaviour = None
             for _behaviour in self.get_behaviours():
                 # special handling for Idle - reset its timer instead of releasing

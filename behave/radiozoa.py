@@ -122,15 +122,12 @@ class Radiozoa(AsyncBehaviour):
 
     def disable(self):
         if self.enabled:
-            self._log.info(Fore.YELLOW + 'a. disabling…')
+            self._log.debug('disabling…')
             self._ranging = False
-            self._log.info(Fore.YELLOW + 'b. disabling…')
             time.sleep(0.1)
-            self._log.info(Fore.YELLOW + 'c. disabling…')
             self._radiozoa_sensor.disable()
-            self._log.info(Fore.YELLOW + 'd. disabling…')
             super().disable()
-            self._log.info(Fore.YELLOW + 'e. disabled.')
+            self._log.info('disabled.')
         else:
             self._log.warning('already disabled.')
 

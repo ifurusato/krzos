@@ -558,7 +558,7 @@ class KROS(Component, FiniteStateMachine):
                             and _component != self \
                             and _component != self._message_bus:
                         if not _component.closed:
-                            self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                            self._log.debug(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                             _component.close()
                 if self._irq_clock and not self._irq_clock.closed:
                     self._irq_clock.close()
@@ -575,7 +575,7 @@ class KROS(Component, FiniteStateMachine):
                             and not isinstance(_component, Player) \
                             and _component != self._message_bus:
                         if not _component.closed:
-                            self._log.info(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
+                            self._log.debug(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                             _component.close()
                             self._component_registry.deregister(_component)
                 _open_count = self._component_registry.count_open_components()
@@ -593,7 +593,7 @@ class KROS(Component, FiniteStateMachine):
                 self._log.info(Fore.MAGENTA + 'closing kros…')
                 super().close() # will call disable()
                 FiniteStateMachine.close(self)
-                self._log.info(Fore.WHITE + '1/3. kros close.' + Style.RESET_ALL)
+                self._log.info('1/3. kros close.')
                 self._log.info('closing the message bus…')
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
@@ -601,11 +601,11 @@ class KROS(Component, FiniteStateMachine):
                     self._log.info(Fore.MAGENTA + 'message bus closed.')
                 else:
                     self._log.warning('message bus not closed.')
-                self._log.info(Fore.WHITE + '2/3. kros close.' + Style.RESET_ALL)
+                self._log.info('2/3. kros close.')
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
-                self._fake_logger_info(Fore.WHITE + '3/3. kros close.')
+                self._fake_logger_info('3/3. kros close.')
                 self._closing = False
 
     def _report_remaining_frames(self):

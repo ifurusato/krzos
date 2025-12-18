@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-09-03
-# modified: 2025-10-14
+# modified: 2025-12-18
 #
 #  The Usfs class is used for running the USFS (Ultimate Sensor Fusion Solution)
 #  SENtral sensor hub as an IMU. This combines a MPU9250 9 DoF IMU (itself
@@ -92,19 +92,21 @@ class Usfs(Component):
             self._log.error('unable to start USFS: {}'.format(self._usfs.getErrorString()))
 #           sys.exit(1)
             self.close()
-        self._use_matrix    = matrix11x7 != None
-        self._verbose       = False # if true display to console
-        self._pitch         = 0.0
-        self._roll          = 0.0
-        self._yaw           = 0.0
-        self._fixed_yaw_trim = None # if set, overrides use of digital pot
-        self._corrected_yaw = 0.0
-        self._yaw_trim      = 0.0
-        self._pressure      = 0.0
-        self._temperature   = 0.0
-        self._altitude      = 0.0
-        self._ax = self._ay = self._az = 0.0
-        self._gx = self._gy = self._gz = 0.0
+        self._use_matrix = matrix11x7 != None
+        self._verbose    = False # if true display to console
+        self._pitch            = 0.0
+        self._roll             = 0.0
+        self._yaw              = 0.0
+        self._pitch_trim       = 0.0
+        self._roll_trim        = 0.0
+        self._corrected_yaw    = 0.0
+        self._fixed_yaw_trim   = None # if set, overrides use of digital pot
+        self._yaw_trim         = 0.0
+        self._pressure         = 0.0
+        self._temperature      = 0.0
+        self._altitude         = 0.0
+        self._ax = self._ay    = self._az = 0.0
+        self._gx = self._gy    = self._gz = 0.0
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -120,6 +122,24 @@ class Usfs(Component):
     def set_verbose(self, verbose):
         self._verbose = verbose
 
+    # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def roll(self):
+        '''
+        After calling poll(), this returns the latest roll value.
+        '''
+        return self._roll
+
+    @property
+    def roll_trim(self):
+        '''
+        Returns the current roll trim value.
+        '''
+        return self._roll_trim
+
+    # pitch ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
     @property
     def pitch(self):
         '''
@@ -128,11 +148,13 @@ class Usfs(Component):
         return self._pitch
 
     @property
-    def roll(self):
+    def pitch_trim(self):
         '''
-        After calling poll(), this returns the latest roll value.
+        Returns the current pitch trim value.
         '''
-        return self._roll
+        return self._pitch_trim
+
+    # yaw ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def yaw(self):
@@ -152,9 +174,11 @@ class Usfs(Component):
     @property
     def yaw_trim(self):
         '''
-        Returns the current yaw trim value as set by the digital potentiometer.
+        Returns the current yaw trim value.
         '''
         return self._yaw_trim
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def pressure(self):

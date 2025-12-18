@@ -160,6 +160,7 @@ kros:
             bored_sound:               'hunhhhhh'          # sound to make when bored ('sigh' or 'hunhhhhh')
             sleeping_sound:               'snore'          # sound to make when sleeping
             enable_light_ctrl:             True            # enable/disable light controls
+            enable_head_light:             True            # enable/disable head light
             active_sounds:
                 - 'blat'
                 - 'blip'

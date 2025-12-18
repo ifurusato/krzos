@@ -187,6 +187,15 @@ class TinyFxController(Controller):
                         fx.set(False)
                     else:
                         return 'ERR'
+            elif _command == "run":
+                fxs = [ self._channel_map['ch4'], self._channel_map['ch5'], self._channel_map['ch6'] ]
+                for fx in fxs:
+                    if _action == 'on':
+                        fx.set(True)
+                    elif _action == 'off':
+                        fx.set(False)
+                    else:
+                        return 'ERR'
             elif _command == "heartbeat":
                 if _action == 'on':
                     self._heartbeat_enabled = True

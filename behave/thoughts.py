@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2020-05-19
-# modified: 2025-11-18
+# modified: 2025-12-18
 
 import itertools
 import asyncio
@@ -87,6 +87,7 @@ class Thoughts(Behaviour):
         self._sleeping_sound    = _cfg.get('sleeping_sound')
         self._active_sounds     = _cfg.get('active_sounds', [])
         self._enable_light_ctrl = _cfg.get('enable_light_ctrl')
+        self._enable_head_light = _cfg.get('enable_head_light')
         # TODO config
         self._bored_limit_min   = 10   # how long before we get bored?
         self._sleep_limit_min   = 17   # how many cycles before falling asleep?
@@ -117,7 +118,7 @@ class Thoughts(Behaviour):
             self._odometer.add_callback(self._odometer_callback)
         self._lux_threshold = _cfg.get('lux_threshold')
         self._lux_sensor = self._component_registry.get(LuxSensor.NAME)
-        if self._lux_sensor is None:
+        if self._enable_head_light and self._lux_sensor is None:
             try:
                 self._lux_sensor = LuxSensor(config)
             except Exception:
@@ -442,7 +443,7 @@ class Thoughts(Behaviour):
             if self._sleeping:
                 _is_dark = False
             if self._darkness_state != _is_dark: # things have changed
-                self._log.info(Fore.MAGENTA + '💮 lux level: {}; is dark? {}; was dark? {}'.format(
+                self._log.info('lux level: {}; is dark? {}; was dark? {}'.format(
                         _lux_level, _is_dark, self._darkness_state))
                 _saved = self._suppress_random_sounds
                 self._suppress_random_sounds = True
@@ -458,18 +459,18 @@ class Thoughts(Behaviour):
         Publishes the message.
         '''
         if self._enable_publishing:
-            self._log.info("👿 publishing {} message…".format(message.event))
+            self._log.info("publishing {} message…".format(message.event))
             try:
                 self._queue_publisher.put(message)
-                self._log.info("👿 {} message published.".format(message.event))
+                self._log.info("{} message published.".format(message.event))
             except Exception as e:
                 self._log.error('{} encountered when publishing message: {}\n{}'.format(
                     type(e), e, traceback.format_exc()))
         else:
-            self._log.warning('👿 publishing disabled.')
+            self._log.warning('publishing disabled.')
 
     def _publish_stuck(self):
-        self._log.info('👿 publish STUCK message.')
+        self._log.info('publish STUCK message.')
         message = self._message_factory.create_message(Event.STUCK, 'thoughts')
         self._publish_message(message)
 
@@ -559,7 +560,7 @@ class Thoughts(Behaviour):
             DPAD_RIGHT: used by Nudge
         '''
         event = message.event
-        self._log.info(Style.DIM + '🌼 execute message with event: {}'.format(event))
+        self._log.info(Style.DIM + 'execute message with event: {}'.format(event))
         match(event):
             case Event.A_BUTTON:
                 self._log.info(Style.DIM + 'A_BUTTON.')
