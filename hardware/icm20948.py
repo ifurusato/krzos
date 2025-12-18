@@ -472,13 +472,10 @@ class Icm20948(Component):
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 _rate.wait()
-
-            if self._adjust_trim and self._digital_pot:
-                try:
-                    input(Fore.WHITE + Style.BRIGHT + "Adjust heading trim, then press Return to continue…" + Style.RESET_ALL)
-                except EOFError:
-                    pass
-
+            try:
+                input(Fore.WHITE + Style.BRIGHT + "Waiting: press Return to continue…" + Style.RESET_ALL)
+            except EOFError:
+                pass
         finally:
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
             if self.is_calibrated:
@@ -671,7 +668,7 @@ class Icm20948(Component):
                     _variance = 3
                     if not math.isclose(self._heading, self._last_heading, abs_tol=_variance):
                         self._log.info(_style + "heading: {:3d}° / mean: {:3d}°;".format(self._heading, int(self._mean_heading))
-                                + Style.NORMAL + " stdev: {:.2f}; trim: fx={:.2f} / ad={:.2f} / hd={:.2f}; color: #{:02X}{:02X}{:02X}".format(
+                                + Style.NORMAL + " stdev: {:.2f}; trim: fix={:.2f} / adj={:.2f} / hd={:.2f}; color: #{:02X}{:02X}{:02X}".format(
                                     self._stdev, self._fixed_heading_trim, self._trim_adjust, self._heading_trim, r, g, b))
                 if self._show_rgbmatrix5x5:
                     self._show_rgbmatrix(r, g, b)

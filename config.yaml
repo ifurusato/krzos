@@ -434,7 +434,7 @@ kros:
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                    0.0             # pitch trim for level
             roll_trim:                     4.0             # roll trim for level
-            heading_trim:                  1.55            # heading trim adjustment (in radians) to set north (was 0.15 on MR01)
+            heading_trim:                  0.05            # heading trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
             stability_threshold:              0.09         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
