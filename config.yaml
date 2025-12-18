@@ -424,6 +424,9 @@ kros:
         usfs:
             declination:                     23.04         # declination at operating location
             swap_pitch_roll:               True            # if True, swap pitch and roll
+            pitch_trim:                     0.0
+            roll_trim:                      0.0
+            yaw_trim:                     -77.41
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled

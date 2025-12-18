@@ -83,8 +83,13 @@ class Usfs(Component):
         # configuration
         _cfg = config['kros'].get('hardware').get('usfs')
         # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-        self._declination = _cfg.get('declination', 13.8) # set for your location
+        self._declination     = _cfg.get('declination', 13.8) # set for your location
         self._log.info('declination: {:5.3f}'.format(self._declination))
+        self._pitch_trim      = _cfg.get('pitch_trim', 0.0)
+        self._roll_trim       = _cfg.get('roll_trim', 0.0)
+        self._yaw_trim        = _cfg.get('yaw_trim', 0.0) # set -77.41 for Pukerua Bay, NZ
+        self._fixed_yaw_trim  = self._yaw_trim # |None if set, overrides use of digital pot
+        self._swap_pitch_roll = _cfg.get('swap_pitch_roll')# if True, swap pitch and roll
         # create USFS
         self._usfs = USFS_Master(self.MAG_RATE, self.ACCEL_RATE, self.GYRO_RATE, self.BARO_RATE, self.Q_RATE_DIVISOR)
         # start the USFS in master mode
@@ -94,15 +99,12 @@ class Usfs(Component):
             self.close()
         self._use_matrix = matrix11x7 != None
         self._verbose    = False # if true display to console
-        self._swap_pitch_roll  = _cfg.get('swap_pitch_roll')# if True, swap pitch and roll
         self._pitch            = 0.0
+        self._corrected_pitch  = 0.0
         self._roll             = 0.0
+        self._corrected_roll   = 0.0
         self._yaw              = 0.0
-        self._pitch_trim       = 0.0
-        self._roll_trim        = 0.0
         self._corrected_yaw    = 0.0
-        self._fixed_yaw_trim   = None # if set, overrides use of digital pot
-        self._yaw_trim         = 0.0
         self._pressure         = 0.0
         self._temperature      = 0.0
         self._altitude         = 0.0
@@ -133,6 +135,13 @@ class Usfs(Component):
         return self._roll
 
     @property
+    def corrected_roll(self):
+        '''
+        After calling poll(), this returns the latest corrected (trimmed) roll value.
+        '''
+        return self._corrected_roll
+
+    @property
     def roll_trim(self):
         '''
         Returns the current roll trim value.
@@ -147,6 +156,14 @@ class Usfs(Component):
         After calling poll(), this returns the latest pitch value.
         '''
         return self._pitch
+
+    @property
+    def corrected_pitch(self):
+        '''
+        After calling poll(), this returns the latest corrected (trimmed)
+        pitch value.
+        '''
+        return self._corrected_pitch
 
     @property
     def pitch_trim(self):
