@@ -13,6 +13,7 @@ import time
 import traceback
 import itertools
 import asyncio
+from enum import Enum
 import math, statistics
 from math import pi as π
 from threading import Thread
@@ -47,6 +48,18 @@ RANGE_DIVISOR = 3.0 # was 10.0 then 5.0
 OUT_MIN = -1.0 * π / RANGE_DIVISOR  # minimum scaled output value
 OUT_MAX = π / RANGE_DIVISOR         # maximum scaled output value
 HALF_PI = π / 2.0
+
+class RDoF(Enum):
+    ROLL  = ( 0, 'roll' )
+    PITCH = ( 1, 'pitch' )
+    YAW   = ( 2, 'yaw' )
+
+    def __init__(self, num, label):
+        self._label = label
+
+    @property
+    def label(self):
+        return self._label
 
 class Icm20948(Component):
     NAME = 'icm20948'
@@ -184,14 +197,28 @@ class Icm20948(Component):
     @property
     def pitch(self):
         '''
-        Return the last-polled pitch value.
+        Return the last-polled pitch value in degrees.
+        '''
+        return math.degrees(self._pitch)
+
+    @property
+    def pitch_radians(self):
+        '''
+        Return the last-polled pitch value in radians.
         '''
         return self._pitch
 
     @property
     def roll(self):
         '''
-        Return the last-polled roll value.
+        Return the last-polled roll value in degrees.
+        '''
+        return math.degrees(self._roll)
+
+    @property
+    def roll_radians(self):
+        '''
+        Return the last-polled roll value in radians.
         '''
         return self._roll
 
@@ -641,14 +668,17 @@ class Icm20948(Component):
                 if self._mean_heading_radians < 0:
                     self._mean_heading_radians += 2 * π
                 self._mean_heading = int(round(math.degrees(self._mean_heading_radians)))
-            z, x, y = self.accelerometer
-            self._pitch = (-180.0 * math.atan(x/math.sqrt(y*y + z*z)) / math.pi) + self._pitch_trim
-            _xz = x*x + z*z
+            # use configured axis mapping
+            _accel = self.accelerometer
+            _x = _accel[self._X]
+            _y = _accel[self._Y]
+            _z = _accel[self._Z]
+            self._pitch = math.atan2(_x, _z) - HALF_PI + self._pitch_trim
+            _xz = _x*_x + _z*_z
             if _xz == 0:
                 _xz = 0.001
-            self._roll  = (-180.0 * math.atan(y/math.sqrt(_xz)) / math.pi) + self._roll_trim
+            self._roll = math.atan2(_y, math.sqrt(_xz)) + self._roll_trim
             self._last_heading = self._heading
-
             if next(self._counter) % self._display_rate == 0:
                 if self._show_console:
                     if self._is_calibrated:

@@ -443,8 +443,8 @@ kros:
             show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
-            pitch_trim:                    0.0             # pitch trim for level
-            roll_trim:                     0.0             # 4.0? roll trim for level
+            pitch_trim:                   -0.019           # pitch trim for level (radians)
+            roll_trim:                     0.0296          # roll trim for level (radians)
             heading_trim:                  1.55            # 0.05 heading trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
