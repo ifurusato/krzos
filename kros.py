@@ -58,6 +58,7 @@ from hardware.player import Player
 from hardware.system import System
 from hardware.usfs import Usfs
 from hardware.icm20948 import Icm20948
+from hardware.imu import IMU
 from hardware.vl53l5cx_sensor import Vl53l5cxSensor
 from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
@@ -106,8 +107,9 @@ class KROS(Component, FiniteStateMachine):
         self._button              = None
         self._digital_pot         = None
         self._compass_encoder     = None
-        self._usfs                = None
         self._icm20948            = None
+        self._usfs                = None
+        self._imu                 = None
         self._vl53_sensor         = None
         self._radiozoa_sensor     = None
         self._tinyfx              = None
@@ -302,15 +304,15 @@ class KROS(Component, FiniteStateMachine):
 
         # create IMUs
 
+        if _cfg.get('enable_icm20948'):
+            self._icm20948 = Icm20948(self._config, level=Level.INFO)
+            self._icm20948.include_accel_gyro(True)
         if _cfg.get('enable_usfs'):
             self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
             # fixed trim determined via observation
             self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
             self._usfs.set_verbose(False)
-
-        if _cfg.get('enable_icm20948'):
-            self._icm20948 = Icm20948(self._config, level=Level.INFO)
-            self._icm20948.include_accel_gyro(True)
+        # IMU class created in start()
 
         # create behaviours
 
@@ -381,12 +383,20 @@ class KROS(Component, FiniteStateMachine):
                 self._rotation_controller.enable()
         else:
             self._log.warning('motor controller disabled.')
-        if self._icm20948:
-            self._icm20948.enable()
 
         if self._tinyfx: # turn on running lights
             if not self._tinyfx.enabled:
                 self._tinyfx.enable()
+
+        if self._icm20948 and self._usfs:
+            self._imu = IMU(self._config, icm20948=self._icm20948, usfs=self._usfs, level=Level.INFO)
+            # this will enabled both IMUs and initiated Icm20948's calibration
+            self._imu.enable()
+        else:
+            if self._icm20948:
+                self._icm20948.enable()
+            if self._usfs:
+                self._usfs.enable()
 
         # begin main loop
         self._log.info(Fore.WHITE + Style.BRIGHT + 'Press Ctrl-C to exit.')

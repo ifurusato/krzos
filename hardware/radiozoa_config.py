@@ -120,7 +120,7 @@ class RadiozoaConfig:
             self._set_xshut(xshut_pin, True)
             found = False
             for i in range(5):
-                time.sleep(1.0) # delay for sensor startup
+                time.sleep(0.75) # delay for sensor startup
                 found = self._i2c_scanner.has_hex_address(['0x29'], force_scan=needs_scan)
                 if found:
                     self._log.info(Style.DIM + "[{}] waiting for sensor…".format(i))
@@ -134,7 +134,7 @@ class RadiozoaConfig:
                 self._log.info("set address for sensor {} to 0x{:02X}".format(label, i2c_address))
             except Exception as e:
                 self._log.error("{} raised setting address for sensor {}: {}".format(type(e), label, e))
-            time.sleep(0.05)  # brief delay after address set
+            time.sleep(0.05) # brief delay after address set
 
     def configure(self):
         self._configure_pins()
@@ -174,6 +174,6 @@ class RadiozoaConfig:
         # Note: new_addr should be 7 bits, same as config
         reg = 0x8A
         self._i2c_bus.write_byte_data(current_addr, reg, new_addr)
-        time.sleep(0.01)
+        time.sleep(0.05)
 
 #EOF

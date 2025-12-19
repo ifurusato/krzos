@@ -9,8 +9,8 @@
 # created:  2024-09-03
 # modified: 2025-12-18
 #
-#  The Usfs class is used for running the USFS (Ultimate Sensor Fusion Solution)
-#  SENtral sensor hub as an IMU. This combines a MPU9250 9 DoF IMU (itself
+# The Usfs class is used for running the USFS (Ultimate Sensor Fusion Solution)
+# SENtral sensor hub as an IMU. This combines a MPU9250 9 DoF IMU (itself
 # composed of an MPU6500 accel/gyro with an embedded AK8963C magnetometer), then
 # coupled with a Bosch BMP280 pressure/temperature sensor.
 #
@@ -34,10 +34,10 @@
 
    USFS is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
    GNU General Public License for more details.
    You should have received a copy of the GNU General Public License
-   along with USFS.  If not, see <http://www.gnu.org/licenses/>.
+   along with USFS. If not, see <http://www.gnu.org/licenses/>.
 '''
 
 from usfs import USFS_Master
@@ -67,10 +67,11 @@ class Usfs(Component):
     To determine the magnetic declination for your location, use NOAA's Magnetic
     Field Calculator at: https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml
 
-    :param: config     application configuration
-    :param: config     optional 11x7 matrix to display heading
-    :param: trim_pot   optional digital potentiometer to set magnetometer trim
-    :param: level      log level
+    Args:
+        config:       application configuration
+        matrix11x7:   optional 11x7 matrix to display heading
+        trim_pot:     optional digital potentiometer to set magnetometer trim
+        level:        log level
     '''
     def __init__(self, config, matrix11x7=None, trim_pot=None, level=Level.INFO):
         self._log = Logger(Usfs.NAME, level)
@@ -83,13 +84,14 @@ class Usfs(Component):
         # configuration
         _cfg = config['kros'].get('hardware').get('usfs')
         # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-        self._declination     = _cfg.get('declination', 13.8) # set for your location
-        self._log.info('declination: {:5.3f}'.format(self._declination))
-        self._pitch_trim      = _cfg.get('pitch_trim', 0.0)
-        self._roll_trim       = _cfg.get('roll_trim', 0.0)
-        self._yaw_trim        = _cfg.get('yaw_trim', 0.0) # set -77.41 for Pukerua Bay, NZ
-        self._fixed_yaw_trim  = self._yaw_trim # |None if set, overrides use of digital pot
-        self._swap_pitch_roll = _cfg.get('swap_pitch_roll')# if True, swap pitch and roll
+        self._declination  = _cfg.get('declination', 13.8) # set for your location
+        self._log.info('declination: {: 5.3f}'.format(self._declination))
+        self._invert_roll  = _cfg.get('invert_roll', False)
+        self._invert_pitch = _cfg.get('invert_pitch', False)
+        # mount orientation
+        self._swap_pitch_roll = _cfg.get('swap_pitch_roll', False)
+        if self._swap_pitch_roll:
+            self._log.info('pitch and roll axes will be swapped')
         # create USFS
         self._usfs = USFS_Master(self.MAG_RATE, self.ACCEL_RATE, self.GYRO_RATE, self.BARO_RATE, self.Q_RATE_DIVISOR)
         # start the USFS in master mode
@@ -100,16 +102,27 @@ class Usfs(Component):
         self._use_matrix = matrix11x7 != None
         self._verbose    = False # if true display to console
         self._pitch            = 0.0
-        self._corrected_pitch  = 0.0
         self._roll             = 0.0
-        self._corrected_roll   = 0.0
         self._yaw              = 0.0
+        # trim values
+        self._pitch_trim       = _cfg.get('pitch_trim', 0.0)
+        self._roll_trim        = _cfg.get('roll_trim', 0.0)
+        self._fixed_yaw_trim   = _cfg.get('yaw_trim', None) # if set, overrides use of digital pot
+        self._yaw_trim         = 0.0
+        # corrected values (after trim applied)
+        self._corrected_pitch  = 0.0
+        self._corrected_roll   = 0.0
         self._corrected_yaw    = 0.0
+        # barometer/altimeter
         self._pressure         = 0.0
         self._temperature      = 0.0
         self._altitude         = 0.0
+        # raw sensor values
         self._ax = self._ay    = self._az = 0.0
         self._gx = self._gy    = self._gz = 0.0
+        self._log.info('pitch trim: {:+2.2f}°; roll trim: {:+2.2f}°'.format(self._pitch_trim, self._roll_trim))
+        if self._fixed_yaw_trim:
+            self._log.info('using fixed yaw trim: {:+2.2f}°'.format(self._fixed_yaw_trim))
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -122,20 +135,32 @@ class Usfs(Component):
         '''
         self._fixed_yaw_trim = yaw
 
+    def set_pitch_trim(self, pitch_trim):
+        '''
+        Set the pitch trim value in degrees.
+        '''
+        self._pitch_trim = pitch_trim
+
+    def set_roll_trim(self, roll_trim):
+        '''
+        Set the roll trim value in degrees.
+        '''
+        self._roll_trim = roll_trim
+
     def set_verbose(self, verbose):
         self._verbose = verbose
 
     # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
-    def roll(self):
+    def uncorrected_roll(self):
         '''
-        After calling poll(), this returns the latest roll value.
+        After calling poll(), this returns the latest uncorrected roll value.
         '''
         return self._roll
 
     @property
-    def corrected_roll(self):
+    def roll(self):
         '''
         After calling poll(), this returns the latest corrected (trimmed) roll value.
         '''
@@ -151,17 +176,16 @@ class Usfs(Component):
     # pitch ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
-    def pitch(self):
+    def uncorrected_pitch(self):
         '''
-        After calling poll(), this returns the latest pitch value.
+        After calling poll(), this returns the latest uncorrected pitch value.
         '''
         return self._pitch
 
     @property
-    def corrected_pitch(self):
+    def pitch(self):
         '''
-        After calling poll(), this returns the latest corrected (trimmed)
-        pitch value.
+        After calling poll(), this returns the latest corrected (trimmed) pitch value.
         '''
         return self._corrected_pitch
 
@@ -175,14 +199,14 @@ class Usfs(Component):
     # yaw ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
-    def yaw(self):
+    def uncorrected_yaw(self):
         '''
         After calling poll(), this returns the latest uncorrected yaw value.
         '''
         return self._yaw
 
     @property
-    def corrected_yaw(self):
+    def yaw(self):
         '''
         After calling poll(), this returns the latest corrected (trimmed)
         yaw value.
@@ -250,85 +274,87 @@ class Usfs(Component):
             return None
 
         # Define output variables from updated quaternion---these are Tait-Bryan
-        # angles, commonly used in aircraft orientation.  In this coordinate
-        # system, the positive z-axis is down toward Earth.  Yaw is the angle
+        # angles, commonly used in aircraft orientation. In this coordinate
+        # system, the positive z-axis is down toward Earth. Yaw is the angle
         # between Sensor x-axis and Earth magnetic North (or true North if
         # corrected for local declination, looking down on the sensor positive
-        # yaw is counterclockwise.  Pitch is angle between sensor x-axis and
+        # yaw is counterclockwise. Pitch is angle between sensor x-axis and
         # Earth ground plane, toward the Earth is positive, up toward the sky is
-        # negative.  Roll is angle between sensor y-axis and Earth ground plane,
-        # y-axis up is positive roll.  These arise from the definition of the
-        # homogeneous rotation matrix constructed from q.  Tait-Bryan
+        # negative. Roll is angle between sensor y-axis and Earth ground plane,
+        # y-axis up is positive roll. These arise from the definition of the
+        # homogeneous rotation matrix constructed from q. Tait-Bryan
         # angles as well as Euler angles are non-commutative that is, the get
         # the correct orientation the rotations must be applied in the correct
-        # order which for this configuration is yaw, pitch, and then roll.  For
+        # order which for this configuration is yaw, pitch, and then roll. For
         # more see http://en.wikipedia.org/wiki/Conversion_between_q_and_Euler_angles
         # which has additional links.
 
         if (self._usfs.gotQuaternion()):
             qw, qx, qy, qz = self._usfs.readQuaternion()
-            self._roll  = math.atan2(2.0 * (qw * qx + qy * qz), qw * qw - qx * qx - qy * qy + qz * qz)
-            self._pitch = -math.asin(2.0 * (qx * qz - qw * qy))
-            self._yaw   = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
-            self._pitch *= 180.0 / math.pi
-            self._yaw   *= 180.0 / math.pi
-#           self._yaw   += self._declination # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-            self._yaw   += self._declination # Pukerua Bay, New Zealand is 20 degrees 36 minutes and 0 seconds on 2025-09-12
-            if self._yaw < 0:
-                self._yaw += 360.0  # keep yaw between 0 and 360
-            self._roll  *= 180.0 / math.pi
-
-    #       print('Quaternion Roll, Pitch, Yaw: %+2.2f %+2.2f %+2.2f' % (roll, pitch, yaw))
-
-            # if fixed trim is set, overrides use of digital pot (use 145.0 for Pukerua Bay)
-            if self._fixed_yaw_trim:
-                self._yaw_trim = self._fixed_yaw_trim
+            # calculate roll and pitch from quaternion
+            _roll_calc  = math.atan2(2.0 * (qw * qx + qy * qz), qw * qw - qx * qx - qy * qy + qz * qz)
+            _pitch_calc = -math.asin(2.0 * (qx * qz - qw * qy))
+            # swap axes if configured for different mount orientation
+            if self._swap_pitch_roll:
+                self._roll  = _pitch_calc
+                self._pitch = _roll_calc
             else:
-                self._yaw_trim = self._trim_pot.get_scaled_value()
-            self._corrected_yaw = self._yaw - self._yaw_trim
+                self._roll  = _roll_calc
+                self._pitch = _pitch_calc
+            # invert pitch and/or roll if configured
+            if self._invert_roll:
+                self._roll *= -1.0
+            if self._invert_pitch:
+                self._pitch *= -1.0
+            # calculate yaw
+            self._yaw   = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
+            # convert to degrees
+            self._pitch *= 180.0 / math.pi
+            self._roll  *= 180.0 / math.pi
+            self._yaw   *= 180.0 / math.pi
+            # apply declination
+            self._yaw   += self._declination
             # keep yaw between 0 and 360
-            if self._corrected_yaw < 0: self._corrected_yaw += 360.0
-            elif self._corrected_yaw > 360: self._corrected_yaw -= 360.0
+            if self._yaw < 0:
+                self._yaw += 360.0
+            # apply trim corrections
+            self._corrected_pitch = self._pitch + self._pitch_trim
+            self._corrected_roll  = self._roll + self._roll_trim
+            # if fixed trim is set, overrides use of digital pot
+            if self._fixed_yaw_trim is not None:
+                self._yaw_trim = self._fixed_yaw_trim
+            elif self._trim_pot:
+                self._yaw_trim = self._trim_pot.get_scaled_value()
+            else:
+                self._yaw_trim = 0.0
+            self._corrected_yaw = self._yaw - self._yaw_trim
+            # keep corrected yaw between 0 and 360
+            if self._corrected_yaw < 0:
+                self._corrected_yaw += 360.0
+            elif self._corrected_yaw > 360:
+                self._corrected_yaw -= 360.0
             if self._verbose:
                 self._log.info(
-                        Fore.RED      + 'roll: {:+2.2f}; '.format(self._roll)
-                        + Fore.GREEN  + 'pitch: {:+2.2f}; '.format(self._pitch)
-                        + Fore.BLUE   + 'yaw: {:+2.2f}; '.format(self._yaw)
-                        + Fore.YELLOW + 'corrected yaw: {:+2.2f}; '.format(self._corrected_yaw)
-                        + Fore.BLACK  + 'with trim: {:+2.2f}'.format(self._yaw_trim))
+                        Fore.RED      + 'roll: {:+2.2f}° (trim: {:+2.2f}°, corrected: {:+2.2f}°); '.format(
+                            self._roll, self._roll_trim, self._corrected_roll)
+                        + Fore.GREEN  + 'pitch: {:+2.2f}° (trim: {:+2.2f}°, corrected: {:+2.2f}°); '.format(
+                            self._pitch, self._pitch_trim, self._corrected_pitch)
+                        + Fore.BLUE   + 'yaw: {:+2.2f}°; '.format(self._yaw)
+                        + Fore.YELLOW + 'corrected yaw: {:+2.2f}° (trim: {:+2.2f}°)'.format(
+                            self._corrected_yaw, self._yaw_trim))
             if self._use_matrix:
                 self._matrix11x7.clear()
                 self._matrix11x7.write_string('{:>3}'.format(int(self._corrected_yaw)), y=1, font=font3x5)
                 self._matrix11x7.show()
         else:
-                self._log.warning('no quaternion')
-
+            self._log.warning('no quaternion')
         if self._usfs.gotAccelerometer():
             self._ax, self._ay, self._az = self._usfs.readAccelerometer()
-#           if self._verbose:
-#               self._log.info('Accel: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._ax, self._ay, self._az))
-
         if self._usfs.gotGyrometer():
             self._gx, self._gy, self._gz = self._usfs.readGyrometer()
-#           if self._verbose:
-#               self._log.info('Gyro: {:+3.3f} {:+3.3f} {:+3.3f}'.format(self._gx,self._gy,self._gz))
-
-         #  Or define output variable according to the Android system, where
-         #  heading (0 to 360) is defined by the angle between the y-axis and True
-         #  North, pitch is rotation about the x-axis (-180 to +180), and roll is
-         #  rotation about the y-axis (-90 to +90) In this systen, the z-axis is
-         #  pointing away from Earth, the +y-axis is at the 'top' of the device
-         #  (cellphone) and the +x-axis points toward the right of the device.
-
         if self._usfs.gotBarometer():
             self._pressure, self._temperature = self._usfs.readBarometer()
             self._altitude = (1.0 - math.pow(self._pressure / 1013.25, 0.190295)) * 44330
-#           if self._verbose:
-#               self._log.info('Baro:')
-#               self._log.info('  Altimeter temperature = {:+2.2f} C'.format(self._temperature))
-#               self._log.info('  Altimeter pressure = {:+2.2f} mbar'.format(self._pressure))
-#               self._log.info('  Altitude = {:+2.2f} m\n'.format(self._altitude))
-
         return self._corrected_yaw
 
     def enable(self):

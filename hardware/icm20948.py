@@ -43,7 +43,7 @@ from hardware.rotation_controller import RotationController, RotationPhase
 
 IN_MIN  = 0.0       # minimum analog value from IO Expander
 IN_MAX  = 3.3       # maximum analog value from IO Expander
-RANGE_DIVISOR = 5.0 # was 10.0
+RANGE_DIVISOR = 3.0 # was 10.0 then 5.0
 OUT_MIN = -1.0 * π / RANGE_DIVISOR  # minimum scaled output value
 OUT_MAX = π / RANGE_DIVISOR         # maximum scaled output value
 HALF_PI = π / 2.0
@@ -106,12 +106,12 @@ class Icm20948(Component):
         self._calibration_rotation = _cfg.get('calibration_rotation')
         self._rotation_controller = _component_registry.get(RotationController.NAME)
         if self._rotation_controller is None:
-            self._log.error('rotation controller not found in registry; motion calibration disabled.')
+            self._log.warning('rotation controller not found in registry; motion calibration disabled.')
             self._motion_calibrate = False
         # add numeric display
-        self._low_brightness    = 0.15
-        self._medium_brightness = 0.25
-        self._high_brightness   = 0.45
+        self._low_brightness    = 0.10
+        self._medium_brightness = 0.20
+        self._high_brightness   = 0.35
         self._matrix11x7        = None
         if self._show_rgbmatrix11x7:
             _i2c_scanner = I2CScanner(config, level=Level.INFO)
@@ -144,7 +144,7 @@ class Icm20948(Component):
         self._stability_threshold = _cfg.get('stability_threshold')
         # misc/variables
         self._heading_count = 0
-        self._display_rate = 20 # display every 10th set of values
+        self._display_rate = 10 # display every 10th set of values
         self._poll_rate_hz = _cfg.get('poll_rate_hz')
         self._log.info('poll rate: ' + Fore.GREEN + '{: d}Hz'.format(self._poll_rate_hz))
         self._radians = None
@@ -362,21 +362,20 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
-#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
                     if _count % 5 == 0:
-                        self._log.info(Fore.CYAN + '[{:3d}] calibrating…'.format(_count))
+                        self._log.info('[{:3d}] calibrating at: '.format(_count) + Fore.GREEN + '{}°…'.format(_heading_degrees))
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
-                import sys
-                import select
+                import sys, select
+
                 if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                     line = input()
                     _rotation_complete = True
                 else:
                     _rate.wait()
 
-            self._log.info(Fore.YELLOW + 'measuring stability, leave sensor stationary…')
+            self._log.info(Fore.YELLOW + 'measuring stability, do not move sensor…')
             self.clear_queue()
             _counter = itertools.count()
 
@@ -387,7 +386,6 @@ class Icm20948(Component):
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
                     _heading_degrees = int(round(math.degrees(_heading_radians)))
-#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
                     USE_ADAPTIVE_CALIBRATION = False
                     if USE_ADAPTIVE_CALIBRATION:
                         if self._calibration_check_adaptive(_heading_radians):
@@ -482,253 +480,6 @@ class Icm20948(Component):
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 _rate.wait()
-        finally:
-            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-            if self.is_calibrated:
-                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-            elif self.enabled:
-                self._log.error('unable to calibrate IMU after {:d}ms elapsed.'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-        return self.is_calibrated
-
-    def z_motion_calibrate(self):
-        '''
-        Programmatically calibrate the sensor by commanding the robot to rotate
-        through a 360° motion, then measuring stability.
-
-        Returns True or False upon completion (in addition to setting the class variable).
-        '''
-        _start_time = dt.now()
-        self._heading_count = 0
-        _rate = Rate(self._poll_rate_hz, Level.ERROR)
-        _counter = itertools.count()
-        _count = 0
-        _limit = 1800
-        self._amin = None
-        self._amax = None
-        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
-        if self._play_sound:
-            pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic {}° rotation for calibration…\n'.format(self._calibration_rotation))
-        if not self._rotation_controller.enabled:
-            self._rotation_controller.enable()
-        try:
-            # phase 1: rotation to capture min/max magnetometer values
-            _imu_counter = itertools.count()
-            def _imu_poll_callback():
-                _count = next(_imu_counter)
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    if _count % 5 == 0:
-                        self._log.info(Style.DIM + '[{:03d}] calibrating (min/max)…'.format(_count))
-                except Exception as e:
-                    self._log.error('{} encountered: {}'.format(type(e), e))
-            self._rotation_controller.add_poll_callback(_imu_poll_callback)
-            self._rotation_controller.rotate_blocking(self._calibration_rotation, Rotation.COUNTER_CLOCKWISE)
-            self._rotation_controller.remove_poll_callback(_imu_poll_callback)
-
-            # allow robot to settle after rotation
-            time.sleep(2.0)
-
-            # phase 2: stability measurement (robot stationary)
-            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
-            self.clear_queue()
-            _counter = itertools.count()
-
-            while self.enabled:
-                _count = next(_counter)
-                if self.is_calibrated or _count > _limit:
-                    break
-                try:
-                    # read heading WITHOUT calibrating flag so trim is applied
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=False)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    if self._calibration_check(_heading_radians):
-                        break
-                    if _count % 5 == 0:
-                        self._log.info(
-                            Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}?  ; '.format(_count, self._stdev, self._stability_threshold)
-                            + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
-                            + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
-                        )
-                except Exception as e:
-                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-                _rate.wait()
-
-            # phase 3: optional trim adjustment (only if adjust_trim is enabled)
-            if self._adjust_trim and self._digital_pot and self.is_calibrated:
-                self._log.info(Fore.YELLOW + 'Calibration complete. You may now adjust heading trim with the potentiometer.')
-                try:
-                    input(Fore.WHITE + Style.BRIGHT + "Adjust heading trim to align with compass, then press Return to continue…" + Style.RESET_ALL)
-                    # Give user a moment to see the final heading after adjustment
-                    time.sleep(1.0)
-                    self._log.info(Fore.GREEN + 'Trim adjustment complete. Final heading: {}°'.format(self.mean_heading))
-                except EOFError:
-                    self._log.warning('No terminal available for trim adjustment')
-
-        finally:
-            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-            if self.is_calibrated:
-                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-            elif self.enabled:
-                self._log.error('unable to calibrate IMU after {: d}ms elapsed.'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-        return self.is_calibrated
-
-    def x_motion_calibrate(self):
-        '''
-        Programmatically calibrate the sensor by commanding the robot to rotate
-        through a 360° motion, then measuring stability.
-
-        Returns True or False upon completion (in addition to setting the class variable).
-        '''
-        _start_time = dt.now()
-        self._heading_count = 0
-        _rate = Rate(self._poll_rate_hz, Level.ERROR)
-        _counter = itertools.count()
-        _count = 0
-        _limit = 1800
-        self._amin = None
-        self._amax = None
-        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
-        if self._play_sound:
-            pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic {}° rotation for calibration…\n'.format(self._calibration_rotation))
-        if not self._rotation_controller.enabled:
-            self._rotation_controller.enable()
-        try:
-            # set up poll callback to capture IMU data during rotation
-            _imu_counter = itertools.count()
-            def _imu_poll_callback():
-                _count = next(_imu_counter)
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    if _count % 5 == 0:
-                        self._log.info(Style.DIM + '[{: 03d}] calibrating (min/max)…'.format(_count))
-                except Exception as e:
-                    self._log.error('{} encountered: {}'.format(type(e), e))
-            self._rotation_controller.add_poll_callback(_imu_poll_callback)
-            # use blocking rotation - callback handles IMU polling
-            self._rotation_controller.rotate_blocking(self._calibration_rotation, Rotation.COUNTER_CLOCKWISE)
-            # clear callback
-            self._rotation_controller.remove_poll_callback(_imu_poll_callback)
-            # allow robot to settle
-            time.sleep(2.0)
-            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
-            self.clear_queue()
-            _counter = itertools.count()
-            while self.enabled:
-                _count = next(_counter)
-                if self.is_calibrated or _count > _limit:
-                    break
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
-#                   r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
-                    if self._calibration_check(_heading_radians):
-                        break
-                    if _count % 5 == 0:
-                        self._log.info(
-                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}?  ; '.format(_count, self._stdev, self._stability_threshold)
-                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
-                                + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit?  {})'.format(self.is_calibrated, _count > _limit)
-                        )
-                except Exception as e:
-                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-                _rate.wait()
-            # WAIT_HERE
-            try:
-                input(Fore.WHITE + Style.BRIGHT + "Waiting: press Return to continue…" + Style.RESET_ALL)
-            except EOFError:
-                pass
-        finally:
-            _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
-            if self.is_calibrated:
-                self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-            elif self.enabled:
-                self._log.error('unable to calibrate IMU after {:d}ms elapsed.'.format(_elapsed_ms))
-                if self._play_sound:
-                    pass
-        return self.is_calibrated
-
-    def motion_calibrate_almost(self):
-        '''
-        Programmatically calibrate the sensor by commanding the robot to rotate
-        through a 360° motion, then measuring stability.
-
-        Returns True or False upon completion (in addition to setting the class variable).
-        '''
-        async def _calibration_sequence():
-            # initiate rotation (non-blocking)
-            self._rotation_controller.rotate(360.0, Rotation.COUNTER_CLOCKWISE)
-            # polling loop at 20Hz
-            _counter_rotation = itertools.count()
-            while self._rotation_controller.is_rotating and self.enabled:
-                _count = next(_counter_rotation)
-                # poll IMU to capture min/max
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    if _count % 5 == 0:
-                        self._log.info(Fore.CYAN + '[{:03d}] calibrating (min/max)…'.format(_count))
-                except Exception as e:
-                    self._log.error('{} encountered: {}'.format(type(e), e))
-                # poll and handle rotation phases
-                current_time, elapsed, accumulated_rotation = self._rotation_controller.poll()
-                if self._rotation_controller.rotation_phase == RotationPhase.ACCEL:
-                    self._rotation_controller.handle_accel_phase(elapsed, accumulated_rotation, current_time)
-                elif self._rotation_controller.rotation_phase == RotationPhase.ROTATE:
-                    self._rotation_controller.handle_rotate_phase(accumulated_rotation, current_time)
-                elif self._rotation_controller.rotation_phase == RotationPhase.DECEL:
-                    decel_complete = self._rotation_controller.handle_decel_phase(elapsed, accumulated_rotation)
-                    if decel_complete:
-                        break
-                await asyncio.sleep(0.05) # 20Hz polling
-            # allow robot to settle
-            await asyncio.sleep(2.0)
-            self._log.info(Fore.YELLOW + 'rotation complete, measuring stability…')
-            self.clear_queue()
-            _counter = itertools.count()
-            _limit = 1800
-            while self.enabled:
-                _count = next(_counter)
-                if self.is_calibrated or _count > _limit:
-                    break
-                try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
-                    r, g, b = [int(c * 255.0) for c in hsv_to_rgb(_heading_degrees / 360.0, 1.0, 1.0)]
-                    if self._calibration_check(_heading_radians):
-                        break
-                    if _count % 5 == 0:
-                        self._log.info(
-                                Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}? ; '.format(_count, self._stdev, self._stability_threshold)
-                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
-                                + Fore.CYAN + Style.DIM + '(calibrated?  {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
-                        )
-                except Exception as e:
-                    self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-                await asyncio.sleep(0.05) # 20Hz polling
-        # main synchronous method body
-        _start_time = dt.now()
-        self._heading_count = 0
-        self._amin = None
-        self._amax = None
-        self._log.info(Fore.YELLOW + 'calibrating to stability threshold: {}…'.format(self._stability_threshold))
-        if self._play_sound:
-            pass
-        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n beginning automatic 360° rotation for calibration…\n')
-        if not self._rotation_controller.enabled:
-            self._rotation_controller.enable()
-        try:
-            asyncio.run(_calibration_sequence())
         finally:
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
             if self.is_calibrated:
@@ -839,14 +590,29 @@ class Icm20948(Component):
 
         Note: calling this method will fail if not previously calibrated.
         '''
+        self._log.info(Fore.YELLOW + '💛 begin scan…    ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ')
         _rate = Rate(self._poll_rate_hz, Level.ERROR)
-        if self._amin is None or self._amax is None:
+#       if self._amin is None or self._amax is None:
+        if not self._is_calibrated:
             raise Exception('compass not calibrated yet, call calibrate() first.')
         while enabled:
             self.poll()
             if callback:
                 callback()
             _rate.wait()
+
+    def _display_heading(self):
+        if self._show_rgbmatrix5x5:
+            r, g, b = [int(c * 255.0) for c in hsv_to_rgb(self._heading / 360.0, 1.0, 1.0)]
+            self._show_rgbmatrix(r, g, b)
+        if self._matrix11x7:
+            self._matrix11x7.clear()
+            self._matrix11x7.write_string('{:>3}'.format(self._heading), y=1, font=font3x5)
+            self._matrix11x7.show()
+            if self._is_calibrated:
+                self._matrix11x7.set_brightness(self._high_brightness)
+            else:
+                self._matrix11x7.set_brightness(self._low_brightness)
 
     def poll(self):
         '''
@@ -860,7 +626,6 @@ class Icm20948(Component):
         '''
         try:
             self._radians = self._read_heading(self._amin, self._amax)
-            self._heading = int(round(math.degrees(self._radians)))
             self._queue.append(self._radians)
             if len(self._queue) > 1:
                 self._stdev = self._circular_stdev(self._queue)
@@ -874,8 +639,15 @@ class Icm20948(Component):
                 if self._mean_heading_radians < 0:
                     self._mean_heading_radians += 2 * π
                 self._mean_heading = int(round(math.degrees(self._mean_heading_radians)))
+            z, x, y = self.accelerometer
+            self._pitch = (-180.0 * math.atan(x/math.sqrt(y*y + z*z)) / math.pi) + self._pitch_trim
+            _xz = x*x + z*z
+            if _xz == 0:
+                _xz = 0.001
+            self._roll  = (-180.0 * math.atan(y/math.sqrt(_xz)) / math.pi) + self._roll_trim
+            self._last_heading = self._heading
+
             if next(self._counter) % self._display_rate == 0:
-                r, g, b = [int(c * 255.0) for c in hsv_to_rgb(self._heading / 360.0, 1.0, 1.0)]
                 if self._show_console:
                     if self._is_calibrated:
                         _style = Style.BRIGHT
@@ -884,25 +656,11 @@ class Icm20948(Component):
                     _variance = 3
                     if not math.isclose(self._heading, self._last_heading, abs_tol=_variance):
                         self._log.info(_style + "heading: {:3d}° / mean: {:3d}°;".format(self._heading, int(self._mean_heading))
-                                + Style.NORMAL + " stdev: {:.2f}; trim: fix={:.2f} / adj={:.2f} / hd={:.2f}; color: #{:02X}{:02X}{:02X}".format(
-                                    self._stdev, self._fixed_heading_trim, self._trim_adjust, self._heading_trim, r, g, b))
-                if self._show_rgbmatrix5x5:
-                    self._show_rgbmatrix(r, g, b)
-                if self._matrix11x7:
-                    self._matrix11x7.clear()
-                    self._matrix11x7.write_string('{:>3}'.format(self._heading), y=1, font=font3x5)
-                    self._matrix11x7.show()
-                    if self._is_calibrated:
-                        self._matrix11x7.set_brightness(self._high_brightness)
-                    else:
-                        self._matrix11x7.set_brightness(self._low_brightness)
-            z, x, y = self.accelerometer
-            self._pitch = (-180.0 * math.atan(x/math.sqrt(y*y + z*z)) / math.pi) + self._pitch_trim
-            _xz = x*x + z*z
-            if _xz == 0:
-                _xz = 0.001
-            self._roll  = (-180.0 * math.atan(y/math.sqrt(_xz)) / math.pi) + self._roll_trim
-            self._last_heading = self._heading
+                                + Fore.WHITE + " pitch: {:4.2f}°; roll: {:4.2f}°".format(self._pitch, self._roll)
+                                + Fore.CYAN + Style.DIM + " stdev: {:.2f}; fxd={:.2f} / adj={:.2f} / trm={:.2f}".format(
+                                    self._stdev, self._fixed_heading_trim, self._trim_adjust, self._heading_trim))
+                self._display_heading()
+
             return self._heading, self._pitch, self._roll
         except Exception as e:
             self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
@@ -953,22 +711,20 @@ class Icm20948(Component):
                 mag[i] /= self._amax[i] - self._amin[i]
             except ZeroDivisionError:
                 pass
-#           self._log.info(Style.DIM + 'amin: {:4.2f}; amax: {:4.2f}; mag: {:4.2f}'.format(self._amin[i], self._amax[i], mag[i]))
             mag[i] -= 0.5
         self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])
         if calibrating:
+            # adjust nothing while calibrating
             pass
         elif self._adjust_trim and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._heading_trim = self._fixed_heading_trim + self._trim_adjust
-            if self._show_rgbmatrix5x5:
-                self._digital_pot.set_rgb(self._digital_pot.value)
             self._radians += self._heading_trim
         else:
             self._radians += self._fixed_heading_trim
         if self._radians < 0:
             self._radians += 2 * math.pi
-#       self._log.info(Style.DIM + 'read heading: {:4.2f}'.format(math.degrees(self._radians)))
+        self._heading = int(round(math.degrees(self._radians)))
         return self._radians
 
     def enable(self):

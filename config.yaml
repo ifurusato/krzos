@@ -421,12 +421,18 @@ kros:
             show_grid:                     True            # show colored grid
             show_target_row:               True            # show target row with selected column
             show_target_info:              True            # show log line with target info
+        imu:
+            verbose:                      False            # verbose messaging
+            yaw_match_threshold:            0.00           # the threshold below which we consider yaw values to match
+            prefer_usfs:                   True            # prefer USFS for accel/gyro
         usfs:
             declination:                     23.04         # declination at operating location
             swap_pitch_roll:               True            # if True, swap pitch and roll
             pitch_trim:                     0.0
             roll_trim:                      0.0
             yaw_trim:                     -77.41
+            invert_roll:                   True
+            invert_pitch:                  True
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled
@@ -434,17 +440,16 @@ kros:
             bench_calibrate:              False            # if true, calibrate the IMU manually while on the rotating bench
             motion_calibrate:              True            # if true, calibrate the IMU by the robot rotating in place
             show_console:                  True            # if true, show data on console (same as verbose)
-            show_rgbmatrix5x5:             True            # if true, show heading as color
+            show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                    0.0             # pitch trim for level
-            roll_trim:                     4.0             # roll trim for level
-            heading_trim:                  0.05            # heading trim adjustment (in radians) to set north
+            roll_trim:                     0.0             # 4.0? roll trim for level
+            heading_trim:                  1.55            # 0.05 heading trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
             stability_threshold:              0.09         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
-            cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians)
-#           cardinal_tolerance:               0.0523599    # tolerance to cardinal points (3° in radians)
+            cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians; 0.0523599rad is 3°)
             include_accel_gyro:            True            # if true, poll heading data
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
