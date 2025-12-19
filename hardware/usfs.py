@@ -47,6 +47,7 @@ from colorama import init, Fore, Style
 init()
 
 from core.component import Component
+from core.rdof import RDoF
 from core.logger import Logger, Level
 from matrix11x7.fonts import font3x5
 
@@ -104,6 +105,10 @@ class Usfs(Component):
         self._pitch            = 0.0
         self._roll             = 0.0
         self._yaw              = 0.0
+        # corrected values (after trim applied)
+        self._corrected_pitch  = 0.0
+        self._corrected_roll   = 0.0
+        self._corrected_yaw    = 0.0
         # trim values
         self._pitch_trim       = _cfg.get('pitch_trim', 0.0)
         self._roll_trim        = _cfg.get('roll_trim', 0.0)
@@ -124,6 +129,20 @@ class Usfs(Component):
         if self._fixed_yaw_trim:
             self._log.info('using fixed yaw trim: {:+2.2f}°'.format(self._fixed_yaw_trim))
         self._log.info('ready.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def adjust_trim(self, rdof):
+        '''
+        Enable trim adjustment for the specified rotational degree of freedom.
+        '''
+        if not isinstance(rdof, RDoF):
+            raise ValueError('argument must be RDoF enum')
+        if self._digital_pot is None:
+            self._log.warning('digital potentiometer not available, trim adjustment disabled.')
+            return
+        self._adjust_rdof = rdof
+        self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -317,31 +336,51 @@ class Usfs(Component):
             # keep yaw between 0 and 360
             if self._yaw < 0:
                 self._yaw += 360.0
-            # apply trim corrections
-            self._corrected_pitch = self._pitch + self._pitch_trim
-            self._corrected_roll  = self._roll + self._roll_trim
-            # if fixed trim is set, overrides use of digital pot
-            if self._fixed_yaw_trim is not None:
-                self._yaw_trim = self._fixed_yaw_trim
-            elif self._trim_pot:
-                self._yaw_trim = self._trim_pot.get_scaled_value()
+
+            # apply trim corrections with pot adjustment in radians
+            if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                self._corrected_pitch = self._pitch + self._pitch_trim + math.degrees(self._trim_adjust)
+            elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                self._corrected_roll = self._roll + self._roll_trim + math.degrees(self._trim_adjust)
+            elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                if self._fixed_yaw_trim is not None:
+                    self._yaw_trim = self._fixed_yaw_trim
+                else:
+                    self._yaw_trim = math.degrees(self._trim_adjust)
+                self._corrected_pitch = self._pitch + self._pitch_trim
+                self._corrected_roll = self._roll + self._roll_trim
+                self._corrected_yaw = self._yaw - self._yaw_trim
             else:
-                self._yaw_trim = 0.0
-            self._corrected_yaw = self._yaw - self._yaw_trim
+                self._corrected_pitch = self._pitch + self._pitch_trim
+                self._corrected_roll = self._roll + self._roll_trim
+                if self._fixed_yaw_trim is not None:
+                    self._yaw_trim = self._fixed_yaw_trim
+                else:
+                    self._yaw_trim = 0.0
+                self._corrected_yaw = self._yaw - self._yaw_trim
+
             # keep corrected yaw between 0 and 360
             if self._corrected_yaw < 0:
                 self._corrected_yaw += 360.0
             elif self._corrected_yaw > 360:
                 self._corrected_yaw -= 360.0
             if self._verbose:
-                self._log.info(
-                        Fore.RED      + 'roll: {:+2.2f}° (trim: {:+2.2f}°, corrected: {:+2.2f}°); '.format(
-                            self._roll, self._roll_trim, self._corrected_roll)
-                        + Fore.GREEN  + 'pitch: {:+2.2f}° (trim: {:+2.2f}°, corrected: {:+2.2f}°); '.format(
-                            self._pitch, self._pitch_trim, self._corrected_pitch)
-                        + Fore.BLUE   + 'yaw: {:+2.2f}°; '.format(self._yaw)
-                        + Fore.YELLOW + 'corrected yaw: {:+2.2f}° (trim: {:+2.2f}°)'.format(
-                            self._corrected_yaw, self._yaw_trim))
+                _info = Fore.RED + 'roll: {:+6.2f}° (corrected: {:+6.2f}°); '.format(self._roll, self._corrected_roll)
+                _info += Fore.GREEN + 'pitch: {:+6.2f}° (corrected: {:+6.2f}°); '.format(self._pitch, self._corrected_pitch)
+                _info += Fore.BLUE + 'yaw: {:+6.2f}°; corrected: {:+6.2f}°; '.format(self._yaw, self._corrected_yaw)
+                if self._adjust_rdof:
+                    if self._adjust_rdof == RDoF.YAW:
+                        _info += Fore.CYAN + Style.DIM + 'yaw trim: adj={:7.4f}'.format(self._trim_adjust)
+                    elif self._adjust_rdof == RDoF.PITCH:
+                        _info += Fore.CYAN + Style.DIM + 'pitch trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                            self._pitch_trim, self._trim_adjust)
+                    elif self._adjust_rdof == RDoF.ROLL:
+                        _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                            self._roll_trim, self._trim_adjust)
+                self._log.info(_info)
             if self._use_matrix:
                 self._matrix11x7.clear()
                 self._matrix11x7.write_string('{:>3}'.format(int(self._corrected_yaw)), y=1, font=font3x5)
