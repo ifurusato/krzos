@@ -423,7 +423,7 @@ kros:
             show_target_info:              True            # show log line with target info
         imu:
             verbose:                      False            # verbose messaging
-            yaw_match_threshold:            0.00           # the threshold below which we consider yaw values to match
+            yaw_match_threshold:              0.00           # the threshold below which we consider yaw values to match
             prefer_usfs:                   True            # prefer USFS for accel/gyro
         usfs:
             declination:                     23.04         # declination at operating location
@@ -443,9 +443,9 @@ kros:
             show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
-            pitch_trim:                   -0.019           # pitch trim for level (radians)
-            roll_trim:                     0.0296          # roll trim for level (radians)
-            heading_trim:                  1.55            # 0.05 heading trim adjustment (in radians) to set north
+            pitch_trim:                       0.0          # -0.019; pitch trim for level (radians)
+            roll_trim:                        0.0296       # roll trim for level (radians)
+            heading_trim:                     1.55         # 0.05 heading trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
             stability_threshold:              0.09         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability

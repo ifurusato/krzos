@@ -13,7 +13,6 @@ import time
 import traceback
 import itertools
 import asyncio
-from enum import Enum
 import math, statistics
 from math import pi as π
 from threading import Thread
@@ -34,6 +33,7 @@ from core.component import Component
 from core.logger import Logger, Level
 from core.orientation import Orientation
 from core.rotation import Rotation
+from core.rdof import RDoF
 from core.rate import Rate
 from core.ranger import Ranger
 from hardware.player import Player
@@ -42,27 +42,10 @@ from hardware.i2c_scanner import I2CScanner
 from hardware.rgbmatrix import RgbMatrix, DisplayType
 from hardware.rotation_controller import RotationController, RotationPhase
 
-IN_MIN  = 0.0       # minimum analog value from IO Expander
-IN_MAX  = 3.3       # maximum analog value from IO Expander
-RANGE_DIVISOR = 3.0 # was 10.0 then 5.0
-OUT_MIN = -1.0 * π / RANGE_DIVISOR  # minimum scaled output value
-OUT_MAX = π / RANGE_DIVISOR         # maximum scaled output value
-HALF_PI = π / 2.0
-
-class RDoF(Enum):
-    ROLL  = ( 0, 'roll' )
-    PITCH = ( 1, 'pitch' )
-    YAW   = ( 2, 'yaw' )
-
-    def __init__(self, num, label):
-        self._label = label
-
-    @property
-    def label(self):
-        return self._label
 
 class Icm20948(Component):
     NAME = 'icm20948'
+    HALF_PI = π / 2.0
     '''
     Wraps the functionality of an ICM20948 IMU largely as a compass, though
     pitch and roll are also available. This includes optional trim adjustment,
@@ -92,7 +75,6 @@ class Icm20948(Component):
         # configuration
         _cfg = config['kros'].get('hardware').get('icm20948')
         self._verbose            = _cfg.get('verbose')
-        self._adjust_trim        = _cfg.get('adjust_trim')
         self._show_console       = _cfg.get('show_console')
         self._show_rgbmatrix5x5  = _cfg.get('show_rgbmatrix5x5')
         self._show_rgbmatrix11x7 = _cfg.get('show_rgbmatrix11x7')
@@ -109,13 +91,14 @@ class Icm20948(Component):
         self._heading_trim = self._fixed_heading_trim # initial value if adjusting
         self._digital_pot = None
         self._trim_adjust = 0.0
+        self._adjust_rdof = None  # which RDoF to adjust with pot
         _component_registry = Component.get_registry()
-        if self._adjust_trim:
-            # configure potentiometer
-            self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-            if self._digital_pot:
-                self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
-                self._digital_pot.set_output_range(OUT_MIN, OUT_MAX)
+        # configure potentiometer
+        _digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        if _digital_pot:
+            self._digital_pot = _digital_pot
+            self._log.info('using digital pot at: ' + Fore.GREEN + '0x0A')
+            # assume output range is already set
         self._calibration_rotation = _cfg.get('calibration_rotation')
         self._rotation_controller = _component_registry.get(RotationController.NAME)
         if self._rotation_controller is None:
@@ -303,6 +286,18 @@ class Icm20948(Component):
     def include_accel_gyro(self, include):
         self._include_accel_gyro = include
 
+    def adjust_trim(self, rdof):
+        '''
+        Enable trim adjustment for the specified rotational degree of freedom.
+        '''
+        if not isinstance(rdof, RDoF):
+            raise ValueError('argument must be RDoF enum')
+        if self._digital_pot is None:
+            self._log.warning('digital potentiometer not available, trim adjustment disabled.')
+            return
+        self._adjust_rdof = rdof
+        self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
+
     def is_cardinal_aligned(self, cardinal=None):
         '''
         Returns True if the mean heading is aligned within a 3° tolerance to
@@ -340,7 +335,7 @@ class Icm20948(Component):
         Returns a ratio (range: 0.0-1.0) between the current heading and the
         provided Cardinal direction.
         '''
-        return Convert.get_offset_from_cardinal(self.heading_radians, cardinal) / HALF_PI
+        return Convert.get_offset_from_cardinal(self.heading_radians, cardinal) / Icm20948.HALF_PI
 
     def disable_displays(self):
         self._show_rgbmatrix5x5  = False
@@ -615,11 +610,14 @@ class Icm20948(Component):
 
         The optional callback will be executed upon each loop.
 
+        This is currently only used in testing and calibration, so it uses
+        a slower poll rate.
+
         Note: calling this method will fail if not previously calibrated.
         '''
         self._log.info(Fore.YELLOW + 'begin scan…')
-        _rate = Rate(self._poll_rate_hz, Level.ERROR)
-#       if self._amin is None or self._amax is None:
+        _poll_rate_hz = 5
+        _rate = Rate(_poll_rate_hz, Level.ERROR)
         if not self._is_calibrated:
             raise Exception('compass not calibrated yet, call calibrate() first.')
         while enabled:
@@ -673,11 +671,23 @@ class Icm20948(Component):
             _x = _accel[self._X]
             _y = _accel[self._Y]
             _z = _accel[self._Z]
-            self._pitch = math.atan2(_x, _z) - HALF_PI + self._pitch_trim
-            _xz = _x*_x + _z*_z
-            if _xz == 0:
-                _xz = 0.001
-            self._roll = math.atan2(_y, math.sqrt(_xz)) + self._roll_trim
+            # apply trim adjustment if enabled
+            if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                self._pitch = math.atan2(_x, _z) - Icm20948.HALF_PI + self._pitch_trim + self._trim_adjust
+            elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                _xz = _x*_x + _z*_z
+                if _xz == 0:
+                    _xz = 0.001
+                self._roll = math.atan2(_y, math.sqrt(_xz)) + self._roll_trim + self._trim_adjust
+            else:
+                self._pitch = math.atan2(_x, _z) - Icm20948.HALF_PI + self._pitch_trim
+                _xz = _x*_x + _z*_z
+                if _xz == 0:
+                    _xz = 0.001
+                self._roll = math.atan2(_y, math.sqrt(_xz)) + self._roll_trim
+            # continue…
             self._last_heading = self._heading
             if next(self._counter) % self._display_rate == 0:
                 if self._show_console:
@@ -687,10 +697,20 @@ class Icm20948(Component):
                         _style = Style.NORMAL
                     _variance = 3
                     if not math.isclose(self._heading, self._last_heading, abs_tol=_variance):
-                        self._log.info(_style + "heading: {:3d}° / mean: {:3d}°;".format(self._heading, int(self._mean_heading))
-                                + Fore.WHITE + " pitch: {:4.2f}°; roll: {:4.2f}°".format(self._pitch, self._roll)
-                                + Fore.CYAN + Style.DIM + " stdev: {:.2f}; fxd={:.2f} / adj={:.2f} / trm={:.2f}".format(
-                                    self._stdev, self._fixed_heading_trim, self._trim_adjust, self._heading_trim))
+                        _info = _style + "heading: {: 3d}° / mean: {: 3d}°;".format(self._heading, int(self._mean_heading))
+                        _info += Fore.WHITE + " pitch: {: 4.2f}°; roll: {:4.2f}°".format(self.pitch, self.roll)
+                        if self._adjust_rdof: 
+                            if self._adjust_rdof == RDoF.YAW: 
+                                _info += Fore.CYAN + Style.DIM + " yaw trim: fxd={:.2f} / adj={:.2f} / trm={:.2f}".format(
+                                    self._fixed_heading_trim, self._trim_adjust, self._heading_trim)
+                            elif self._adjust_rdof == RDoF.PITCH:
+                                _info += Fore.CYAN + Style.DIM + " pitch trim: fxd={:.2f} / adj={:.2f}".format(
+                                    self._pitch_trim, self._trim_adjust)
+                            elif self._adjust_rdof == RDoF.ROLL:
+                                _info += Fore.CYAN + Style.DIM + " roll trim: fxd={:.2f} / adj={:.2f}".format(
+                                    self._roll_trim, self._trim_adjust)
+                        _info += Fore.CYAN + Style.DIM + " stdev: {:.2f}".format(self._stdev)
+                        self._log.info(_info)
                 self._display_heading()
 
             return self._heading, self._pitch, self._roll
@@ -698,12 +718,34 @@ class Icm20948(Component):
             self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
             return None
 
-    def show_info(self):
+    def show_info_simple(self):
+        '''
+        Just displays the RDoFs.
+        '''
         self._log.info(
                 Fore.YELLOW + 'pitch: {:4.2f}; '.format(self.pitch)
               + Fore.WHITE  + 'roll: {:4.2f}; '.format(self.roll)     
               + Fore.GREEN  + 'heading: {:4.2f}'.format(self.heading)     
         )
+
+    def show_info(self):
+        '''
+        Displays the RDoFs along with the active trim adjustment.
+        '''
+        _info = Fore.YELLOW + 'pitch: {:6.2f}; '.format(self.pitch)
+        _info += Fore.WHITE + 'roll: {:6.2f}; '.format(self.roll)
+        _info += Fore.GREEN + 'heading: {:6.2f}; '.format(self.heading)
+        if self._adjust_rdof:
+            if self._adjust_rdof == RDoF.YAW:
+                _info += Fore.CYAN + Style.DIM + 'yaw trim: fxd={:7.4f} / adj={:7.4f} / trm={:7.4f}'.format(
+                    self._fixed_heading_trim, self._trim_adjust, self._heading_trim)
+            elif self._adjust_rdof == RDoF.PITCH:
+                _info += Fore.CYAN + Style.DIM + 'pitch trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                    self._pitch_trim, self._trim_adjust)
+            elif self._adjust_rdof == RDoF.ROLL:
+                _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                    self._roll_trim, self._trim_adjust)
+        self._log.info(_info)
 
     def _show_rgbmatrix(self, r, g, b):
         if self._is_calibrated:
@@ -755,7 +797,7 @@ class Icm20948(Component):
         if calibrating:
             # adjust nothing while calibrating
             pass
-        elif self._adjust_trim and self._digital_pot:
+        elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._heading_trim = self._fixed_heading_trim + self._trim_adjust
             self._radians += self._heading_trim
