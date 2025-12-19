@@ -590,13 +590,14 @@ class Icm20948(Component):
 
         Note: calling this method will fail if not previously calibrated.
         '''
-        self._log.info(Fore.YELLOW + '💛 begin scan…    ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ☉ ')
+        self._log.info(Fore.YELLOW + 'begin scan…')
         _rate = Rate(self._poll_rate_hz, Level.ERROR)
 #       if self._amin is None or self._amax is None:
         if not self._is_calibrated:
             raise Exception('compass not calibrated yet, call calibrate() first.')
         while enabled:
             self.poll()
+            self.show_info()
             if callback:
                 callback()
             _rate.wait()
@@ -624,6 +625,7 @@ class Icm20948(Component):
 
         Note: calling this method will fail if not previously calibrated.
         '''
+#       self._log.info('poll… ')
         try:
             self._radians = self._read_heading(self._amin, self._amax)
             self._queue.append(self._radians)
@@ -665,6 +667,13 @@ class Icm20948(Component):
         except Exception as e:
             self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
             return None
+
+    def show_info(self):
+        self._log.info(
+                Fore.YELLOW + 'pitch: {:4.2f}; '.format(self.pitch)
+              + Fore.WHITE  + 'roll: {:4.2f}; '.format(self.roll)     
+              + Fore.GREEN  + 'heading: {:4.2f}'.format(self.heading)     
+        )
 
     def _show_rgbmatrix(self, r, g, b):
         if self._is_calibrated:
