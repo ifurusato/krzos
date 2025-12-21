@@ -39,8 +39,8 @@ class Smoothing(Behaviour):
         _idle_cfg = config['kros']['behaviour']['smoothing']
         # thoughts configuration
         _cfg = config['kros']['behaviour']['smoothing']
-        self._verbose           = _cfg.get('verbose', False)
-        self._priority          = _cfg.get('priority', 0.4)
+        self._verbose  = _cfg.get('verbose', False)
+        self._priority = _cfg.get('priority', 0.4)
         # components
         _component_registry = Component.get_registry()
         self._odometer = _component_registry.get(Odometer.NAME)

@@ -312,7 +312,8 @@ class KROS(Component, FiniteStateMachine):
             # fixed trim determined via observation
             self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
             self._usfs.set_verbose(False)
-        # IMU class created in start()
+        if _cfg.get('enable_imu') and self._icm20948 and self._usfs:
+            self._imu = IMU(self._config, icm20948=self._icm20948, usfs=self._usfs, level=Level.INFO)
 
         # create behaviours
 
@@ -388,11 +389,11 @@ class KROS(Component, FiniteStateMachine):
             if not self._tinyfx.enabled:
                 self._tinyfx.enable()
 
-        if self._icm20948 and self._usfs:
-            self._imu = IMU(self._config, icm20948=self._icm20948, usfs=self._usfs, level=Level.INFO)
-            # this will enabled both IMUs and initiated Icm20948's calibration
+        if self._imu:
+            # this will enable both IMUs and initiated Icm20948's calibration
             self._imu.enable()
         else:
+            self._log.warning('fused IMU not available.')
             if self._icm20948:
                 self._icm20948.enable()
             if self._usfs:

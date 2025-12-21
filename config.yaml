@@ -21,8 +21,9 @@ kros:
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
-        enable_usfs:                       True            # enable USFS IMU
         enable_icm20948:                   True            # enable ICM20948 IMU
+        enable_usfs:                       True            # enable USFS IMU
+        enable_imu:                        True            # enable fused IMU
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -221,7 +222,7 @@ kros:
         enable:                            True            # enable motor controller on startup
         closed_loop:                       True            # open or closed loop control
         create_external_clock:             True            # create external clock if not provided
-        motor_power_smoothing:             
+        motor_power_smoothing:
             enabled:                       True            # enable post-kinematic blending smoothing
             alpha:                            0.5          # smoothing factor: 0.0=no smoothing, 1.0=no response
                                                            # recommended: 0.4-0.6 for timing jitter absorption
@@ -333,7 +334,7 @@ kros:
             subpixel:                     False            # better accuracy for longer distance, fractional disparity 32-levels
             left_right_check:              True            # better handling for occlusions
         paa5100je:                                         # PAA5100JE Optical Flow Sensor
-            rotation:                       180            # permitted values: 0, 90, 180 or 270 
+            rotation:                       180            # permitted values: 0, 90, 180 or 270
             x_trim:                         1.0            # percentage X trim (as a multiplier)
             y_trim:                         0.92           # percentage Y trim (as a multiplier)
         button:                                            # GPIO or IO Expander-based simple button or switch
@@ -426,15 +427,17 @@ kros:
             yaw_match_threshold:              0.00           # the threshold below which we consider yaw values to match
             prefer_usfs:                   True            # prefer USFS for accel/gyro
         usfs:
+            verbose:                      False
             declination:                     23.04         # declination at operating location
             swap_pitch_roll:               True            # if True, swap pitch and roll
-            pitch_trim:                     0.0
-            roll_trim:                      0.0
+            pitch_trim:                    -0.7392 
+            roll_trim:                     -1.5231 
             yaw_trim:                     -77.41
             invert_roll:                   True
             invert_pitch:                  True
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
+            declination:                     23.04         # declination at operating location
             poll_rate_hz:                   150            # how often the IMU is polled
             vertical_mount:               False            # True: vertical like Pimoroni, or False: horizontal like Adafruit
             bench_calibrate:              False            # if true, calibrate the IMU manually while on the rotating bench
@@ -443,8 +446,8 @@ kros:
             show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
-            pitch_trim:                       0.0          # -0.019; pitch trim for level (radians)
-            roll_trim:                        0.0296       # roll trim for level (radians)
+            pitch_trim:                      -0.0116       # pitch trim for level (radians)
+            roll_trim:                        0.0271       # 0.0112 # roll trim for level (radians)
             heading_trim:                     1.55         # 0.05 heading trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?

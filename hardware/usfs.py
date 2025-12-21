@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-09-03
-# modified: 2025-12-18
+# modified: 2025-12-19
 #
 # The Usfs class is used for running the USFS (Ultimate Sensor Fusion Solution)
 # SENtral sensor hub as an IMU. This combines a MPU9250 9 DoF IMU (itself
@@ -49,6 +49,7 @@ init()
 from core.component import Component
 from core.rdof import RDoF
 from core.logger import Logger, Level
+from hardware.digital_pot import DigitalPotentiometer
 from matrix11x7.fonts import font3x5
 
 class Usfs(Component):
@@ -66,12 +67,12 @@ class Usfs(Component):
     trim.
 
     To determine the magnetic declination for your location, use NOAA's Magnetic
-    Field Calculator at: https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml
+    Field Calculator at:  https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml
 
     Args:
         config:       application configuration
         matrix11x7:   optional 11x7 matrix to display heading
-        trim_pot:     optional digital potentiometer to set magnetometer trim
+        trim_pot:     optional digital potentiometer to set magnetometer trim (deprecated, use component registry)
         level:        log level
     '''
     def __init__(self, config, matrix11x7=None, trim_pot=None, level=Level.INFO):
@@ -81,12 +82,12 @@ class Usfs(Component):
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
         self._matrix11x7 = matrix11x7
-        self._trim_pot = trim_pot
         # configuration
         _cfg = config['kros'].get('hardware').get('usfs')
         # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
-        self._declination  = _cfg.get('declination', 13.8) # set for your location
-        self._log.info('declination: {: 5.3f}'.format(self._declination))
+        self._declination_degrees = _cfg.get('declination', 13.8) # set for your location
+        self._declination = math.radians(self._declination_degrees)
+        self._log.info('declination: {:5.3f}° ({:.6f} rad)'.format(self._declination_degrees, self._declination))
         self._invert_roll  = _cfg.get('invert_roll', False)
         self._invert_pitch = _cfg.get('invert_pitch', False)
         # mount orientation
@@ -98,36 +99,45 @@ class Usfs(Component):
         # start the USFS in master mode
         if not self._usfs.begin():
             self._log.error('unable to start USFS: {}'.format(self._usfs.getErrorString()))
-#           sys.exit(1)
             self.close()
         self._use_matrix = matrix11x7 != None
         self._verbose    = False # if true display to console
-        self._pitch            = 0.0
-        self._roll             = 0.0
-        self._yaw              = 0.0
-        # corrected values (after trim applied)
-        self._corrected_pitch  = 0.0
-        self._corrected_roll   = 0.0
-        self._corrected_yaw    = 0.0
-        # trim values
-        self._pitch_trim       = _cfg.get('pitch_trim', 0.0)
-        self._roll_trim        = _cfg.get('roll_trim', 0.0)
-        self._fixed_yaw_trim   = _cfg.get('yaw_trim', None) # if set, overrides use of digital pot
-        self._yaw_trim         = 0.0
-        # corrected values (after trim applied)
-        self._corrected_pitch  = 0.0
-        self._corrected_roll   = 0.0
-        self._corrected_yaw    = 0.0
-        # barometer/altimeter
-        self._pressure         = 0.0
-        self._temperature      = 0.0
-        self._altitude         = 0.0
-        # raw sensor values
-        self._ax = self._ay    = self._az = 0.0
-        self._gx = self._gy    = self._gz = 0.0
-        self._log.info('pitch trim: {:+2.2f}°; roll trim: {:+2.2f}°'.format(self._pitch_trim, self._roll_trim))
+        # internal values stored in radians
+        self._pitch = 0.0
+        self._roll  = 0.0
+        self._yaw   = 0.0
+        # trim values from config (in degrees), converted to radians
+        _pitch_trim_degrees = _cfg.get('pitch_trim', 0.0)
+        _roll_trim_degrees  = _cfg.get('roll_trim', 0.0)
+        _yaw_trim_degrees   = _cfg.get('yaw_trim', None)
+        self._pitch_trim = math.radians(_pitch_trim_degrees)
+        self._roll_trim  = math.radians(_roll_trim_degrees)
+        self._fixed_yaw_trim = math.radians(_yaw_trim_degrees) if _yaw_trim_degrees is not None else None
+        self._yaw_trim = 0.0
+        self._log.info('pitch trim: {:+2.2f}° ({:+.6f} rad); roll trim: {:+2.2f}° ({:+.6f} rad)'.format(
+            _pitch_trim_degrees, self._pitch_trim, _roll_trim_degrees, self._roll_trim))
         if self._fixed_yaw_trim:
-            self._log.info('using fixed yaw trim: {:+2.2f}°'.format(self._fixed_yaw_trim))
+            self._log.info('using fixed yaw trim: {:+2.2f}° ({:+.6f} rad)'.format(_yaw_trim_degrees, self._fixed_yaw_trim))
+        # corrected values (after trim applied), stored in radians
+        self._corrected_pitch = 0.0
+        self._corrected_roll  = 0.0
+        self._corrected_yaw   = 0.0
+        # digital pot for dynamic trim adjustment
+        self._digital_pot = None
+        self._trim_adjust = 0.0
+        self._adjust_rdof = None
+        _component_registry = Component.get_registry()
+        _digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        if _digital_pot:
+            self._digital_pot = _digital_pot
+            self._log.info('digital pot available for trim adjustment')
+        # barometer/altimeter
+        self._pressure    = 0.0
+        self._temperature = 0.0
+        self._altitude    = 0.0
+        # raw sensor values
+        self._ax = self._ay = self._az = 0.0
+        self._gx = self._gy = self._gz = 0.0
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -144,27 +154,25 @@ class Usfs(Component):
         self._adjust_rdof = rdof
         self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-    def set_fixed_yaw_trim(self, yaw):
+    def set_fixed_yaw_trim(self, yaw_degrees):
         '''
         The IMU will use the digital potentiometer for dynamically adjusting
         the yaw trim. If a fixed value is set it is used instead, disabling
         use of the potentiometer.
         '''
-        self._fixed_yaw_trim = yaw
+        self._fixed_yaw_trim = math.radians(yaw_degrees)
 
-    def set_pitch_trim(self, pitch_trim):
+    def set_pitch_trim(self, pitch_trim_degrees):
         '''
-        Set the pitch trim value in degrees.
+        set the pitch trim value in degrees.
         '''
-        self._pitch_trim = pitch_trim
+        self._pitch_trim = math.radians(pitch_trim_degrees)
 
-    def set_roll_trim(self, roll_trim):
+    def set_roll_trim(self, roll_trim_degrees):
         '''
-        Set the roll trim value in degrees.
+        set the roll trim value in degrees.
         '''
-        self._roll_trim = roll_trim
+        self._roll_trim = math.radians(roll_trim_degrees)
 
     def set_verbose(self, verbose):
         self._verbose = verbose
@@ -174,21 +182,42 @@ class Usfs(Component):
     @property
     def uncorrected_roll(self):
         '''
-        After calling poll(), this returns the latest uncorrected roll value.
+        After calling poll(), returns the latest uncorrected roll value in degrees.
+        '''
+        return math.degrees(self._roll)
+
+    @property
+    def uncorrected_roll_radians(self):
+        '''
+        After calling poll(), returns the latest uncorrected roll value in radians.
         '''
         return self._roll
 
     @property
     def roll(self):
         '''
-        After calling poll(), this returns the latest corrected (trimmed) roll value.
+        After calling poll(), returns the latest corrected (trimmed) roll value in degrees.
+        '''
+        return math.degrees(self._corrected_roll)
+
+    @property
+    def roll_radians(self):
+        '''
+        After calling poll(), returns the latest corrected (trimmed) roll value in radians.
         '''
         return self._corrected_roll
 
     @property
     def roll_trim(self):
         '''
-        Returns the current roll trim value.
+        Returns the current roll trim value in degrees.
+        '''
+        return math.degrees(self._roll_trim)
+
+    @property
+    def roll_trim_radians(self):
+        '''
+        Returns the current roll trim value in radians.
         '''
         return self._roll_trim
 
@@ -197,21 +226,42 @@ class Usfs(Component):
     @property
     def uncorrected_pitch(self):
         '''
-        After calling poll(), this returns the latest uncorrected pitch value.
+        After calling poll(), returns the latest uncorrected pitch value in degrees.
+        '''
+        return math.degrees(self._pitch)
+
+    @property
+    def uncorrected_pitch_radians(self):
+        '''
+        After calling poll(), returns the latest uncorrected pitch value in radians.
         '''
         return self._pitch
 
     @property
     def pitch(self):
         '''
-        After calling poll(), this returns the latest corrected (trimmed) pitch value.
+        After calling poll(), returns the latest corrected (trimmed) pitch value in degrees.
+        '''
+        return math.degrees(self._corrected_pitch)
+
+    @property
+    def pitch_radians(self):
+        '''
+        After calling poll(), returns the latest corrected (trimmed) pitch value in radians.
         '''
         return self._corrected_pitch
 
     @property
     def pitch_trim(self):
         '''
-        Returns the current pitch trim value.
+        Returns the current pitch trim value in degrees.
+        '''
+        return math.degrees(self._pitch_trim)
+
+    @property
+    def pitch_trim_radians(self):
+        '''
+        Returns the current pitch trim value in radians.
         '''
         return self._pitch_trim
 
@@ -220,22 +270,42 @@ class Usfs(Component):
     @property
     def uncorrected_yaw(self):
         '''
-        After calling poll(), this returns the latest uncorrected yaw value.
+        After calling poll(), returns the latest uncorrected yaw value in degrees.
+        '''
+        return math.degrees(self._yaw)
+
+    @property
+    def uncorrected_yaw_radians(self):
+        '''
+        After calling poll(), returns the latest uncorrected yaw value in radians.
         '''
         return self._yaw
 
     @property
     def yaw(self):
         '''
-        After calling poll(), this returns the latest corrected (trimmed)
-        yaw value.
+        After calling poll(), returns the latest corrected (trimmed) yaw value in degrees.
+        '''
+        return math.degrees(self._corrected_yaw)
+
+    @property
+    def yaw_radians(self):
+        '''
+        After calling poll(), returns the latest corrected (trimmed) yaw value in radians.
         '''
         return self._corrected_yaw
 
     @property
     def yaw_trim(self):
         '''
-        Returns the current yaw trim value.
+        Returns the current yaw trim value in degrees.
+        '''
+        return math.degrees(self._yaw_trim)
+
+    @property
+    def yaw_trim_radians(self):
+        '''
+        Returns the current yaw trim value in radians.
         '''
         return self._yaw_trim
 
@@ -244,44 +314,42 @@ class Usfs(Component):
     @property
     def pressure(self):
         '''
-        After calling poll(), this returns the latest pressure value.
+        After calling poll(), returns the latest pressure value.
         '''
         return self._pressure
 
     @property
     def temperature(self):
         '''
-        After calling poll(), this returns the latest temperature value.
+        After calling poll(), returns the latest temperature value.
         '''
         return self._temperature
 
     @property
     def altitude(self):
         '''
-        After calling poll(), this returns the latest altitude value.
+        After calling poll(), returns the latest altitude value.
         '''
         return self._altitude
 
     @property
     def accelerometer(self):
         '''
-        After calling poll(), this returns the x,y,z tuple value from the
-        accelerometer.
+        After calling poll(), returns the x,y,z tuple value from the accelerometer.
         '''
         return self._ax, self._ay, self._az
 
     @property
     def gyroscope(self):
         '''
-        After calling poll(), this returns the x,y,z tuple value from the
-        gyroscope.
+        After calling poll(), returns the x,y,z tuple value from the gyroscope.
         '''
         return self._gx, self._gy, self._gz
 
     def poll(self):
         '''
         Polls the hardware and sets all the available properties, returning
-        the corrected yaw (as that's our primary interest).
+        the corrected yaw (as that's our primary interest) in degrees.
         '''
         if self.closed:
             self._log.warning('usfs is closed.')
@@ -310,7 +378,7 @@ class Usfs(Component):
 
         if (self._usfs.gotQuaternion()):
             qw, qx, qy, qz = self._usfs.readQuaternion()
-            # calculate roll and pitch from quaternion
+            # calculate roll and pitch from quaternion (in radians)
             _roll_calc  = math.atan2(2.0 * (qw * qx + qy * qz), qw * qw - qx * qx - qy * qy + qz * qz)
             _pitch_calc = -math.asin(2.0 * (qx * qz - qw * qy))
             # swap axes if configured for different mount orientation
@@ -325,65 +393,66 @@ class Usfs(Component):
                 self._roll *= -1.0
             if self._invert_pitch:
                 self._pitch *= -1.0
-            # calculate yaw
-            self._yaw   = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
-            # convert to degrees
-            self._pitch *= 180.0 / math.pi
-            self._roll  *= 180.0 / math.pi
-            self._yaw   *= 180.0 / math.pi
+            # calculate yaw (in radians)
+            self._yaw = math.atan2(2.0 * (qx * qy + qw * qz), qw * qw + qx * qx - qy * qy - qz * qz)
             # apply declination
-            self._yaw   += self._declination
-            # keep yaw between 0 and 360
+            self._yaw += self._declination
+            # keep yaw between 0 and 2π
             if self._yaw < 0:
-                self._yaw += 360.0
+                self._yaw += 2 * math.pi
+            elif self._yaw >= 2 * math.pi:
+                self._yaw -= 2 * math.pi
 
-            # apply trim corrections with pot adjustment in radians
+            # apply trim corrections (all in radians)
             if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
                 self._trim_adjust = self._digital_pot.get_scaled_value(False)
-                self._corrected_pitch = self._pitch + self._pitch_trim + math.degrees(self._trim_adjust)
-            elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
-                self._trim_adjust = self._digital_pot.get_scaled_value(False)
-                self._corrected_roll = self._roll + self._roll_trim + math.degrees(self._trim_adjust)
-            elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
-                self._trim_adjust = self._digital_pot.get_scaled_value(False)
-                if self._fixed_yaw_trim is not None:
-                    self._yaw_trim = self._fixed_yaw_trim
-                else:
-                    self._yaw_trim = math.degrees(self._trim_adjust)
-                self._corrected_pitch = self._pitch + self._pitch_trim
-                self._corrected_roll = self._roll + self._roll_trim
-                self._corrected_yaw = self._yaw - self._yaw_trim
+                self._corrected_pitch = self._pitch + self._pitch_trim + self._trim_adjust
             else:
                 self._corrected_pitch = self._pitch + self._pitch_trim
-                self._corrected_roll = self._roll + self._roll_trim
-                if self._fixed_yaw_trim is not None:
-                    self._yaw_trim = self._fixed_yaw_trim
-                else:
-                    self._yaw_trim = 0.0
-                self._corrected_yaw = self._yaw - self._yaw_trim
 
-            # keep corrected yaw between 0 and 360
+            if self._adjust_rdof == RDoF.ROLL and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                self._corrected_roll = self._roll + self._roll_trim + self._trim_adjust
+            else:
+                self._corrected_roll = self._roll + self._roll_trim
+
+            # yaw trim handling
+            if self._fixed_yaw_trim is not None:
+                self._yaw_trim = self._fixed_yaw_trim
+            elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
+                self._trim_adjust = self._digital_pot.get_scaled_value(False)
+                self._yaw_trim = self._trim_adjust
+            else:
+                self._yaw_trim = 0.0
+            self._corrected_yaw = self._yaw - self._yaw_trim
+
+            # keep corrected yaw between 0 and 2π
             if self._corrected_yaw < 0:
-                self._corrected_yaw += 360.0
-            elif self._corrected_yaw > 360:
-                self._corrected_yaw -= 360.0
+                self._corrected_yaw += 2 * math.pi
+            elif self._corrected_yaw >= 2 * math.pi:
+                self._corrected_yaw -= 2 * math.pi
+
             if self._verbose:
-                _info = Fore.RED + 'roll: {:+6.2f}° (corrected: {:+6.2f}°); '.format(self._roll, self._corrected_roll)
-                _info += Fore.GREEN + 'pitch: {:+6.2f}° (corrected: {:+6.2f}°); '.format(self._pitch, self._corrected_pitch)
-                _info += Fore.BLUE + 'yaw: {:+6.2f}°; corrected: {:+6.2f}°; '.format(self._yaw, self._corrected_yaw)
+                _info = Fore.RED + 'roll: {:+6.2f}° (corrected: {:+6.2f}°); '.format(
+                    math.degrees(self._roll), math.degrees(self._corrected_roll))
+                _info += Fore.GREEN + 'pitch: {:+6.2f}° (corrected: {:+6.2f}°); '.format(
+                    math.degrees(self._pitch), math.degrees(self._corrected_pitch))
+                _info += Fore.BLUE + 'yaw: {:+6.2f}° (corrected: {:+6.2f}°); '.format(
+                    math.degrees(self._yaw), math.degrees(self._corrected_yaw))
                 if self._adjust_rdof:
                     if self._adjust_rdof == RDoF.YAW:
-                        _info += Fore.CYAN + Style.DIM + 'yaw trim: adj={:7.4f}'.format(self._trim_adjust)
+                        _info += Fore.CYAN + Style.DIM + 'yaw trim: adj={:7.4f}'.format(
+                            math.degrees(self._trim_adjust))
                     elif self._adjust_rdof == RDoF.PITCH:
                         _info += Fore.CYAN + Style.DIM + 'pitch trim: fxd={:7.4f} / adj={:7.4f}'.format(
-                            self._pitch_trim, self._trim_adjust)
+                            math.degrees(self._pitch_trim), math.degrees(self._trim_adjust))
                     elif self._adjust_rdof == RDoF.ROLL:
                         _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
-                            self._roll_trim, self._trim_adjust)
+                            math.degrees(self._roll_trim), math.degrees(self._trim_adjust))
                 self._log.info(_info)
             if self._use_matrix:
                 self._matrix11x7.clear()
-                self._matrix11x7.write_string('{:>3}'.format(int(self._corrected_yaw)), y=1, font=font3x5)
+                self._matrix11x7.write_string('{:>3}'.format(int(math.degrees(self._corrected_yaw))), y=1, font=font3x5)
                 self._matrix11x7.show()
         else:
             self._log.warning('no quaternion')
@@ -394,7 +463,27 @@ class Usfs(Component):
         if self._usfs.gotBarometer():
             self._pressure, self._temperature = self._usfs.readBarometer()
             self._altitude = (1.0 - math.pow(self._pressure / 1013.25, 0.190295)) * 44330
-        return self._corrected_yaw
+        return math.degrees(self._corrected_yaw)
+
+    def show_info(self):
+        '''
+        Displays the RDoFs along with the active trim adjustment.
+        '''
+        _info =  Fore.RED   + 'roll: {:6.2f}; '.format(self.roll)
+        _info += Fore.GREEN + 'pitch: {:6.2f}; '.format(self.pitch)
+        _info += Fore.BLUE  + 'yaw: {:6.2f}; '.format(self.yaw)
+        if self._adjust_rdof:
+            if self._adjust_rdof == RDoF.YAW:
+                _info += Fore.CYAN + Style.DIM + 'yaw trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                    math.degrees(self._fixed_yaw_trim) if self._fixed_yaw_trim else 0.0,
+                    math.degrees(self._trim_adjust))
+            elif self._adjust_rdof == RDoF.PITCH:
+                _info += Fore.CYAN + Style.DIM + 'pitch trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                    math.degrees(self._pitch_trim), math.degrees(self._trim_adjust))
+            elif self._adjust_rdof == RDoF.ROLL:
+                _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
+                    math.degrees(self._roll_trim), math.degrees(self._trim_adjust))
+        self._log.info(_info)
 
     def enable(self):
         if not self.closed:

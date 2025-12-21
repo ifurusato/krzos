@@ -35,7 +35,7 @@ class GamepadMapping(Enum):
     '''
     A_BUTTON        = ( 1,  304,  'cross',    'A (Cross) Button',     Event.A_BUTTON)
     B_BUTTON        = ( 2,  305,  'circle',   'B (Circle) Button',    Event.B_BUTTON)     # noop
-    X_BUTTON        = ( 3,  307,  'triangle', 'X (Triangle) Button',  Event.STOP)         # escalating stop
+    X_BUTTON        = ( 3,  307,  'triangle', 'X (Triangle) Button',  Event.X_BUTTON)     # stop?
     Y_BUTTON        = ( 4,  308,  'square',   'Y ((Square) Button',   Event.SHUTDOWN)
 
     L1_BUTTON       = ( 5,  310,  'l1',       'L1 Button',            Event.L1_BUTTON)

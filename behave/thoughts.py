@@ -21,7 +21,7 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
-from core.component import Component
+from core.component import Component, MissingComponentError
 from core.event import Event, Group
 from core.orientation import Orientation
 from core.rate_limited import rate_limited
@@ -35,6 +35,7 @@ from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
 from hardware.tinyfx_controller import TinyFxController
+from hardware.imu import IMU
 
 class Thoughts(Behaviour):
     NAME = 'thoughts'
@@ -105,8 +106,11 @@ class Thoughts(Behaviour):
         self._enable_publishing = True
         self._queue_publisher = self._component_registry.get(QueuePublisher.NAME)
         if self._queue_publisher is None:
-            raise MissingComponentError('queue publisher not available for Scan.')
+            raise MissingComponentError('queue publisher not available.')
         # others…
+        self._imu = self._component_registry.get(IMU.NAME)
+        if not self._imu:
+            raise MissingComponentError('IMU not available.')
         self._eyeballs_monitor = self._component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
@@ -142,6 +146,7 @@ class Thoughts(Behaviour):
         # get tinyfx
         self._tinyfx = None
         # behavioural states
+        self._enable_imu_poll  = False
         self._bored            = False
         self._sleeping         = False
         self._idle_count       = 0
@@ -291,7 +296,7 @@ class Thoughts(Behaviour):
     def _reset_eyeballs(self):
         _eyeballs = self._eyeballs_monitor.get_eyeballs()
         if _eyeballs is None:
-            self._log.info('no manual setting for eyeballs, setting blank…')
+            self._log.debug('no manual setting for eyeballs, setting blank…')
             self._eyeballs_monitor.set_eyeballs(Eyeball.BLANK, temporary=True)
         elif _eyeballs == Eyeball.NEUTRAL \
                 or _eyeballs == Eyeball.BORED \
@@ -327,6 +332,8 @@ class Thoughts(Behaviour):
                         self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(self._count))
                     await asyncio.sleep(self._loop_delay_sec)
                     continue
+                if self._enable_imu_poll:
+                    self.poll_imu()
                 # check odometer for movement activity
                 if self._odometer:
                     vx, vy, omega = self._odometer.velocity
@@ -351,20 +358,20 @@ class Thoughts(Behaviour):
                     _normalized = _raw_activity / self._max_activity
                     _activity = _normalized * self._activity_scale
                     _activity = min(_activity, 1.0)
-#                   if self._verbose:
-                    _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM
-                    _bored_style    = Style.NORMAL if ( self._bored and not self._sleeping ) else Style.DIM
-                    _sleeping_style = Style.NORMAL if self._sleeping else Style.DIM
-                    _deep_sleep_style = Style.NORMAL if self._sleep_count > self._deep_sleep_limit else Style.DIM
-                    self._log.info(Fore.BLUE + _style + '[{:05d}] activity: {:4.2f} (raw: {:4.2f});'.format(
-                           self._count, _activity, _raw_activity)
-                           + Style.NORMAL
-                           + Fore.WHITE   + _idle_style       + ' idle: {:4d};'.format(self._idle_count)
-                           + Fore.YELLOW  + _bored_style      + ' bored: {};'.format(self._bored_limit)
-                           + Fore.BLUE    + _sleeping_style   + ' sleep: {};'.format(self._sleep_limit)
-                           + Fore.MAGENTA + _deep_sleep_style + ' deep sleep: {};'.format(self._deep_sleep_limit)
-                           + Fore.BLACK   + Style.DIM         + ' snore: {}'.format(self._snore_rate)
-                    )
+                    if self._verbose:
+                        _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM
+                        _bored_style    = Style.NORMAL if ( self._bored and not self._sleeping ) else Style.DIM
+                        _sleeping_style = Style.NORMAL if self._sleeping else Style.DIM
+                        _deep_sleep_style = Style.NORMAL if self._sleep_count > self._deep_sleep_limit else Style.DIM
+                        self._log.info(Fore.BLUE + _style + '[{:05d}] activity: {:4.2f} (raw: {:4.2f});'.format(
+                               self._count, _activity, _raw_activity)
+                               + Style.NORMAL
+                               + Fore.WHITE   + _idle_style       + ' idle: {:4d};'.format(self._idle_count)
+                               + Fore.YELLOW  + _bored_style      + ' bored: {};'.format(self._bored_limit)
+                               + Fore.BLUE    + _sleeping_style   + ' sleep: {};'.format(self._sleep_limit)
+                               + Fore.MAGENTA + _deep_sleep_style + ' deep sleep: {};'.format(self._deep_sleep_limit)
+                               + Fore.BLACK   + Style.DIM         + ' snore: {}'.format(self._snore_rate)
+                        )
                     if self._idle_count == 0: # activity ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         self._maybe_play_random_sound(_activity)
                         self._mark_activity()
@@ -569,9 +576,10 @@ class Thoughts(Behaviour):
                 self._log.debug(Style.DIM + 'B_BUTTON. rotate north')
                 self._rotate_to_heading()
             case Event.X_BUTTON:
-                self._log.debug(Style.DIM + 'X_BUTTON.')
+                self._enable_imu_poll = not self._enable_imu_poll  
+                self._log.info(Fore.YELLOW + 'X_BUTTON. poll IMU? {}'.format(self._enable_imu_poll))
             case Event.Y_BUTTON:
-                self._log.info(Style.DIM + 'Y_BUTTON. exit.')
+                self._log.info(Style.DIM + 'Y_BUTTON. exit')
             case Event.L1_BUTTON:
                 self._log.info(Fore.MAGENTA + 'L1_BUTTON. toggle running lights')
                 self._toggle_running_lights()
@@ -619,7 +627,16 @@ class Thoughts(Behaviour):
             case Event.R3_HORIZONTAL:
                 self._log.debug(Style.DIM + 'R3_HORIZONTAL.')
             case _:
-                self._log.warning('unrecognised event: {}'.format(event))
+#               self._log.debug('unrecognised event: {}'.format(event))
+                pass
+
+    def poll_imu(self):
+        if self._imu:
+            self._log.debug('polling IMU… ')
+            self._imu.poll()
+            self._imu.show_info()
+        else:
+            self._log.warning('no IMU available.')
 
     def pir(self):
         try:

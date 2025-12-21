@@ -114,8 +114,7 @@ class Radiozoa(AsyncBehaviour):
             if not self._radiozoa_sensor.check_ranging():
                 self._log.warning('not all sensors are ranging.')
                 return
-#           super().enable()
-            AsyncBehaviour.enable(self)
+            super().enable()
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')

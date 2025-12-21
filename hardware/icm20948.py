@@ -82,6 +82,10 @@ class Icm20948(Component):
         # calibration
         self._bench_calibrate    = _cfg.get('bench_calibrate')
         self._motion_calibrate   = _cfg.get('motion_calibrate')
+        # declination
+        _declination_degrees = _cfg. get('declination', 23.04) 
+        self._declination = math.radians(_declination_degrees)
+        self._log.info('declination: {:5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
         # set up trim control
         self._pitch_trim = _cfg.get('pitch_trim') # 0.0
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
@@ -465,7 +469,7 @@ class Icm20948(Component):
                 _count = next(_imu_counter)
                 try:
                     _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    if _count % 5 == 0:
+                    if _count % 25 == 0:
                         self._log.info(Style.DIM + '[{:3d}] calibrating…'.format(_count))
                 except Exception as e:
                     self._log.error('{} encountered: {}'.format(type(e), e))
@@ -619,6 +623,7 @@ class Icm20948(Component):
         _poll_rate_hz = 5
         _rate = Rate(_poll_rate_hz, Level.ERROR)
         if not self._is_calibrated:
+#           self._log.warning('compass not calibrated yet, call calibrate() first.')
             raise Exception('compass not calibrated yet, call calibrate() first.')
         while enabled:
             self.poll()
@@ -794,6 +799,8 @@ class Icm20948(Component):
                 pass
             mag[i] -= 0.5
         self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])
+        # apply declination first
+        self._radians += self._declination # rad
         if calibrating:
             # adjust nothing while calibrating
             pass

@@ -10,6 +10,7 @@
 # modified: 2025-12-19
 
 import math
+from math import isclose
 from colorama import init, Fore, Style
 init()
 
@@ -113,12 +114,50 @@ class IMU(Component):
         # pitch ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_pitch       = self._usfs.pitch
         icm20948_pitch   = self._icm20948.pitch
-        # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        if isclose(usfs_pitch, icm20948_pitch, abs_tol=1.00):
+            pitch_display = (usfs_pitch + icm20948_pitch) / 2
+            pitch_str = '{:4.2f}'.format(pitch_display)
+        else:
+            pitch_str = '{:4.2f} | {:4.2f}'.format(usfs_pitch, icm20948_pitch)
+        # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_roll        = self._usfs.roll
-        icm20948_roll    = self._icm20948.roll # in degrees
+        icm20948_roll    = self._icm20948.roll
+        if isclose(usfs_roll, icm20948_roll, abs_tol=1.00):
+            roll_display = (usfs_roll + icm20948_roll) / 2
+            roll_str = '{:4.2f}'.format(roll_display)
+        else:
+            roll_str = '{:4.2f} | {:4.2f}'.format(usfs_roll, icm20948_roll)
         # heading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_heading     = self._usfs.yaw
         icm20948_heading = self._icm20948.heading
+        if isclose(usfs_heading, icm20948_heading, abs_tol=5.0):
+            heading_display = (usfs_heading + icm20948_heading) / 2
+            heading_str = '{:4.2f}'.format(heading_display)
+        else:
+            heading_str = '{:4.2f} | {:4.2f}'.format(usfs_heading, icm20948_heading)
+        # log output
+        self._log.info(
+              Fore.YELLOW + 'pitch: ' + pitch_str + '; '
+            + Fore.WHITE  + 'roll: ' + roll_str + '; '
+            + Fore.GREEN  + 'heading: ' + heading_str
+        )
+
+    def x_show_info(self):
+        # pitch ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        usfs_pitch       = self._usfs.pitch
+        icm20948_pitch   = self._icm20948.pitch
+        if isclose(usfs_pitch, icm20948_pitch, abs_tol=0.20):
+            pass
+        # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        usfs_roll        = self._usfs.roll
+        icm20948_roll    = self._icm20948.roll # in degrees
+        if isclose(usfs_roll, icm20948_roll, abs_tol=0.20):
+            pass
+        # heading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        usfs_heading     = self._usfs.yaw
+        icm20948_heading = self._icm20948.heading
+        if isclose(usfs_heading, icm20948_heading, abs_tol=3.0):
+            pass
         self._log.info(
                 Fore.YELLOW + 'pitch: {:4.2f} | {:4.2f}; '.format(usfs_pitch, icm20948_pitch)
               + Fore.WHITE  + 'roll: {:4.2f} | {:4.2f}; '.format(usfs_roll, icm20948_roll)     

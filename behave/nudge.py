@@ -251,7 +251,8 @@ class Nudge(AsyncBehaviour):
             case Event.R3_VERTICAL:
                 self._log.debug('R3_VERTICAL.')
             case _:
-                self._log.warning('unrecognised event: {}'.format(event))
+#               self._log.debug('unrecognised event: {}'.format(event))
+                pass
 
     def _nudge_speed_modifier(self, speeds):
         '''

@@ -75,7 +75,7 @@ try:
 
     _icm20948 = Icm20948(_config, rgbmatrix=_rgbmatrix, level=Level.INFO)
     _icm20948._show_console = True
-    _icm20948.adjust_trim(RDoF.YAW)
+#   _icm20948.adjust_trim(RDoF.ROLL)
     _icm20948.include_accel_gyro(ACCEL_GYRO_TEST)
     _icm20948.enable()
     if CALIBRATE:

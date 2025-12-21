@@ -121,7 +121,7 @@ class Scan(AsyncBehaviour):
         Called when STUCK message received via message bus.
         '''
         if message.event is Event.STUCK:
-            self._log.info('💜 💜 💜 💜 💜 STUCK event received, initiating scan…')
+            self._log.info('STUCK event received, initiating scan…')
             if not self._scan_active:
                 # suppress other behaviours
                 if self.suppressed:

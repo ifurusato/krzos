@@ -91,7 +91,7 @@ class TinyFxController(I2CMaster):
                 response = self.send_request('ch6 {}'.format('on' if enable else 'off'))
             case _: # ignore
                 response = 'ERR'
-        if response != 'ACK':
+        if response != 'ACK' and response != 'ERR':
             self._log.info(Style.DIM + '{} response: {}'.format(orientation.label, response))
 
     def enable(self):

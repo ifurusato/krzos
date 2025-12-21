@@ -157,8 +157,7 @@ class AsyncBehaviour(Behaviour):
         Does not start the async loop - that happens on release().
         '''
         if not self.enabled:
-#           super().enable()
-            Behaviour.enable(self)
+            super().enable()
             self._log.debug('enabled.')
         else:
             self._log.warning("already enabled.")
@@ -172,7 +171,7 @@ class AsyncBehaviour(Behaviour):
             is_blind = message.value
             if is_blind:
                 if not self._hold_at_zero:
-                    self._log.warning("BLIND(True) received: engaging hold-at-zero and ramping down intent…")
+                    self._log.warning("BLIND received: engaging hold-at-zero and ramping down intent…")
                     self._hold_at_zero = True
                     # trigger the brake
                     if self._motor_controller and not self._motor_controller.braking_active:
@@ -180,16 +179,16 @@ class AsyncBehaviour(Behaviour):
                         self._motor_controller.brake()
             else: # is not blind
                 if self._hold_at_zero:
-                    self._log.info("BLIND(False) received: disengaging hold-at-zero…")
+                    self._log.info("BLIND (exit) received: disengaging hold-at-zero…")
                     self._hold_at_zero = False
                     # first responder releases the brake
                     if self._motor_controller and self._motor_controller.is_braked:
                         self._log.info("first responder: triggering brake release.")
                         self._motor_controller.release_brake()
-            message.process(self)
+#           message.process(self) # let Behaviour do this
         else:
-            # pass to original Behaviour handler
-            await super().process_message(message)
+            pass #
+        await super().process_message(message)
 
     def _start_loop(self):
         '''
@@ -219,7 +218,7 @@ class AsyncBehaviour(Behaviour):
             self._log.warning('cannot suppress: behaviour is disabled.')
         elif not self.suppressed:
             self._log.debug("suppressing…")
-            Behaviour.suppress(self)
+            super().suppress()
 #           self._remove_intent_vector()
             # stop the loop when suppressed
 #           if self._loop_instance:
@@ -237,7 +236,7 @@ class AsyncBehaviour(Behaviour):
             self._log.warning('cannot release: behaviour is disabled.')
         elif not self.released:
             self._log.debug("releasing…")
-            Behaviour.release(self)
+            super().release()
             # start the loop when released for the first time
             if not self._loop_instance:
                 self._start_loop()
