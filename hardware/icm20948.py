@@ -430,6 +430,7 @@ class Icm20948(Component):
                 _rate.wait()
 
         finally:
+            self._log.info('post-calibration: amin={:4.2f}; amax={:4.2f}'.format(self._amin, self._amax))
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
             if self.is_calibrated:
                 self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
