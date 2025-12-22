@@ -34,6 +34,8 @@ ACCEL_GYRO_TEST = True
 
 HALF_PI = π / 2.0
 
+_trim_axis = None #RDoF.ROLL
+_rgbmatrix = None
 _icm20948 = None
 _log = Logger('test', Level.INFO)
 _cardinal = Cardinal.NORTH
@@ -64,18 +66,22 @@ try:
 #   elif _i2c_scanner.has_address([0x0E]):
 #       _pot = DigitalPotentiometer(_config, i2c_address=0x0E, level=Level.INFO)
     if _pot:
-#       _pot.set_output_range(-0.5 * π, 0.5 * π)  # ±90° adjustment range
-#       _pot.set_output_range(-π, π)              # ±180° adjustment range
-#       _pot.set_output_range(-0.17453293, 0.17453293) # ±10° adjustment range
-#       _pot.set_output_range(-0.08726646, 0.08726646) # ±5° adjustment range
-#       _pot.set_output_range(-0.05235988, 0.05235988) # ±3° adjustment range
-        _pot.set_output_range(-0.03490659, 0.03490659) # ±2° adjustment range
-
-    _rgbmatrix = None
+        if _trim_axis:
+            if _trim_axis == RDoF.YAW:
+#               _pot.set_output_range(-π, π) # ±180° adjustment range
+                _pot.set_output_range(-π/2.0, π/2.0) # ±90° adjustment range
+#               _pot.set_output_range(-π/4.0, π/4.0) # ±45° adjustment range
+            else:
+#               _pot.set_output_range(-0.5 * π, 0.5 * π)  # ±90° adjustment range
+#               _pot.set_output_range(-0.17453293, 0.17453293) # ±10° adjustment range
+#               _pot.set_output_range(-0.08726646, 0.08726646) # ±5° adjustment range
+#               _pot.set_output_range(-0.05235988, 0.05235988) # ±3° adjustment range
+                _pot.set_output_range(-0.03490659, 0.03490659) # ±2° adjustment range
 
     _icm20948 = Icm20948(_config, rgbmatrix=_rgbmatrix, level=Level.INFO)
     _icm20948._show_console = True
-#   _icm20948.adjust_trim(RDoF.ROLL)
+    if _trim_axis:
+        _icm20948.adjust_trim(_trim_axis)
     _icm20948.include_accel_gyro(ACCEL_GYRO_TEST)
     _icm20948.enable()
     if CALIBRATE:

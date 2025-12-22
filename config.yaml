@@ -430,14 +430,15 @@ kros:
             verbose:                      False
             declination:                     23.04         # declination at operating location
             swap_pitch_roll:               True            # if True, swap pitch and roll
-            pitch_trim:                    -0.7392 
-            roll_trim:                     -1.5231 
-            yaw_trim:                     -77.41
+            pitch_trim:                     0.7363         # -0.7392 
+            roll_trim:                      1.7473         # -1.5231 
+            yaw_trim:                     -78.5275         # -76.2418 # -73.12 # -77.41
+            adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
             invert_roll:                   True
             invert_pitch:                  True
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
-            declination:                     23.04         # declination at operating location
+            declination:                     23.97         # declination at operating location
             poll_rate_hz:                   150            # how often the IMU is polled
             vertical_mount:               False            # True: vertical like Pimoroni, or False: horizontal like Adafruit
             bench_calibrate:              False            # if true, calibrate the IMU manually while on the rotating bench
@@ -446,9 +447,9 @@ kros:
             show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
-            pitch_trim:                      -0.0116       # pitch trim for level (radians)
-            roll_trim:                        0.0271       # 0.0112 # roll trim for level (radians)
-            heading_trim:                     1.55         # 0.05 heading trim adjustment (in radians) to set north
+            pitch_trim:                      -0.0103       # 0.0029 # -0.0116 # pitch trim for level (radians)
+            roll_trim:                       -0.0004       # 0.0296 # 0.0271 # 0.0112 # roll trim for level (radians)
+            yaw_trim:                         1.5737       # 0.7440 # 0.3834 # yaw trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
             stability_threshold:              0.09         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability

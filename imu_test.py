@@ -17,6 +17,7 @@ init()
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 from core.rate import Rate
+from core.rdof import RDoF
 from hardware.digital_pot import DigitalPotentiometer
 
 from hardware.icm20948 import Icm20948
@@ -50,9 +51,11 @@ try:
 
     # USFS ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    _usfs = Usfs(config, matrix11x7=None, trim_pot=None, level=Level.INFO)
-    _usfs.set_fixed_yaw_trim(-72.5) # TODO config
+    _usfs = Usfs(config, matrix11x7=None, level=Level.INFO)
+#   _usfs.set_fixed_yaw_trim(-72.5) # TODO config
+    _usfs.adjust_trim(RDoF.YAW)
     _usfs.set_verbose(False)
+
 
     # IMU ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

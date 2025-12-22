@@ -116,30 +116,35 @@ class IMU(Component):
         icm20948_pitch   = self._icm20948.pitch
         if isclose(usfs_pitch, icm20948_pitch, abs_tol=1.00):
             pitch_display = (usfs_pitch + icm20948_pitch) / 2
-            pitch_str = '{:4.2f}'.format(pitch_display)
+            pitch_str = '{:7.2f}          '.format(pitch_display)
         else:
-            pitch_str = '{:4.2f} | {:4.2f}'.format(usfs_pitch, icm20948_pitch)
+            pitch_str = '{:7.2f} | {:7.2f}'.format(usfs_pitch, icm20948_pitch)
         # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_roll        = self._usfs.roll
         icm20948_roll    = self._icm20948.roll
         if isclose(usfs_roll, icm20948_roll, abs_tol=1.00):
             roll_display = (usfs_roll + icm20948_roll) / 2
-            roll_str = '{:4.2f}'.format(roll_display)
+            roll_str = '{:7.2f}          '.format(roll_display)
         else:
-            roll_str = '{:4.2f} | {:4.2f}'.format(usfs_roll, icm20948_roll)
+            roll_str = '{:7.2f} | {:7.2f}'.format(usfs_roll, icm20948_roll)
         # heading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_heading     = self._usfs.yaw
         icm20948_heading = self._icm20948.heading
+        if self._usfs.is_adjusting_trim():
+            trim_str = '; trim: {:7.2f}'.format(self._usfs.trim_adjust)
+        else:
+            trim_str = ''
         if isclose(usfs_heading, icm20948_heading, abs_tol=5.0):
             heading_display = (usfs_heading + icm20948_heading) / 2
-            heading_str = '{:4.2f}'.format(heading_display)
+            heading_str = '{:7.2f}          '.format(heading_display)
         else:
-            heading_str = '{:4.2f} | {:4.2f}'.format(usfs_heading, icm20948_heading)
+            heading_str = '{:7.2f} | {:7.2f}'.format(usfs_heading, icm20948_heading)
         # log output
         self._log.info(
-              Fore.YELLOW + 'pitch: ' + pitch_str + '; '
-            + Fore.WHITE  + 'roll: ' + roll_str + '; '
-            + Fore.GREEN  + 'heading: ' + heading_str
+              Fore.RED    + 'pitch: ' + pitch_str + '; '
+            + Fore.GREEN  + 'roll: ' + roll_str + '; '
+            + Fore.BLUE   + 'heading: ' + heading_str
+            + Fore.YELLOW + trim_str
         )
 
     def x_show_info(self):

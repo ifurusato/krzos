@@ -72,10 +72,9 @@ class Usfs(Component):
     Args:
         config:       application configuration
         matrix11x7:   optional 11x7 matrix to display heading
-        trim_pot:     optional digital potentiometer to set magnetometer trim (deprecated, use component registry)
         level:        log level
     '''
-    def __init__(self, config, matrix11x7=None, trim_pot=None, level=Level.INFO):
+    def __init__(self, config, matrix11x7=None, level=Level.INFO):
         self._log = Logger(Usfs.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising usfs…')
@@ -131,6 +130,8 @@ class Usfs(Component):
         if _digital_pot:
             self._digital_pot = _digital_pot
             self._log.info('digital pot available for trim adjustment')
+        else:
+            self._log.warning('digital pot not available for trim adjustment')
         # barometer/altimeter
         self._pressure    = 0.0
         self._temperature = 0.0
@@ -142,6 +143,16 @@ class Usfs(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    def is_adjusting_trim(self):
+        '''
+        Returns True if trim adjust is active.
+        '''
+        return self._adjust_rdof is not None
+
+    @property
+    def trim_adjust(self):
+        return self._trim_adjust
+
     def adjust_trim(self, rdof):
         '''
         Enable trim adjustment for the specified rotational degree of freedom.
@@ -151,6 +162,7 @@ class Usfs(Component):
         if self._digital_pot is None:
             self._log.warning('digital potentiometer not available, trim adjustment disabled.')
             return
+        self._fixed_yaw_trim = None # override any configuration
         self._adjust_rdof = rdof
         self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 

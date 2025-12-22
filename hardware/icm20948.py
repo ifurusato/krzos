@@ -83,16 +83,18 @@ class Icm20948(Component):
         self._bench_calibrate    = _cfg.get('bench_calibrate')
         self._motion_calibrate   = _cfg.get('motion_calibrate')
         # declination
-        _declination_degrees = _cfg. get('declination', 23.04) 
+        _declination_degrees = _cfg.get('declination', 23.04) 
         self._declination = math.radians(_declination_degrees)
-        self._log.info('declination: {:5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
+        self._log.info('declination: ' + Fore.GREEN + '{:5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
         # set up trim control
         self._pitch_trim = _cfg.get('pitch_trim') # 0.0
+        self._log.info('pitch trim: ' + Fore.GREEN + '{:.4f}'.format(self._pitch_trim))
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
+        self._log.info('roll trim:  ' + Fore.GREEN + '{:.4f}'.format(self._roll_trim))
         # use fixed heading trim value
-        self._fixed_heading_trim = _cfg.get('heading_trim') # - π
-        self._log.info('heading trim: ' + Fore.GREEN + '{:.2f}'.format(self._fixed_heading_trim))
-        self._heading_trim = self._fixed_heading_trim # initial value if adjusting
+        self._fixed_yaw_trim = _cfg.get('yaw_trim') # - π
+        self._log.info('yaw trim:   ' + Fore.GREEN + '{:.4f}'.format(self._fixed_yaw_trim))
+        self._yaw_trim = self._fixed_yaw_trim # initial value if adjusting
         self._digital_pot = None
         self._trim_adjust = 0.0
         self._adjust_rdof = None  # which RDoF to adjust with pot
@@ -430,7 +432,6 @@ class Icm20948(Component):
                 _rate.wait()
 
         finally:
-            self._log.info('post-calibration: amin={:4.2f}; amax={:4.2f}'.format(self._amin, self._amax))
             _elapsed_ms = round((dt.now() - _start_time).total_seconds() * 1000.0)
             if self.is_calibrated:
                 self._log.info(Fore.GREEN + 'IMU calibrated: elapsed: {: d}ms'.format(_elapsed_ms))
@@ -708,7 +709,7 @@ class Icm20948(Component):
                         if self._adjust_rdof: 
                             if self._adjust_rdof == RDoF.YAW: 
                                 _info += Fore.CYAN + Style.DIM + " yaw trim: fxd={:.2f} / adj={:.2f} / trm={:.2f}".format(
-                                    self._fixed_heading_trim, self._trim_adjust, self._heading_trim)
+                                    self._fixed_yaw_trim, self._trim_adjust, self._yaw_trim)
                             elif self._adjust_rdof == RDoF.PITCH:
                                 _info += Fore.CYAN + Style.DIM + " pitch trim: fxd={:.2f} / adj={:.2f}".format(
                                     self._pitch_trim, self._trim_adjust)
@@ -744,7 +745,7 @@ class Icm20948(Component):
         if self._adjust_rdof:
             if self._adjust_rdof == RDoF.YAW:
                 _info += Fore.CYAN + Style.DIM + 'yaw trim: fxd={:7.4f} / adj={:7.4f} / trm={:7.4f}'.format(
-                    self._fixed_heading_trim, self._trim_adjust, self._heading_trim)
+                    self._fixed_yaw_trim, self._trim_adjust, self._yaw_trim)
             elif self._adjust_rdof == RDoF.PITCH:
                 _info += Fore.CYAN + Style.DIM + 'pitch trim: fxd={:7.4f} / adj={:7.4f}'.format(
                     self._pitch_trim, self._trim_adjust)
@@ -807,10 +808,10 @@ class Icm20948(Component):
             pass
         elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
-            self._heading_trim = self._fixed_heading_trim + self._trim_adjust
-            self._radians += self._heading_trim
+            self._yaw_trim = self._fixed_yaw_trim + self._trim_adjust
+            self._radians += self._yaw_trim
         else:
-            self._radians += self._fixed_heading_trim
+            self._radians += self._fixed_yaw_trim
         if self._radians < 0:
             self._radians += 2 * math.pi
         self._heading = int(round(math.degrees(self._radians)))
