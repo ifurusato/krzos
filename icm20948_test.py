@@ -34,7 +34,7 @@ ACCEL_GYRO_TEST = True
 
 HALF_PI = π / 2.0
 
-_trim_axis = None #RDoF.ROLL
+_trim_axis = None #RDoF.YAW
 _rgbmatrix = None
 _icm20948 = None
 _log = Logger('test', Level.INFO)

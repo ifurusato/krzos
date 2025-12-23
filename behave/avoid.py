@@ -62,7 +62,7 @@ class Avoid(AsyncBehaviour):
             self._log.info('side easing: {}; aft easing: none'.format(self._side_easing.name))
         self._boost_when_squeezed  = _cfg.get('boost_when_squeezed', True)
         self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True)
-        self._default_priority     = _cfg.get('default_priority', 0.3)
+        self._default_priority     = _cfg.get('default_priority', 0.4)
         self._priority             = self._default_priority
         self._verbose              = _cfg.get('verbose', False)
         self._squeezed = False

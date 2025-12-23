@@ -308,10 +308,7 @@ class KROS(Component, FiniteStateMachine):
             self._icm20948 = Icm20948(self._config, level=Level.INFO)
             self._icm20948.include_accel_gyro(True)
         if _cfg.get('enable_usfs'):
-            self._usfs = Usfs(self._config, matrix11x7=None, trim_pot=None, level=self._level)
-            # fixed trim determined via observation
-            self._usfs.set_fixed_yaw_trim(-72.5) # TODO config
-            self._usfs.set_verbose(False)
+            self._usfs = Usfs(self._config, matrix11x7=None, level=self._level)
         if _cfg.get('enable_imu') and self._icm20948 and self._usfs:
             self._imu = IMU(self._config, icm20948=self._icm20948, usfs=self._usfs, level=Level.INFO)
 

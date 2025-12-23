@@ -86,6 +86,7 @@ class Thoughts(Behaviour):
         self._rate_delay_ms     = _cfg.get('rate_limit_ms', 1500)
         self._bored_sound       = _cfg.get('bored_sound')
         self._sleeping_sound    = _cfg.get('sleeping_sound')
+        self._enable_sound_fx   = True
         self._active_sounds     = _cfg.get('active_sounds', [])
         self._enable_light_ctrl = _cfg.get('enable_light_ctrl')
         self._enable_head_light = _cfg.get('enable_head_light')

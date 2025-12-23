@@ -134,6 +134,7 @@ class Icm20948(Component):
             self._X = 2
             self._Y = 1
             self._Z = 0
+        self._use_tilt_compensation = False # TODO config
         # The two axes which relate to heading depend on orientation of the
         # sensor, think Left & Right, Forwards and Back, ignoring Up and Down.
         # When the sensor is sitting vertically upright in a Breakout Garden
@@ -800,6 +801,9 @@ class Icm20948(Component):
             except ZeroDivisionError:
                 pass
             mag[i] -= 0.5
+        # apply tilt compensation
+        if self._use_tilt_compensation:
+            mag = self._tilt_compensate_magnetometer(mag, self._pitch, self._roll)
         self._radians = math.atan2(mag[self._axes[0]], mag[self._axes[1]])
         # apply declination first
         self._radians += self._declination # rad
@@ -816,6 +820,30 @@ class Icm20948(Component):
             self._radians += 2 * math.pi
         self._heading = int(round(math.degrees(self._radians)))
         return self._radians
+
+    def _tilt_compensate_magnetometer(self, mag, pitch, roll):
+        '''
+        Apply tilt compensation to magnetometer reading using pitch and roll. 
+        Returns corrected magnetometer vector in robot frame. 
+        '''
+        # rotation matrices for pitch and roll
+        sin_pitch = math.sin(pitch)
+        cos_pitch = math.cos(pitch)
+        sin_roll  = math.sin(roll)
+        cos_roll  = math.cos(roll)
+        # apply pitch rotation (around Y axis)
+        mag_pitch = [
+            mag[0] * cos_pitch + mag[2] * sin_pitch,
+            mag[1],
+            -mag[0] * sin_pitch + mag[2] * cos_pitch
+        ]
+        # apply roll rotation (around X axis)
+        mag_compensated = [
+            mag_pitch[0],
+            mag_pitch[1] * cos_roll - mag_pitch[2] * sin_roll,
+            mag_pitch[1] * sin_roll + mag_pitch[2] * cos_roll
+        ]
+        return mag_compensated
 
     def enable(self):
         if not self.closed:

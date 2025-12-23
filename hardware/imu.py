@@ -63,10 +63,7 @@ class IMU(Component):
             _high_brightness   = 0.45
             _matrix11x7 = Matrix11x7()
             _matrix11x7.set_brightness(_medium_brightness)
-            _pot = None
-            self._usfs = Usfs(config, matrix11x7=_matrix11x7, trim_pot=_pot, level=Level.INFO)
-            # fixed trim for Pukerua Bay, NZ, determined via observation
-            self._usfs.set_fixed_yaw_trim(-77.41)
+            self._usfs = Usfs(config, matrix11x7=_matrix11x7, level=Level.INFO)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
