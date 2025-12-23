@@ -43,12 +43,14 @@ class Avoid(AsyncBehaviour):
         self.add_event(Event.AVOID)
         # configuration
         _cfg = config['kros'].get('behaviour').get('avoid')
+        self._fore_threshold_mm = _cfg.get('fore_threshold_mm', 280)
         self._side_threshold_mm = _cfg.get('side_threshold_mm', 280)
         self._aft_threshold_mm  = _cfg.get('aft_threshold_mm', 500)
         self._avoid_speed = _cfg.get('avoid_speed', 1.0)
         self._log.info('side threshold: {}mm; aft threshold: {}mm; avoid speed: {:4.2f}'.format(
                 self._side_threshold_mm, self._aft_threshold_mm, self._avoid_speed))
-        self._side_easing = Easing.from_string(_cfg.get('side_easing', 'SQUARE_ROOT'))
+        self._fore_easing = Easing.from_string(_cfg.get('fore_easing', 'LOGARITHMIC'))
+        self._side_easing = Easing.from_string(_cfg.get('side_easing', 'LOGARITHMIC'))
         self._aft_easing  = Easing.from_string(_cfg.get('aft_easing', 'REVERSE_LOGARITHMIC'))
         self._max_urgency = _cfg.get('max_urgency', 0.7)
         self._port_sensor = AvoidSensor(config, Orientation.PORT, level=level)

@@ -21,9 +21,9 @@ kros:
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
-        enable_icm20948:                   True            # enable ICM20948 IMU
-        enable_usfs:                       True            # enable USFS IMU
-        enable_imu:                        True            # enable fused IMU
+        enable_icm20948:                  False            # enable ICM20948 IMU
+        enable_usfs:                      False            # enable USFS IMU
+        enable_imu:                       False            # enable fused IMU
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -45,10 +45,12 @@ kros:
             default_priority:               0.42           # default behaviour priority
             dynamic_speed:              False              # if True use digital pot for default speed
             use_dynamic_priority:        True              # if True, alter priority based on distance
+            fore_threshold_mm:              400            # ignore fore obstacles further than this
             side_threshold_mm:              400            # ignore side obstacles further than this
             aft_threshold_mm:               200            # ignore aft obstacles further than this
             use_aft_sensor:              True              # enable/disable use of the aft sensor
             avoid_speed:                    0.5            # speed to avoid obstacles
+            fore_easing:         'LOGARITHMIC'             # relationship between distance and force/speed for side sensors
             side_easing:         'LOGARITHMIC'             # relationship between distance and force/speed for side sensors
             aft_easing:          'SQUARE_ROOT'             # relationship between distance and force/speed for aft sensor
             max_urgency:                    0.667          # clamp at this level
