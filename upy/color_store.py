@@ -16,7 +16,7 @@ class ColorStore:
     '''
     A store for color tuples by name.
     '''
-    def __init__(self, filename="colors.json"):
+    def __init__(self, filename="color_store.json"):
         self.filename = filename
         self.colors = {}  # name -> (r,g,b)
         self._load()

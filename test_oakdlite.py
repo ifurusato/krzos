@@ -18,6 +18,8 @@ from core.logger import Logger, Level
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+REQUIRE_OAK_D_LITE = True
+
 __log = Logger('test-oakdlite', level=Level.INFO)
 
 @pytest.mark.unit
@@ -27,13 +29,17 @@ def test_oakd_lite_available():
     '''
     __log.info(Style.BRIGHT + "testing availability of OAK-D Lite depth camera…")
     try:
-        REQUIRE_OAK_D_LITE = False
 
         # check for available devices
         devices = dai.Device.getAllAvailableDevices()
-        __log.info(Fore.GREEN + 'found {} devices.'.format(len(devices)))
-        oak_d_lite_found = len(devices) > 0
+        device_count = len(devices)
+        if device_count == 1:
+            __log.info(Fore.GREEN + 'found 1 device.')
+        else:
+            __log.info(Fore.GREEN + 'found {} devices.'.format(len(devices)))
+        oak_d_lite_found = device_count > 0
         if REQUIRE_OAK_D_LITE:
+
             assert oak_d_lite_found, "no OAK-D Lite (DepthAI) devices found"
 
             __log.info("trying to connect to: {}…".format(devices[0]))
@@ -57,6 +63,8 @@ def test_oakd_lite_available():
 
             __log.info(Fore.GREEN + "OAK-D Lite depth camera is ready.")
 
+        elif oak_d_lite_found:
+            __log.info('found 1 device, likely OAK-D Lite but not tested.')
         else:
             __log.warning("OAK-D Lite depth camera not found.")
 

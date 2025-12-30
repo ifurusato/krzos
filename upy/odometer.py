@@ -7,49 +7,28 @@
 #
 # author:   Murray Altheim
 # created:  2025-12-09
-# modified: 2025-12-09
+# modified: 2025-12-26
 
 import time
 from machine import Pin
 from logger import Logger, Level
-#from pmw3901_rp2040 import create_paa5100
 
 class Odometer:
     RESOLUTION_FACTOR = 0.009734
     '''
     MicroPython Odometer that computes velocity and position using a PAA5100JE
     near optical flow sensor.
-
-    Supports both polling mode and interrupt-driven mode for efficiency.
-
-    Measures translation only - rotation must come from encoders or IMU.
-
-    Modes:
-    - Polling mode:  Call update() regularly in your main loop
-    - IRQ mode:      Attach IRQ pin, updates happen automatically on motion events
-
-    - velocity:      Returns (vx, vy) where vx = lateral cm/s, vy = forward cm/s
-    - position:      Returns (x, y) where x = lateral cm, y = forward cm (body frame)
-    - reset():       Resets cumulative position and timing
-    - calibrate():   Adjusts resolution factor based on known vs measured distance
     '''
     def __init__(self, sensor=None, irq_pin=None, resolution_factor=None, timeout=1.0):
         '''
         Initialize the optical flow odometer.
-
-        Args:
-            sensor:             PAA5100 instance (optional or already configured with correct orientation)
-            irq_pin:            Optional Pin instance for interrupt-driven updates
-            resolution_factor:  Scaling factor for sensor readings (adjust via calibration)
-            timeout:            Sensor read timeout in seconds
         '''
         self._log = Logger('odometer', level=Level.INFO)
         if sensor:
             self._nofs = sensor
             self._irq_pin = irq_pin
         else:
-            # use defaults for the RP2040
-            from pmw3901_rp2040 import create_paa5100
+            from pmw3901 import create_paa5100
 
             self._nofs, self._irq_pin = create_paa5100()
             self._nofs.set_orientation(invert_x=True, invert_y=True, swap_xy=False)
@@ -69,8 +48,8 @@ class Odometer:
         self._closed       = False
         # IRQ setup
         self._irq_mode = False
-        if irq_pin is not None:
-            self._setup_irq(irq_pin)
+        if self._irq_pin is not None:
+            self._setup_irq(self._irq_pin)
         self._log.info("mode: {}".format("IRQ-driven" if self._irq_mode else "polling"))
         self._log.info('ready.')
 
@@ -79,13 +58,13 @@ class Odometer:
         Set up interrupt-driven mode.
         '''
         try:
-            # Attach IRQ handler to pin (rising edge = motion detected)
+            # attach IRQ handler to pin (rising edge = motion detected)
             irq_pin.irq(trigger=Pin.IRQ_RISING, handler=self._irq_handler)
             self._irq_mode = True
             self._log.info("  IRQ attached to pin {}".format(irq_pin))
         except Exception as e:
-            self._log.info("  Warning: Could not setup IRQ:  {}".format(e))
-            self._log.info("  Falling back to polling mode.")
+            self._log.warning("  could not setup IRQ: {}".format(e))
+            self._log.info("  falling back to polling mode.")
             self._irq_mode = False
 
     def _irq_handler(self, pin):
@@ -93,7 +72,6 @@ class Odometer:
         IRQ callback - called when sensor detects motion.
         '''
         if self._enabled and not self._closed:
-            # Call update from IRQ context
             self.update()
 
     @property
@@ -128,11 +106,6 @@ class Odometer:
     def set_position(self, x, y):
         '''
         Set the robot's position to specific coordinates.
-        Used for initialization or resetting odometry.
-
-        Args:
-            x:  lateral position in cm
-            y: forward position in cm
         '''
         self._x = x
         self._y = y
@@ -149,16 +122,11 @@ class Odometer:
         self._vy = 0.0
         self._cumulative_x = 0.0
         self._cumulative_y = 0.0
-        self._log.info('💜 reset.')
+        self._log.info('reset.')
 
     def update(self):
         '''
         Read sensor and update velocity and position.
-
-        In polling mode:  Call this at regular intervals (e.g., 10-50Hz) in your main loop.
-        In IRQ mode: Called automatically when sensor detects motion (you can still call manually).
-
-        Automatically handles timing and integration.
         '''
         if not self._enabled:
             return
@@ -196,18 +164,6 @@ class Odometer:
     def calibrate(self, known_distance_cm, measured_distance_cm=None):
         '''
         Calibrate the resolution factor based on a known movement.
-
-        Usage:
-        1. Call reset() to zero odometry
-        2. Move robot a known distance (e.g., 100cm forward)
-        3. Call calibrate(known_distance_cm=100.0)
-
-        Or manually specify measured distance:
-            calibrate(known_distance_cm=100.0, measured_distance_cm=98.5)
-
-        Args:
-            known_distance_cm:     Actual distance traveled (ground truth)
-            measured_distance_cm:  Distance measured by sensor (if None, uses current cumulative)
         '''
         self._log.debug("cumulative_x={:.2f}, cumulative_y={:.2f}".format(self._cumulative_x, self._cumulative_y))
         if measured_distance_cm is None:

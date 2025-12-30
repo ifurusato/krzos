@@ -7,9 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2024-08-14
-# modified: 2024-06-25 (changed to RGB)
-#
-# RGB color constants
+# modified: 2025-12-30
 
 class Color:
     _registry = []
@@ -37,7 +35,7 @@ class Color:
         return hash(self.rgb)
 
     def __repr__(self):
-        return f"{self.name} {self.rgb}"
+        return '{} {}'.format(self.name, self.rgb)
 
     @classmethod
     def all_colors(cls):
@@ -46,7 +44,7 @@ class Color:
     @classmethod
     def get(cls, name: str):
         '''
-        Return a Color whose name matches the lowercase key.
+        Return a Color whose name matches the key.
         '''
         key = name.lower().replace("_", " ")
         for c in cls._registry:
@@ -71,11 +69,12 @@ COLOR_DARK_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  32,  32))
 COLOR_DARK_MAGENTA  = Color("COLOR_DARK_MAGENTA", ( 32,   0,  32))
 COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 64,  32,   0))
 
-COLOR_ORANGE        = Color("COLOR_ORANGE",       (220, 105,   0))
+COLOR_ORANGE        = Color("COLOR_ORANGE",       (220,  33,   0))
 COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  75, 130))
 COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
 COLOR_DEEP_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  11,  11))
-COLOR_PINK          = Color("COLOR_PINK",         (255,  58, 149))
-COLOR_AMBER         = Color("COLOR_AMBER",        (255, 170,   0))
+COLOR_PINK          = Color("COLOR_PINK",         (255,  50,  40))
+COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
+COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
 
 #EOF

@@ -111,7 +111,7 @@ class Thoughts(Behaviour):
         # others…
         self._imu = self._component_registry.get(IMU.NAME)
         if not self._imu:
-            raise MissingComponentError('IMU not available.')
+            self._log.warning('IMU not available.' )
         self._eyeballs_monitor = self._component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
@@ -333,7 +333,7 @@ class Thoughts(Behaviour):
                         self._log.info(Fore.BLUE + '[{:05d}] suppressed.'.format(self._count))
                     await asyncio.sleep(self._loop_delay_sec)
                     continue
-                if self._enable_imu_poll:
+                if self._enable_imu_poll and self._imu:
                     self.poll_imu()
                 # check odometer for movement activity
                 if self._odometer:
@@ -632,12 +632,9 @@ class Thoughts(Behaviour):
                 pass
 
     def poll_imu(self):
-        if self._imu:
-            self._log.debug('polling IMU… ')
-            self._imu.poll()
-            self._imu.show_info()
-        else:
-            self._log.warning('no IMU available.')
+        self._log.debug('polling IMU… ')
+        self._imu.poll()
+        self._imu.show_info()
 
     def pir(self):
         try:

@@ -7,11 +7,13 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-11-24
+# modified: 2025-12-30
+#
+# Configured for the WeAct STM32F405.
 
 import sys
 import time
-from machine import Pin, I2CTarget
+from machine import I2CTarget, Pin
 
 try:
     from upy.message_util import pack_message, unpack_message
@@ -19,22 +21,25 @@ except ImportError:
     from message_util import pack_message, unpack_message
 
 __I2C_ID      = 1
-__I2C_SDA_PIN = 2
-__I2C_SCL_PIN = 3
-__I2C_ADDRESS = 0x41
+__I2C_ADDRESS = 0x45
+#  ID    SCL    SDA
+_I2C_PINS     = {
+    1: ('B6',  'B7'),
+    2: ('B10', 'B11'),
+}
+
 __BUF_LEN     = 258
 
 class I2CSlave:
     '''
     Constructs an I2C slave at the configured bus (0) and address (0x43).
     '''
-    def __init__(self, i2c_id=None, i2c_address=None, scl_pin=None, sda_pin=None):
+    def __init__(self, i2c_id=None, i2c_address=None):
         # configuration
-        self._i2c_id      = i2c_id if i2c_id else __I2C_ID
+        self._i2c_id      = i2c_id      if i2c_id      else __I2C_ID
         self._i2c_address = i2c_address if i2c_address else __I2C_ADDRESS
-        self._i2c_scl_pin = scl_pin if scl_pin else __I2C_SCL_PIN 
-        self._i2c_sda_pin = sda_pin if sda_pin else __I2C_SDA_PIN
-
+        self._i2c_scl_pin, self._i2c_sda_pin = _I2C_PINS[self._i2c_id]
+        print('I2C slave configured for SDA on pin {}, SCL on pin {}'.format(self._i2c_sda_pin, self._i2c_scl_pin))
         # state variables
         self._i2c = None
         self._single_chunk = bytearray(32)
@@ -59,9 +64,9 @@ class I2CSlave:
         triggers = (I2CTarget.IRQ_WRITE_REQ | I2CTarget.IRQ_END_WRITE |
                     I2CTarget.IRQ_READ_REQ | I2CTarget.IRQ_END_READ)
         # STM32: configure for your board; pins are pre-set for each bus
-#       self._i2c = I2CTarget(self._i2c_id, self._i2c_address)
+        self._i2c = I2CTarget(self._i2c_id, self._i2c_address)
         # RP2040:
-        self._i2c = I2CTarget(self._i2c_id, self._i2c_address, scl=Pin(self._i2c_scl_pin), sda=Pin(self._i2c_sda_pin))
+#       self._i2c = I2CTarget(self._i2c_id, self._i2c_address, scl=Pin(self._i2c_scl_pin), sda=Pin(self._i2c_sda_pin))
         self._i2c.irq(self._irq_handler, trigger=triggers, hard=True)
         print('I2C slave enabled at on I2C{} address {:#04x}'.format(self._i2c_id, self._i2c_address))
 
@@ -94,23 +99,22 @@ class I2CSlave:
     def check_and_process(self):
         WAIT = True # wait for the full message before unpacking
         if self._new_cmd:
-            time.sleep_ms(5)  # small delay to ensure IRQ completes
+            time.sleep_ms(5)
             self._new_cmd = False
             try:
                 if WAIT:
                     raw = self._rx_buf[:self._last_rx_len]
-                    if len(raw) < 2:  # must have at least register + length
-                        return  # incomplete, wait
+                    if len(raw) < 2:
+                        return
                     msg_len = raw[1]
-                    expected_total = 1 + 1 + msg_len + 1  # reg + length + payload + crc
+                    expected_total = 1 + 1 + msg_len + 1
                     if len(raw) < expected_total:
-                        return  # full message not yet in buffer
+                        return
                     rx_bytes = raw[1:1 + 1 + msg_len + 1]
                 else:
                     raw = self._rx_buf[:self._last_rx_len]
-                    # skip the first byte (register address from I2C master)
                     if raw and len(raw) > 1:
-                        msg_len = raw[1]  # Length of payload
+                        msg_len = raw[1]
                         if msg_len > 0 and len(raw) >= msg_len + 3:
                             rx_bytes = bytes(raw[1:msg_len + 3])
                         else:

@@ -342,7 +342,7 @@ kros:
         button:                                            # GPIO or IO Expander-based simple button or switch
             pin:                             24            # GPIO pin used
         digital_potentiometer:                             # IO Expander-based Digital Potentiometer breakout
-            i2c_address:                   0x0A            # I²C address for the device
+            i2c_address:                   0x0D            # I²C address for the device
             brightness:                     1.0            # brightness of the RGB LED (0.0-1.0)
         compass_encoder:                                   # IO Expander-based RGB Encoder breakout
             i2c_address:                   0x0F            # I²C address for the device
@@ -386,7 +386,7 @@ kros:
         avoid_sensor:
             data_logging:                 False            # if True use data logging (requires application-level as well)
         fore_sensor:
-            i2c_address:                   0x18            # I²C address for the IO Expander
+            i2c_address:                   0x22            # I²C address for the IO Expander
             sensor_pin:                      14            # pin on the IO Expander for the analog distance sensor
             trim_cm:                         -2            # ± cm trim to adjust output
             smoothing:                     True            # enable smoothing
@@ -490,7 +490,7 @@ kros:
         radiozoa:
             reassign_and_connect:          True            # set up the sensors if not available
             i2c_bus_number:                   1            # use I2C1 or alternate I2C0
-            ioe_i2c_address:               0x18            # if the IO Expander is available it will be used
+            ioe_i2c_address:               0x22            # if the IO Expander is available it will be used
             devices:
                 0:
                     label:      'N0'
@@ -532,8 +532,8 @@ kros:
                     enabled:     True
                     i2c_address: 0x37
                     xshut:       12                        # white:white (GPIO 5) 14
-        devices:                                           # set of availale i2c devices
-          - address:                       0x0A
+        devices:                                           # set of available i2c devices
+          - address:                       0x0D
             name:        "Digital Potentiometer"
             required:                      True
           - address:                       0x0F
@@ -548,7 +548,7 @@ kros:
           - address:                       0x16
             name:                "ThunderBorg 2"
             required:                      True
-          - address:                       0x18
+          - address:                       0x22
             name:                  "IO Expander"
             required:                     False
           - address:                       0x1D

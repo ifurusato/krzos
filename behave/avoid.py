@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-11-01
-# modified: 2025-11-15
+# modified: 2025-12-24
 
 import time
 import traceback
@@ -62,6 +62,16 @@ class Avoid(AsyncBehaviour):
         else:
             self._aft_sensor = None
             self._log.info('side easing: {}; aft easing: none'.format(self._side_easing.name))
+        # fore sensor - obtain from registry or create if needed
+        self._fore_sensor = _component_registry.get('fore-sensor')
+        if self._fore_sensor is None:
+            from hardware.fore_sensor import ForeSensor
+            self._log.info('creating ForeSensor…')
+            self._fore_sensor = ForeSensor(config, level=level)
+        else:
+            self._log.info('using existing ForeSensor.')
+        # behaviour manager for Roam state checking
+#       self._behaviour_manager    = _component_registry.get('behave-mgr')
         self._boost_when_squeezed  = _cfg.get('boost_when_squeezed', True)
         self._use_dynamic_priority = _cfg.get('use_dynamic_priority', True)
         self._default_priority     = _cfg.get('default_priority', 0.4)
@@ -106,22 +116,37 @@ class Avoid(AsyncBehaviour):
             # poll sensors
             _port_distance = self._port_sensor.get_distance()
             _stbd_distance = self._stbd_sensor.get_distance()
-            _aft_distance = self._aft_sensor.get_distance() if self._aft_sensor else None
+            _aft_distance  = self._aft_sensor.get_distance() if self._aft_sensor else None
+            # poll fore sensor if roam is inactive
+            _fore_distance = None
+            if self._behaviour_manager:
+                _roam = self._behaviour_manager.get_behaviours()[0] # get roam if available
+                # check all behaviours for roam
+                for _behaviour in self._behaviour_manager.get_behaviours():
+                    if _behaviour.name == 'roam':
+                        _roam = _behaviour
+                        break
+                if _roam and (not _roam.enabled or _roam.suppressed):
+                    _fore_distance_cm = self._fore_sensor.get_distance_cm()
+                    if _fore_distance_cm is not None:
+                        _fore_distance = _fore_distance_cm * 10.0
             # calculate and return intent vector
-            return self._update_intent_vector(_port_distance, _stbd_distance, _aft_distance)
+            return self._update_intent_vector(_port_distance, _stbd_distance, _fore_distance, _aft_distance)
         except Exception as e:
             self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self.disable()
             return (0.0, 0.0, 0.0)
 
-    def _update_intent_vector(self, port_distance, stbd_distance, aft_distance):
+    def _update_intent_vector(self, port_distance, stbd_distance, fore_distance, aft_distance):
         '''
         Compute the robot's movement intent as a single (vx, vy, omega) vector
-        based on the three distance sensors.
+        based on the three distance sensors. When Roam is disabled or suppressed
+        this uses its ForeSensor for forward avoidance.
 
         Port sensor pushes robot to starboard (positive vx).
         Starboard sensor pushes robot to port (negative vx).
         Aft sensor pushes robot forward (positive vy) when obstacle detected behind.
+        Fore sensor pushes the robot backward (negative vy) when obstacle detected ahead.
 
         Priority scales continuously with obstacle proximity. When squeezed (both
         port and starboard active), priority is boosted proportionally to make sure
@@ -137,6 +162,7 @@ class Avoid(AsyncBehaviour):
         # track normalized sensor urgencies for priority calculation
         port_urgency = 0.0
         stbd_urgency = 0.0
+        fore_urgency = 0.0
         aft_urgency  = 0.0
         port_active  = False
         stbd_active  = False
@@ -156,6 +182,13 @@ class Avoid(AsyncBehaviour):
             stbd_active = True
         # squeeze detection
         self._squeezed = port_active and stbd_active
+        # fore sensor (optional): obstacle closer → push backward (negative vy)
+        if fore_distance is not None and fore_distance < self._fore_threshold_mm:
+            normalised = 1.0 - (fore_distance / self._fore_threshold_mm)
+            fore_scale = self._fore_easing.apply(normalised)
+            if fore_scale > 0.05: # ignore weak signals below 5%
+                vy -= fore_scale * self._avoid_speed
+                fore_urgency = fore_scale
         # aft sensor (optional): obstacle closer → push forward (positive vy)
         if self._aft_sensor:
             if aft_distance is not None and aft_distance < self._aft_threshold_mm:
@@ -166,7 +199,7 @@ class Avoid(AsyncBehaviour):
                     aft_urgency = aft_scale
         # calculate priority from maximum sensor urgency
         # base priority scales from 0.3 (no obstacles) to 1.0 (collision imminent)
-        max_urgency = max(port_urgency, stbd_urgency, aft_urgency)
+        max_urgency = max(port_urgency, stbd_urgency, fore_urgency, aft_urgency)
         self._priority = 0.3 + (max_urgency * 0.7)
         self._priority = min(self._max_urgency, self._priority) # clamp to maximum
         # squeeze boost: make sure that lateral balancing dominates when threading narrow gaps
@@ -182,10 +215,10 @@ class Avoid(AsyncBehaviour):
                 self._log.debug('squeezed; priority: {:4.2f}'.format(self._priority))
         self._log.debug('intent vector: vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(vx, vy, omega))
         if True or self._verbose:
-            self._print_info(port_distance, stbd_distance, aft_distance, vx, vy, omega)
+            self._print_info(port_distance, stbd_distance, fore_distance, aft_distance, vx, vy, omega)
         return (vx, vy, omega)
 
-    def _print_info(self, port_distance, stbd_distance, aft_distance, vx, vy, omega):
+    def _print_info(self, port_distance, stbd_distance, fore_distance, aft_distance, vx, vy, omega):
         '''
         Display current sensor readings, intent vector, and priority with color coding.
         '''
@@ -197,6 +230,10 @@ class Avoid(AsyncBehaviour):
             _stbd_color = Fore.GREEN + Style.NORMAL
         else:
             _stbd_color = Fore.GREEN + Style.DIM
+        if fore_distance and fore_distance < self._fore_threshold_mm:
+            _fore_color = Fore.BLUE + Style.NORMAL
+        else:
+            _fore_color = Fore.BLUE + Style.DIM
         if aft_distance and aft_distance < self._aft_threshold_mm:
             _aft_color = Fore.YELLOW + Style.NORMAL
         else:
@@ -210,13 +247,15 @@ class Avoid(AsyncBehaviour):
         else:
             _priority_color = Fore.CYAN + Style.DIM
         if self._verbose:
-            self._log.info("intent: ({:5.2f}, {:5.2f}, {:5.2f}); {}priority: {:.2f};{} port: {};{} stbd: {};{} aft: {}{}".format(
+            self._log.info("intent: ({:5.2f}, {:5.2f}, {:5.2f}); {}priority: {:.2f};{} port: {};{} stbd: {};{} fore: {}{}; aft: {}{}".format(
                     vx, vy, omega,
                     _priority_color, self._priority, Style.RESET_ALL,
                     _port_color,
                     '{}mm'.format(port_distance) if port_distance else 'NA',
                     _stbd_color,
                     '{}mm'.format(stbd_distance) if stbd_distance else 'NA',
+                    _fore_color,
+                    '{}mm'.format(fore_distance) if fore_distance else 'NA',
                     _aft_color,
                     '{}mm'.format(aft_distance) if aft_distance else 'NA',
                     _squeeze_indicator))
@@ -225,6 +264,8 @@ class Avoid(AsyncBehaviour):
         if not self.enabled:
             self._port_sensor.enable()
             self._stbd_sensor.enable()
+            if self._fore_sensor:
+                self._fore_sensor.enable()
             if self._aft_sensor:
                 self._aft_sensor.enable()
             super().enable()
@@ -236,6 +277,8 @@ class Avoid(AsyncBehaviour):
         if self.enabled:
             self._port_sensor.disable()
             self._stbd_sensor.disable()
+            if self._fore_sensor:
+                self._fore_sensor.disable()
             if self._aft_sensor:
                 self._aft_sensor.disable()
             super().disable()

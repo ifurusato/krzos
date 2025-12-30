@@ -2,14 +2,12 @@
 # -*- coding: utf-8 -*-
 #
 # Calibration test script for Odometer with PAA5100 MicroPython driver.
-# Uses RP2040 wrapper with IRQ support
 
 import sys
+from pyb import Pin
 import machine, time
-from pmw3901_rp2040 import create_paa5100
+from pmw3901 import create_paa5100
 from odometer import Odometer
-
-# ------------------------------------
 
 # auto-clear: remove cached modules to force reload
 for mod in ['main', 'test_pmw3901', 'test_paa5100', 'pmw3901']:

@@ -1,5 +1,7 @@
-
-# Note: PAA5100 class at bottom
+#!/micropython
+# -*- coding: utf-8 -*-
+#
+# PAA5100 class at bottom
 
 import time
 import ustruct as struct
@@ -8,7 +10,31 @@ import machine
 
 WAIT = -1 # sentinel for waits in vendor sequences
 
+def create_paa5100(
+        spi_id   = 3,
+        cs_pin   = 'PB6',
+        int_pin  = 'PB7',
+        led_pin  = None,
+        baudrate = 400000,
+        secret_sauce = True):
+    '''
+    Create and return a configured PAA5100 instance for the STM32.
+    '''
+    spi = machine.SPI(spi_id)
+    spi.init(baudrate=baudrate, polarity=1, phase=1)
+    cs = Pin(cs_pin, Pin.OUT)
+    led = None
+    if led_pin is not None:
+        led = Pin(led_pin, Pin.OUT)
+    inst = PAA5100(spi=spi, cs=cs, led_pin=led, secret_sauce=secret_sauce)
+    # optionally return an IRQ Pin object too
+    irq_pin = None
+    if int_pin is not None:
+        irq_pin = Pin(int_pin, Pin.IN)
+    return inst, irq_pin
+
 class PMW3901:
+    CS_PIN          = 'PA4'
     REG_PRODUCT_ID  = 0x00
     REG_MOTION      = 0x02
     REG_DELTA_X     = 0x03
@@ -19,40 +45,30 @@ class PMW3901:
     REG_ORIENTATION = 0x5B
     '''
     MicroPython PMW3901 driver with PAA5100 support and Pimoroni "secret_sauce" init.
-
-    Pass secret_sauce=True to call the vendor calibration sequence during __init__.
-
-    Wiring table for defaults: SPI(1), CS='PA4':
-
-        PAA5100 / PMW3901 pin -> STM32F405 pin
-            VCC  -> 3V3 (3.3 V supply pin on WeAct)
-            CS   -> PA4
-            SCK  -> PA5
-            MOSI -> PA7
-            MISO -> PA6
-            INT  -> PA0 (or PB0 / PB1 / any EXTI-capable GPIO you prefer)
-            GND  -> GND
     '''
-    def __init__(self, spi=None, cs=None, sck=None, mosi=None, miso=None,
+    def __init__(self, spi=None, spi_id=1, cs=None, sck=None, mosi=None, miso=None,
                  baudrate=2000000, led_pin=None, led_pwm_freq=1000, secret_sauce=False):
         # SPI setup
         if spi is None:
             try:
                 if sck or mosi or miso:
-                    self.spi = SPI(1, baudrate=baudrate, polarity=1, phase=1,
+                    self.spi = SPI(spi_id, baudrate=baudrate, polarity=1, phase=1,
                                    sck=sck, mosi=mosi, miso=miso)
                 else:
-                    self.spi = SPI(1, baudrate=baudrate, polarity=1, phase=1)
-            except Exception:
-                self.spi = SPI(1, baudrate=baudrate, polarity=1, phase=1)
+                    self.spi = SPI(spi_id)
+                    self.spi.init(baudrate=baudrate, polarity=1, phase=1)
+            except Exception as e:
+                print('{} raised creating SPI device: {}'.format(type(e), e))
+                raise e
         else:
             self.spi = spi
         # CS setup
         if cs is None:
             try:
-                self.cs = Pin('PA4', Pin.OUT)
+                self.cs = Pin(PMW3901.CS_PIN, Pin.OUT)
             except Exception:
-                self.cs = Pin(4, Pin.OUT)
+                print('{} raised creating CS pin: {}'.format(type(e), e))
+                raise e
         else:
             self.cs = cs if isinstance(cs, Pin) else Pin(cs, Pin.OUT)
         self.cs.value(1)  # deselect
@@ -65,12 +81,7 @@ class PMW3901:
         self._saved_led_reg = None
         if led_pin is not None:
             self._setup_led(led_pin, led_pwm_freq)
-        # optional vendor init
-        if secret_sauce and hasattr(self, "_secret_sauce"):
-            # Allow subclass to do its init/calibration sequence
-            self._secret_sauce()
-
-    # high-level API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        self._secret_sauce()
 
     def init(self, registers=None, delay_after_ms=50):
         if not registers:
@@ -119,12 +130,6 @@ class PMW3901:
         self._rotation = deg
 
     def set_rotation(self, deg):
-        '''
-        Set orientation of PMW3901 in increments of 90 degrees. 
-        
-        Args:
-            deg:  rotation in multiple of 90 degrees
-        '''
         if deg == 0:
             self.set_orientation(invert_x=True, invert_y=True, swap_xy=True)
         elif deg == 90:
@@ -138,22 +143,12 @@ class PMW3901:
         self._rotation = deg
 
     def set_orientation(self, invert_x=True, invert_y=True, swap_xy=True):
-        '''
-        Set orientation of PMW3901 manually.
-        
-        Swapping is performed before flipping.
-        
-        Args:
-            invert_x:  invert the X axis
-            invert_y:  invert the Y axis
-            swap_xy:   swap the X/Y axes
-        '''
         value = 0
         if swap_xy:
             value |= 0b10000000
         if invert_y:
             value |= 0b01000000
-        if invert_x: 
+        if invert_x:
             value |= 0b00100000
         self. write_register(self.REG_ORIENTATION, value)
         self._orientation = value
@@ -181,8 +176,6 @@ class PMW3901:
             except Exception:
                 out[a] = None
         return out
-
-    # LED helpers (optional) ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _setup_led(self, led_pin, freq):
         self.led_pin = led_pin if isinstance(led_pin, Pin) else Pin(led_pin, Pin.OUT)
@@ -245,8 +238,6 @@ class PMW3901:
             self.set_led(0)
             time.sleep_ms(off_ms)
 
-    # callback support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def add_callback(self, callback, int_pin=None, trigger=Pin.IRQ_RISING):
         '''
         Attach callback directly to INT pin. callback is called in IRQ context.
@@ -267,8 +258,6 @@ class PMW3901:
         self._int_pin.irq(handler=None)
         self._int_pin = None
         self._user_int_cb = None
-
-    # low-level SPI helpers ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _cs_low(self):
         self.cs.value(0)
@@ -309,7 +298,6 @@ class PMW3901:
         return out
 
     def _bulk_write(self, data):
-        # data is a flat list: [reg, val, reg, val, ...], WAIT sentinel for sleeps
         for x in range(0, len(data), 2):
             register, value = data[x:x+2]
             if register == WAIT:
@@ -318,10 +306,6 @@ class PMW3901:
                 self.write_register(register, value)
 
     def motion_burst(self):
-        '''
-        Basic short burst (7 bytes) used by generic PMW3901 read.
-        Returns dict with fields parsed from the 7-byte burst.
-        '''
         self._cs_low()
         self.spi.write(bytes([self.REG_MOTION & 0x7F]))
         self._delay_us(35)
@@ -340,7 +324,6 @@ class PMW3901:
 
 class PAA5100(PMW3901):
     REG_MOTION_BURST = 0x16
-
     def __init__(self, *args, secret_sauce=False, **kwargs):
         super().__init__(*args, **kwargs)
         self._use_16bit = False
@@ -359,23 +342,14 @@ class PAA5100(PMW3901):
         return val
 
     def motion_burst(self):
-        '''
-        PAA5100 extended burst read (12 bytes) matching Pimoroni format.
-        Parses fields and returns a dict with parsed fields.
-        '''
         self._cs_low()
         self.spi.write(bytes([self.REG_MOTION_BURST & 0x7F]))
         self._delay_us(35)
         buf = bytearray(12)
         self.spi.readinto(buf)
         self._cs_high()
-
-        # parse according to mapping:
-        # buf[0] = dr, buf[1]=obs, buf[2..3]=x (low,high), buf[4..5]=y, buf[6]=quality,
-        # buf[7]=raw_sum, buf[8]=raw_max, buf[9]=raw_min, buf[10]=shutter_upper, buf[11]=shutter_lower
         dr = buf[0]
         obs = buf[1]
-        # little-endian signed 16-bit
         x = struct.unpack("<h", bytes([buf[2], buf[3]]))[0]
         y = struct.unpack("<h", bytes([buf[4], buf[5]]))[0]
         quality = buf[6]
@@ -389,10 +363,6 @@ class PAA5100(PMW3901):
                 "shutter_upper": shutter_upper, "shutter_lower": shutter_lower}
 
     def get_motion(self, timeout=5):
-        '''
-        Poll using the extended Pimoroni burst and validation.
-        Returns (x, y) on success or raises RuntimeError on timeout.
-        '''
         start = time.ticks_ms()
         timeout_ms = int(timeout * 1000)
         while time.ticks_diff(time.ticks_ms(), start) < timeout_ms:
@@ -407,30 +377,12 @@ class PAA5100(PMW3901):
         raise RuntimeError("Timed out waiting for motion data.")
 
     def enable_sensor_led(self, value=None):
-        '''
-        Minimal enable: restores saved LED register or writes provided value.
-
-        - If `value` is None this uses self._saved_led_reg (must exist if not passing value).
-        - Writes reg 0x6F on page 0x14 and restores page 0x00.
-        '''
         v = value if value is not None else self._saved_led_reg
         self.write_register(0x7F, 0x14)
         self.write_register(0x6F, v)
         self.write_register(0x7F, 0x00)
 
     def disable_sensor_led(self):
-        '''
-        Stop the sensor from driving the on-board LED.
-
-        This writes the same register / page sequence used to enable LED pulsing,
-        but clears the LED control register so the sensor stops pulsing the LED.
-        Safe to call even if the LED wasn't enabled.
-
-        Saves the current LED register value to self._saved_led_reg if readable,
-        then clears the LED control register (0x6F) on page 0x14.
-
-        Safe to call in a finally/cleanup block (best-effort).
-        '''
         try:
             self.write_register(0x7F, 0x14)
         except Exception:
@@ -452,13 +404,6 @@ class PAA5100(PMW3901):
                 pass
 
     def x_disable_sensor_led(self):
-        '''
-        Stop the sensor from driving the on-board LED.
-
-        This writes the same register / page sequence used to enable LED pulsing,
-        but clears the LED control register so the sensor stops pulsing the LED.
-        Safe to call even if the LED wasn't enabled.
-        '''
         try:
             self._bulk_write([0x7F, 0x14, 0x6F, 0x00, 0x7F, 0x00])
         except Exception:
@@ -470,10 +415,6 @@ class PAA5100(PMW3901):
                 pass
 
     def _secret_sauce(self):
-        '''
-        Ported Pimoroni PAA5100 vendor init sequence.
-        Safe to call from __init__ by passing secret_sauce=True.
-        '''
         seq = [
             0x7F, 0x00,
             0x55, 0x01,
@@ -514,93 +455,17 @@ class PAA5100(PMW3901):
             self.write_register(0x70, c1)
             self.write_register(0x71, c2)
 
+        # ......................................................................
         self._bulk_write([
-            0x7F, 0x00,
-            0x61, 0xAD,
-            0x7F, 0x03,
-            0x40, 0x00,
-            0x7F, 0x05,
-            0x41, 0xB3,
-            0x43, 0xF1,
-            0x45, 0x14,
-            0x5F, 0x34,
-            0x7B, 0x08,
-            0x5E, 0x34,
-            0x5B, 0x11,
-            0x6D, 0x11,
-            0x45, 0x17,
-            0x70, 0xE5,
-            0x71, 0xE5,
-            0x7F, 0x06,
-            0x44, 0x1B,
-            0x40, 0xBF,
-            0x4E, 0x3F,
-            0x7F, 0x08,
-            0x66, 0x44,
-            0x65, 0x20,
-            0x6A, 0x3A,
-            0x61, 0x05,
-            0x62, 0x05,
-            0x7F, 0x09,
-            0x4F, 0xAF,
-            0x5F, 0x40,
-            0x48, 0x80,
-            0x49, 0x80,
-            0x57, 0x77,
-            0x60, 0x78,
-            0x61, 0x78,
-            0x62, 0x08,
-            0x63, 0x50,
-            0x7F, 0x0A,
-            0x45, 0x60,
-            0x7F, 0x00,
-            0x4D, 0x11,
-            0x55, 0x80,
-            0x74, 0x21,
-            0x75, 0x1F,
-            0x4A, 0x78,
-            0x4B, 0x78,
-            0x44, 0x08,
-            0x45, 0x50,
-            0x64, 0xFF,
-            0x65, 0x1F,
-            0x7F, 0x14,
-            0x65, 0x67,
-            0x66, 0x08,
-            0x63, 0x70,
-            0x6F, 0x1C,
-            0x7F, 0x15,
-            0x48, 0x48,
-            0x7F, 0x07,
-            0x41, 0x0D,
-            0x43, 0x14,
-            0x4B, 0x0E,
-            0x45, 0x0F,
-            0x44, 0x42,
-            0x4C, 0x80,
-            0x7F, 0x10,
-            0x5B, 0x02,
-            0x7F, 0x07,
-            0x40, 0x41,
-            WAIT, 0x0A,
-            0x7F, 0x00,
-            0x32, 0x00,
-            0x7F, 0x07,
-            0x40, 0x40,
-            0x7F, 0x06,
-            0x68, 0xF0,
-            0x69, 0x00,
-            0x7F, 0x0D,
-            0x48, 0xC0,
-            0x6F, 0xD5,
-            0x7F, 0x00,
-            0x5B, 0xA0,
-            0x4E, 0xA8,
-            0x5A, 0x90,
-            0x40, 0x80,
-            0x73, 0x1F,
-            WAIT, 0x0A,
-            0x73, 0x00
+            0x7F, 0x00, 0x61, 0xAD, 0x7F, 0x03, 0x40, 0x00, 0x7F, 0x05, 0x41, 0xB3, 0x43, 0xF1, 0x45, 0x14, 0x5F, 0x34, 0x7B, 0x08,
+            0x5E, 0x34, 0x5B, 0x11, 0x6D, 0x11, 0x45, 0x17, 0x70, 0xE5, 0x71, 0xE5, 0x7F, 0x06, 0x44, 0x1B, 0x40, 0xBF, 0x4E, 0x3F,
+            0x7F, 0x08, 0x66, 0x44, 0x65, 0x20, 0x6A, 0x3A, 0x61, 0x05, 0x62, 0x05, 0x7F, 0x09, 0x4F, 0xAF, 0x5F, 0x40, 0x48, 0x80,
+            0x49, 0x80, 0x57, 0x77, 0x60, 0x78, 0x61, 0x78, 0x62, 0x08, 0x63, 0x50, 0x7F, 0x0A, 0x45, 0x60, 0x7F, 0x00, 0x4D, 0x11,
+            0x55, 0x80, 0x74, 0x21, 0x75, 0x1F, 0x4A, 0x78, 0x4B, 0x78, 0x44, 0x08, 0x45, 0x50, 0x64, 0xFF, 0x65, 0x1F, 0x7F, 0x14,
+            0x65, 0x67, 0x66, 0x08, 0x63, 0x70, 0x6F, 0x1C, 0x7F, 0x15, 0x48, 0x48, 0x7F, 0x07, 0x41, 0x0D, 0x43, 0x14, 0x4B, 0x0E,
+            0x45, 0x0F, 0x44, 0x42, 0x4C, 0x80, 0x7F, 0x10, 0x5B, 0x02, 0x7F, 0x07, 0x40, 0x41, WAIT, 0x0A, 0x7F, 0x00, 0x32, 0x00,
+            0x7F, 0x07, 0x40, 0x40, 0x7F, 0x06, 0x68, 0xF0, 0x69, 0x00, 0x7F, 0x0D, 0x48, 0xC0, 0x6F, 0xD5, 0x7F, 0x00, 0x5B, 0xA0,
+            0x4E, 0xA8, 0x5A, 0x90, 0x40, 0x80, 0x73, 0x1F, WAIT, 0x0A, 0x73, 0x00
         ])
 
 #EOF

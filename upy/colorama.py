@@ -7,16 +7,8 @@
 # author:   Murray Altheim
 # created:  2024-04-20
 # modified: 2024-04-20
-#
-# Usage:
-#
-#    from colorama import Fore, Style
-#
-#    print(Fore.RED + "That's all, folks!" + Style.RESET)
-#
 
 class Fore:
-
     BLACK      = "\033[30m"
     RED        = "\033[31m"
     GREEN      = "\033[32m"
@@ -40,7 +32,6 @@ class Fore:
         pass
 
 class Style:
-
     RESET_ALL  = "\033[0m"
     NORMAL     = "\033[22m"
     BRIGHT     = "\033[1m"

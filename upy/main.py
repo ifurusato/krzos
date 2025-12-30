@@ -7,19 +7,23 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-03
+# modified: 2025-12-28
+#
+# I2C1:  SCL=PB6   SDA=PB7
+# I2C2:  SCL=PB10  SDA=PB11
 
 import sys
 import time
-from machine import Pin, Timer
+import stm
+from pyb import Pin, Timer
 
 from colors import*
 from i2c_slave import I2CSlave
 from controller import Controller
 from pixel import Pixel
-from pixel_cycler import PixelCycler
-from blink_pattern import BlinkPattern
-from rainbow_cycler import RainbowCycler
+#from pixel_cycler import PixelCycler
+#from blink_pattern import BlinkPattern
+#from rainbow_cycler import RainbowCycler
 
 # auto-clear: remove cached modules to force reload
 for mod in ['main', 'i2c_slave', 'controller']:
@@ -27,73 +31,57 @@ for mod in ['main', 'i2c_slave', 'controller']:
         del sys.modules[mod]
 
 def main():
-    SDA_PIN    = 2
-    SCL_PIN    = 3
-    STRIP_PIN  = 0
-    RING_PIN   = 1
-    CLOCK_PIN  = 4
-
-    IS_PICO    = True
-    I2C_SLAVE  = True
-    CYCLE_TEST = False
-    BLINK      = False
-
-    timer0 = None
-    timer1 = None
+    TIMER2_SOFT = False
+    TIMER2_HARD = True
+    TIMER5      = True
+    I2C_SLAVE   = True
+    slave  = None
     timer2 = None
-    strip  = None
-    cycler = None
+    timer5 = None
 
     try:
 
         controller = Controller()
 
         count = 24
-        ring = Pixel(pin=RING_PIN, pixel_count=count, brightness=0.1)
-        strip = Pixel(pin=STRIP_PIN, pixel_count=8, brightness=0.1)
+        ring = Pixel(pin='B14', pixel_count=count, brightness=0.1)
+        strip = Pixel(pin='B12', pixel_count=8, brightness=0.1)
 
-        def tick():
-            print('tick')
-            clock_pin.value(not clock_pin.value())
+        if TIMER2_SOFT:
+            clock_pin = Pin('A0', Pin.OUT_PP)
+            # set up 20Hz timer2 on pin A0 (requires 2x frequency since toggle is half freq)
+            timer2 = Timer(2)
+            timer2.init(freq=40,
+                        callback=lambda t: clock_pin.toggle(),
+                        hard=False)
 
-        # set up 50Hz timer0 on pin GP4 (requires 2x frequency since toggle is half freq)
-        clock_pin = Pin(CLOCK_PIN, Pin.OUT)
-        timer0 = Timer(hard=True)
-        timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: clock_pin.value(not clock_pin.value()))
-#       timer0.init(freq=40, mode=Timer.PERIODIC, callback=lambda t: tick())
+        if TIMER2_HARD:
+            PIN_BIT = 0  # PA0
+            PIN_MASK = 1 << PIN_BIT
+            # configure PA0 as push-pull output (mode = 0b01, otyper = 0)
+            stm.mem32[stm.GPIOA + stm.GPIO_MODER] &= ~(0b11 << (PIN_BIT*2))  # clear mode
+            stm.mem32[stm.GPIOA + stm.GPIO_MODER] |=  (0b01 << (PIN_BIT*2))  # set output mode
+            stm.mem32[stm.GPIOA + stm.GPIO_OTYPER] &= ~PIN_MASK             # push-pull
+            # hard IRQ toggle
+            def toggle_hard(timer):
+                stm.mem32[stm.GPIOA + stm.GPIO_ODR] ^= PIN_MASK
+            # timer at 40 Hz (20 Hz toggle)
+            timer2 = Timer(2)
+            timer2.init(freq=40,
+                        callback=toggle_hard,
+                        hard=True)
+        if TIMER5:
+            # set up a 2Hz timer to call the controller's step()
+            timer5 = Timer(5)
+            timer5.init(freq=2,
+                        callback=controller.step, 
+                        hard=False)
         
-        if BLINK:
-            timer1 = Timer()
-            timer1.init(freq=2, mode=Timer.PERIODIC, callback=controller.step)
-            strip.set_color(index=0, color=COLOR_ORANGE)
-        else:
-            led = Pin(25, Pin.OUT)   # Onboard LED
-
-            def blink():
-                led.on()
-                time.sleep_ms(20)
-                led.off()
-
-            # otherwise use the onboard LED
-            timer1 = Timer()
-            timer1.init(freq=0.5, mode=Timer.PERIODIC, callback=lambda t: blink())
-        
-        if CYCLE_TEST:
-    #       cycler = BlinkPattern(ring, count, offset=12, auto_rotate=True)
-    #       cycler = PixelCycler(ring, count)
-            cycler = RainbowCycler(ring, count, hue_step=0.02) # 0.002 is slow
-            timer2 = Timer()
-            timer2.init(freq=48, mode=Timer.PERIODIC, callback=lambda t: cycler.step())
-
-            while True:
-                time.sleep(1)
-
         if I2C_SLAVE:
+            # set initial pixel
+            strip.set_color(index=0, color=COLOR_AMBER)
             # set up I2C slave
-            if IS_PICO:
-                slave = I2CSlave(scl_pin=SCL_PIN, sda_pin=SDA_PIN)
-            else:
-                slave = I2CSlave(scl_pin='A1', sda_pin='A2')
+            slave = I2CSlave(i2c_id=2, i2c_address=0x45)
             controller.set_strip(strip)
             controller.set_ring(ring)
             slave.add_callback(controller.process)
@@ -111,16 +99,13 @@ def main():
 
     except KeyboardInterrupt:
         print('\nCtrl-C caught; exiting…')
-        slave.disable()
+        if slave:
+            slave.disable()
     finally:
-        if timer0:
-            timer0.deinit()
-        if timer1:
-            timer1.deinit()
         if timer2:
             timer2.deinit()
-        if cycler:
-            cycler.close()
+        if timer5:
+            timer5.deinit()
 
 main()
 

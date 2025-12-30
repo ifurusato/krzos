@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2025-12-03
-# modified: 2025-12-03
+# modified: 2025-12-30
 
 from pixel import Pixel
 from colors import*
@@ -18,9 +18,10 @@ class RainbowCycler:
     '''
     def __init__(self, pixel, count, hue_step=0.002):
         '''
-        :param pixel:  your pixel controller instance
-        :param count:  number of LEDs
-        :param hue_step: how much to advance the hue for each rotation (0–1)
+        Args:
+            pixel:    pixel controller instance
+            count:    number of LEDs
+            hue_step: how much to advance the hue for each rotation (0–1)
         '''
         self._enabled = True
         self._pixel = pixel
@@ -34,32 +35,19 @@ class RainbowCycler:
     def step(self):
         '''
         One non-blocking step.
-        Call this from your Timer.
         '''
         if not self._enabled:
             return
-
-        # Compute current color from current hue
         color = Pixel.hsv_to_rgb(self._hue)
-
         if self._phase == 0:
-            # Turn pixel ON with rainbow hue
             self._pixel.set_color(index=self._pixel_index, color=color)
             self._phase = 1
-
         else:
-            # Turn pixel OFF
             self._pixel.set_color(index=self._pixel_index, color=COLOR_BLACK)
             self._phase = 0
-
-            # Move to next pixel
             self._pixel_index += 1
-
-            # Finished a rotation?
             if self._pixel_index >= self._count:
                 self._pixel_index = 0
-
-                # Advance hue each completed rotation
                 self._hue += self._hue_step
                 if self._hue >= 1.0:
                     self._hue -= 1.0
@@ -68,6 +56,5 @@ class RainbowCycler:
         self._enabled = False
         for idx in range(24):
             self._pixel.set_color(index=idx, color=COLOR_BLACK)
-        print('closed.')
 
 #EOF
