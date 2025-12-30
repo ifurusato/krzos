@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
-# author:   altheim
+# author:   Ichiro Furusato
 # created:  2020-02-14
 # modified: 2025-09-09
 #
-#  Scans the I²C bus, returning a list of devices. If i2cdetect is available
-#  it is used, otherwise a less reliable Python-native approach is used (a
-#  known error is that this won't find multiple devices occupying the same
-#  address).
+# Scans the I²C bus, returning a list of devices. If i2cdetect is available
+# it is used, otherwise a less reliable Python-native approach is used (a
+# known error is that this won't find multiple devices occupying the same
+# address).
 #
 # DeviceNotFound class at bottom.
 

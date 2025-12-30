@@ -2,9 +2,9 @@
 #
 #    usage: kros.py [-h] [--docs] [--configure] [--start] [--motors] [--json] [--gamepad] [--pubs PUBS]
 #            [--subs SUBS] [--behave BEHAVE] [--config-file CONFIG_FILE] [--log] [--level LEVEL]
-#    
+#
 #    Provides command line control of the K-Series Robot OS application.
-#    
+#
 #    options:
 #      -h, --help            show this help message and exit
 #      --docs, -d            show the documentation message and exit
@@ -23,7 +23,7 @@
 #      --log, -L             write log to timestamped file
 #      --level LEVEL, -l LEVEL
 #                            specify logging level 'DEBUG'|'INFO'|'WARN'|'ERROR' (default: 'INFO')
-#    
+#
 #    This script may be executed by krosd (kros daemon) or run directly from the command line.
 #
 

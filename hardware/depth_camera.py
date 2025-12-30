@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2025 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License.
 #
-# author:   Murray Altheim
+# author:   Ichiro Furusato
 # created:  2025-09-26
 #
 # DepthCamera class for OAK-D Lite providing depth frames via DepthAI 3.x API.

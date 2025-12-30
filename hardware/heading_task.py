@@ -4,9 +4,9 @@
 # HeadingTask: A Component to rotate and hold a robot at a specified heading,
 # with optional persistent mode and hysteresis. Now uses external clock for PID timing.
 #
-# Copyright 2025 by Murray Altheim. All rights reserved.
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved.
 #
-# author:   Murray Altheim
+# author:   Ichiro Furusato
 # created:  2025-09-30
 
 import time
