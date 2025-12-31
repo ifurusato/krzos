@@ -1,11 +1,11 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
-# author:   Ichiro Furusato
+# author:   Murray Altheim
 # created:  2024-08-14
 # modified: 2025-12-30
 
@@ -55,6 +55,7 @@ class Color:
         return None
 
 COLOR_BLACK         = Color("COLOR_BLACK",        (  0,   0,   0))
+COLOR_WHITE         = Color("COLOR_WHITE",        (255, 255, 255))
 COLOR_RED           = Color("COLOR_RED",          (255,   0,   0))
 COLOR_GREEN         = Color("COLOR_GREEN",        (  0, 255,   0))
 COLOR_BLUE          = Color("COLOR_BLUE",         (  0,   0, 255))
@@ -69,12 +70,14 @@ COLOR_DARK_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  32,  32))
 COLOR_DARK_MAGENTA  = Color("COLOR_DARK_MAGENTA", ( 32,   0,  32))
 COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 64,  32,   0))
 
-COLOR_ORANGE        = Color("COLOR_ORANGE",       (220,  33,   0))
+COLOR_ORANGE        = Color("COLOR_ORANGE",       (240,  53,   0))
+COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  11,   0))
 COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  75, 130))
 COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
 COLOR_DEEP_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  11,  11))
 COLOR_PINK          = Color("COLOR_PINK",         (255,  50,  40))
 COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
 COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
+COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
 
 #EOF

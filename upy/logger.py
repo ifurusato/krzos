@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License.
 #
-# author:   Ichiro Furusato
+# author:   Murray Altheim
 # created:  2020-01-14
 # modified: 2025-12-28
 

@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
+#!/micropython
 # -*- coding: utf-8 -*-
 #
 # Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
-# of the Robot Operating System project, released under the MIT License. Please
-# see the LICENSE file included as part of this package.
+# of the Robot Operating System project, released under the MIT License.
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
@@ -11,10 +10,11 @@
 
 import sys
 import time
-from machine import Pin, Timer
+from machine import RTC
 
 from colors import*
 from color_store import ColorStore
+from odometer import Odometer
 
 class Controller:
     '''
@@ -23,54 +23,61 @@ class Controller:
     def __init__(self):
         self._slave = None
         self._strip = None
-        self._ring  = None
+        self._ring  = None # the Pixel (NeoPixel) object
         self._store = ColorStore()
-        self._led   = Pin('PB2')
-        self._timer_enabled   = False
         # blink support
         self._enable_blink    = True
         self._enable_rotate   = False
         self._blink_index     = -1
         self._blink_direction = 1
-        self._blink_color     = COLOR_AMBER
-        self._ring_colors = [COLOR_BLACK] * 24
+        self._blink_color     = COLOR_TANGERINE
+        self._ring_colors = [COLOR_BLACK] * 24 # model for ring
+        self._last_update_ts = self._get_time()
+        # instantiate the odometer
+        self._odometer = Odometer()
+        # heartbeat feature
+        self._heartbeat_enabled     = True
+        self._heartbeat_on_time_ms  = 50
+        self._heartbeat_off_time_ms = 2950
+        self._heartbeat_timer = 0
+        self._heartbeat_state = False
+        self._position = '0 0'
+        self._velocity = '0 0'
         print('ready.')
-
-    def _blink_led(self, t):
-        '''
-        Flash the LED.
-        '''
-        self._led.value(1)
-        time.sleep_ms(50)
-        self._led.value(0)
-        time.sleep_ms(50)
 
     def set_strip(self, strip):
         self._strip = strip
 
-    def set_ring(self, ring):
-        self._ring = ring
-
     def set_slave(self, slave):
-        '''
-        Assigns the I2C slave and registers this controller's callback.
-        Should be called by your main program after instantiating both.
-        '''
         self._slave = slave
         self._slave.add_callback(self.on_command)
 
     def on_command(self, cmd):
-        '''
-        Callback invoked by I2C slave when a command is received and processed outside IRQ.
-        Delegates to process() for handling.
-        '''
         return self.process(cmd)
 
+    def _update_odometry(self):
+        x, y = self._odometer.position
+        vx, vy = self._odometer.velocity
+        self._position = '{} {}'.format(int(x), int(y))
+        self._velocity = '{} {}'.format(int(vx), int(vy))
+        self._last_update_ts = self._get_time()
+
     def tick(self, delta_ms):
-        '''
-        Can be called from main to update based on a delta in milliseconds.
-        '''
-        pass
+        if self._heartbeat_enabled:
+            self._heartbeat(delta_ms)
+
+    def _heartbeat(self, delta_ms):
+        self._heartbeat_timer += delta_ms
+        if self._heartbeat_state:
+            if self._heartbeat_timer >= self._heartbeat_on_time_ms:
+                self._update_odometry()
+                self._heartbeat_state = False
+                self._heartbeat_timer = 0
+        else:
+            if self._heartbeat_timer >= self._heartbeat_off_time_ms:
+                self._odometer.update()
+                self._heartbeat_state = True
+                self._heartbeat_timer = 0
 
     def step(self, t):
         if self._enable_blink:
@@ -79,41 +86,23 @@ class Controller:
             self.rotate_ring(1)
 
     def blink(self):
-        '''
-        A callback from an external Timer that sequentially blinks the LEDs of the strip.
-        The first time this is called it sets up a timer to blink the LED.
-        '''
         if self._enable_blink:
-            if self._strip:
-                self._strip.set_color(index=(0 if self._blink_index < 0 else self._blink_index), color=COLOR_BLACK)
+            self._strip.set_color(index=(0 if self._blink_index < 0 else self._blink_index), color=COLOR_BLACK)
             time.sleep_ms(50)
             # update index for next time
             self._blink_index += self._blink_direction
-            if self._strip:
-                self._strip.set_color(index=self._blink_index, color=self._blink_color)
+            self._strip.set_color(index=self._blink_index, color=self._blink_color)
             # bounce at the ends
             if self._blink_index >= 7:
                 self._blink_direction = -1
             elif self._blink_index <= 0:
                 self._blink_direction = 1
-        if not self._timer_enabled:
-            timer0 = Timer()
-            timer0.init(freq=0.5, mode=Timer.PERIODIC, callback=self._blink_led)
-            self._timer_enabled = True
 
     def heading_to_pixel(self, heading_deg):
-        '''
-        Convert heading in degrees to nearest pixel index on 24-pixel ring.
-        Pixel 0 = South, 6 = East, 12 = North, 18 = West
-        '''
         pixel = round((180 - heading_deg) / 15) % 24
         return pixel
 
     def get_color(self, name, second_token):
-        '''
-        Returns the color from either the store or the enum, optionally
-        using a second token for whitespace-delimited names.
-        '''
         if second_token: # e.g., "dark cyan"
             name = '{} {}'.format(name, second_token)
         saved = self._store.get(name)
@@ -122,33 +111,87 @@ class Controller:
         else:
             return Color.get(name)
 
+    # ring .......................................
+
+    def set_ring(self, ring):
+        self._ring = ring
+        self.reset_ring()
+
+    def reset_ring(self):
+        self._ring_colors = [COLOR_BLACK] * 24
+        self.update_ring()
+
     def rotate_ring(self, shift):
-        '''
-        Rotates the underlying ring list, then updates the display.
-        '''
         if abs(shift) > 24:
             raise ValueError('shift value outside of bounds.')
-        self._ring_colors = self._ring_colors[shift:] + self._ring_colors[:shift]
+        self._ring_colors = (self._ring_colors[shift:] + self._ring_colors[:shift])
         self.update_ring()
 
     def update_ring(self):
         for index in range(24):
-            color = self._ring_colors[index]
-            self._ring.set_color(index, color)
+            self._ring.set_color(index, self._ring_colors[index])
 
     def set_ring_color(self, index, color):
         self._ring.set_color(index, color)
         self._ring_colors[index] = color
 
+    # ............................................
+
+    def _parse_timestamp(self, ts):
+        year    = int(ts[0:4])
+        month   = int(ts[4:6])
+        day     = int(ts[6:8])
+        hour    = int(ts[9:11])
+        minute  = int(ts[11:13])
+        second  = int(ts[13:15])
+        weekday = 0
+        subsecs = 0
+        return (year, month, day, weekday, hour, minute, second, subsecs)
+
+    def _rtc_to_iso(self, dt):
+        return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
+
+    def _get_time(self):
+        return time.time()
+
+    def _set_time(self, timestamp):
+        try:
+            print('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
+            RTC().datetime(self._parse_timestamp(timestamp))
+            print('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
+            self._blink_color = COLOR_AMBER
+            return 'ACK'
+        except Exception as e:
+            print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
+            return 'ERR'
+
     def process(self, cmd):
         '''
         Processes the callback from the I2C slave, returning 'ACK', 'NACK'
-        or 'ERR'. Data requests and use three transactions, the first is
-        followed by 'get' and then 'clear', somewhat arbitrary tokens that
-        return the previous response and then clear the buffer.
+        or 'ERR'.
+
+        Commands:
+            odo pos
+                vel
+                reset
+                led on | off
+                rf get
+                rf set <value> | None
+            time get | set <timestamp>
+            strip off | <color>
+                  <n> <color>
+            ring off | <color>
+                  <n> <color>
+            rotate <n> | on | off
+            blink on | off
+            save <name> <red> <green> <blue>
+            rgb <n> <red> <green> <blue>
+            heading <degrees> <color>
+            get
+            clear
         '''
         try:
-            print("cmd: '{}'".format(cmd))
+#           print("cmd: '{}'".format(cmd))
             parts = cmd.lower().split()
             if len(parts) == 0:
                 return 'ERR'
@@ -158,7 +201,53 @@ class Controller:
             _arg3 = parts[3] if len(parts) > 3 else None
             _arg4 = parts[4] if len(parts) > 4 else None
 
-            if _arg0 == "strip":
+            # odometer
+            if _arg0 == "odo":
+
+                if _arg1 == "pos":
+                    return self._position
+                elif _arg1 == "vel":
+                    return self._velocity
+                elif _arg1 == "ts":
+                    return str(self._last_update_ts)
+                elif _arg1 == "reset":
+                    self._odometer.reset()
+                    return 'ACK'
+                elif _arg1 == "led":
+                    if _arg2 == "on":
+                        self._odometer.set_sensor_led(True)
+                        return 'ACK'
+                    elif _arg2 == "off":
+                        self._odometer.set_sensor_led(False)
+                        return 'ACK'
+                elif _arg1 == "rf":
+                    if _arg2 == "get":
+                        return self._odometer.get_resolution_factor()
+                    elif _arg2 == "set":
+                        if _arg3 is None:
+                            self._odometer.set_resolution_factor(None)
+                            return 'ACK'
+                        else:
+                            try:
+                                resolution_factor = float(_arg3)
+                                self._odometer.set_resolution_factor(resolution_factor)
+                                return 'ACK'
+                            except Exception as e:
+                                self._log.error('{} raised setting resolution factor: {}'.format(type(e), e))
+                                return 'ERR'
+                return 'ERR'
+
+            # RTC
+            elif _arg0 == "time":
+#               print('time: {}, {}'.format(_arg1, _arg2))
+                if _arg1 == 'set':
+                    return self._set_time(_arg2)
+                elif _arg1 == 'get':
+                    return "2025" # TEMP
+                return 'ERR'
+
+            # LEDs
+            elif _arg0 == "strip":
                 if self._strip:
                     if _arg1 == 'all':
                         # e.g., strip all blue
@@ -186,12 +275,12 @@ class Controller:
                 if self._ring:
                     if _arg1 == 'clear':
                         self._store.clear()
-                        self.clear_ring()
+                        self.reset_ring()
                         return 'ACK'
                     elif _arg1 == 'all':
                         # e.g., ring all off
                         if _arg2 == 'off':
-                            self.clear_ring()
+                            self.reset_ring()
                             self._store.clear()
                             return 'ACK'
                         else:
@@ -248,11 +337,10 @@ class Controller:
                 blue  = int(_arg4)
                 color = (red, green, blue)
                 self._store.put(name, color)
-                if self._strip:
-                    for index in range(8):
-                        self._strip.set_color(index, color)
-                    time.sleep(1)
-                    self.clear_strip()
+                for index in range(8):
+                    self._strip.set_color(index, color)
+                time.sleep(1)
+                self.clear_strip()
                 return 'ACK'
 
             elif _arg0 == "rgb":
@@ -271,10 +359,17 @@ class Controller:
                 color = self.get_color(_arg2, _arg3)
                 self._ring.set_color(index, color)
                 return 'ACK'
+
+            # ping
+            elif _arg0 == "ping":
+                return 'ACK'
+
+            # get/set
             elif _arg0 == "get":
                 return 'ACK' # called on 2nd request for data
             elif _arg0 == "clear":
                 return 'ACK' # called on 3rd request for data
+
             else:
                 print("unrecognised command: '{}'{}{}{}".format(
                         cmd,
@@ -288,13 +383,12 @@ class Controller:
             sys.print_exception()
             return 'ERR'
 
-    def clear_ring(self):
-        for index in range(24):
-            self._ring.set_color(index, COLOR_BLACK)
-
     def clear_strip(self):
-        if self._strip:
-            for index in range(8):
-                self._strip.set_color(index, COLOR_BLACK)
+        for index in range(8):
+            self._strip.set_color(index, COLOR_BLACK)
+
+    def sensor_led_off(self):
+        if elf._odometer:
+            self._odometer.sensor_led_off()
 
 #EOF
