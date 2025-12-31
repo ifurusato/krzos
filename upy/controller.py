@@ -28,7 +28,6 @@ class Controller:
         self._store = ColorStore()
         # blink support
         self._enable_blink    = True
-        self._enable_rotate   = False
         self._blink_index     = -1
         self._blink_direction = 1
         self._blink_color     = COLOR_TANGERINE
@@ -44,8 +43,12 @@ class Controller:
         self._heartbeat_state = False
         self._position = '0 0'
         self._velocity = '0 0'
+        # rotation
+        self._ring_offset      = 0
+        self._enable_rotate    = False
+        self._rotation_pending = False
         self._timer3 = Timer(3)
-        self._timer3.init(freq=20, callback=self._tick)
+        self._timer3.init(freq=20, callback=self._set_rotation_pending)
         print('ready.')
 
     def set_strip(self, strip):
@@ -68,6 +71,9 @@ class Controller:
     def tick(self, delta_ms):
         if self._heartbeat_enabled:
             self._heartbeat(delta_ms)
+        if self._rotation_pending and self._enable_rotate:
+            self._rotation_pending = False
+            self.rotate_ring(1)
 
     def _heartbeat(self, delta_ms):
         self._heartbeat_timer += delta_ms
@@ -81,13 +87,6 @@ class Controller:
                 self._odometer.update()
                 self._heartbeat_state = True
                 self._heartbeat_timer = 0
-
-    def _tick(self, t):
-        '''
-        Internal tick called by Timer 3.
-        '''
-        if self._enable_rotate:
-            self.rotate_ring(1)
 
     def step(self, t):
         if self._enable_blink:
@@ -121,6 +120,9 @@ class Controller:
 
     # ring .......................................
 
+    def _set_rotation_pending(self):
+        self._rotation_pending = True
+
     def set_ring(self, ring):
         self._ring = ring
         self.reset_ring()
@@ -132,16 +134,22 @@ class Controller:
     def rotate_ring(self, shift):
         if abs(shift) > 24:
             raise ValueError('shift value outside of bounds.')
-        self._ring_colors = (self._ring_colors[shift:] + self._ring_colors[:shift])
+        self._ring_offset = (self._ring_offset + shift) % 24
+#       self._ring_colors = (self._ring_colors[shift:] + self._ring_colors[:shift])
         self.update_ring()
 
     def update_ring(self):
         for index in range(24):
-            self._ring.set_color(index, self._ring_colors[index])
+#           self._ring.set_color(index, self._ring_colors[index])
+            rotated_index = (index - self._ring_offset) % 24
+            self._ring.set_color(index, self._ring_colors[rotated_index])
 
     def set_ring_color(self, index, color):
+#       self._ring.set_color(index, color)
+#       self._ring_colors[index] = color
+        actual_index = (index + self._ring_offset) % 24
+        self._ring_colors[actual_index] = color
         self._ring.set_color(index, color)
-        self._ring_colors[index] = color
 
     # ............................................
 
@@ -314,6 +322,7 @@ class Controller:
                         self._enable_rotate = True
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                        self._rotation_pending = False
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
