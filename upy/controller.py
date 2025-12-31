@@ -10,6 +10,7 @@
 
 import sys
 import time
+from pyb import Timer
 from machine import RTC
 
 from colors import*
@@ -43,6 +44,8 @@ class Controller:
         self._heartbeat_state = False
         self._position = '0 0'
         self._velocity = '0 0'
+        self._timer3 = Timer(3)
+        self._timer3.init(freq=20, callback=self._tick)
         print('ready.')
 
     def set_strip(self, strip):
@@ -79,11 +82,16 @@ class Controller:
                 self._heartbeat_state = True
                 self._heartbeat_timer = 0
 
+    def _tick(self, t):
+        '''
+        Internal tick called by Timer 3.
+        '''
+        if self._enable_rotate:
+            self.rotate_ring(1)
+
     def step(self, t):
         if self._enable_blink:
             self.blink()
-        if self._enable_rotate:
-            self.rotate_ring(1)
 
     def blink(self):
         if self._enable_blink:
@@ -182,7 +190,7 @@ class Controller:
                   <n> <color>
             ring off | <color>
                   <n> <color>
-            rotate <n> | on | off
+            rotate <n> | on | off | hz <n>
             blink on | off
             save <name> <red> <green> <blue>
             rgb <n> <red> <green> <blue>
@@ -191,7 +199,7 @@ class Controller:
             clear
         '''
         try:
-#           print("cmd: '{}'".format(cmd))
+            print("cmd: '{}'".format(cmd))
             parts = cmd.lower().split()
             if len(parts) == 0:
                 return 'ERR'
@@ -306,6 +314,11 @@ class Controller:
                         self._enable_rotate = True
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                    elif _arg1 == 'hz':
+                        hz = int(_arg2)
+                        if hz > 0:
+                            self._timer3.init(freq=hz)
+                        return 'ERR'
                     else:
                         shift = int(_arg1)
                         self.rotate_ring(shift)

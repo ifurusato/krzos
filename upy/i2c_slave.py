@@ -95,6 +95,7 @@ class I2CSlave:
             self._new_cmd = True
         if flags & I2CTarget.IRQ_READ_REQ:
             i2c.write(self._tx_buf)
+#           i2c.write(self._tx_buf[: self._tx_len])
 
     def check_and_process(self):
         WAIT = True # wait for the full message before unpacking
@@ -146,6 +147,7 @@ class I2CSlave:
                 sys.print_exception(e)
                 resp_bytes = pack_message("ERR")
             rlen = len(resp_bytes)
+#           print("resp: len={}, bytes={}".format(rlen, ' '.join('{:02x}'.format(b) for b in resp_bytes[: rlen])))
             for i in range(rlen):
                 self._tx_buf[i] = resp_bytes[i]
             self._tx_len = rlen

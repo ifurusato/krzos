@@ -59,6 +59,25 @@ class I2CMaster(Component):
         time.sleep(0.002)
         for _ in range(2):
             resp_buf = self._bus.read_i2c_block_data(self._i2c_address, 0, 32)
+#           print('read {} bytes: {}'.format(len(resp_buf), ' '.join('{:02x}'.format(b) for b in resp_buf[: 16])))
+            if resp_buf and len(resp_buf) >= 2:
+                msg_len = resp_buf[0]
+                if 1 <= msg_len <= 30:
+                    resp_bytes = bytes(resp_buf[: msg_len+2])
+                    return resp_bytes
+            time.sleep(0.003)
+        raise RuntimeError("bad message length or slave not ready.")
+
+    def x_i2c_write_and_read(self, out_msg):
+        if out_msg is None:
+            raise ValueError('null message.')
+        elif len(out_msg) == 0:
+            self._log.warning('did not send empty message.')
+            return
+        self._bus.write_i2c_block_data(self._i2c_address, 0, list(out_msg))
+        time.sleep(0.002)
+        for _ in range(2):
+            resp_buf = self._bus.read_i2c_block_data(self._i2c_address, 0, 32)
             # auto-detect and extract the real message
             if resp_buf and resp_buf[0] == 0 and len(resp_buf) > 2:
                 # skip first byte, interpret the second as length

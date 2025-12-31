@@ -18,7 +18,8 @@ import stm
 from pyb import Pin, Timer
 
 from colors import*
-from i2c_slave import I2CSlave
+#from i2c_slave import I2CSlave    # IRQ based
+from i2c_slave_mem import I2CSlave # memory-based
 from controller import Controller
 from pixel import Pixel
 #from pixel_cycler import PixelCycler
