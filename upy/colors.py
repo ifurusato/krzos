@@ -69,6 +69,7 @@ COLOR_DARK_BLUE     = Color("COLOR_DARK_BLUE",    (  0,   0,  32))
 COLOR_DARK_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  32,  32))
 COLOR_DARK_MAGENTA  = Color("COLOR_DARK_MAGENTA", ( 32,   0,  32))
 COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 64,  32,   0))
+COLOR_DARK_GREY     = Color("COLOR_DARK_GREY",    ( 10,  10,  10))
 
 COLOR_ORANGE        = Color("COLOR_ORANGE",       (240,  53,   0))
 COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  11,   0))

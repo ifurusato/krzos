@@ -31,8 +31,8 @@ class Controller:
         self._blink_index     = -1
         self._blink_direction = 1
         self._blink_color     = COLOR_TANGERINE
-        self._ring_colors = [COLOR_BLACK] * 24 # model for ring
-        self._last_update_ts = self._get_time()
+        self._ring_colors     = [COLOR_BLACK] * 24 # model for ring
+        self._last_update_ts  = self._get_time()
         # instantiate the odometer
         self._odometer = Odometer()
         # heartbeat feature
@@ -44,11 +44,10 @@ class Controller:
         self._position = '0 0'
         self._velocity = '0 0'
         # rotation
-        self._ring_offset      = 0
-        self._enable_rotate    = False
-        self._rotation_pending = False
+        self._ring_offset     = 0
+        self._enable_rotate   = False
         self._timer3 = Timer(3)
-        self._timer3.init(freq=20, callback=self._set_rotation_pending)
+        self._timer3.init(freq=24, callback=self._do_rotation, hard=False)
         print('ready.')
 
     def set_strip(self, strip):
@@ -71,9 +70,6 @@ class Controller:
     def tick(self, delta_ms):
         if self._heartbeat_enabled:
             self._heartbeat(delta_ms)
-        if self._rotation_pending and self._enable_rotate:
-            self._rotation_pending = False
-            self.rotate_ring(1)
 
     def _heartbeat(self, delta_ms):
         self._heartbeat_timer += delta_ms
@@ -120,8 +116,12 @@ class Controller:
 
     # ring .......................................
 
-    def _set_rotation_pending(self):
+    def _set_rotation_pending(self, t):
         self._rotation_pending = True
+
+    def _do_rotation(self, t):
+        if self._enable_rotate:
+            self.rotate_ring(1)
 
     def set_ring(self, ring):
         self._ring = ring
@@ -190,16 +190,25 @@ class Controller:
             odo pos
                 vel
                 reset
-                led on | off
+                led on
+                    off
                 rf get
-                rf set <value> | None
-            time get | set <timestamp>
-            strip off | <color>
+                rf set <value>
+                       None
+            time get
+                 set <timestamp>
+            strip off
+                  <color>
                   <n> <color>
-            ring off | <color>
-                  <n> <color>
-            rotate <n> | on | off | hz <n>
-            blink on | off
+            ring off
+                 <color>
+                 <n> <color>
+            rotate <n>
+                   on
+                   off
+                   hz <n>
+            blink on
+                  off
             save <name> <red> <green> <blue>
             rgb <n> <red> <green> <blue>
             heading <degrees> <color>
@@ -219,7 +228,6 @@ class Controller:
 
             # odometer
             if _arg0 == "odo":
-
                 if _arg1 == "pos":
                     return self._position
                 elif _arg1 == "vel":
@@ -253,7 +261,6 @@ class Controller:
                                 return 'ERR'
                 return 'ERR'
 
-            # RTC
             elif _arg0 == "time":
 #               print('time: {}, {}'.format(_arg1, _arg2))
                 if _arg1 == 'set':
@@ -262,7 +269,6 @@ class Controller:
                     return "2025" # TEMP
                 return 'ERR'
 
-            # LEDs
             elif _arg0 == "strip":
                 if self._strip:
                     if _arg1 == 'all':
@@ -289,29 +295,31 @@ class Controller:
 
             elif _arg0 == "ring":
                 if self._ring:
-                    if _arg1 == 'clear':
-                        self._store.clear()
-                        self.reset_ring()
-                        return 'ACK'
-                    elif _arg1 == 'all':
-                        # e.g., ring all off
-                        if _arg2 == 'off':
-                            self.reset_ring()
+                    try:
+                        _rotating = self._enable_rotate
+                        if _arg1 == 'clear':
                             self._store.clear()
+                            self.reset_ring()
                             return 'ACK'
+                        elif _arg1 == 'all':
+                            if _arg2 == 'off':
+                                self.reset_ring()
+                                self._store.clear()
+                                return 'ACK'
+                            else:
+                                color = self.get_color(_arg2, _arg3)
+                                for idx in range(24):
+                                    self.set_ring_color(index, color)
+                                return 'ACK'
                         else:
+                            index = int(_arg1)
                             color = self.get_color(_arg2, _arg3)
-                            for idx in range(24):
+                            if color:
                                 self.set_ring_color(index, color)
-                            return 'ACK'
-                    else:
-                        index = int(_arg1)
-                        color = self.get_color(_arg2, _arg3)
-                        if color:
-                            # e.g.:  ring 20 yellow
-                            self.set_ring_color(index, color)
-                            return 'ACK'
-                    print("ERROR: could not process input: '{}'".format(cmd))
+                                return 'ACK'
+                        print("ERROR: could not process input: '{}'".format(cmd))
+                    finally:
+                        self._enable_rotate = _rotating
                 else:
                     print('ERROR: no LED ring available.')
                 return 'ERR'
@@ -322,11 +330,11 @@ class Controller:
                         self._enable_rotate = True
                     elif _arg1 == 'off':
                         self._enable_rotate = False
-                        self._rotation_pending = False
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
-                            self._timer3.init(freq=hz)
+                            self._timer3.deinit()
+                            self._timer3.init(freq=hz, callback=self._do_rotation, hard=False)
                         return 'ERR'
                     else:
                         shift = int(_arg1)
@@ -337,11 +345,9 @@ class Controller:
 
             elif _arg0 == "blink":
                 if _arg1 == 'on':
-                    print('step on.')
                     self._enable_blink = True
                     return 'ACK'
                 elif _arg1 == 'off':
-                    print('step off.')
                     self._enable_blink = False
                     self.clear_strip()
                     self._blink_index = -1
@@ -366,7 +372,7 @@ class Controller:
                 return 'ACK'
 
             elif _arg0 == "rgb":
-                # e.g., (ring only) rgb 3 130 40 242
+                # e.g., rgb 3 130 40 242
                 index = int(_arg1)
                 red   = int(_arg2)
                 green = int(_arg3)
