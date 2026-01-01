@@ -55,13 +55,11 @@ class Controller:
         self._velocity        = '0 0'
         # rotation
         self._ring_offset     = 0
-        self._ring_colors     = [COLOR_BLACK] * 24 # model for ring
         self._enable_rotate   = False
-        # thinking
         self._ring_model = [PixelState() for _ in range(24)]
+        # thinking
         self._enable_think    = False
         self._pulse_steps = 40
-        self._pulse_state = {}
         self._think_target_pixels = 12 # default
         self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
                        COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
@@ -176,8 +174,8 @@ class Controller:
 
     def set_ring_color(self, index, color):
         actual_index = (index + self._ring_offset) % 24
-        self._ring_colors[actual_index] = color
-        self._ring.set_color(index, color)
+        self._ring_model[actual_index]. color = color
+        self._ring. set_color(index, color)
 
     def populate(self, count, palette):
         for pixel in self._ring_model:
@@ -195,36 +193,23 @@ class Controller:
         print('_init_think() reset: {}'.format(reset))
         if reset:
             self.reset_ring()
-            self._pulse_state.clear() 
             existing_count = 0
         else:
-            # count existing non-black pixels
-            existing_count = sum(1 for c in self._ring_colors if c != COLOR_BLACK)
+            existing_count = sum(1 for p in self._ring_model if p.is_active())
         new_pixels_needed = max(0, self._think_target_pixels - existing_count)
-        # get available colors excluding black
         available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
         print('_init_think() existing pixels: {}; needed: {}'.format(existing_count, new_pixels_needed))
         if new_pixels_needed > 0:
             # find empty positions
-            empty_positions = [i for i in range(24) if self._ring_colors[i] == COLOR_BLACK]
+            empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
             # randomly select positions
-            selected_positions = []
             for _ in range(new_pixels_needed):
+                if not empty_positions:
+                    break
                 pos = random.choice(empty_positions)
-                selected_positions.append(pos)
                 empty_positions.remove(pos)
-            # assign random colors
-            for pos in selected_positions:
-                color = random.choice(available_colors)
-                self._ring_colors[pos] = color. rgb
-        # create pulse state for all non-black pixels
-        self._pulse_state = {}
-        for i in range(24):
-            if self._ring_colors[i] != COLOR_BLACK:
-                self._pulse_state[i] = {
-                    'base_color':  self._ring_colors[i],
-                    'phase': random.random()
-                }
+                self._ring_model[pos].color = random.choice(available_colors).rgb
+                self._ring_model[pos].phase = random.random()
 
     def think(self):
         for index in range(24):
