@@ -27,7 +27,6 @@ class Controller:
     def __init__(self):
         self._slave = None
         self._store = ColorStore()
-        self._led = LED(1)
         # blink support
         self._enable_blink    = False
         self._blink_index     = -1
@@ -45,6 +44,8 @@ class Controller:
         self._ring_offset     = 0
         self._ring_colors     = [COLOR_BLACK] * 24 # model for ring
         self._enable_rotate   = False
+        # thinking
+        self._enable_think    = False
         # instantiate ring, strip & odometer
         self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
         self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
@@ -52,8 +53,23 @@ class Controller:
         self._last_update_ts  = self._get_time()
         self._odometer = Odometer()
         self._timer3 = Timer(3)
-        self._timer3.init(freq=24, callback=self._do_rotation, hard=False)
+        self._timer3.init(freq=24, callback=self._action, hard=False)
+        # LED support
+        self._led = LED(1)
+        self._timer7 = Timer(7)
         print('ready.')
+
+    # led ........................................
+
+    def _led_pulse(self, duration_ms=20):
+        self._led.on()
+        self._timer7.deinit()
+        self._timer7.init(period=duration_ms, callback=self._off)
+
+    def _off(self, timer):
+        self._led.off()
+
+    # ............................................
 
     def set_slave(self, slave):
         self._slave = slave
@@ -90,7 +106,7 @@ class Controller:
         if self._enable_blink:
             self.blink()
         else:
-            self._led.toggle()
+            self._led_pulse()
 
     def heading_to_pixel(self, heading_deg):
         pixel = round((180 + heading_deg) / 15) % 24
@@ -110,9 +126,11 @@ class Controller:
     def _set_rotation_pending(self, t):
         self._rotation_pending = True
 
-    def _do_rotation(self, t):
+    def _action(self, t):
         if self._enable_rotate:
-            self.rotate_ring(1)
+            self.rotate_ring()
+        elif self._enable_think:
+            self.think()
 
     def set_ring(self, ring):
         self._ring = ring
@@ -122,7 +140,11 @@ class Controller:
         self._ring_colors = [COLOR_BLACK] * 24
         self.update_ring()
 
-    def rotate_ring(self, shift):
+    def think(self):
+        print('think')
+        pass # TODO
+
+    def rotate_ring(self, shift=1):
         if abs(shift) > 24:
             raise ValueError('shift value outside of bounds.')
         self._ring_offset = (self._ring_offset + shift) % 24
@@ -201,6 +223,7 @@ class Controller:
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
             rotate <n> | on | off | hz <n>
+            think on | off | hz <n>
             heartbeat on | off
             blink on | off
             save <name> <red> <green> <blue>
@@ -334,6 +357,7 @@ class Controller:
             elif _arg0 == "rotate":
                 if _arg1:
                     if _arg1 == 'on':
+                        self._enable_think  = False
                         self._enable_rotate = True
                     elif _arg1 == 'off':
                         self._enable_rotate = False
@@ -341,11 +365,31 @@ class Controller:
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer3.deinit()
-                            self._timer3.init(freq=hz, callback=self._do_rotation, hard=False)
+                            self._timer3.init(freq=hz, callback=self._action, hard=False)
                         return 'ERR'
                     else:
                         shift = int(_arg1)
                         self.rotate_ring(shift)
+                    return 'ACK'
+                else:
+                    return 'ERR'
+
+            elif _arg0 == "think":
+                if _arg1:
+                    if _arg1 == 'on':
+                        self._enable_rotate = False
+                        self._enable_think  = True
+                    elif _arg1 == 'off':
+                        self._enable_think  = False
+                    elif _arg1 == 'hz':
+                        hz = int(_arg2)
+                        if hz > 0:
+                            self._timer3.deinit()
+                            self._timer3.init(freq=hz, callback=self._action, hard=False)
+                        return 'ERR'
+                    else:
+                        print("ERROR: could not process input: '{}'".format(cmd))
+                        return 'ERR'
                     return 'ACK'
                 else:
                     return 'ERR'
