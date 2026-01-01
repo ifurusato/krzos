@@ -32,7 +32,8 @@ __BUF_LEN     = 258
 
 class I2CSlave:
     '''
-    Constructs an I2C slave at the configured bus (0) and address (0x43).
+    Constructs an I2C slave at the configured bus (0) and address (0x43),
+    using an IRQ callback.
     '''
     def __init__(self, i2c_id=None, i2c_address=None):
         # configuration

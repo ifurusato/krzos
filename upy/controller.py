@@ -10,6 +10,7 @@
 
 import sys
 import time
+import math, random # for think()
 from pyb import LED, Timer
 from machine import RTC
 
@@ -46,6 +47,14 @@ class Controller:
         self._enable_rotate   = False
         # thinking
         self._enable_think    = False
+        self._pulse_steps = 40
+        self._pulse_state = {}
+        self._think_target_pixels = 12 # default
+        self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
+                       COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
+                       COLOR_PURPLE, COLOR_SKY_BLUE]
+        self._warm = [ COLOR_RED, COLOR_YELLOW, COLOR_DARK_RED, COLOR_DARK_YELLOW,
+                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER]
         # instantiate ring, strip & odometer
         self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
         self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
@@ -129,7 +138,7 @@ class Controller:
     def _action(self, t):
         if self._enable_rotate:
             self.rotate_ring()
-        elif self._enable_think:
+        if self._enable_think:
             self.think()
 
     def set_ring(self, ring):
@@ -137,12 +146,9 @@ class Controller:
         self.reset_ring()
 
     def reset_ring(self):
-        self._ring_colors = [COLOR_BLACK] * 24
+        for i in range(24):
+            self._ring_colors[i] = COLOR_BLACK
         self.update_ring()
-
-    def think(self):
-        print('think')
-        pass # TODO
 
     def rotate_ring(self, shift=1):
         if abs(shift) > 24:
@@ -159,6 +165,73 @@ class Controller:
         actual_index = (index + self._ring_offset) % 24
         self._ring_colors[actual_index] = color
         self._ring.set_color(index, color)
+
+    def populate(self, count, palette):
+        if count > 24:
+            raise ValueError("count exceeds ring size")
+        for i in range(24):
+            self._ring_colors[i] = COLOR_BLACK
+        indices = list(range(24))
+        print('b. populate; indices: {}'.format(indices))
+        for i in range(24 - 1, 0, -1):
+            j = random.randrange(i + 1)
+            print('j: {}'.format(j))
+            indices[i], indices[j] = indices[j], indices[i]
+        for i in indices[:count]:
+            self._ring_colors[i] = random.choice(palette)
+            print('color[{}]: {}'.format(i, self._ring_colors[i]))
+
+    # thinking ...................................
+
+    def _init_think(self, reset=False):
+        print('_init_think() reset: {}'.format(reset))
+        if reset:
+            self.reset_ring()
+            self._pulse_state.clear() 
+            existing_count = 0
+        else:
+            # count existing non-black pixels
+            existing_count = sum(1 for c in self._ring_colors if c != COLOR_BLACK)
+        new_pixels_needed = max(0, self._think_target_pixels - existing_count)
+        # get available colors excluding black
+        available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
+        print('_init_think() existing pixels: {}; needed: {}'.format(existing_count, new_pixels_needed))
+        if new_pixels_needed > 0:
+            # find empty positions
+            empty_positions = [i for i in range(24) if self._ring_colors[i] == COLOR_BLACK]
+            # randomly select positions
+            selected_positions = []
+            for _ in range(new_pixels_needed):
+                pos = random.choice(empty_positions)
+                selected_positions.append(pos)
+                empty_positions.remove(pos)
+            # assign random colors
+            for pos in selected_positions:
+                color = random.choice(available_colors)
+                self._ring_colors[pos] = color. rgb
+        # create pulse state for all non-black pixels
+        self._pulse_state = {}
+        for i in range(24):
+            if self._ring_colors[i] != COLOR_BLACK:
+                self._pulse_state[i] = {
+                    'base_color':  self._ring_colors[i],
+                    'phase': random.random()
+                }
+
+    def think(self):
+        import math
+        for index, state in self._pulse_state.items():
+            # increment phase
+            state['phase'] = (state['phase'] + 1.0 / self._pulse_steps) % 1.0
+            # calculate brightness using sine wave:  0→1→0
+            brightness = (math.sin(state['phase'] * 2 * math.pi) + 1) / 2
+            # scale base color by brightness
+            r, g, b = state['base_color']
+            scaled_color = (int(r * brightness), int(g * brightness), int(b * brightness))
+            # update model
+            self._ring_colors[index] = scaled_color
+        # write to hardware
+        self.update_ring()
 
     # strip ......................................
 
@@ -223,7 +296,7 @@ class Controller:
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
             rotate <n> | on | off | hz <n>
-            think on | off | hz <n>
+            think on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
             heartbeat on | off
             blink on | off
             save <name> <red> <green> <blue>
@@ -357,7 +430,6 @@ class Controller:
             elif _arg0 == "rotate":
                 if _arg1:
                     if _arg1 == 'on':
-                        self._enable_think  = False
                         self._enable_rotate = True
                     elif _arg1 == 'off':
                         self._enable_rotate = False
@@ -374,21 +446,67 @@ class Controller:
                 else:
                     return 'ERR'
 
-            elif _arg0 == "think":
+            elif _arg0 == "think": 
                 if _arg1:
                     if _arg1 == 'on':
-                        self._enable_rotate = False
-                        self._enable_think  = True
+                        self._init_think()
+                        self._enable_think = True
                     elif _arg1 == 'off':
-                        self._enable_think  = False
-                    elif _arg1 == 'hz':
+                        self._enable_think = False
+                    elif _arg1 == 'hz': 
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer3.deinit()
                             self._timer3.init(freq=hz, callback=self._action, hard=False)
+                            return 'ACK'
                         return 'ERR'
-                    else:
-                        print("ERROR: could not process input: '{}'".format(cmd))
+                    elif _arg1 == 'pixels':
+                        _thinking = self._enable_think
+                        try:
+                            self._enable_think = False
+                            target = int(_arg2)
+                            if 1 <= target <= 24:
+                                self._think_target_pixels = target
+                                self._init_think(reset=True)
+                                return 'ACK'
+                            return 'ERR'
+                        finally:
+                            self._enable_think = _thinking
+                    elif _arg1 == 'cool' or _arg1 == 'warm':
+                        _thinking = self._enable_think
+                        _rotating = self._enable_rotate
+                        self._enable_rotate = False
+                        self._enable_think = False
+                        try:
+                            print('a. palette: {}; count: {}'.format(_arg1, _arg2))
+                            self._init_think(reset=True)
+                            target = int(_arg2)
+                            print('b. target: {}'.format(target))
+                            self._think_target_pixels = target
+                            if 1 <= target <= 24:
+                                if _arg1 == 'cool':
+                                    print('c. palette: {}; count: {}'.format(_arg1, _arg2))
+                                    self.populate(target, self._cool)
+                                else:
+                                    print('d. palette: {}; count: {}'.format(_arg1, _arg2))
+                                    self.populate(target, self._warm)
+                                return 'ACK'
+                            return 'ERR'
+                        except Exception:
+                            return 'ERR'
+                        finally:
+                            print('finally. palette: {}; count: {}'.format(_arg1, _arg2))
+                            self._enable_think = _thinking
+                            self._enable_rotate = _rotating
+
+                    elif _arg1 == 'steps':
+                        steps = int(_arg2)
+                        if steps > 0:
+                            self._pulse_steps = steps
+                            return 'ACK'
+                        return 'ERR'
+                    else: 
+                        print("ERROR: could not process input:  '{}'".format(cmd))
                         return 'ERR'
                     return 'ACK'
                 else:
