@@ -21,13 +21,15 @@ from pixel import Pixel
 
 class PixelState:
     def __init__(self, color=COLOR_BLACK, phase=0.0):
+        self.base_color = color
         self.color = color
         self.phase = phase
     
     def is_active(self):
-        return self. color != COLOR_BLACK
+        return self.base_color != COLOR_BLACK
     
     def reset(self):
+        self.base_color = COLOR_BLACK
         self.color = COLOR_BLACK
         self. phase = 0.0
 
@@ -174,8 +176,9 @@ class Controller:
 
     def set_ring_color(self, index, color):
         actual_index = (index + self._ring_offset) % 24
-        self._ring_model[actual_index]. color = color
-        self._ring. set_color(index, color)
+        self._ring_model[actual_index].base_color = color
+        self._ring_model[actual_index].color = color
+        self._ring.set_color(index, color)
 
     def populate(self, count, palette):
         for pixel in self._ring_model:
@@ -183,8 +186,10 @@ class Controller:
             pixel.phase = random.random()
         indices = list(range(24))
         random.shuffle(indices)
-        for i in indices[:count]: 
-            self._ring_model[i].color = random.choice(palette)
+        for i in indices[:count]:
+            color = random.choice(palette)
+            self._ring_model[i].base_color = color
+            self._ring_model[i].color = color
         self.update_ring()
 
     # thinking ...................................
@@ -198,17 +203,16 @@ class Controller:
             existing_count = sum(1 for p in self._ring_model if p.is_active())
         new_pixels_needed = max(0, self._think_target_pixels - existing_count)
         available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
-        print('_init_think() existing pixels: {}; needed: {}'.format(existing_count, new_pixels_needed))
         if new_pixels_needed > 0:
-            # find empty positions
             empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
-            # randomly select positions
             for _ in range(new_pixels_needed):
                 if not empty_positions:
                     break
                 pos = random.choice(empty_positions)
                 empty_positions.remove(pos)
-                self._ring_model[pos].color = random.choice(available_colors).rgb
+                color = random.choice(available_colors).rgb
+                self._ring_model[pos].base_color = color
+                self._ring_model[pos].color = color
                 self._ring_model[pos].phase = random.random()
 
     def think(self):
@@ -217,8 +221,8 @@ class Controller:
             if not pixel.is_active():
                 continue
             pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
-            brightness = (math. sin(pixel.phase * 2 * math.pi) + 1) / 2
-            r, g, b = pixel.color
+            brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
+            r, g, b = pixel.base_color
             pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
@@ -468,7 +472,7 @@ class Controller:
                         self._enable_think = False
                         try:
                             print('a. palette: {}; count: {}'.format(_arg1, _arg2))
-                            self._init_think(reset=True)
+#                           self._init_think(reset=True)
                             target = int(_arg2)
                             print('b. target: {}'.format(target))
                             self._think_target_pixels = target
