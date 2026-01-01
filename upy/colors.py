@@ -83,5 +83,6 @@ COLOR_FUCHSIA       = Color("COLOR_FUCHSIA",      (158,  16,  99))
 COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
 COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
 COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
+COLOR_LAVENDER      = Color("COLOR_LAVENDER",     ( 24,  11, 130))
 
 #EOF

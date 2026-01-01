@@ -22,7 +22,7 @@ from pixel import Pixel
 class PixelState:
     def __init__(self, color=COLOR_BLACK, phase=0.0):
         self.base_color = color
-        self.color = color
+        self.color = color.rgb
         self.phase = phase
     
     def is_active(self):
@@ -30,8 +30,8 @@ class PixelState:
     
     def reset(self):
         self.base_color = COLOR_BLACK
-        self.color = COLOR_BLACK
-        self. phase = 0.0
+        self.color = self.base_color.rgb
+        self.phase = 0.0
 
 class Controller:
     STRIP_PIN = 'B12'
@@ -65,9 +65,19 @@ class Controller:
         self._think_target_pixels = 12 # default
         self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
                        COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
-                       COLOR_PURPLE, COLOR_SKY_BLUE]
+                       COLOR_PURPLE, COLOR_SKY_BLUE
+        ]
         self._warm = [ COLOR_RED, COLOR_YELLOW, COLOR_DARK_RED, COLOR_DARK_YELLOW,
-                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER]
+                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER
+        ]
+        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO,
+                       COLOR_VIOLET, COLOR_PINK, COLOR_FUCHSIA, COLOR_PURPLE, COLOR_SKY_BLUE
+        ]
+        self._palettes = {
+            'cool': self._cool,
+            'warm': self._warm,
+            'wild': self._wild
+        }
         # instantiate ring, strip & odometer
         self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
         self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
@@ -177,19 +187,27 @@ class Controller:
     def set_ring_color(self, index, color):
         actual_index = (index + self._ring_offset) % 24
         self._ring_model[actual_index].base_color = color
-        self._ring_model[actual_index].color = color
-        self._ring.set_color(index, color)
+        self._ring_model[actual_index].color = color.rgb
+        self._ring.set_color(index, color.rgb)
 
-    def populate(self, count, palette):
+    def populate(self, count, palette_name):
+        print("getting palette: '{}'".format(palette_name))
+        palette = self._palettes.get(palette_name)
+        if palette is None:
+            print("no such palette: '{}'".format(palette_name))
+            return
         for pixel in self._ring_model:
             pixel.reset()
             pixel.phase = random.random()
-        indices = list(range(24))
-        random.shuffle(indices)
-        for i in indices[:count]:
+        selected = []
+        available = list(range(24))
+        for _ in range(count):
+            idx = random.randrange(len(available))
+            selected.append(available.pop(idx))
+        for i in selected:
             color = random.choice(palette)
-            self._ring_model[i].base_color = color
-            self._ring_model[i].color = color
+            self._ring_model[i]. base_color = color
+            self._ring_model[i].color = color.rgb
         self.update_ring()
 
     # thinking ...................................
@@ -203,17 +221,19 @@ class Controller:
             existing_count = sum(1 for p in self._ring_model if p.is_active())
         new_pixels_needed = max(0, self._think_target_pixels - existing_count)
         available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
+        print('existing: {}; needed: {}'.format(existing_count, new_pixels_needed))
         if new_pixels_needed > 0:
             empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
             for _ in range(new_pixels_needed):
                 if not empty_positions:
                     break
-                pos = random.choice(empty_positions)
-                empty_positions.remove(pos)
-                color = random.choice(available_colors).rgb
+                idx = random.randrange(len(empty_positions))
+                pos = empty_positions.pop(idx)
+                color = random.choice(available_colors)
                 self._ring_model[pos].base_color = color
-                self._ring_model[pos].color = color
+                self._ring_model[pos].color = color.rgb
                 self._ring_model[pos].phase = random.random()
+        self.update_ring()
 
     def think(self):
         for index in range(24):
@@ -222,7 +242,18 @@ class Controller:
                 continue
             pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
             brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
-            r, g, b = pixel.base_color
+            r, g, b = pixel.base_color.rgb
+            pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
+        self.update_ring()
+
+    def x_think(self):
+        for index in range(24):
+            pixel = self._ring_model[index]
+            if not pixel.is_active():
+                continue
+            pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
+            brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
+            r, g, b = pixel.base_color.rgb
             pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
@@ -465,27 +496,21 @@ class Controller:
                             return 'ERR'
                         finally:
                             self._enable_think = _thinking
-                    elif _arg1 == 'cool' or _arg1 == 'warm':
+                    elif _arg1 in self._palettes:
                         _thinking = self._enable_think
                         _rotating = self._enable_rotate
                         self._enable_rotate = False
                         self._enable_think = False
+                        self._ring_offset = 0
                         try:
-                            print('a. palette: {}; count: {}'.format(_arg1, _arg2))
-#                           self._init_think(reset=True)
                             target = int(_arg2)
-                            print('b. target: {}'.format(target))
                             self._think_target_pixels = target
                             if 1 <= target <= 24:
-                                if _arg1 == 'cool':
-                                    print('c. palette: {}; count: {}'.format(_arg1, _arg2))
-                                    self.populate(target, self._cool)
-                                else:
-                                    print('d. palette: {}; count: {}'.format(_arg1, _arg2))
-                                    self.populate(target, self._warm)
+                                self.populate(target, _arg1)
                                 return 'ACK'
                             return 'ERR'
-                        except Exception:
+                        except Exception as e:
+                            print('{} raised with palette name: {}'.format(type(e), e))
                             return 'ERR'
                         finally:
                             print('finally. palette: {}; count: {}'.format(_arg1, _arg2))

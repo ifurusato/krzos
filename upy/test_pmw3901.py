@@ -1,6 +1,3 @@
-#!/micropython
-# -*- coding: utf-8 -*-
-#
 # Test script for PMW3901 / PAA5100 MicroPython driver.
 # This variant shows how to enable Pimoroni vendor init ("secret sauce").
 
