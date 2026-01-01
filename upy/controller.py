@@ -19,6 +19,18 @@ from color_store import ColorStore
 from odometer import Odometer
 from pixel import Pixel
 
+class PixelState:
+    def __init__(self, color=COLOR_BLACK, phase=0.0):
+        self.color = color
+        self.phase = phase
+    
+    def is_active(self):
+        return self. color != COLOR_BLACK
+    
+    def reset(self):
+        self.color = COLOR_BLACK
+        self. phase = 0.0
+
 class Controller:
     STRIP_PIN = 'B12'
     RING_PIN  = 'B14'
@@ -46,6 +58,7 @@ class Controller:
         self._ring_colors     = [COLOR_BLACK] * 24 # model for ring
         self._enable_rotate   = False
         # thinking
+        self._ring_model = [PixelState() for _ in range(24)]
         self._enable_think    = False
         self._pulse_steps = 40
         self._pulse_state = {}
@@ -146,8 +159,8 @@ class Controller:
         self.reset_ring()
 
     def reset_ring(self):
-        for i in range(24):
-            self._ring_colors[i] = COLOR_BLACK
+        for pixel in self._ring_model:
+            pixel.reset()
         self.update_ring()
 
     def rotate_ring(self, shift=1):
@@ -159,7 +172,7 @@ class Controller:
     def update_ring(self):
         for index in range(24):
             rotated_index = (index - self._ring_offset) % 24
-            self._ring.set_color(index, self._ring_colors[rotated_index])
+            self._ring. set_color(index, self._ring_model[rotated_index].color)
 
     def set_ring_color(self, index, color):
         actual_index = (index + self._ring_offset) % 24
@@ -167,19 +180,14 @@ class Controller:
         self._ring.set_color(index, color)
 
     def populate(self, count, palette):
-        if count > 24:
-            raise ValueError("count exceeds ring size")
-        for i in range(24):
-            self._ring_colors[i] = COLOR_BLACK
+        for pixel in self._ring_model:
+            pixel.reset()
+            pixel.phase = random.random()
         indices = list(range(24))
-        print('b. populate; indices: {}'.format(indices))
-        for i in range(24 - 1, 0, -1):
-            j = random.randrange(i + 1)
-            print('j: {}'.format(j))
-            indices[i], indices[j] = indices[j], indices[i]
-        for i in indices[:count]:
-            self._ring_colors[i] = random.choice(palette)
-            print('color[{}]: {}'.format(i, self._ring_colors[i]))
+        random.shuffle(indices)
+        for i in indices[:count]: 
+            self._ring_model[i].color = random.choice(palette)
+        self.update_ring()
 
     # thinking ...................................
 
@@ -219,18 +227,14 @@ class Controller:
                 }
 
     def think(self):
-        import math
-        for index, state in self._pulse_state.items():
-            # increment phase
-            state['phase'] = (state['phase'] + 1.0 / self._pulse_steps) % 1.0
-            # calculate brightness using sine wave:  0→1→0
-            brightness = (math.sin(state['phase'] * 2 * math.pi) + 1) / 2
-            # scale base color by brightness
-            r, g, b = state['base_color']
-            scaled_color = (int(r * brightness), int(g * brightness), int(b * brightness))
-            # update model
-            self._ring_colors[index] = scaled_color
-        # write to hardware
+        for index in range(24):
+            pixel = self._ring_model[index]
+            if not pixel.is_active():
+                continue
+            pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
+            brightness = (math. sin(pixel.phase * 2 * math.pi) + 1) / 2
+            r, g, b = pixel.color
+            pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
     # strip ......................................
