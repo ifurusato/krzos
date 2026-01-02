@@ -109,7 +109,8 @@ class I2CMaster(Component):
                 resp_bytes = self._i2c_write_and_read(out_msg)
                 return unpack_message(resp_bytes)
             except Exception as e:
-                self._log.error('I2C message error: {}\n{}'.format(e, traceback.format_exc()))
+#               self._log.error('{} raised by send request: {}\n{}'.format(type(e), e, traceback.format_exc()))
+                self._log.error('{} raised by send request: {}'.format(type(e), e))
                 return None
             finally:
                 # don't repeat too quickly

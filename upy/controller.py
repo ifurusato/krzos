@@ -6,11 +6,11 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-01
+# modified: 2026-01-03
 
 import sys
 import time
-import math, random # for think()
+import math, random
 from pyb import LED, Timer
 from machine import RTC
 
@@ -59,24 +59,30 @@ class Controller:
         self._ring_offset     = 0
         self._enable_rotate   = False
         self._ring_model = [PixelState() for _ in range(24)]
-        # thinking
-        self._enable_think    = False
+        # theme
+        self._enable_theme    = False
         self._pulse_steps = 40
-        self._think_target_pixels = 12 # default
+        self._theme_target_pixels = 12 # default
+        self._all  = Color.all_colors()
         self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
                        COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
-                       COLOR_PURPLE, COLOR_SKY_BLUE
-        ]
+                       COLOR_PURPLE, COLOR_SKY_BLUE ]
         self._warm = [ COLOR_RED, COLOR_YELLOW, COLOR_DARK_RED, COLOR_DARK_YELLOW,
-                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER
-        ]
-        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO,
-                       COLOR_VIOLET, COLOR_PINK, COLOR_FUCHSIA, COLOR_PURPLE, COLOR_SKY_BLUE
-        ]
+                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER ]
+        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_RED,
+                       COLOR_VIOLET, COLOR_PINK, COLOR_FUCHSIA, COLOR_PURPLE, COLOR_SKY_BLUE,
+                       COLOR_WHITE, COLOR_APPLE, COLOR_EMERALD, COLOR_TANGERINE, COLOR_AMBER ]
+        self._grey = [ COLOR_WHITE, COLOR_GREY_0, COLOR_GREY_1, COLOR_GREY_2, COLOR_GREY_3,
+                       COLOR_GREY_4, COLOR_GREY_5, COLOR_GREY_6, COLOR_GREY_7 ]
+        self._dark = [ COLOR_DARK_RED, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
+                       COLOR_DARK_MAGENTA, COLOR_DARK_YELLOW, COLOR_PURPLE ]
         self._palettes = {
+            'all':  self._all,
             'cool': self._cool,
             'warm': self._warm,
-            'wild': self._wild
+            'wild': self._wild,
+            'grey': self._grey,
+            'dark': self._dark
         }
         # instantiate ring, strip & odometer
         self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
@@ -161,8 +167,8 @@ class Controller:
     def _action(self, t):
         if self._enable_rotate:
             self.rotate_ring()
-        if self._enable_think:
-            self.think()
+        if self._enable_theme:
+            self.theme()
 
     def set_ring(self, ring):
         self._ring = ring
@@ -191,7 +197,6 @@ class Controller:
         self._ring.set_color(index, color.rgb)
 
     def populate(self, count, palette_name):
-        print("getting palette: '{}'".format(palette_name))
         palette = self._palettes.get(palette_name)
         if palette is None:
             print("no such palette: '{}'".format(palette_name))
@@ -210,18 +215,16 @@ class Controller:
             self._ring_model[i].color = color.rgb
         self.update_ring()
 
-    # thinking ...................................
+    # themes .....................................
 
-    def _init_think(self, reset=False):
-        print('_init_think() reset: {}'.format(reset))
+    def _init_theme(self, reset=False):
         if reset:
             self.reset_ring()
             existing_count = 0
         else:
             existing_count = sum(1 for p in self._ring_model if p.is_active())
-        new_pixels_needed = max(0, self._think_target_pixels - existing_count)
+        new_pixels_needed = max(0, self._theme_target_pixels - existing_count)
         available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
-        print('existing: {}; needed: {}'.format(existing_count, new_pixels_needed))
         if new_pixels_needed > 0:
             empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
             for _ in range(new_pixels_needed):
@@ -235,18 +238,7 @@ class Controller:
                 self._ring_model[pos].phase = random.random()
         self.update_ring()
 
-    def think(self):
-        for index in range(24):
-            pixel = self._ring_model[index]
-            if not pixel.is_active():
-                continue
-            pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
-            brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
-            r, g, b = pixel.base_color.rgb
-            pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
-        self.update_ring()
-
-    def x_think(self):
+    def theme(self):
         for index in range(24):
             pixel = self._ring_model[index]
             if not pixel.is_active():
@@ -320,7 +312,7 @@ class Controller:
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
             rotate <n> | on | off | hz <n>
-            think on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
+            theme on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
             heartbeat on | off
             blink on | off
             save <name> <red> <green> <blue>
@@ -462,7 +454,9 @@ class Controller:
                         if hz > 0:
                             self._timer3.deinit()
                             self._timer3.init(freq=hz, callback=self._action, hard=False)
-                        return 'ERR'
+                            return 'ACK'
+                        else:
+                            return 'ERR'
                     else:
                         shift = int(_arg1)
                         self.rotate_ring(shift)
@@ -470,13 +464,15 @@ class Controller:
                 else:
                     return 'ERR'
 
-            elif _arg0 == "think": 
+            elif _arg0 == "theme": 
                 if _arg1:
                     if _arg1 == 'on':
-                        self._init_think()
-                        self._enable_think = True
+                        self._init_theme()
+                        self._enable_theme = True
+                        return 'ACK'
                     elif _arg1 == 'off':
-                        self._enable_think = False
+                        self._enable_theme = False
+                        return 'ACK'
                     elif _arg1 == 'hz': 
                         hz = int(_arg2)
                         if hz > 0:
@@ -485,37 +481,38 @@ class Controller:
                             return 'ACK'
                         return 'ERR'
                     elif _arg1 == 'pixels':
-                        _thinking = self._enable_think
+                        _themed = self._enable_theme
                         try:
-                            self._enable_think = False
+                            self._enable_theme = False
                             target = int(_arg2)
                             if 1 <= target <= 24:
-                                self._think_target_pixels = target
-                                self._init_think(reset=True)
+                                self._theme_target_pixels = target
+                                self._init_theme(reset=True)
                                 return 'ACK'
                             return 'ERR'
                         finally:
-                            self._enable_think = _thinking
+                            self._enable_theme = _themed
                     elif _arg1 in self._palettes:
-                        _thinking = self._enable_think
+                        _themed = self._enable_theme
                         _rotating = self._enable_rotate
                         self._enable_rotate = False
-                        self._enable_think = False
+                        self._enable_theme = False
                         self._ring_offset = 0
                         try:
                             target = int(_arg2)
-                            self._think_target_pixels = target
+                            self._theme_target_pixels = target
                             if 1 <= target <= 24:
                                 self.populate(target, _arg1)
                                 return 'ACK'
-                            return 'ERR'
+                            else:
+                                return 'ERR'
                         except Exception as e:
                             print('{} raised with palette name: {}'.format(type(e), e))
                             return 'ERR'
                         finally:
-                            print('finally. palette: {}; count: {}'.format(_arg1, _arg2))
-                            self._enable_think = _thinking
+                            self._enable_theme = _themed
                             self._enable_rotate = _rotating
+                        return 'ACK'
 
                     elif _arg1 == 'steps':
                         steps = int(_arg2)
