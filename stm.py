@@ -7,19 +7,20 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-03
+# modified: 2026-01-03
 
-from hardware.i2c_master import I2CMaster
+from hardware.stm32_controller import Stm32Controller
 
 def main():
     try:
-        NAME= 'pico'
-        master = I2CMaster(NAME, i2c_address=0x45, timeset=True)
+#       master = I2CMaster(Stm32Controller.NAME, i2c_address=0x45, timeset=True)
+        master = Stm32Controller()
         master.enable()
         while True:
             user_msg = input('Enter command string to send ("quit" to exit): ')
             if user_msg.strip().lower() == 'quit':
                 break
+            print('user msg: {}'.format(user_msg))
             if len(user_msg) == 0:
                 continue
             data_request = user_msg.startswith('!')

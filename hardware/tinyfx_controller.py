@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-05
+# modified: 2026-01-03
 
 import time
 from colorama import init, Fore, Style
@@ -19,6 +19,8 @@ from hardware.i2c_master import I2CMaster
 
 class TinyFxController(I2CMaster):
     NAME = 'tinyfx-ctrl'
+    I2C_BUS_ID  = 1
+    I2C_ADDRESS = 0x43
     '''
     Extends I2CMaster to control a Pimoroni TinyFX.
     '''
@@ -28,8 +30,8 @@ class TinyFxController(I2CMaster):
             _i2c_bus_id  = _cfg.get('i2c_bus_id')
             _i2c_address = _cfg.get('i2c_address')
         else:
-            _i2c_bus_id  = None
-            _i2c_address = None
+            _i2c_bus_id  = TinyFxController.I2C_BUS_ID
+            _i2c_address = TinyFxController.I2C_ADDRESS if i2c_address is None else i2c_address
         I2CMaster.__init__(self, log_or_name=TinyFxController.NAME, i2c_bus_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=timeset, level=level)
         # ready
 

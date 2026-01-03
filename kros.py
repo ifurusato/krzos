@@ -64,6 +64,7 @@ from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
 #from hardware.sound import Sound
 #from hardware.system_subscriber import SystemSubscriber
+from hardware.stm32_controller import Stm32Controller
 from hardware.tinyfx_controller import TinyFxController
 
 from behave.behaviour_manager import BehaviourManager
@@ -273,6 +274,12 @@ class KROS(Component, FiniteStateMachine):
                 time.sleep(0.1)
             self._radiozoa_sensor.set_visualisation(False)
             self._radiozoa_sensor.start_ranging()
+
+        _enable_stm32_controller = _cfg.get('enable_stm32_controller')
+        if _enable_stm32_controller:
+            self._log.info('configure stm32 controller…')
+            self._stm32 = Stm32Controller(self._config, level=self._level)
+            self._stm32.enable()
 
         _enable_tinyfx_controller = _cfg.get('enable_tinyfx_controller')
         if _enable_tinyfx_controller:

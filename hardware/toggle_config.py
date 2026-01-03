@@ -9,6 +9,7 @@
 # created:  2025-11-28
 # modified: 2025-11-29
 
+import traceback
 from colorama import init, Fore, Style
 init()
 
@@ -64,19 +65,20 @@ class ToggleConfig(Component):
                 import smbus2 as smbus
             # set up I2C ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             _cfg_radiozoa    = config.get('kros').get('hardware').get('radiozoa')
-            _ioe_i2c_address = '0x{:02X}'.format(_cfg_radiozoa.get('ioe_i2c_address'))
+            _ioe_i2c_address = _cfg_radiozoa.get('ioe_i2c_address')
             self._i2c_bus_number = _cfg_radiozoa.get('i2c_bus_number')
             if not isinstance(self._i2c_bus_number, int):
                 raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
             self._i2c_bus = smbus.SMBus()
             self._i2c_bus.open(bus=self._i2c_bus_number)
-            self._log.debug('I2C{} open.'.format(self._i2c_bus_number))
+            self._log.info('I2C{} open.'.format(self._i2c_bus_number))
             # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             try:
-                self._ioe = io.IOE(i2c_addr=0x18, smbus_id=self._i2c_bus_number)
+                self._log.info('opening IO Expander at {} on I2C{}…'.format(_ioe_i2c_address, self._i2c_bus_number))
+                self._ioe = io.IOE(i2c_addr=_ioe_i2c_address, smbus_id=self._i2c_bus_number)
                 self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
             except Exception as e:
-                self._log.error('{} raised setting up IO Expander: {}'.format(type(e), e))
+                self._log.error('{} raised setting up IO Expander: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 raise MissingComponentError('could not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
         # configuration by pin
         self._pin1 = _cfg.get('pin1')

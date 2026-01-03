@@ -447,8 +447,10 @@ class Controller:
                 if _arg1:
                     if _arg1 == 'on':
                         self._enable_rotate = True
+                        return 'ACK'
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                        return 'ACK'
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
@@ -493,6 +495,7 @@ class Controller:
                         finally:
                             self._enable_theme = _themed
                     elif _arg1 in self._palettes:
+                        print('a. theme')
                         _themed = self._enable_theme
                         _rotating = self._enable_rotate
                         self._enable_rotate = False
@@ -500,11 +503,14 @@ class Controller:
                         self._ring_offset = 0
                         try:
                             target = int(_arg2)
+                            print('b. theme; target: {}'.format(target))
                             self._theme_target_pixels = target
                             if 1 <= target <= 24:
                                 self.populate(target, _arg1)
+                                print('c. ACK theme; target: {}'.format(target))
                                 return 'ACK'
                             else:
+                                print('d. ERR theme; target: {}'.format(target))
                                 return 'ERR'
                         except Exception as e:
                             print('{} raised with palette name: {}'.format(type(e), e))

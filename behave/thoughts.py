@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2020-05-19
-# modified: 2025-12-18
+# modified: 2026-01-03
 
 import itertools
 import asyncio
@@ -34,6 +34,7 @@ from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
+from hardware.stm32_controller import Stm32Controller
 from hardware.tinyfx_controller import TinyFxController
 from hardware.imu import IMU
 
@@ -77,7 +78,7 @@ class Thoughts(Behaviour):
             self._idle_threshold_sec, self._loop_freq_hz))
         # thoughts configuration
         _cfg = config['kros']['behaviour']['thoughts']
-        self._verbose           = _cfg.get('verbose', False)
+        self._verbose           = True #_cfg.get('verbose', False)
         self._priority          = _cfg.get('priority', 0.2)
         self._max_activity      = _cfg.get('max_activity', 4.0)
         self._activity_scale    = _cfg.get('activity_scale', 1.0)
@@ -139,13 +140,15 @@ class Thoughts(Behaviour):
         self._last_name = None
         self._next_play_time = 0.0
         self._stop_event = ThreadEvent()
+        self._max_normalised = 0.0
         # subscribe to all non-IDLE events to detect activity
         self._thoughts_task = None
         self._loop_running = False
         self.add_events([member for member in Group
                         if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
-        # get tinyfx
+        # external controllers
         self._tinyfx = None
+        self._stm32  = None
         # behavioural states
         self._enable_imu_poll  = False
         self._bored            = False
@@ -199,6 +202,7 @@ class Thoughts(Behaviour):
             self._mark_activity()
             self._next_play_time = time.monotonic()
             self._tinyfx = self._component_registry.get(TinyFxController.NAME)
+            self._stm32  = self._component_registry.get(Stm32Controller.NAME)
             self._set_running_lights(True)
             # create async listener loop task
             if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
@@ -219,7 +223,7 @@ class Thoughts(Behaviour):
             if self._count % 10 == 0: # every 10 seconds
                 self._log.info(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
             else:
-                self._log.info(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
+                self._log.debug(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
 
     def _reset_sleepiness(self):
         '''
@@ -339,6 +343,7 @@ class Thoughts(Behaviour):
                 if self._odometer:
                     vx, vy, omega = self._odometer.velocity
                     _raw_activity = abs(vx) + abs(vy) + abs(omega)
+                    self._log.info(Fore.GREEN + '🤢 vx: {:4.2f}; vy: {:4.2f}; omega: {:4.2f}'.format(vx, vy, omega))
                     if isclose(_raw_activity, 0.0, abs_tol=0.001):
                         _style = Style.DIM
                         _raw_activity = 0.0
@@ -356,8 +361,10 @@ class Thoughts(Behaviour):
                         # reset, there's been activity
                         _style = Style.NORMAL
                     # normalize and scale activity
-                    _normalized = _raw_activity / self._max_activity
-                    _activity = _normalized * self._activity_scale
+                    _normalised = _raw_activity / self._max_activity
+                    _activity = _normalised * self._activity_scale
+                    self._max_normalised = max(self._max_normalised, _normalised)
+                    self._log.info(Fore.GREEN + '🤢 activity raw: {:4.2f}; normalised: {:4.2f}; max: {:4.2f}'.format(_raw_activity, _normalised, self._max_normalised))
                     _activity = min(_activity, 1.0)
                     if self._verbose:
                         _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-05
+# modified: 2026-01-03
 
 import time
 from datetime import datetime as dt, timezone
@@ -64,31 +64,6 @@ class I2CMaster(Component):
                 msg_len = resp_buf[0]
                 if 1 <= msg_len <= 30:
                     resp_bytes = bytes(resp_buf[: msg_len+2])
-                    return resp_bytes
-            time.sleep(0.003)
-        raise RuntimeError("bad message length or slave not ready.")
-
-    def x_i2c_write_and_read(self, out_msg):
-        if out_msg is None:
-            raise ValueError('null message.')
-        elif len(out_msg) == 0:
-            self._log.warning('did not send empty message.')
-            return
-        self._bus.write_i2c_block_data(self._i2c_address, 0, list(out_msg))
-        time.sleep(0.002)
-        for _ in range(2):
-            resp_buf = self._bus.read_i2c_block_data(self._i2c_address, 0, 32)
-            # auto-detect and extract the real message
-            if resp_buf and resp_buf[0] == 0 and len(resp_buf) > 2:
-                # skip first byte, interpret the second as length
-                msg_len = resp_buf[1]
-                if 1 <= msg_len < 32:
-                    resp_bytes = bytes(resp_buf[1:1+msg_len+2])
-                    return resp_bytes
-            else:
-                msg_len = resp_buf[0]
-                if 1 <= msg_len < 32:
-                    resp_bytes = bytes(resp_buf[:msg_len+2])
                     return resp_bytes
             time.sleep(0.003)
         raise RuntimeError("bad message length or slave not ready.")
@@ -152,7 +127,6 @@ class I2CMaster(Component):
                     if candidate not in ('ACK', 'ERR'):
                         return candidate
                 return second_response
-
             except Exception as e:
                 self._log.error('I2C data request error: {}\n{}'.format(e, traceback.format_exc()))
                 return None
