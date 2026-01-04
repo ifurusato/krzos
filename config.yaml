@@ -436,7 +436,7 @@ kros:
             pitch_trim:                     0.7363         # -0.7392 
             roll_trim:                      1.7473         # -1.5231 
             yaw_trim:                     -78.5275         # -76.2418 # -73.12 # -77.41
-            adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
+            adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
             invert_roll:                   True
             invert_pitch:                  True
         icm20948:
@@ -449,7 +449,7 @@ kros:
             show_console:                  True            # if true, show data on console (same as verbose)
             show_rgbmatrix5x5:            False            # if true, show heading as color
             show_rgbmatrix11x7:            True            # if true, show heading as number
-            adjust_trim:                   True            # if true, use pot for trim, otherwise used fixed value
+            adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                      -0.0103       # 0.0029 # -0.0116 # pitch trim for level (radians)
             roll_trim:                       -0.0004       # 0.0296 # 0.0271 # 0.0112 # roll trim for level (radians)
             yaw_trim:                         1.2335       # 1.5737 # 0.7440 # 0.3834 # yaw trim adjustment (in radians) to set north

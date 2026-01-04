@@ -44,13 +44,10 @@ class DigitalPotentiometer(Component):
         if config is None:
             raise ValueError('no configuration provided.')
         _cfg = config['kros'].get('hardware').get('digital_potentiometer')
-        # 0x18 for IO Expander, 0x0E for the potentiometer breakout
-#       self._i2c_addr = 0x0E
         if i2c_address is not None:
             self._i2c_addr = i2c_address
         else:
             self._i2c_addr = _cfg.get('i2c_address')
-#       self._log = Logger('digital-pot-0x{:02X}'.format(self._i2c_addr), level)
         self._log = Logger(DigitalPotentiometer.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._pin_red    = 1
@@ -78,7 +75,6 @@ class DigitalPotentiometer(Component):
                 self._i2c_addr = 0x0a # new I2C address
                 self._ioe.set_i2c_addr(self._i2c_addr)
                 self._log.info('changed I2C address of digital potentiometer to 0x{:02X}…'.format(self._i2c_addr))
-#               sys.exit(0)
             self._ioe.set_mode(self._pot_enc_a, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_b, io.PIN_MODE_PP)
             self._ioe.set_mode(self._pot_enc_c, io.ADC)
@@ -89,11 +85,6 @@ class DigitalPotentiometer(Component):
             self._ioe.set_mode(self._pin_red,   io.PWM, invert=True)
             self._ioe.set_mode(self._pin_green, io.PWM, invert=True)
             self._ioe.set_mode(self._pin_blue,  io.PWM, invert=True)
-#           _result = self._ioe.get_bit(REG_ADCCON0, 7)
-#           print('REG_ADCCON0: {}'.format(_result))
-#           _result = self._ioe.get_bit(REG_PWMCON0, 6)
-#           print('REG_PWMCON0: {}'.format(_result))
-
         except FileNotFoundError:
             raise DeviceNotFound("unable to initialise potentiometer: no device found.")
         except Exception as e:

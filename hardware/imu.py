@@ -44,6 +44,7 @@ class IMU(Component):
         self._verbose             = _cfg.get('verbose')
         self._yaw_match_threshold = _cfg.get('yaw_match_threshold')
         self._prefer_usfs         = _cfg.get('prefer_usfs') # prefer USFS for accel/gyro
+        self._heading_matches     = False
         # components
         _component_registry = Component.get_registry()
         # ICM20948 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -89,6 +90,10 @@ class IMU(Component):
             return self._icm20948.roll
 
     @property
+    def heading_matches(self):
+        return self._heading_matches
+
+    @property
     def heading(self):
         '''
         Return the fused compass heading in degrees (as an int).
@@ -131,11 +136,13 @@ class IMU(Component):
             trim_str = '; trim: {:7.2f}'.format(self._usfs.trim_adjust)
         else:
             trim_str = ''
-        if isclose(usfs_heading, icm20948_heading, abs_tol=5.0):
+        self._heading_matches = isclose(usfs_heading, icm20948_heading, abs_tol=5.0)
+        if self._heading_matches:
             heading_display = (usfs_heading + icm20948_heading) / 2
-            heading_str = '{:7.2f}          '.format(heading_display)
+            heading_str = '{:7.2f} 💚       '.format(heading_display)
         else:
             heading_str = '{:7.2f} | {:7.2f}'.format(usfs_heading, icm20948_heading)
+
         # log output
         self._log.info(
               Fore.RED    + 'pitch: ' + pitch_str + '; '

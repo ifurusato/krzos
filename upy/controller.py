@@ -57,6 +57,7 @@ class Controller:
         self._velocity        = '0 0'
         # rotation
         self._ring_offset     = 0
+        self._rotate_direction = 1 # 1 or -1
         self._enable_rotate   = False
         self._ring_model = [PixelState() for _ in range(24)]
         # theme
@@ -182,6 +183,7 @@ class Controller:
     def rotate_ring(self, shift=1):
         if abs(shift) > 24:
             raise ValueError('shift value outside of bounds.')
+        shift *= self._rotate_direction
         self._ring_offset = (self._ring_offset + shift) % 24
         self.update_ring()
 
@@ -311,7 +313,7 @@ class Controller:
             time get | set <timestamp>
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
-            rotate <n> | on | off | hz <n>
+            rotate <n> | on | off | hz <n> | fwd/cw | rev/ccw
             theme on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
             heartbeat on | off
             blink on | off
@@ -450,6 +452,12 @@ class Controller:
                         return 'ACK'
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                        return 'ACK'
+                    elif _arg1 == 'fwd' or _arg1 == 'cw':
+                        self._rotate_direction = 1
+                        return 'ACK'
+                    elif _arg1 == 'rev' or _arg1 == 'ccw':
+                        self._rotate_direction = -1
                         return 'ACK'
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
