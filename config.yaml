@@ -430,9 +430,9 @@ kros:
             enable_dynamic_trim:           True            # if true enable dynamic modification of trim
             yaw_match_threshold:              0.00         # the threshold below which we consider yaw values to match
             prefer_usfs:                   True            # prefer USFS for accel/gyro
-            min_stability_threshold:        0.0            # (radians) absolute max stdev to trust a "stable" reading
-            trim_adjustment_gain:           0.0            # how aggressively to adjust (e.g., 0.05 = 5% of error per poll)
-            min_error_threshold:            0.0            # (radians) minimum heading difference before adjusting
+            min_stability_threshold:        0.15           # (radians) absolute max stdev to trust a "stable" reading
+            trim_adjustment_gain:           0.05           # how aggressively to adjust (e.g., 0.05 = 5% of error per poll)
+            min_error_threshold:            0.0872         # (radians) minimum heading difference before adjusting
         usfs:
             verbose:                      False
             declination:                     23.04         # declination at operating location
@@ -443,6 +443,7 @@ kros:
             adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
             invert_roll:                   True
             invert_pitch:                  True
+            stability_threshold:              0.09         # max standard deviation to determine calibration
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             declination:                     23.97         # declination at operating location
@@ -455,7 +456,7 @@ kros:
             show_rgbmatrix11x7:            True            # if true, show heading as number
             adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                      -0.0103       # 0.0029 # -0.0116 # pitch trim for level (radians)
-            roll_trim:                       -0.0004       # 0.0296 # 0.0271 # 0.0112 # roll trim for level (radians)
+            roll_trim:                        0.0324       # 0.0296 # 0.0271 # 0.0112 # roll trim for level (radians)
             yaw_trim:                         1.2335       # 1.5737 # 0.7440 # 0.3834 # yaw trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?

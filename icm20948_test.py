@@ -35,13 +35,14 @@ ACCEL_GYRO_TEST = True
 HALF_PI = π / 2.0
 
 _trim_axis = None #RDoF.YAW
+#_trim_axis = RDoF.ROLL
 _rgbmatrix = None
 _icm20948 = None
 _log = Logger('test', Level.INFO)
 _cardinal = Cardinal.NORTH
 _threshold = 4
 _pot = None
-_i2c_address = 0x0A
+_i2c_address = 0x0D
 
 try:
     # read YAML configuration

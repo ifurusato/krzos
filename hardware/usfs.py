@@ -118,6 +118,9 @@ class Usfs(Component):
         self._stdev = 0.0
         self._queue_length = _cfg.get('queue_length', 100)  # default to 100 if not in config
         self._queue = deque([], self._queue_length)
+        # calibration status
+        self._stability_threshold = _cfg.get('stability_threshold', 0.09)
+        self._is_calibrated = False
         # info
         self._log.info('pitch trim: {:+2.2f}° ({:+.6f} rad); roll trim: {:+2.2f}° ({:+.6f} rad)'.format(
             _pitch_trim_degrees, self._pitch_trim, _roll_trim_degrees, self._roll_trim))
@@ -335,6 +338,13 @@ class Usfs(Component):
         '''
         return self._stdev
 
+    @property
+    def is_calibrated(self):
+        '''
+        Return True if the compass is calibrated based on stability. 
+        '''
+        return self._is_calibrated
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
@@ -406,7 +416,7 @@ class Usfs(Component):
             qw, qx, qy, qz = self._usfs.readQuaternion()
             # calculate roll and pitch from quaternion (in radians)
             _roll_calc  = math.atan2(2.0 * (qw * qx + qy * qz), qw * qw - qx * qx - qy * qy + qz * qz)
-            _pitch_calc = -math.asin(2.0 * (qx * qz - qw * qy))
+            _pitch_calc = -math.asin(max(-1.0, min(1.0, 2.0 * (qx * qz - qw * qy))))
             # swap axes if configured for different mount orientation
             if self._swap_pitch_roll:
                 self._roll  = _pitch_calc
@@ -456,6 +466,9 @@ class Usfs(Component):
             self._queue.append(self._corrected_yaw)
             if len(self._queue) > 1:
                 self._stdev = self._circular_stdev(self._queue)
+                # check calibration based on stability
+                if len(self._queue) >= 20 and self._stdev < self._stability_threshold:
+                    self._is_calibrated = True
 
             # keep corrected yaw between 0 and 2π
             if self._corrected_yaw < 0:

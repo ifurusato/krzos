@@ -160,6 +160,16 @@ class IMU(Component):
         _agreement = max(0.0, 1.0 - (abs(_error) / _max_error))
         # combined score: geometric mean of all three factors
         self._heading_stability_score = (_usfs_stability * _icm_stability * _agreement) ** (1/3)
+
+        # debug logging
+        self._log. info(Style.DIM + 
+            'enable_dynamic_trim: {}; '. format(self._enable_dynamic_trim) +
+            'usfs_cal: {}; icm_cal:  {}; '.format(self._usfs.is_calibrated, self._icm20948.is_calibrated) +
+            'error: {:.4f} ({:.2f}°) > min:  {:.4f}? ; '.format(abs(_error), math.degrees(abs(_error)), self._min_error_threshold) +
+            'usfs_stdev: {:.4f}; icm_stdev: {:.4f}; diff: {:.4f} > 0.01?; '.format(_usfs_stdev, _icm_stdev, abs(_usfs_stdev - _icm_stdev)) +
+            'usfs < thresh: {}; icm < thresh: {}'.format(_usfs_stdev < self._min_stability_threshold, _icm_stdev < self._min_stability_threshold)
+        )
+
         # dynamic trim adjustment
         if self._enable_dynamic_trim:
             # check guard conditions
@@ -199,39 +209,48 @@ class IMU(Component):
         # pitch ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_pitch       = self._usfs.pitch
         icm20948_pitch   = self._icm20948.pitch
-        if isclose(usfs_pitch, icm20948_pitch, abs_tol=1.00):
+        if isclose(usfs_pitch, icm20948_pitch, abs_tol=2.00):
             pitch_display = (usfs_pitch + icm20948_pitch) / 2
             pitch_str = '{:7.2f}          '.format(pitch_display)
         else:
-            pitch_str = '{:7.2f} | {:7.2f}'.format(usfs_pitch, icm20948_pitch)
+            pitch_str = Style.DIM + '{:7.2f} | {:7.2f}'.format(usfs_pitch, icm20948_pitch)
         # roll ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_roll        = self._usfs.roll
         icm20948_roll    = self._icm20948.roll
-        if isclose(usfs_roll, icm20948_roll, abs_tol=1.00):
+        if isclose(usfs_roll, icm20948_roll, abs_tol=2.00):
             roll_display = (usfs_roll + icm20948_roll) / 2
             roll_str = '{:7.2f}          '.format(roll_display)
         else:
-            roll_str = '{:7.2f} | {:7.2f}'.format(usfs_roll, icm20948_roll)
+            roll_str = Style.DIM + '{:7.2f} | {:7.2f}'.format(usfs_roll, icm20948_roll)
         # heading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         usfs_heading     = self._usfs.yaw
         icm20948_heading = self._icm20948.heading
-        if self._usfs.is_adjusting_trim():
-            trim_str = '; trim: {:7.2f}'.format(self._usfs.trim_adjust)
-        else:
-            trim_str = ''
         self._heading_matches = isclose(usfs_heading, icm20948_heading, abs_tol=5.0)
         if self._heading_matches:
             heading_display = (usfs_heading + icm20948_heading) / 2
-            heading_str = '{:7.2f} 💚       '.format(heading_display)
+            heading_str = '{:7.2f}          '.format(heading_display)
         else:
-            heading_str = '{:7.2f} | {:7.2f}'.format(usfs_heading, icm20948_heading)
+            heading_str = Style.DIM + '{:7.2f} | {:7.2f}'.format(usfs_heading, icm20948_heading)
+        # trim ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+        if self._usfs.is_adjusting_trim():
+            trim_str = '; trim: {:7.2f}; '.format(self._usfs.trim_adjust)
+        else:
+            trim_str = ';              ; '
+        # stability ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        _stability_str = 'stability: {:3.2f}; '.format(self.heading_stability_score)
+        # calibrated? ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+        _usfs_is_calibrated     = self._usfs.is_calibrated
+        _icm20948_is_calibrated = self._icm20948.is_calibrated
+        _calib_str = ' calib? {} {}'.format('+' if _usfs_is_calibrated else '-', '+' if _icm20948_is_calibrated else '-')
         # log output
         self._log.info(
-              Fore.RED    + 'pitch: ' + pitch_str + '; '
-            + Fore.GREEN  + 'roll: ' + roll_str + '; '
-            + Fore.BLUE   + 'heading: ' + heading_str
-            + Fore.YELLOW + trim_str
+              Fore.RED     + 'pitch: ' + pitch_str + '; '
+            + Fore.GREEN   + Style.NORMAL + 'roll: ' + roll_str + '; '
+            + Fore.BLUE    + Style.NORMAL + 'heading: ' + heading_str
+            + Fore.YELLOW  + Style.NORMAL + trim_str
+            + Fore.MAGENTA + Style.NORMAL + _stability_str
+            + Fore.CYAN    + _calib_str
         )
 
     def x_show_info(self):
