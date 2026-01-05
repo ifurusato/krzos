@@ -43,6 +43,7 @@
 from usfs import USFS_Master
 
 import math
+from collections import deque
 from colorama import init, Fore, Style
 init()
 
@@ -113,6 +114,11 @@ class Usfs(Component):
         self._roll_trim  = math.radians(_roll_trim_degrees)
         self._fixed_yaw_trim = math.radians(_yaw_trim_degrees) if _yaw_trim_degrees is not None else None
         self._yaw_trim = 0.0
+        # queue for stability check stats
+        self._stdev = 0.0
+        self._queue_length = _cfg.get('queue_length', 100)  # default to 100 if not in config
+        self._queue = deque([], self._queue_length)
+        # info
         self._log.info('pitch trim: {:+2.2f}° ({:+.6f} rad); roll trim: {:+2.2f}° ({:+.6f} rad)'.format(
             _pitch_trim_degrees, self._pitch_trim, _roll_trim_degrees, self._roll_trim))
         if self._fixed_yaw_trim:
@@ -321,6 +327,14 @@ class Usfs(Component):
         '''
         return self._yaw_trim
 
+    @property
+    def standard_deviation(self):
+        '''
+        Return the current value of the standard deviation of yaw readings
+        calculated from the queue.
+        '''
+        return self._stdev
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
@@ -438,6 +452,11 @@ class Usfs(Component):
                 self._yaw_trim = 0.0
             self._corrected_yaw = self._yaw - self._yaw_trim
 
+            # update stability tracking
+            self._queue.append(self._corrected_yaw)
+            if len(self._queue) > 1:
+                self._stdev = self._circular_stdev(self._queue)
+
             # keep corrected yaw between 0 and 2π
             if self._corrected_yaw < 0:
                 self._corrected_yaw += 2 * math.pi
@@ -496,6 +515,31 @@ class Usfs(Component):
                 _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
                     math.degrees(self._roll_trim), math.degrees(self._trim_adjust))
         self._log.info(_info)
+
+    def _circular_stdev(self, angles):
+        '''
+        calculate standard deviation for circular data (angles in radians).
+        returns value in radians.
+        '''
+        if len(angles) < 2:
+            return float('inf')
+        sin_sum = sum(math.sin(a) for a in angles)
+        cos_sum = sum(math.cos(a) for a in angles)
+        n = len(angles)
+        sin_mean = sin_sum / n
+        cos_mean = cos_sum / n
+        r = math.sqrt(sin_mean**2 + cos_mean**2)
+        if r > 0.999999: 
+            return 0.0
+        if r < 0.0001:
+            return math.pi
+        return math.sqrt(-2 * math.log(r))
+
+    def clear_queue(self):
+        '''
+        Clears the statistic queue.
+        '''
+        self._queue.clear()
 
     def enable(self):
         if not self.closed:
