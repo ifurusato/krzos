@@ -278,7 +278,7 @@ class RotationController(Component):
         if _behaviour_manager:
             _behaviour_manager.suppress_all_behaviours()
         # get current heading from IMU
-        _current_heading = _icm20948.mean_heading
+        _current_heading = _icm20948.mean_yaw
         # calculate shortest rotation direction and degrees
         _delta = (target_heading_degrees - _current_heading + 180) % 360 - 180
         _rotation_degrees = abs(_delta)
@@ -292,7 +292,7 @@ class RotationController(Component):
         # perform rotation using existing blocking method
         _success = self.rotate_blocking(_rotation_degrees, _direction)
         # verify we reached target (within tolerance)
-        _final_heading = _icm20948.mean_heading
+        _final_heading = _icm20948.mean_yaw
         _error = abs((_final_heading - target_heading_degrees + 180) % 360 - 180)
         if _error > 5.0: # tolerance: 5°
             self._log.warning('rotation completed but heading error: {:.1f}° (target: {}°, actual: {}°)'.format(

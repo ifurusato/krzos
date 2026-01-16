@@ -51,7 +51,7 @@ from core.component import Component
 from core.rdof import RDoF
 from core.logger import Logger, Level
 from hardware.digital_pot import DigitalPotentiometer
-from matrix11x7.fonts import font3x5
+from hardware.numeric_display import NumericDisplay
 
 class Usfs(Component):
     NAME = 'usfs'
@@ -72,26 +72,25 @@ class Usfs(Component):
 
     Args:
         config:       application configuration
-        matrix11x7:   optional 11x7 matrix to display heading
         level:        log level
     '''
-    def __init__(self, config, matrix11x7=None, level=Level.INFO):
+    def __init__(self, config, level=Level.INFO):
         self._log = Logger(Usfs.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising usfs…')
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
-        self._matrix11x7 = matrix11x7
         # configuration
         _cfg = config['kros'].get('hardware').get('usfs')
+        self._show_matrix11x7     = _cfg.get('show_matrix11x7')
         # declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
         self._declination_degrees = _cfg.get('declination', 13.8) # set for your location
-        self._declination = math.radians(self._declination_degrees)
+        self._declination         = math.radians(self._declination_degrees)
         self._log.info('declination: {:5.3f}° ({:.6f} rad)'.format(self._declination_degrees, self._declination))
-        self._invert_roll  = _cfg.get('invert_roll', False)
-        self._invert_pitch = _cfg.get('invert_pitch', False)
+        self._invert_roll         = _cfg.get('invert_roll', False)
+        self._invert_pitch        = _cfg.get('invert_pitch', False)
         # mount orientation
-        self._swap_pitch_roll = _cfg.get('swap_pitch_roll', False)
+        self._swap_pitch_roll     = _cfg.get('swap_pitch_roll', False)
         if self._swap_pitch_roll:
             self._log.info('pitch and roll axes will be swapped')
         # create USFS
@@ -100,7 +99,6 @@ class Usfs(Component):
         if not self._usfs.begin():
             self._log.error('unable to start USFS: {}'.format(self._usfs.getErrorString()))
             self.close()
-        self._use_matrix = matrix11x7 != None
         self._verbose    = False # if true display to console
         # internal values stored in radians
         self._pitch = 0.0
@@ -141,6 +139,14 @@ class Usfs(Component):
             self._log.info('digital pot available for trim adjustment')
         else:
             self._log.warning('digital pot not available for trim adjustment')
+        # add numeric display for heading
+        self._numeric_display = None
+        if self._show_matrix11x7:
+            _numeric_display = _component_registry.get(NumericDisplay.NAME)
+            if _numeric_display:
+                self._numeric_display = _numeric_display
+            else:
+                self._numeric_display = NumericDisplay()
         # barometer/altimeter
         self._pressure    = 0.0
         self._temperature = 0.0
@@ -150,7 +156,23 @@ class Usfs(Component):
         self._gx = self._gy = self._gz = 0.0
         self._log.info('ready.')
 
+    def enable_matrix11x7(self, enable):
+        '''
+        The flag is initially a configuration value but subsequently can be used to
+        enable/disable the Matrix11x7 display (if available at configuration).
+        If not, calls to this method are ignored.
+        '''
+        if self._numeric_display: 
+            self._show_matrix11x7 = enable
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def numeric_display(self):
+        '''
+        Return the numeric display if it has been instantiated.
+        '''
+        return self._numeric_display
 
     def is_adjusting_trim(self):
         '''
@@ -494,10 +516,8 @@ class Usfs(Component):
                         _info += Fore.CYAN + Style.DIM + 'roll trim: fxd={:7.4f} / adj={:7.4f}'.format(
                             math.degrees(self._roll_trim), math.degrees(self._trim_adjust))
                 self._log.info(_info)
-            if self._use_matrix:
-                self._matrix11x7.clear()
-                self._matrix11x7.write_string('{:>3}'.format(int(math.degrees(self._corrected_yaw))), y=1, font=font3x5)
-                self._matrix11x7.show()
+            if self._show_matrix11x7:
+                self._numeric_display.show_int(int(math.degrees(self._corrected_yaw)))
         else:
             self._log.warning('no quaternion')
         if self._usfs.gotAccelerometer():

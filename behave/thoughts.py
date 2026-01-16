@@ -150,7 +150,7 @@ class Thoughts(Behaviour):
         self._tinyfx = None
         self._stm32  = None
         # behavioural states
-        self._enable_imu_poll  = False
+        self._enable_imu_poll  = True
         self._bored            = False
         self._sleeping         = False
         self._idle_count       = 0
@@ -338,7 +338,8 @@ class Thoughts(Behaviour):
                     await asyncio.sleep(self._loop_delay_sec)
                     continue
                 if self._enable_imu_poll and self._imu:
-                    self.poll_imu()
+#                   if self._count % 5 == 0:
+                    self._poll_imu()
                 # check odometer for movement activity
                 if self._odometer:
                     vx, vy, omega = self._odometer.velocity
@@ -638,10 +639,29 @@ class Thoughts(Behaviour):
 #               self._log.debug('unrecognised event: {}'.format(event))
                 pass
 
-    def poll_imu(self):
-        self._log.debug('polling IMU… ')
+    def _poll_imu(self):
+        self._log.info(Fore.MAGENTA + '🍉 polling IMU… ')
         self._imu.poll()
         self._imu.show_info()
+        _usfs_is_calibrated, _icm20948_is_calibrated = self._imu.is_calibrated
+        _stability = self._imu.heading_stability_score
+        self._stm32.send_request('strip 6 {}'.format('green' if _usfs_is_calibrated else 'red'))
+        time.sleep(0.2)
+        self._stm32.send_request('strip 7 {}'.format('green' if _icm20948_is_calibrated  else 'red'))
+        time.sleep(0.2)
+        self._stm32.send_request('strip 8 {}'.format(self._get_stability_color(_stability)))
+
+    def _get_stability_color(self, stability):
+        if stability < 0.2:
+            return 'red'
+        elif stability < 0.4:
+            return 'tangerine'
+        elif stability < 0.6:
+            return 'orange'
+        elif stability < 0.8:
+            return 'yellow'
+        else:
+            return 'green'
 
     def pir(self):
         try:

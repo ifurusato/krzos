@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2024-05-20
-# modified: 2025-12-18
+# modified: 2026-01-16
 
 import time
 import traceback
@@ -18,14 +18,11 @@ from math import pi as π
 from threading import Thread
 from collections import deque
 from datetime import datetime as dt
-from colorsys import hsv_to_rgb
 from colorama import init, Fore, Style
 init()
 
 from icm20948 import ICM20948
-from rgbmatrix5x5 import RGBMatrix5x5
-from matrix11x7 import Matrix11x7
-from matrix11x7.fonts import font3x5, font5x5, font5x7, font5x7smoothed
+from hardware.numeric_display import NumericDisplay
 
 from core.cardinal import Cardinal
 from core.convert import Convert
@@ -38,8 +35,6 @@ from core.rate import Rate
 from core.ranger import Ranger
 from hardware.player import Player
 from hardware.digital_pot import DigitalPotentiometer
-from hardware.i2c_scanner import I2CScanner
-from hardware.rgbmatrix import RgbMatrix, DisplayType
 from hardware.rotation_controller import RotationController, RotationPhase
 
 
@@ -49,41 +44,30 @@ class Icm20948(Component):
     '''
     Wraps the functionality of an ICM20948 IMU largely as a compass, though
     pitch and roll are also available. This includes optional trim adjustment,
-    a calibration check, an optional console, numeric and color displays of
-    heading, as well as making raw accelerometer and gyroscope values available.
+    a calibration check, an optional console, and numeric display of yaw,
+    as well as making raw accelerometer and gyroscope values available.
 
     :param config:          the application configuration
-    :param rgbmatrix:       the optional RgbMatrix to indicate calibration
     :param level:           the log level
     '''
-    def __init__(self, config, rgbmatrix=None, level=Level.INFO):
+    def __init__(self, config, level=Level.INFO):
         self._log = Logger(Icm20948.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising icm20948…')
         if not isinstance(config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
-        # add color display
-        self._rgbmatrix         = rgbmatrix
-        self._port_rgbmatrix5x5 = None
-        self._stbd_rgbmatrix5x5 = None
-        if self._rgbmatrix:
-            if not isinstance(self._rgbmatrix, RgbMatrix):
-                raise ValueError('wrong type for RgbMatrix argument: {}'.format(type(self._rgbmatrix)))
-            self._port_rgbmatrix5x5 = self._rgbmatrix.get_rgbmatrix(Orientation.PORT)
-            self._stbd_rgbmatrix5x5 = self._rgbmatrix.get_rgbmatrix(Orientation.STBD)
         self._counter = itertools.count()
         # configuration
         _cfg = config['kros'].get('hardware').get('icm20948')
         self._verbose            = _cfg.get('verbose')
         self._show_console       = _cfg.get('show_console')
-        self._show_rgbmatrix5x5  = _cfg.get('show_rgbmatrix5x5')
-        self._show_rgbmatrix11x7 = _cfg.get('show_rgbmatrix11x7')
+        self._show_matrix11x7    = _cfg.get('show_matrix11x7')
         self._play_sound         = _cfg.get('play_sound') # if True, play sound to indicate calibration
         # calibration
         self._bench_calibrate    = _cfg.get('bench_calibrate')
         self._motion_calibrate   = _cfg.get('motion_calibrate')
         # declination
-        _declination_degrees = _cfg.get('declination', 23.04) 
+        _declination_degrees = _cfg.get('declination', 23.04)
         self._declination = math.radians(_declination_degrees)
         self._log.info('declination: ' + Fore.GREEN + '{:5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
         # set up trim control
@@ -91,7 +75,7 @@ class Icm20948(Component):
         self._log.info('pitch trim: ' + Fore.GREEN + '{:.4f}'.format(self._pitch_trim))
         self._roll_trim  = _cfg.get('roll_trim') # 4.0
         self._log.info('roll trim:  ' + Fore.GREEN + '{:.4f}'.format(self._roll_trim))
-        # use fixed heading trim value
+        # use fixed yaw trim value
         self._fixed_yaw_trim = _cfg.get('yaw_trim') # - π
         self._log.info('yaw trim:   ' + Fore.GREEN + '{:.4f}'.format(self._fixed_yaw_trim))
         self._yaw_trim = self._fixed_yaw_trim # initial value if adjusting
@@ -110,16 +94,14 @@ class Icm20948(Component):
         if self._rotation_controller is None:
             self._log.warning('rotation controller not found in registry; motion calibration disabled.')
             self._motion_calibrate = False
-        # add numeric display
-        self._low_brightness    = 0.10
-        self._medium_brightness = 0.20
-        self._high_brightness   = 0.35
-        self._matrix11x7        = None
-        if self._show_rgbmatrix11x7:
-            _i2c_scanner = I2CScanner(config, level=Level.INFO)
-            if _i2c_scanner.has_hex_address(['0x75']):
-                self._matrix11x7 = Matrix11x7()
-                self._matrix11x7.set_brightness(self._low_brightness)
+        # add numeric display for yaw
+        self._numeric_display   = None
+        if self._show_matrix11x7:
+            _numeric_display = _component_registry.get(NumericDisplay.NAME)
+            if _numeric_display:
+                self._numeric_display = _numeric_display
+            else:
+                self._numeric_display = NumericDisplay()
         self._cardinal_tolerance = _cfg.get('cardinal_tolerance') # tolerance to cardinal points (in radians)
         self._log.info('cardinal tolerance: {:.8f}'.format(self._cardinal_tolerance))
         # general orientation
@@ -135,7 +117,7 @@ class Icm20948(Component):
             self._Y = 1
             self._Z = 0
         self._use_tilt_compensation = False # TODO config
-        # The two axes which relate to heading depend on orientation of the
+        # The two axes which relate to yaw/heading depend on orientation of the
         # sensor, think Left & Right, Forwards and Back, ignoring Up and Down.
         # When the sensor is sitting vertically upright in a Breakout Garden
         # socket, use (Z,Y), where hanging upside down would be (Y,Z).
@@ -146,7 +128,7 @@ class Icm20948(Component):
         self._queue = deque([], self._queue_length)
         self._stability_threshold = _cfg.get('stability_threshold')
         # misc/variables
-        self._heading_count = 0
+        self._yaw_count = 0
         self._display_rate = 10 # display every 10th set of values
         self._poll_rate_hz = _cfg.get('poll_rate_hz')
         self._log.info('poll rate: ' + Fore.GREEN + '{: d}Hz'.format(self._poll_rate_hz))
@@ -155,11 +137,11 @@ class Icm20948(Component):
         self._amax = None
         self._pitch = 0.0
         self._roll  = 0.0
-        self._heading = 0
-        self._last_heading = 0
-        self._formatted_heading = lambda: 'Heading: {: d}°'.format(self._heading)
-        self._mean_heading = 0
-        self._mean_heading_radians = None
+        self._yaw = 0
+        self._last_yaw = 0
+        self._formatted_yaw = lambda: 'Yaw: {: d}°'.format(self._yaw)
+        self._mean_yaw = 0
+        self._mean_yaw_radians = None
         self._accel = [0.0, 0.0, 0.0]
         self._gyro =  [0.0, 0.0, 0.0]
         self._include_accel_gyro = _cfg.get('include_accel_gyro')
@@ -168,7 +150,23 @@ class Icm20948(Component):
         self.__icm20948 = ICM20948(i2c_addr=_cfg.get('i2c_address'))
         self._log.info('ready.')
 
+    def enable_matrix11x7(self, enable):
+        '''
+        The flag is initially a configuration value but subsequently can be used
+        to enable/disable the Matrix11x7 display (if available at configuration).
+        If not, calls to this method are ignored.
+        '''
+        if self._numeric_display:
+            self._show_matrix11x7 = enable
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def numeric_display(self):
+        '''
+        Return the numeric display if it has been instantiated.
+        '''
+        return self._numeric_display
 
     @property
     def queue_length(self):
@@ -213,9 +211,9 @@ class Icm20948(Component):
         return self._roll
 
     @property
-    def uncalibrated_heading(self):
+    def uncalibrated_yaw(self):
         '''
-        Return the compass heading in degrees from a potentially
+        Return the yaw (compass heading) in degrees from a potentially
         uncalibrated IMU.
 
         This may not be a valid value if the device is not calibrated.
@@ -223,53 +221,53 @@ class Icm20948(Component):
         if self._amin is None or self._amax is None:
             self._amin = list(self.__icm20948.read_magnetometer_data())
             self._amax = list(self.__icm20948.read_magnetometer_data())
-        return self._read_heading(self._amin, self._amax)
+        return self._read_yaw(self._amin, self._amax)
 
     @property
-    def heading(self):
+    def yaw(self):
         '''
-        Return the last-polled compass heading in degrees (as an int).
+        Return the last-polled yaw (compass heading) in degrees (as an int).
 
         This is only valid if the device is calibrated.
         '''
-        return self._heading
+        return self._yaw
 
     @property
-    def heading_radians(self):
+    def yaw_radians(self):
         '''
-        Return the last-polled compass heading in radians.
+        Return the last-polled yaw (compass heading) in radians.
 
         This is only valid if the device is calibrated.
         '''
         return self._radians
 
     @property
-    def mean_heading(self):
+    def mean_yaw(self):
         '''
-        Return the mean compass heading in degrees (as an int). This is the
-        mean value of the current queue, whose size and rate accumulated are
-        set in configuration.  Because this is calculated from the queue, if
-        the queue is changing rapidly this returned value won't accurately
-        reflect the mean.  Depending on configuration this takes roughly 1
-        second to stabilise to a mean reflective of the robot's position,
-        which then doesn't change very quickly.  It is therefore suitable for
-        gaining an accurate heading of a resting robot.
+        Return the mean yaw (compass heading) in degrees (as an int). This is
+        the mean value of the current queue, whose size and rate accumulated
+        are set in configuration. Because this is calculated from the queue,
+        if the queue is changing rapidly this returned value won't accurately
+        reflect the mean. Depending on configuration this takes roughly 1s to
+        stabilise to a mean reflective of the robot's position, which then
+        doesn't change very quickly. It is therefore suitable for gaining an
+        accurate yaw value of a resting robot.
 
         This is only valid if the device is calibrated.
         '''
-        return self._mean_heading
+        return self._mean_yaw
 
     @property
-    def mean_heading_radians(self):
+    def mean_yaw_radians(self):
         '''
-        Return the mean compass heading in radians (as a float).
+        Return the mean yaw (compass heading) in radians (as a float).
         '''
-        return self._mean_heading_radians
+        return self._mean_yaw_radians
 
     @property
     def standard_deviation(self):
         '''
-        Return the current value of the standard deviation of headings
+        Return the current value of the standard deviation of yaw values
         calculated from the queue.
         '''
         return self._stdev
@@ -307,13 +305,13 @@ class Icm20948(Component):
 
     def is_cardinal_aligned(self, cardinal=None):
         '''
-        Returns True if the mean heading is aligned within a 3° tolerance to
+        Returns True if the mean yaw is aligned within a 3° tolerance to
         the specified cardinal directory, or if the argument is None, any of
         the four cardinal directions.
         '''
-        if self._mean_heading_radians is None:
+        if self._mean_yaw_radians is None:
             return False
-        _angle = self._mean_heading_radians
+        _angle = self._mean_yaw_radians
         _degrees = int(Convert.to_degrees(_angle))
         if ((cardinal is None or cardinal is Cardinal.NORTH)
                     and math.isclose(_angle, Cardinal.NORTH.radians, abs_tol=self._cardinal_tolerance)):
@@ -332,30 +330,26 @@ class Icm20948(Component):
 
     def difference_from_cardinal(self, cardinal):
         '''
-        Returns the difference between the current heading and the provided
+        Returns the difference between the current yaw and the provided
         Cardinal direction, in radians.
         '''
-        return Convert.get_offset_from_cardinal(self.heading_radians, cardinal)
+        return Convert.get_offset_from_cardinal(self.yaw_radians, cardinal)
 
     def ratio_from_cardinal(self, cardinal):
         '''
-        Returns a ratio (range: 0.0-1.0) between the current heading and the
+        Returns a ratio (range: 0.0-1.0) between the current yaw and the
         provided Cardinal direction.
         '''
-        return Convert.get_offset_from_cardinal(self.heading_radians, cardinal) / Icm20948.HALF_PI
+        return Convert.get_offset_from_cardinal(self.yaw_radians, cardinal) / Icm20948.HALF_PI
 
-    def disable_displays(self):
-        self._show_rgbmatrix5x5  = False
-        self._show_rgbmatrix11x7 = False
-
-    def get_formatted_heading(self):
+    def get_formatted_yaw(self):
         '''
-        Return a lambda function whose result is the last-polled compass
-        heading in degrees, formatted as a string.
+        Return a lambda function whose result is the last-polled yaw (compass heading)
+        in degrees, formatted as a string.
 
         This is only valid if the device is calibrated.
         '''
-        return self._formatted_heading
+        return self._formatted_yaw
 
     def bench_calibrate(self):
         '''
@@ -367,7 +361,7 @@ class Icm20948(Component):
         Returns True or False upon completion (in addition to setting the class variable).
         '''
         _start_time = dt.now()
-        self._heading_count = 0
+        self._yaw_count = 0
         _rate = Rate(self._poll_rate_hz, Level.ERROR)
         _ranger = Ranger(0.0, 180.0, 0.0, 0.5)
         _counter = itertools.count()
@@ -389,10 +383,10 @@ class Icm20948(Component):
                 if _count > _limit:
                     break
                 try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    _yaw_radians = self._read_yaw(self._amin, self._amax, calibrating=True)
+                    _yaw_degrees = int(round(math.degrees(_yaw_radians)))
                     if _count % 5 == 0:
-                        self._log.info('[{:3d}] calibrating at: '.format(_count) + Fore.GREEN + '{}°…'.format(_heading_degrees))
+                        self._log.info('[{:3d}] calibrating at: '.format(_count) + Fore.GREEN + '{}°…'.format(_yaw_degrees))
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
@@ -413,19 +407,19 @@ class Icm20948(Component):
                 if self.is_calibrated or _count > _limit:
                     break
                 try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    _yaw_radians = self._read_yaw(self._amin, self._amax, calibrating=True)
+                    _yaw_degrees = int(round(math.degrees(_yaw_radians)))
                     USE_ADAPTIVE_CALIBRATION = False
                     if USE_ADAPTIVE_CALIBRATION:
-                        if self._calibration_check_adaptive(_heading_radians):
+                        if self._calibration_check_adaptive(_yaw_radians):
                             break
                     else:
-                        if self._calibration_check(_heading_radians):
+                        if self._calibration_check(_yaw_radians):
                             break
                     if _count % 5 == 0:
                         self._log.info(
                                 Fore.CYAN + '[{:03d}] calibrating…\tstdev: {:.2f} < {:.2f}? ; '.format(_count, self._stdev, self._stability_threshold)
-                                + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
+                                + Fore.YELLOW + '{:.2f}°; '.format(_yaw_degrees)
                                 + Fore.CYAN + Style.DIM + '(calibrated?  {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
                         )
                 except Exception as e:
@@ -452,7 +446,7 @@ class Icm20948(Component):
         Returns True or False upon completion (in addition to setting the class variable).
         '''
         _start_time = dt.now()
-        self._heading_count = 0
+        self._yaw_count = 0
         _rate = Rate(self._poll_rate_hz, Level.ERROR)
         _counter = itertools.count()
         _count = 0
@@ -471,7 +465,7 @@ class Icm20948(Component):
             def _imu_poll_callback():
                 _count = next(_imu_counter)
                 try:
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=True)
+                    _yaw_radians = self._read_yaw(self._amin, self._amax, calibrating=True)
                     if _count % 25 == 0:
                         self._log.info(Style.DIM + '[{:3d}] calibrating…'.format(_count))
                 except Exception as e:
@@ -492,19 +486,21 @@ class Icm20948(Component):
                 if self.is_calibrated or _count > _limit:
                     break
                 try:
-                    # read heading with trim applied (not calibrating anymore)
-                    _heading_radians = self._read_heading(self._amin, self._amax, calibrating=False)
-                    _heading_degrees = int(round(math.degrees(_heading_radians)))
+                    # read yaw with trim applied (not calibrating anymore)
+                    _yaw_radians = self._read_yaw(self._amin, self._amax, calibrating=False)
+                    _yaw_degrees = int(round(math.degrees(_yaw_radians)))
                     # check calibration status
-                    if self._calibration_check(_heading_radians):
+                    if self._calibration_check(_yaw_radians):
                         break
                     if _count % 5 == 0:
                         _queue_len = len(self._queue)
                         _queue_status = "filling" if _queue_len < 20 else "checking"
                         self._log.info(
-                            Fore.CYAN + '[{:03d}] calibrating…\t{}: {:3d}/{:3d}; ; '.format(_count, _queue_status, _queue_len, self._queue_length)
-                            + Fore.YELLOW + '{:.2f}°; '.format(_heading_degrees)
-                            + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit? {})'.format(self.is_calibrated, _count > _limit)
+                            Fore.CYAN + '[{:03d}] calibrating…\t{}: {:3d}/{:3d}; ; '.format(
+                                    _count, _queue_status, _queue_len, self._queue_length)
+                            + Fore.YELLOW + '{:.2f}°; '.format(_yaw_degrees)
+                            + Fore.CYAN + Style.DIM + '(calibrated? {}; over limit? {})'.format(
+                                    self.is_calibrated, _count > _limit)
                         )
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
@@ -527,16 +523,16 @@ class Icm20948(Component):
         '''
         self._queue.clear()
 
-    def _calibration_check(self, heading_radians):
+    def _calibration_check(self, yaw_radians):
         '''
-        Adds a heading value in radians to the queue and checks to see if the IMU is
+        Adds a yaw value in radians to the queue and checks to see if the IMU is
         calibrated, according to the contents of the queue having a standard
         deviation less than a set threshold.
 
         Note that this does not clear the queue.
         '''
-        self._queue.append(heading_radians)
-        self._heading_count += 1
+        self._queue.append(yaw_radians)
+        self._yaw_count += 1
         # require minimum samples before checking stability
         _min_samples = 20 # reasonable minimum for stdev calculation
         if len(self._queue) < _min_samples:
@@ -549,13 +545,13 @@ class Icm20948(Component):
             self._is_calibrated = True
         return self._is_calibrated
 
-    def _calibration_check_adaptive(self, heading_radians):
+    def _calibration_check_adaptive(self, yaw_radians):
         '''
-        Adds a heading value in radians to the queue and checks calibration status.
+        Adds a yaw value in radians to the queue and checks calibration status.
         Uses adaptive threshold based on sample size.
         '''
-        self._queue.append(heading_radians)
-        self._heading_count += 1
+        self._queue.append(yaw_radians)
+        self._yaw_count += 1
         # minimum samples before checking
         _min_samples = 20
         if len(self._queue) < _min_samples:
@@ -572,16 +568,16 @@ class Icm20948(Component):
             self._is_calibrated = True
         return self._is_calibrated
 
-    def x_calibration_check(self, heading_radians):
+    def x_calibration_check(self, yaw_radians):
         '''
-        Adds a heading value in radians to the queue and checks to see if the IMU is
+        Adds a yaw value in radians to the queue and checks to see if the IMU is
         calibrated, according to the contents of the queue having a standard
         deviation less than a set threshold.
 
         Note that this does not clear the queue.
         '''
-        self._queue.append(heading_radians)
-        self._heading_count += 1
+        self._queue.append(yaw_radians)
+        self._yaw_count += 1
         if len(self._queue) < self._queue_length:
             return False
         self._stdev = self._circular_stdev(self._queue)
@@ -635,32 +631,23 @@ class Icm20948(Component):
                 callback()
             _rate.wait()
 
-    def _display_heading(self):
-        if self._show_rgbmatrix5x5:
-            r, g, b = [int(c * 255.0) for c in hsv_to_rgb(self._heading / 360.0, 1.0, 1.0)]
-            self._show_rgbmatrix(r, g, b)
-        if self._matrix11x7:
-            self._matrix11x7.clear()
-            self._matrix11x7.write_string('{:>3}'.format(self._heading), y=1, font=font3x5)
-            self._matrix11x7.show()
-            if self._is_calibrated:
-                self._matrix11x7.set_brightness(self._high_brightness)
-            else:
-                self._matrix11x7.set_brightness(self._low_brightness)
+    def _display_yaw(self):
+        if self._show_matrix11x7 and self._numeric_display:
+            self._numeric_display.show_int(self._yaw)
 
     def poll(self):
         '''
         An individual call to the sensor. This is called in a loop by scan(),
-        but can be called independently. This sets heading, pitch and roll.
+        but can be called independently. This sets pitch, roll and yaw.
 
-        We have a fixed heading trim value (in radians). If the digital pot
-        is available, its value is added to the heading trim.
+        We have a fixed yaw trim value (in radians). If the digital pot
+        is available, its value is added to the yaw trim.
 
         Note: calling this method will fail if not previously calibrated.
         '''
 #       self._log.info('poll… ')
         try:
-            self._radians = self._read_heading(self._amin, self._amax)
+            self._radians = self._read_yaw(self._amin, self._amax)
             self._queue.append(self._radians)
             if len(self._queue) > 1:
                 self._stdev = self._circular_stdev(self._queue)
@@ -670,10 +657,10 @@ class Icm20948(Component):
                 sin_sum = sum(math.sin(a) for a in self._queue)
                 cos_sum = sum(math.cos(a) for a in self._queue)
                 n = len(self._queue)
-                self._mean_heading_radians = math.atan2(sin_sum / n, cos_sum / n)
-                if self._mean_heading_radians < 0:
-                    self._mean_heading_radians += 2 * π
-                self._mean_heading = int(round(math.degrees(self._mean_heading_radians)))
+                self._mean_yaw_radians = math.atan2(sin_sum / n, cos_sum / n)
+                if self._mean_yaw_radians < 0:
+                    self._mean_yaw_radians += 2 * π
+                self._mean_yaw = int(round(math.degrees(self._mean_yaw_radians)))
             # use configured axis mapping
             _accel = self.accelerometer
             _x = _accel[self._X]
@@ -696,7 +683,7 @@ class Icm20948(Component):
                     _xz = 0.001
                 self._roll = math.atan2(_y, math.sqrt(_xz)) + self._roll_trim
             # continue…
-            self._last_heading = self._heading
+            self._last_yaw = self._yaw
             if next(self._counter) % self._display_rate == 0:
                 if self._show_console:
                     if self._is_calibrated:
@@ -704,11 +691,11 @@ class Icm20948(Component):
                     else:
                         _style = Style.NORMAL
                     _variance = 3
-                    if not math.isclose(self._heading, self._last_heading, abs_tol=_variance):
-                        _info = _style + "heading: {: 3d}° / mean: {: 3d}°;".format(self._heading, int(self._mean_heading))
+                    if not math.isclose(self._yaw, self._last_yaw, abs_tol=_variance):
+                        _info = _style + "yaw: {: 3d}° / mean: {: 3d}°;".format(self._yaw, int(self._mean_yaw))
                         _info += Fore.WHITE + " pitch: {: 4.2f}°; roll: {:4.2f}°".format(self.pitch, self.roll)
-                        if self._adjust_rdof: 
-                            if self._adjust_rdof == RDoF.YAW: 
+                        if self._adjust_rdof:
+                            if self._adjust_rdof == RDoF.YAW:
                                 _info += Fore.CYAN + Style.DIM + " yaw trim: fxd={:.2f} / adj={:.2f} / trm={:.2f}".format(
                                     self._fixed_yaw_trim, self._trim_adjust, self._yaw_trim)
                             elif self._adjust_rdof == RDoF.PITCH:
@@ -719,9 +706,9 @@ class Icm20948(Component):
                                     self._roll_trim, self._trim_adjust)
                         _info += Fore.CYAN + Style.DIM + " stdev: {:.2f}".format(self._stdev)
                         self._log.info(_info)
-                self._display_heading()
+                self._display_yaw()
 
-            return self._heading, self._pitch, self._roll
+            return self._yaw, self._pitch, self._roll
         except Exception as e:
             self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
             return None
@@ -732,8 +719,8 @@ class Icm20948(Component):
         '''
         self._log.info(
                 Fore.YELLOW + 'pitch: {:4.2f}; '.format(self.pitch)
-              + Fore.WHITE  + 'roll: {:4.2f}; '.format(self.roll)     
-              + Fore.GREEN  + 'heading: {:4.2f}'.format(self.heading)     
+              + Fore.WHITE  + 'roll: {:4.2f}; '.format(self.roll)
+              + Fore.GREEN  + 'yaw: {:4.2f}'.format(self.yaw)
         )
 
     def show_info(self):
@@ -742,7 +729,7 @@ class Icm20948(Component):
         '''
         _info = Fore.YELLOW + 'pitch: {:6.2f}; '.format(self.pitch)
         _info += Fore.WHITE + 'roll: {:6.2f}; '.format(self.roll)
-        _info += Fore.GREEN + 'heading: {:6.2f}; '.format(self.heading)
+        _info += Fore.GREEN + 'yaw: {:6.2f}; '.format(self.yaw)
         if self._adjust_rdof:
             if self._adjust_rdof == RDoF.YAW:
                 _info += Fore.CYAN + Style.DIM + 'yaw trim: fxd={:7.4f} / adj={:7.4f} / trm={:7.4f}'.format(
@@ -755,33 +742,9 @@ class Icm20948(Component):
                     self._roll_trim, self._trim_adjust)
         self._log.info(_info)
 
-    def _show_rgbmatrix(self, r, g, b):
-        if self._is_calibrated:
-            if self._port_rgbmatrix5x5:
-                RgbMatrix.set_all(self._port_rgbmatrix5x5, r, g, b)
-                if self.is_cardinal_aligned():
-                    self._port_rgbmatrix5x5.set_brightness(0.8)
-                else:
-                    self._port_rgbmatrix5x5.set_brightness(0.3)
-            if self._stbd_rgbmatrix5x5:
-                RgbMatrix.set_all(self._stbd_rgbmatrix5x5, r, g, b)
-                if self.is_cardinal_aligned():
-                    self._stbd_rgbmatrix5x5.set_brightness(0.8)
-                else:
-                    self._stbd_rgbmatrix5x5.set_brightness(0.3)
-        else:
-            if self._port_rgbmatrix5x5:
-                RgbMatrix.set_all(self._port_rgbmatrix5x5, 40, 40, 40)
-            if self._stbd_rgbmatrix5x5:
-                RgbMatrix.set_all(self._stbd_rgbmatrix5x5, 40, 40, 40)
-        if self._port_rgbmatrix5x5:
-            self._port_rgbmatrix5x5.show()
-        if self._stbd_rgbmatrix5x5:
-            self._stbd_rgbmatrix5x5.show()
-
-    def _read_heading(self, amin, amax, calibrating=False):
+    def _read_yaw(self, amin, amax, calibrating=False):
         '''
-        Does the work of obtaining the heading value in radians.
+        Does the work of obtaining the yaw value in radians.
         '''
         if self._amin is None or self._amax is None:
             self._amin = list(self.__icm20948.read_magnetometer_data())
@@ -818,13 +781,13 @@ class Icm20948(Component):
             self._radians += self._fixed_yaw_trim
         if self._radians < 0:
             self._radians += 2 * math.pi
-        self._heading = int(round(math.degrees(self._radians)))
+        self._yaw = int(round(math.degrees(self._radians)))
         return self._radians
 
     def _tilt_compensate_magnetometer(self, mag, pitch, roll):
         '''
-        Apply tilt compensation to magnetometer reading using pitch and roll. 
-        Returns corrected magnetometer vector in robot frame. 
+        Apply tilt compensation to magnetometer reading using pitch and roll.
+        Returns corrected magnetometer vector in robot frame.
         '''
         # rotation matrices for pitch and roll
         sin_pitch = math.sin(pitch)

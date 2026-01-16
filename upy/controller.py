@@ -314,7 +314,7 @@ class Controller:
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
             rotate <n> | on | off | hz <n> | fwd/cw | rev/ccw
-            theme on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
+            theme on | off | hz <n> | pixels <n> | steps <n> | <theme-name> <n>
             heartbeat on | off
             blink on | off
             save <name> <red> <green> <blue>
@@ -598,7 +598,7 @@ class Controller:
                 return 'ACK'
 
             elif _arg0 == "ping":
-                return 'ACK'
+                return 'PING'
 
             elif _arg0 == "close":
                 self._enable_rotate     = False

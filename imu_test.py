@@ -11,6 +11,7 @@
 
 import traceback
 from math import pi as π
+import itertools
 from colorama import init, Fore, Style
 init()
 
@@ -34,6 +35,7 @@ log = Logger('test', Level.INFO)
 try:
     # read YAML configuration
     config = ConfigLoader(Level.INFO).configure()
+    _counter = itertools.count()
 
     log.info('using digital pot.')
     pot = DigitalPotentiometer(config, level=Level.INFO)
@@ -41,7 +43,7 @@ try:
 
     # ICM20948 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    icm20948 = Icm20948(config, rgbmatrix=None, level=Level.INFO)
+    icm20948 = Icm20948(config, level=Level.INFO)
     icm20948._show_console = True
     icm20948.include_accel_gyro(True)
     icm20948.enable()
@@ -51,7 +53,7 @@ try:
 
     # USFS ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    _usfs = Usfs(config, matrix11x7=None, level=Level.INFO)
+    _usfs = Usfs(config, level=Level.INFO)
 #   _usfs.set_fixed_yaw_trim(-72.5) # TODO config
 #   _usfs.adjust_trim(RDoF.YAW)
     _usfs.set_verbose(False)
@@ -68,7 +70,8 @@ try:
 #   for i in range(10):
     while True:
         imu.poll()
-        imu.show_info()
+        if next(_counter) % 10 == 0:
+            imu.show_info()
         rate.wait()
 
 except KeyboardInterrupt:

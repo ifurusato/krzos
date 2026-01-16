@@ -39,6 +39,7 @@ class I2CMaster(Component):
         self._i2c_bus_id  = i2c_bus_id if i2c_bus_id else I2CMaster.I2C_BUS_ID
         self._i2c_address = i2c_address if i2c_address else I2CMaster.I2C_ADDRESS
         self._timeset = timeset
+        self._fail_on_exception = False
         try:
             self._bus = smbus2.SMBus(self._i2c_bus_id)
             self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus_id, self._i2c_address))
@@ -48,6 +49,9 @@ class I2CMaster(Component):
             raise
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def set_fail_on_exception(self, fail):
+        self._fail_on_exception = fail
 
     def _i2c_write_and_read(self, out_msg):
         if out_msg is None:
@@ -86,6 +90,8 @@ class I2CMaster(Component):
             except Exception as e:
 #               self._log.error('{} raised by send request: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 self._log.error('{} raised by send request: {}'.format(type(e), e))
+                if self._fail_on_exception:
+                    raise e
                 return None
             finally:
                 # don't repeat too quickly
@@ -129,6 +135,8 @@ class I2CMaster(Component):
                 return second_response
             except Exception as e:
                 self._log.error('I2C data request error: {}\n{}'.format(e, traceback.format_exc()))
+                if self._fail_on_exception:
+                    raise e
                 return None
             finally:
                 # don't repeat too quickly

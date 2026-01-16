@@ -22,9 +22,9 @@ kros:
         enable_stm32_controller:           True            # enable STM32F405 for neopixel strip and ring
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
-        enable_icm20948:                  False            # enable ICM20948 IMU
-        enable_usfs:                      False            # enable USFS IMU
-        enable_imu:                       False            # enable fused IMU
+        enable_icm20948:                   True            # enable ICM20948 IMU
+        enable_usfs:                       True            # enable USFS IMU
+        enable_imu:                        True            # enable fused IMU
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
@@ -43,7 +43,7 @@ kros:
             release:                     True              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
-            default_priority:               0.42           # default behaviour priority
+            default_priority:               0.52           # default behaviour priority
             dynamic_speed:              False              # if True use digital pot for default speed
             use_dynamic_priority:        True              # if True, alter priority based on distance
             fore_threshold_mm:              400            # ignore fore obstacles further than this
@@ -64,7 +64,7 @@ kros:
             enable:                      True              # enable nudge behaviour
             release:                     True              # release nudge behaviour on startup
             verbose:                    False              # verbose messaging
-            priority:                   0.4                # fixed behaviour priority
+            priority:                   0.6                # fixed behaviour priority
             lateral_max:                0.5
             omega_max:                  0.5
             speed_multiplier_max:       2.0
@@ -91,7 +91,7 @@ kros:
             release:                     True              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # cruising speed
-            default_priority:               0.5            # default behaviour priority
+            default_priority:               0.4            # default behaviour priority
             use_dynamic_speed:           True              # if True use digital pot for default speed
             deadband_threshold:             0.07
             obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
@@ -426,15 +426,19 @@ kros:
             show_target_row:               True            # show target row with selected column
             show_target_info:              True            # show log line with target info
         imu:
-            verbose:                      False            # verbose messaging
-            enable_dynamic_trim:           True            # if true enable dynamic modification of trim
+            verbose:                       True            # verbose messaging
+            enable_dynamic_trim:          False            # if true enable dynamic modification of trim
             yaw_match_threshold:              0.00         # the threshold below which we consider yaw values to match
             prefer_usfs:                   True            # prefer USFS for accel/gyro
-            min_stability_threshold:        0.15           # (radians) absolute max stdev to trust a "stable" reading
+            min_stability_threshold:        0.35           # (radians) ~20° absolute max stdev to trust a "stable" reading
+            stability_threshold:            0.75           # (radians) stability values above this indicate we trust the IMU
+            min_stability_difference:       0.005          # minimum stdev difference to trust one IMU over the other
+            require_absolute_stability:   False            # if True, require absolute stability threshold; if False, only relative
             trim_adjustment_gain:           0.05           # how aggressively to adjust (e.g., 0.05 = 5% of error per poll)
             min_error_threshold:            0.0872         # (radians) minimum heading difference before adjusting
         usfs:
             verbose:                      False
+            show_matrix11x7:               True            # if true, show heading as number
             declination:                     23.04         # declination at operating location
             swap_pitch_roll:               True            # if True, swap pitch and roll
             pitch_trim:                     0.7363         # -0.7392 
@@ -449,18 +453,17 @@ kros:
             declination:                     23.97         # declination at operating location
             poll_rate_hz:                   150            # how often the IMU is polled
             vertical_mount:               False            # True: vertical like Pimoroni, or False: horizontal like Adafruit
-            bench_calibrate:              False            # if true, calibrate the IMU manually while on the rotating bench
-            motion_calibrate:              True            # if true, calibrate the IMU by the robot rotating in place
+            bench_calibrate:               True            # if true, calibrate the IMU manually while on the rotating bench
+            motion_calibrate:             False            # if true, calibrate the IMU by the robot rotating in place
             show_console:                  True            # if true, show data on console (same as verbose)
-            show_rgbmatrix5x5:            False            # if true, show heading as color
-            show_rgbmatrix11x7:            True            # if true, show heading as number
+            show_matrix11x7:               True            # if true, show heading as number
             adjust_trim:                  False            # if true, use pot for trim, otherwise used fixed value
             pitch_trim:                      -0.0103       # 0.0029 # -0.0116 # pitch trim for level (radians)
             roll_trim:                        0.0324       # 0.0296 # 0.0271 # 0.0112 # roll trim for level (radians)
             yaw_trim:                         1.2335       # 1.5737 # 0.7440 # 0.3834 # yaw trim adjustment (in radians) to set north
             queue_length:                   100            # length of heading data queue
             calibration_rotation:           450            # how many degrees to rotate during calibration?
-            stability_threshold:              0.09         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
+            stability_threshold:              0.07         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
             cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians; 0.0523599rad is 3°)
             include_accel_gyro:            True            # if true, poll heading data
             include_heading:               True            # if true, poll accelerometer and gyroscope data
