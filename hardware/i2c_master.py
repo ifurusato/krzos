@@ -91,7 +91,7 @@ class I2CMaster(Component):
 #               self._log.error('{} raised by send request: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 self._log.error('{} raised by send request: {}'.format(type(e), e))
                 if self._fail_on_exception:
-                    raise e
+                    raise
                 return None
             finally:
                 # don't repeat too quickly
@@ -136,7 +136,7 @@ class I2CMaster(Component):
             except Exception as e:
                 self._log.error('I2C data request error: {}\n{}'.format(e, traceback.format_exc()))
                 if self._fail_on_exception:
-                    raise e
+                    raise
                 return None
             finally:
                 # don't repeat too quickly

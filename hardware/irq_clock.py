@@ -79,7 +79,7 @@ class IrqClock(Component):
                     self._log.info('configured IRQ clock via gpiozero on pin {}.'.format(self._pin))
                 except Exception as e:
                     self._log.error('unable to enable IRQ clock: {}'.format(e))
-                    raise e
+                    raise
                 finally:
                     self._initd = True
         else:

@@ -130,7 +130,7 @@ class MotorConfigurer(Component):
             self._sfwd_motor = None
             self._paft_motor = None
             self._saft_motor = None
-            raise e
+            raise
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

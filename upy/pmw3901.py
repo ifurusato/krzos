@@ -59,7 +59,7 @@ class PMW3901:
                     self.spi.init(baudrate=baudrate, polarity=1, phase=1)
             except Exception as e:
                 print('{} raised creating SPI device: {}'.format(type(e), e))
-                raise e
+                raise
         else:
             self.spi = spi
         # CS setup
@@ -68,7 +68,7 @@ class PMW3901:
                 self.cs = Pin(PMW3901.CS_PIN, Pin.OUT)
             except Exception:
                 print('{} raised creating CS pin: {}'.format(type(e), e))
-                raise e
+                raise
         else:
             self.cs = cs if isinstance(cs, Pin) else Pin(cs, Pin.OUT)
         self.cs.value(1)  # deselect

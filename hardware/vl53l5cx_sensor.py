@@ -122,7 +122,7 @@ class Vl53l5cxSensor(Component):
                 self._vl53 = vl53l5cx.VL53L5CX(i2c_dev=_i2c_bus_dev, skip_init=_skip_init)
             except Exception as e:
                 self._log.error('{} raised connecting to VL53L5CX on I2C bus 0: {}'.format(type(e), e))
-                raise e
+                raise
         else:
             self._vl53 = vl53l5cx.VL53L5CX(skip_init=_skip_init)
         self._vl53.set_resolution(self._cols * self._rows)

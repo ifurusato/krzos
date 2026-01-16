@@ -63,7 +63,7 @@ class System(Component):
             self._ina260 = Ina260(config, level=level)
         except Exception as e:
             self._log.error('{} raised establishing system monitor: {}'.format(type(e), e))
-            raise e
+            raise
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
