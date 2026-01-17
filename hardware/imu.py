@@ -65,7 +65,7 @@ class IMU(Component):
         self._offset_decay_rate       = _cfg.get('offset_decay_rate', 0.01)
         self._small_error_threshold   = math.radians(_cfg.get('small_error_threshold_deg', 2.0))
         # dynamic trim state
-        self._dynamic_yaw_offset      = 0.0 # dynamic offset for ICM20948
+        self._icm20948_yaw_offset     = 0.0 # dynamic offset for ICM20948
         self._usfs_yaw_offset         = 0.0 # dynamic offset for USFS
         self._yaw                     = None
         self._yaw_radians             = None
@@ -99,7 +99,7 @@ class IMU(Component):
     @property
     def pitch(self):
         '''
-        Return the last-polled pitch value.
+        Return the last-polled pitch value, for the preferred IMU.
         '''
         if self._prefer_usfs:
             return self._usfs.pitch
@@ -109,7 +109,7 @@ class IMU(Component):
     @property
     def roll(self):
         '''
-        Return the last-polled roll value.
+        Return the last-polled roll value, for the preferred IMU.
         '''
         if self._prefer_usfs:
             return self._usfs.roll
@@ -123,9 +123,12 @@ class IMU(Component):
     @property
     def dynamic_yaw_offset(self):
         '''
-        return the current dynamic yaw offset in radians.
+        Return the current dynamic yaw offset in radians, for the preferred IMU.
         '''
-        return self._dynamic_yaw_offset
+        if self._prefer_usfs:
+            return self._usfs_yaw_offset
+        else:
+            return self._icm20948_yaw_offset
 
     @property
     def yaw(self):
@@ -231,16 +234,16 @@ class IMU(Component):
                         if not self._require_absolute_stability or _usfs_stdev < self._min_stability_threshold:
                             # adjust ICM20948 toward USFS
                             _adjustment = _error * self._trim_adjustment_gain
-                            self._dynamic_yaw_offset += _adjustment
+                            self._icm20948_yaw_offset += _adjustment
                             if abs(_error) < self._small_error_threshold:
-                                self._dynamic_yaw_offset *= (1.0 - self._offset_decay_rate)
-                            self._dynamic_yaw_offset = (self._dynamic_yaw_offset + π) % (2 * π) - π
-                            self._dynamic_yaw_offset = max(-self._max_dynamic_offset,
-                                                           min(self._max_dynamic_offset, self._dynamic_yaw_offset))
+                                self._icm20948_yaw_offset *= (1.0 - self._offset_decay_rate)
+                            self._icm20948_yaw_offset = (self._icm20948_yaw_offset + π) % (2 * π) - π
+                            self._icm20948_yaw_offset = max(-self._max_dynamic_offset,
+                                                           min(self._max_dynamic_offset, self._icm20948_yaw_offset))
                             if self._verbose:
                                 self._log. info('USFS more stable - adjusting ICM20948 by {:+.4f} rad ({:+.2f}°); offset: {:+.4f} rad ({:+.2f}°)'.format(
                                     _adjustment, math.degrees(_adjustment),
-                                    self._dynamic_yaw_offset, math.degrees(self._dynamic_yaw_offset)))
+                                    self._icm20948_yaw_offset, math.degrees(self._icm20948_yaw_offset)))
                     elif _icm_stdev < _usfs_stdev:
                         self._prefer_usfs = False
                         # icm20948 is more stable, check absolute threshold if required
@@ -259,7 +262,7 @@ class IMU(Component):
                                     self._usfs_yaw_offset, math.degrees(self._usfs_yaw_offset)))
 
         # calculate fused heading
-        _icm_adjusted = _icm_yaw_rad + self._dynamic_yaw_offset
+        _icm_adjusted = _icm_yaw_rad + self._icm20948_yaw_offset
         _usfs_adjusted = _usfs_yaw_rad + self._usfs_yaw_offset
         # normalize both
         if _icm_adjusted < 0:
