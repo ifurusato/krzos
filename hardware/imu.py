@@ -66,10 +66,12 @@ class IMU(Component):
         self._offset_decay_rate       = _cfg.get('offset_decay_rate', 0.01)
         self._small_error_threshold   = math.radians(_cfg.get('small_error_threshold_deg', 2.0))
         # forced alignment state
-        self._alignment_active = False
-        self._icm20948_alignment_offset = 0.0
-        self._usfs_alignment_offset = 0.0
-        self._aligned_rdof = None
+        self._alignment_active              = False
+        self._icm20948_alignment_offset     = 0.0
+        self._usfs_alignment_offset         = 0.0
+        self._aligned_rdof                  = None
+        self._usfs_yaw_adjusted_radians     = 0.0
+        self._icm20948_yaw_adjusted_radians = 0.0
         # dynamic trim state
         self._adjusting_icm20948      = False
         self._adjusting_usfs          = False
@@ -206,8 +208,8 @@ class IMU(Component):
         self._icm20948.poll()
         # 2. calculate metrics
         _error, _usfs_stdev, _icm_stdev = self._calculate_stability_metrics()
-        # 3. dynamic trim (if enabled)
-        if self._enable_dynamic_trim:
+        # 3. dynamic trim, if enabled and we're not already using forced alignment
+        if self._enable_dynamic_trim and not self._alignment_active:
             self._apply_dynamic_trim(_error, _usfs_stdev, _icm_stdev)
         else:
             self._adjusting_icm20948 = False
@@ -236,7 +238,6 @@ class IMU(Component):
         _agreement = max(0.0, 1.0 - (abs(_error) / _max_error))
         # combined score: geometric mean of all three factors
         self._heading_stability_score = (_usfs_stability * _icm_stability * _agreement) ** (1/3)
-
         # debug logging
     #   self._log.debug(Style.DIM +
     #       'enable_dynamic_trim: {}; '.format(self._enable_dynamic_trim) +
@@ -246,7 +247,6 @@ class IMU(Component):
     #       'usfs < thresh:  {}; icm < thresh: {}'.format(_usfs_stdev < self._min_stability_threshold, _icm_stdev < self._min_stability_threshold)
     #   )
     #   self._log.debug('USFS queue len:   {}; stdev: {:.6f}'.format(len(self._usfs._queue), _usfs_stdev))
-
         return _error, _usfs_stdev, _icm_stdev
 
     def _apply_dynamic_trim(self, error, usfs_stdev, icm_stdev):
@@ -313,6 +313,9 @@ class IMU(Component):
             _usfs_adjusted += 2 * π
         elif _usfs_adjusted >= 2 * π:
             _usfs_adjusted -= 2 * π
+        # store adjusted values for show_info()
+        self._usfs_yaw_adjusted_radians     = _usfs_adjusted
+        self._icm20948_yaw_adjusted_radians = _icm_adjusted
         # check if adjusted values match (not raw values)
         _adjusted_error = (_usfs_adjusted - _icm_adjusted + π) % (2 * π) - π
         self._yaw_matches = abs(_adjusted_error) < math.radians(5.0)  # 5° tolerance
@@ -320,7 +323,7 @@ class IMU(Component):
 
     def _fuse_or_select_heading(self, usfs_adjusted, icm_adjusted):
         '''
-        fuse headings if stable, otherwise select preferred or return None.
+        Fuse headings if stable, otherwise select preferred or return None.
         '''
         # determine stability and fusion
         if self._usfs.is_calibrated and self._icm20948.is_calibrated:
@@ -342,12 +345,12 @@ class IMU(Component):
                 self._yaw_radians = None
                 self._yaw = None
         elif self._has_matched_heading: # we've matched in the past
+            # use adjusted values from preferred IMU
             if self._prefer_usfs:
-                self._yaw_radians = self._usfs.yaw_radians
-                self._yaw = self._usfs.yaw
-            else: # ICM20948
-                self._yaw_radians = self._icm20948.yaw_radians
-                self._yaw = self._icm20948.yaw
+                self._yaw_radians = usfs_adjusted
+            else:
+                self._yaw_radians = icm_adjusted
+            self._yaw = int(round(math.degrees(self._yaw_radians)))
         else:
             self._yaw_radians = None
             self._yaw = None
@@ -370,7 +373,10 @@ class IMU(Component):
             self._icm20948_alignment_offset = 0.0
             self._usfs_alignment_offset = 0.0
             self._aligned_rdof = None
-            self._log.info('alignment cleared')
+            # reset dynamic trim offsets
+            self._icm20948_yaw_offset = 0.0
+            self._usfs_yaw_offset = 0.0
+            self._log.info('alignment cleared; dynamic trim offsets reset')
             return
         # validate argument
         if not isinstance(rdof, RDoF):
@@ -379,6 +385,9 @@ class IMU(Component):
         if not (self._usfs.is_calibrated and self._icm20948.is_calibrated):
             self._log.warning('both IMUs must be calibrated before alignment; ignoring align() call')
             return
+        # reset dynamic trim offsets before calculating alignment
+        self._icm20948_yaw_offset = 0.0
+        self._usfs_yaw_offset = 0.0
         if rdof == RDoF.YAW:
             _usfs_yaw = self._usfs.yaw_radians
             _icm_yaw = self._icm20948.yaw_radians
@@ -431,7 +440,7 @@ class IMU(Component):
         # mark alignment as active
         self._alignment_active = True
         self._aligned_rdof = rdof
-        self._has_matched_heading = True  # we've now forced a match
+        self._has_matched_heading = True
 
     def show_info(self):
         '''
@@ -455,17 +464,30 @@ class IMU(Component):
         else:
             roll_str = Style.DIM + '{:7.2f} | {:7.2f}'.format(usfs_roll, icm20948_roll)
         # yaw ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        usfs_yaw     = self._usfs.yaw
-        icm20948_yaw = self._icm20948.yaw
-        # use existing _yaw_matches flag (set in poll())
+        usfs_yaw_raw = self._usfs.yaw
+        icm20948_yaw_raw = self._icm20948.yaw
+        usfs_yaw_adjusted = math.degrees(self._usfs_yaw_adjusted_radians)
+        icm20948_yaw_adjusted = math.degrees(self._icm20948_yaw_adjusted_radians)
         _style = Style.BRIGHT if self._has_matched_heading else Style.NORMAL
         if self._yaw_matches:
-            heading_display = (usfs_yaw + icm20948_yaw) / 2
-            yaw_str = '{:7.2f}          '.format(heading_display)
-        elif self._prefer_usfs:
-            yaw_str = _style + '{:7.2f} | '.format(usfs_yaw) + Style.DIM + '{:7.2f}'.format(icm20948_yaw)
+            if self._yaw is not None:
+                yaw_str = '{:7.2f}          '.format(self._yaw) # use the fused value
+            else:
+                yaw_str = ' None            '
+        elif self._alignment_active:
+            # show raw→adjusted for both IMUs
+            if self._prefer_usfs:
+                yaw_str = _style + '{:3.0f}→{:3.0f} | '.format(usfs_yaw_raw, usfs_yaw_adjusted) \
+                     + Style.DIM + '{:3.0f}→{:3.0f}'.format(icm20948_yaw_raw, icm20948_yaw_adjusted)
+            else:
+                yaw_str = Style.DIM + '{:3.0f}→{:3.0f}'.format(usfs_yaw_raw, usfs_yaw_adjusted) \
+                        + _style + ' | {:3.0f}→{:3.0f}'.format(icm20948_yaw_raw, icm20948_yaw_adjusted)
         else:
-            yaw_str = Style.DIM + '{:7.2f}'.format(usfs_yaw) + _style + ' | {:7.2f}'.format(icm20948_yaw)
+            # show just raw values
+            if self._prefer_usfs:
+                yaw_str = _style + '{:7.2f} | '.format(usfs_yaw_raw) + Style.DIM + '{:7.2f}'.format(icm20948_yaw_raw)
+            else:
+                yaw_str = Style.DIM + '{:7.2f}'.format(usfs_yaw_raw) + _style + ' | {:7.2f}'.format(icm20948_yaw_raw)
         # trim ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         if self._usfs.is_adjusting_trim():
             trim_str = '; trim: {:5.2f}; '.format(self._usfs.trim_adjust)
