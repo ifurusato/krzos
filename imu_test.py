@@ -24,6 +24,7 @@ from hardware.digital_pot import DigitalPotentiometer
 from hardware.icm20948 import Icm20948
 from hardware.usfs import Usfs
 from hardware.imu import IMU
+from hardware.button import Button
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -35,7 +36,9 @@ log = Logger('test', Level.INFO)
 try:
     # read YAML configuration
     config = ConfigLoader(Level.INFO).configure()
-    _counter = itertools.count()
+    counter = itertools.count()
+
+    button = Button(config=config, name='button', level=Level.INFO)
 
     log.info('using digital pot.')
     pot = DigitalPotentiometer(config, level=Level.INFO)
@@ -61,6 +64,7 @@ try:
     # IMU ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     imu = IMU(config, level=Level.INFO)
+    button.add_callback(lambda: imu.align(RDoF.YAW))
     imu.enable()
     log.info(Fore.GREEN + 'ready.')
 
@@ -70,7 +74,7 @@ try:
 #   for i in range(10):
     while True:
         imu.poll()
-        if next(_counter) % 10 == 0:
+        if next(counter) % 10 == 0:
             imu.show_info()
         rate.wait()
 

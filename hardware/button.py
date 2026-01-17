@@ -32,9 +32,12 @@ class Button(Component):
     See: https://gpiozero.readthedocs.io/en/latest/
 
     :param config:        the application configuration
+    :param name:          the optional button name
     :param level:         the log level
     '''
     def __init__(self, config, name=None, level=Level.INFO):
+        if name is None:
+            name = 'button'
         _cfg = config['kros'].get('hardware').get('button')
         self._pin = _cfg.get('pin')
         _log_name = 'btn-{}'.format(self._pin) if name is None else name
