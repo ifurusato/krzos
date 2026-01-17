@@ -427,18 +427,9 @@ kros:
             show_target_info:              True            # show log line with target info
         imu:
             verbose:                       True            # verbose messaging
-            enable_dynamic_trim:           True            # if true enable dynamic modification of trim
-            yaw_match_threshold:              0.00         # the threshold below which we consider yaw values to match
-            prefer_usfs:                   True            # prefer USFS for accel/gyro
-            min_stability_threshold:        0.35           # (radians) ~20° absolute max stdev to trust a "stable" reading
-            stability_threshold:            0.75           # (radians) stability values above this indicate we trust the IMU
-            min_stability_difference:       0.005          # minimum stdev difference to trust one IMU over the other
-            require_absolute_stability:   False            # if True, require absolute stability threshold; if False, only relative
-            trim_adjustment_gain:           0.05           # how aggressively to adjust (e.g., 0.05 = 5% of error per poll)
-            min_error_threshold:            0.0872         # (radians) minimum heading difference before adjusting
-            max_dynamic_offset_deg:        30.0
-            offset_decay_rate:              0.01
-            small_error_threshold_deg:      2.0
+            rate_divergence_threshold_deg:  15.0           # degrees - warn if rotation rates differ by this much
+            min_stability_threshold:         0.09          # radians - USFS stdev threshold for stability
+            rotation_threshold_deg :         1.0           # degrees per poll - below this is considered stationary
         usfs:
             verbose:                      False
             show_matrix11x7:               True            # if true, show heading as number
