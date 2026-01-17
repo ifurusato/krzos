@@ -61,8 +61,12 @@ class IMU(Component):
         self._min_error_threshold     = _cfg.get('min_error_threshold')
         self._require_absolute_stability = _cfg.get('require_absolute_stability')
         self._min_stability_difference = _cfg.get('min_stability_difference')
+        self._max_dynamic_offset      = math.radians(_cfg.get('max_dynamic_offset_deg', 30.0))
+        self._offset_decay_rate       = _cfg.get('offset_decay_rate', 0.01)
+        self._small_error_threshold   = math.radians(_cfg.get('small_error_threshold_deg', 2.0))
         # dynamic trim state
-        self._dynamic_yaw_offset = 0.0
+        self._dynamic_yaw_offset      = 0.0 # dynamic offset for ICM20948
+        self._usfs_yaw_offset         = 0.0 # dynamic offset for USFS
         self._yaw                     = None
         self._yaw_radians             = None
         self._heading_stability_score = 0.0
@@ -214,48 +218,74 @@ class IMU(Component):
 
         # dynamic trim adjustment
         if self._enable_dynamic_trim:
-            # check guard conditions
             if (self._usfs.is_calibrated and self._icm20948.is_calibrated
                     and abs(_error) > self._min_error_threshold):
                 # determine which IMU is more stable
                 _stdev_diff = abs(_usfs_stdev - _icm_stdev)
                 # only adjust if there's a clear stability difference
-                if _stdev_diff > self._min_stability_difference: # 0.005/~0.3° difference threshold
+                if _stdev_diff > self._min_stability_difference:
+                    # dynamically update preference based on stability
                     if _usfs_stdev < _icm_stdev:
+                        self._prefer_usfs = True
                         # usfs is more stable, check absolute threshold if required
                         if not self._require_absolute_stability or _usfs_stdev < self._min_stability_threshold:
-                            # adjust icm20948 toward it
+                            # adjust ICM20948 toward USFS
                             _adjustment = _error * self._trim_adjustment_gain
                             self._dynamic_yaw_offset += _adjustment
+                            if abs(_error) < self._small_error_threshold:
+                                self._dynamic_yaw_offset *= (1.0 - self._offset_decay_rate)
+                            self._dynamic_yaw_offset = (self._dynamic_yaw_offset + π) % (2 * π) - π
+                            self._dynamic_yaw_offset = max(-self._max_dynamic_offset,
+                                                           min(self._max_dynamic_offset, self._dynamic_yaw_offset))
                             if self._verbose:
-                                self._log.info('adjusting ICM20948 trim by {:+.4f} rad ({:+.2f}°)'.format(
-                                    _adjustment, math.degrees(_adjustment)))
+                                self._log. info('USFS more stable - adjusting ICM20948 by {:+.4f} rad ({:+.2f}°); offset: {:+.4f} rad ({:+.2f}°)'.format(
+                                    _adjustment, math.degrees(_adjustment),
+                                    self._dynamic_yaw_offset, math.degrees(self._dynamic_yaw_offset)))
                     elif _icm_stdev < _usfs_stdev:
+                        self._prefer_usfs = False
                         # icm20948 is more stable, check absolute threshold if required
                         if not self._require_absolute_stability or _icm_stdev < self._min_stability_threshold:
-                            # adjust usfs toward it (reverse error sign)
+                            # adjust USFS toward ICM20948
                             _adjustment = -_error * self._trim_adjustment_gain
-                            _usfs_trim_rad = self._usfs.yaw_trim_radians + _adjustment
-                            self._usfs.set_fixed_yaw_trim(math.degrees(_usfs_trim_rad))
+                            self._usfs_yaw_offset += _adjustment
+                            if abs(_error) < self._small_error_threshold:
+                                self._usfs_yaw_offset *= (1.0 - self._offset_decay_rate)
+                            self._usfs_yaw_offset = (self._usfs_yaw_offset + π) % (2 * π) - π
+                            self._usfs_yaw_offset = max(-self._max_dynamic_offset,
+                                                        min(self._max_dynamic_offset, self._usfs_yaw_offset))
                             if self._verbose:
-                                self._log.info('adjusting USFS trim by {:+.4f} rad ({:+.2f}°)'.format(
-                                    _adjustment, math.degrees(_adjustment)))
+                                self._log.info('ICM20948 more stable - adjusting USFS by {:+.4f} rad ({:+.2f}°); offset: {:+.4f} rad ({:+.2f}°)'.format(
+                                    _adjustment, math.degrees(_adjustment),
+                                    self._usfs_yaw_offset, math.degrees(self._usfs_yaw_offset)))
+
         # calculate fused heading
         _icm_adjusted = _icm_yaw_rad + self._dynamic_yaw_offset
-        # normalize to 0-2π
+        _usfs_adjusted = _usfs_yaw_rad + self._usfs_yaw_offset
+        # normalize both
         if _icm_adjusted < 0:
             _icm_adjusted += 2 * π
         elif _icm_adjusted >= 2 * π:
             _icm_adjusted -= 2 * π
+        if _usfs_adjusted < 0:
+            _usfs_adjusted += 2 * π
+        elif _usfs_adjusted >= 2 * π:
+            _usfs_adjusted -= 2 * π
+
         # if both are calibrated and their resp. yaw matches we alter state of is_stable
         if self._usfs.is_calibrated and self._icm20948.is_calibrated:
             _is_stable = self.is_stable and self._yaw_matches
             if _is_stable != self._is_stable:
-                self._change_callback(self._is_stable)
                 self._is_stable = _is_stable
+                self._change_callback(self._is_stable)
+            if self._is_stable: # continuously fuse when stable
                 # simple average for now (could weight by stability in future)
-                self._yaw_radians = (_usfs_yaw_rad + _icm_adjusted) / 2.0
-                self._yaw = int(round(math.degrees(self._yaw_radians)))
+#               self._yaw_radians = (_usfs_yaw_rad + _icm_adjusted) / 2.0
+#               self._yaw = int(round(math.degrees(self._yaw_radians)))
+                _sin_avg = (math.sin(_usfs_yaw_rad) + math.sin(_icm_adjusted)) / 2.0
+                _cos_avg = (math.cos(_usfs_yaw_rad) + math.cos(_icm_adjusted)) / 2.0
+                self._yaw_radians = math.atan2(_sin_avg, _cos_avg)
+                if self._yaw_radians < 0:
+                    self._yaw_radians += 2 * π
             else:
                 self._yaw_radians = None
                 self._yaw = None
