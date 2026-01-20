@@ -22,7 +22,7 @@ kros:
         enable_stm32_controller:           True            # enable STM32F405 for neopixel strip and ring
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
-        enable_icm20948:                   True            # enable ICM20948 IMU
+        enable_icm20948:                  False            # enable ICM20948 IMU
         enable_usfs:                       True            # enable USFS IMU
         enable_imu:                        True            # enable fused IMU
         enable_motor_controller:           True            # enable Motor 2040

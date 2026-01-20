@@ -1,46 +1,69 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+# Copyright 2020-2026 by Ichiro Furusato.  All rights reserved.  This file is part
+# of the Robot Operating System project, released under the MIT License.  Please
+# see the LICENSE file included as part of this package. 
+#
+# author:    Ichiro Furusato
+# created:  2026-01-20
 
 import time
-import board
-import busio
+from colorama import init, Fore, Style
+init()
 
-from bno085 import (
+from hardware.bno085 import (
+    BNO085,
     BNO_REPORT_ACCELEROMETER,
     BNO_REPORT_GYROSCOPE,
     BNO_REPORT_MAGNETOMETER,
     BNO_REPORT_ROTATION_VECTOR,
 )
-from bno085.i2c import BNO08X_I2C
+from core.logger import Logger, Level
 
-i2c = busio.I2C(board.SCL, board.SDA, frequency=400000)
-bno = BNO08X_I2C(i2c)
+_log = Logger('bno085-test', level=Level.INFO)
 
-bno.enable_feature(BNO_REPORT_ACCELEROMETER)
-bno.enable_feature(BNO_REPORT_GYROSCOPE)
-bno.enable_feature(BNO_REPORT_MAGNETOMETER)
-bno.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+try:
+    _log.info('initializing BNO085 on I2C bus 1 at default address 0x4A…')
+    bno = BNO085(i2c_bus_number=1, level=Level.INFO)
+    
+    _log.info('enabling sensor reports…')
+    bno.enable_feature(BNO_REPORT_ACCELEROMETER)
+    bno.enable_feature(BNO_REPORT_GYROSCOPE)
+    bno.enable_feature(BNO_REPORT_MAGNETOMETER)
+    bno.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+    
+    _log.info('reading sensor data…')
+    while True:
 
-while True:
-    time.sleep(0.5)
-    print("Acceleration:")
-    accel_x, accel_y, accel_z = bno.acceleration
-    print("X: %0.6f  Y: %0.6f Z: %0.6f  m/s^2" % (accel_x, accel_y, accel_z))
-    print("")
+        # accelerometer:
+        accel_x, accel_y, accel_z = bno.acceleration
+        _log.info(Fore.YELLOW + 'accel:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} m/s^2'.format(accel_x, accel_y, accel_z))
+        
+        # gyroscope:
+        gyro_x, gyro_y, gyro_z = bno.gyro
+        _log. info(Fore.MAGENTA + 'gyro:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} rad/s'.format(gyro_x, gyro_y, gyro_z))
+        
+        # magnetometer:
+        mag_x, mag_y, mag_z = bno.magnetic
+        _log.info(Fore.CYAN + 'mag:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} uT'.format(mag_x, mag_y, mag_z))
+        
+        # rotation vector quaternion:
+        quat_i, quat_j, quat_k, quat_real = bno.quaternion
+        _log.info(Fore.GREEN + 'rvq:  I: {:.6f}  J: {:.6f}  K: {:.6f}  Real: {:.6f}\n'.format(quat_i, quat_j, quat_k, quat_real))
+#       _log.info('')
 
-    print("Gyro:")
-    gyro_x, gyro_y, gyro_z = bno.gyro
-    print("X: %0.6f  Y: %0.6f Z: %0.6f rads/s" % (gyro_x, gyro_y, gyro_z))
-    print("")
+        time.sleep(0.5)
 
-    print("Magnetometer:")
-    mag_x, mag_y, mag_z = bno.magnetic
-    print("X: %0.6f  Y: %0.6f Z: %0.6f uT" % (mag_x, mag_y, mag_z))
-    print("")
-
-    print("Rotation Vector Quaternion:")
-    quat_i, quat_j, quat_k, quat_real = bno.quaternion
-    print("I: %0.6f  J: %0.6f K: %0.6f  Real: %0.6f" % (quat_i, quat_j, quat_k, quat_real))
-    print("")
+except KeyboardInterrupt:
+    _log.info('Ctrl-C caught; exiting…')
+except Exception as e: 
+    _log.error('error during test: {}'.format(e))
+    import traceback
+    traceback.print_exc()
+finally:
+    _log.info('closing BNO085…')
+    bno.close()
+    _log.info('test complete.')
 
 #EOF
