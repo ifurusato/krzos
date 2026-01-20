@@ -13,8 +13,9 @@
 from __future__ import annotations
 
 import time
+import math
 from math import pi as π
-from collections import namedtuple
+from collections import namedtuple, deque
 from struct import pack_into, unpack_from
 from typing import Any, Optional
 
@@ -358,7 +359,7 @@ def _separate_batch(packet, report_slices: list[Any]) -> None:
             raise PacketError('incomplete report: need {} bytes for report 0x{:02X}, only {} available'.format(
                 required_bytes, report_id, unprocessed_byte_count))
         # we have enough bytes to read
-        report_slice = packet.data[next_byte_index:  next_byte_index + required_bytes]
+        report_slice = packet.data[next_byte_index: next_byte_index + required_bytes]
         report_slices.append([report_slice[0], report_slice])
         next_byte_index = next_byte_index + required_bytes
 
@@ -467,6 +468,7 @@ class Packet:
 class BNO085(Component):
     NAME = 'bno085'
     HALF_PI = π / 2.0
+    DEFAULT_I2C_ADDRESS = 0x4A
     '''
     BNO085 9-DoF IMU driver for CPython using SMBus2.
 
@@ -474,28 +476,59 @@ class BNO085(Component):
     adapted for use with standard CPython on Raspberry Pi.
 
     Args:
-        config:          the application configuration
-        level:           the log level
+        config:  the application configuration
+        level:   the log level
     '''
     def __init__(self, config, level=Level.INFO):
-        self._log = Logger(BNO085.NAME, level=level)
+        self._log = Logger(BNO085.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._log.info('initialising bno085…')
+        if not isinstance(config, dict):
+            raise ValueError('wrong type for config argument: {}'.format(type(config)))
         # configuration
         _cfg = config['kros'].get('hardware').get('bno085')
-        self._i2c_address = _cfg.get('i2c_address', 0x4A) # default is 0x4A
-        self._log.info('opened I2C bus {} at address 0x{:02X}'.format(1, self._i2c_address))
-        self._data_buffer: bytearray = bytearray(_DATA_BUFFER_SIZE)
-        self._command_buffer: bytearray = bytearray(12)
-        self._packet_slices: list[Any] = []
-        self._sequence_number: list[int] = [0, 0, 0, 0, 0, 0]
-        self._two_ended_sequence_numbers: dict[int, int] = {}
-        self._dcd_saved_at: float = -1
-        self._me_calibration_started_at: float = -1.0
-        self._calibration_complete = False
+        self._i2c_bus_number  = _cfg.get('i2c_bus_number', 1)
+        self._i2c_address     = _cfg.get('i2c_address', BNO085.DEFAULT_I2C_ADDRESS)
+        # declination and trim (read from config in degrees, store in radians)
+        _declination_degrees  = _cfg.get('declination', 13.8)
+        self._declination     = math.radians(_declination_degrees)
+        self._log.info('declination: {: 5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
+        _pitch_trim_degrees   = _cfg.get('pitch_trim', 0.0)
+        _roll_trim_degrees    = _cfg.get('roll_trim', 0.0)
+        _yaw_trim_degrees     = _cfg.get('yaw_trim', 0.0)
+        self._pitch_trim      = math.radians(_pitch_trim_degrees)
+        self._roll_trim       = math.radians(_roll_trim_degrees)
+        self._yaw_trim        = math.radians(_yaw_trim_degrees)
+        # axis configuration
+        self._swap_pitch_roll = _cfg.get('swap_pitch_roll', False)
+        self._invert_pitch    = _cfg.get('invert_pitch', False)
+        self._invert_roll     = _cfg.get('invert_roll', False)
+        self._invert_yaw      = _cfg.get('invert_yaw', False)
+        # stability tracking
+        self._queue_length    = _cfg.get('queue_length', 100)
+        self._stability_threshold = _cfg.get('stability_threshold', 0.09)
+        self._min_calibration_accuracy = _cfg.get('min_calibration_accuracy', 2)
+        self._queue = deque([], self._queue_length)
+        self._stdev = 0.0
+        # euler angles (uncorrected, in radians)
+        self._pitch = 0.0
+        self._roll  = 0.0
+        self._yaw   = 0.0
+        # corrected euler angles (after trim applied, in radians)
+        self._corrected_pitch = 0.0
+        self._corrected_roll  = 0.0
+        self._corrected_yaw   = 0.0
+        # sensor state (will be initialized in enable())
+        self._i2c             = None
+        self._i2c_device      = None
+        self._dbuf            = None
+        self._data_buffer     = None
+        self._packet_slices   = None
+        self._sequence_number = None
         self._magnetometer_accuracy = 0
-        self._id_read = False
-        self._readings: dict[int, Any] = {}
+        self._gyro_accuracy   = 0
+        self._accel_accuracy  = 0
+        self._two_ended_sequence_numbers = {}
         self._log.info('ready.')
 
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -537,9 +570,9 @@ class BNO085(Component):
     def game_quaternion(self) -> Optional[tuple[float, float, float, float]]:
         '''
         A quaternion representing the current rotation vector expressed as a quaternion with no
-        specific reference for heading, while roll and pitch are referenced against gravity. to
+        specific reference for heading, while roll and pitch are referenced against gravity. To
         prevent sudden jumps in heading due to corrections, the game_quaternion property is not
-        corrected using the magnetometer. some drift is expected.
+        corrected using the magnetometer. Some drift is expected.
         '''
         self._process_available_packets()
         try:
@@ -612,7 +645,7 @@ class BNO085(Component):
         True if a shake was detected on any axis since the last time it was checked
 
         This property has a "latching" behavior where once a shake is detected, it will stay in a
-        "shaken" state until the value is read. this prevents missing shake events but means that
+        "shaken" state until the value is read. This prevents missing shake events but means that
         this property is not guaranteed to reflect the shake state at the moment it is read.
         '''
         self._process_available_packets()
@@ -632,8 +665,8 @@ class BNO085(Component):
 
         * "Unknown"    - the sensor is unable to classify the current stability
         * "On Table"   - the sensor is at rest on a stable surface with very little vibration
-        * "Stationary" - the sensor's motion is below the stable threshold but the stable 
-                         duration requirement has not been met. this output is only available 
+        * "Stationary" - the sensor's motion is below the stable threshold but the stable
+                         duration requirement has not been met. This output is only available
                          when gyro calibration is enabled
         * "Stable"     - the sensor's motion has met the stable threshold and duration requirements
         * "In motion"  - the sensor is moving
@@ -729,7 +762,7 @@ class BNO085(Component):
         '''corrected pitch in degrees'''
         return math.degrees(self._corrected_pitch)
 
-    @property  
+    @property
     def pitch_radians(self):
         '''corrected pitch in radians'''
         return self._corrected_pitch
@@ -775,22 +808,90 @@ class BNO085(Component):
         '''
         Enable the hardware for the sensor.
         '''
-        if not self.closed:
-            if not self.enabled:
-                Component.enable(self)
-                self._i2c = SMBus(1)
-                for _ in range(3):
-                    self.soft_reset()
-                    try:
-                        if self._check_id():
-                            break
-                    except Exception:
-                        time.sleep(0.5)
-                else:
-                    raise RuntimeError('could not read ID')
-                self._log.info('enabled.')
+        if not self.enabled:
+            self._log.info('enabling bno085…')
+            Component.enable(self)
+            # initialize I2C and sensor (your original code from initialize())
+            self._i2c = SMBus(self._i2c_bus_number)
+            for _ in range(3):
+                self.soft_reset()
+                try:
+                    if self._check_id():
+                        break
+                except Exception:
+                    time.sleep(0.5)
             else:
-                self._log.warning('already enabled.')
+                raise RuntimeError('could not read ID')
+            # initialize buffers (was also in initialize())
+            self._dbuf = bytearray(2)
+            self._data_buffer = bytearray(_DATA_BUFFER_SIZE)
+            self._packet_slices = _INITIAL_REPORTS.copy()
+            self._sequence_number = [0] * _BNO_CHANNEL_GYRO_ROTATION_VECTOR
+            # enable default sensor features
+            self.enable_feature(BNO_REPORT_ACCELEROMETER)
+            self.enable_feature(BNO_REPORT_GYROSCOPE)
+            self.enable_feature(BNO_REPORT_MAGNETOMETER)
+            self.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+            self._log.info('bno085 enabled.')
+        else:
+            self._log.warning('bno085 already enabled.')
+
+    def poll(self):
+        '''
+        poll sensor, update Euler angles with trim/declination applied.
+        returns corrected yaw in degrees, or None if no quaternion available.
+        '''
+        if self.closed:
+            self._log.warning('bno085 is closed.')
+            return None
+
+        # process available sensor packets
+        self._process_available_packets()
+
+        # get quaternion
+        quat = self.quaternion
+        if quat is None:
+            return None
+
+        # convert quaternion to Euler angles (yaw, pitch, roll in radians)
+        self._yaw, self._pitch, self._roll = self._quaternion_to_euler(*quat)
+
+        # apply declination to yaw
+        self._yaw += self._declination
+
+        # normalize yaw to [0, 2π)
+        if self._yaw < 0:
+            self._yaw += 2 * math.pi
+        elif self._yaw >= 2 * math.pi:
+            self._yaw -= 2 * math.pi
+
+        # apply axis swapping/inversion
+        if self._swap_pitch_roll:
+            self._pitch, self._roll = self._roll, self._pitch
+        if self._invert_pitch:
+            self._pitch *= -1.0
+        if self._invert_roll:
+            self._roll *= -1.0
+        if self._invert_yaw:
+            self._yaw *= -1.0
+
+        # apply trim corrections
+        self._corrected_pitch = self._pitch + self._pitch_trim
+        self._corrected_roll = self._roll + self._roll_trim
+        self._corrected_yaw = self._yaw - self._yaw_trim
+
+        # normalize corrected yaw to [0, 2π)
+        if self._corrected_yaw < 0:
+            self._corrected_yaw += 2 * math.pi
+        elif self._corrected_yaw >= 2 * math.pi:
+            self._corrected_yaw -= 2 * math.pi
+
+        # update stability tracking
+        self._queue.append(self._corrected_yaw)
+        if len(self._queue) > 1:
+            self._stdev = self._circular_stdev(self._queue)
+
+        return math.degrees(self._corrected_yaw)
 
     def begin_calibration(self) -> None:
         '''
@@ -815,7 +916,8 @@ class BNO085(Component):
     def _quaternion_to_euler(self, quat_i, quat_j, quat_k, quat_real):
         '''
         Convert quaternion to Tait-Bryan Euler angles (yaw, pitch, roll).
-        returns tuple of (yaw_rad, pitch_rad, roll_rad).
+        Uses aerospace convention matching USFS.
+        Returns tuple of (yaw_rad, pitch_rad, roll_rad).
         '''
         # roll (x-axis rotation)
         sinr_cosp = 2.0 * (quat_real * quat_i + quat_j * quat_k)
@@ -829,6 +931,31 @@ class BNO085(Component):
         cosy_cosp = 1.0 - 2.0 * (quat_j * quat_j + quat_k * quat_k)
         yaw = math.atan2(siny_cosp, cosy_cosp)
         return yaw, pitch, roll
+
+    def _circular_stdev(self, angles):
+        '''
+        Calculate standard deviation for circular data (angles in radians).
+        Returns value in radians.
+        '''
+        if len(angles) < 2:
+            return float('inf')
+        sin_sum = sum(math.sin(a) for a in angles)
+        cos_sum = sum(math.cos(a) for a in angles)
+        n = len(angles)
+        sin_mean = sin_sum / n
+        cos_mean = cos_sum / n
+        r = math.sqrt(sin_mean**2 + cos_mean**2)
+        if r > 0.999999:
+            return 0.0
+        if r < 0.0001:
+            return math.pi
+        return math.sqrt(-2 * math.log(r))
+
+    def clear_queue(self):
+        '''
+        Clears the statistic queue. Used by IMU class for fast stability recovery.
+        '''
+        self._queue.clear()
 
     def _send_me_command(self, subcommand_params: Optional[list[int]]) -> None:
         start_time = time.monotonic()
@@ -1218,10 +1345,15 @@ class BNO085(Component):
         '''
         Closes the I2C bus.
         '''
-        if self._i2c:
-            self._i2c.close()
-            self._log.info('I2C bus closed')
-        super().disable()
+        if not self.disabled:
+            if self._i2c:
+                self._i2c.close()
+                self._i2c = None
+                self._log.info('I2C bus closed')
+            super().disable()
+            self._log.info('disabled.')
+        else:
+            self._log.warning('already disabled.')
 
     def close(self):
         '''
