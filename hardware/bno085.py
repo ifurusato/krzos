@@ -819,7 +819,7 @@ class BNO085(Component):
             # initialize buffers
             self._dbuf = bytearray(2)
             self._data_buffer = bytearray(_DATA_BUFFER_SIZE)
-            self._packet_slices = _INITIAL_REPORTS.copy()
+            self._packet_slices: list[Any] = []
             self._sequence_number = [0] * _BNO_CHANNEL_GYRO_ROTATION_VECTOR
             # reset and check ID
             for _ in range(3):

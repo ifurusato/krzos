@@ -42,19 +42,19 @@ try:
 
         # accelerometer:
         accel_x, accel_y, accel_z = bno.acceleration
-        _log.info(Fore.YELLOW + 'accel:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} m/s^2'.format(accel_x, accel_y, accel_z))
+        _log.info(Fore.YELLOW + 'accel:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} m/s^2'.format(accel_x, accel_y, accel_z))
         
         # gyroscope:
         gyro_x, gyro_y, gyro_z = bno.gyro
-        _log. info(Fore.MAGENTA + 'gyro:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} rad/s'.format(gyro_x, gyro_y, gyro_z))
+        _log. info(Fore.MAGENTA + 'gyro:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} rad/s'.format(gyro_x, gyro_y, gyro_z))
         
         # magnetometer:
         mag_x, mag_y, mag_z = bno.magnetic
-        _log.info(Fore.CYAN + 'mag:  X: {:.6f}  Y: {:.6f}  Z: {:.6f} uT'.format(mag_x, mag_y, mag_z))
+        _log.info(Fore.CYAN + 'mag:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} uT'.format(mag_x, mag_y, mag_z))
         
         # rotation vector quaternion:
         quat_i, quat_j, quat_k, quat_real = bno.quaternion
-        _log.info(Fore.GREEN + 'rvq:  I: {:.6f}  J: {:.6f}  K: {:.6f}  Real: {:.6f}\n'.format(quat_i, quat_j, quat_k, quat_real))
+        _log.info(Fore.GREEN + 'rvq:  I: {:4.2f}  J: {:4.2f}  K: {:4.2f}  Real: {:4.2f}\n'.format(quat_i, quat_j, quat_k, quat_real))
 #       _log.info('')
 
         time.sleep(0.5)
