@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import traceback
 import time
 import math
 from math import pi as π
@@ -504,6 +505,8 @@ class BNO085(Component):
         self._invert_pitch    = _cfg.get('invert_pitch', False)
         self._invert_roll     = _cfg.get('invert_roll', False)
         self._invert_yaw      = _cfg.get('invert_yaw', False)
+        self._id_read  = False
+        self._readings = {}
         # stability tracking
         self._queue_length    = _cfg.get('queue_length', 100)
         self._stability_threshold = _cfg.get('stability_threshold', 0.09)
@@ -824,7 +827,8 @@ class BNO085(Component):
                 try:
                     if self._check_id():
                         break
-                except Exception:
+                except Exception as e:
+                    self._log.error('{} raised during _check_id(): {}\n{}'.format(type(e), e, traceback.format_exc()))
                     time.sleep(0.5)
             else:
                 raise RuntimeError('could not read ID')
