@@ -443,8 +443,19 @@ kros:
             invert_pitch:                  True
             stability_threshold:              0.09         # max standard deviation to determine calibration
         bno085:
-            i2c_address:                   0x4A            # I²C address (default 0x4A)
-            declination:                     23.97         # declination at operating location
+            i2c_bus_number:                  1             # I2C bus (1 = /dev/i2c-1)
+            i2c_address:                  0x4A             # default BNO085 address
+            declination:                 23.97             # declination at operating location
+            pitch_trim:                   0.0              # pitch offset correction (degrees)
+            roll_trim:                    0.0              # roll offset correction (degrees)
+            yaw_trim:                     0.0              # yaw offset correction (degrees)
+            swap_pitch_roll:            False              # swap pitch/roll axes for different mount
+            invert_pitch:               False              # invert pitch axis
+            invert_roll:                False              # invert roll axis
+            invert_yaw:                 False              # invert yaw axis
+            queue_length:                 100              # stability tracking queue size
+            stability_threshold:          0.09             # radians - stdev threshold for calibration
+            min_calibration_accuracy:       2              # 0-3, minimum mag accuracy for is_calibrated
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled

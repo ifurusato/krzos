@@ -484,7 +484,6 @@ class BNO085(Component):
         # configuration
         _cfg = config['kros'].get('hardware').get('bno085')
         self._i2c_address = _cfg.get('i2c_address', 0x4A) # default is 0x4A
-        self._i2c = SMBus(1)
         self._log.info('opened I2C bus {} at address 0x{:02X}'.format(1, self._i2c_address))
         self._data_buffer: bytearray = bytearray(_DATA_BUFFER_SIZE)
         self._command_buffer: bytearray = bytearray(12)
@@ -499,29 +498,7 @@ class BNO085(Component):
         self._readings: dict[int, Any] = {}
         self._log.info('ready.')
 
-    def enable(self):
-        if not self.closed:
-            if not self.enabled:
-                Component.enable(self)
-                self.initialize()
-                # TODO
-                self._log.info('enabled.')
-            else:
-                self._log.warning('already enabled.')
-
-    def initialize(self):
-        '''
-        Initialize the sensor.
-        '''
-        for _ in range(3):
-            self.soft_reset()
-            try:
-                if self._check_id():
-                    break
-            except Exception:
-                time.sleep(0.5)
-        else:
-            raise RuntimeError('could not read ID')
+    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def magnetic(self) -> Optional[tuple[float, float, float]]:
@@ -727,6 +704,94 @@ class BNO085(Component):
         except KeyError:
             raise RuntimeError('no raw magnetic report found, is it enabled?') from None
 
+    @property
+    def calibration_status(self) -> int:
+        '''
+        Get the status of the self-calibration.
+        '''
+        self._send_me_command(
+            [
+                0,  # calibrate accel
+                0,  # calibrate gyro
+                0,  # calibrate mag
+                _ME_GET_CAL,
+                0,  # calibrate planar acceleration
+                0,  # 'on_table' calibration
+                0,  # reserved
+                0,  # reserved
+                0,  # reserved
+            ]
+        )
+        return self._magnetometer_accuracy
+
+    @property
+    def pitch(self):
+        '''corrected pitch in degrees'''
+        return math.degrees(self._corrected_pitch)
+
+    @property  
+    def pitch_radians(self):
+        '''corrected pitch in radians'''
+        return self._corrected_pitch
+
+    @property
+    def roll(self):
+        '''corrected roll in degrees'''
+        return math.degrees(self._corrected_roll)
+
+    @property
+    def roll_radians(self):
+        '''corrected roll in radians'''
+        return self._corrected_roll
+
+    @property
+    def yaw(self):
+        '''corrected yaw in degrees'''
+        return math.degrees(self._corrected_yaw)
+
+    @property
+    def yaw_radians(self):
+        '''corrected yaw in radians'''
+        return self._corrected_yaw
+
+    @property
+    def is_calibrated(self):
+        '''True if magnetometer accuracy ≥ threshold'''
+        return self._magnetometer_accuracy >= self._min_calibration_accuracy
+
+    @property
+    def standard_deviation(self):
+        '''circular stdev of yaw queue (radians)'''
+        return self._stdev
+
+    @property
+    def mag_accuracy(self):
+        '''magnetometer calibration quality (0-3)'''
+        return self._magnetometer_accuracy
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def enable(self):
+        '''
+        Enable the hardware for the sensor.
+        '''
+        if not self.closed:
+            if not self.enabled:
+                Component.enable(self)
+                self._i2c = SMBus(1)
+                for _ in range(3):
+                    self.soft_reset()
+                    try:
+                        if self._check_id():
+                            break
+                    except Exception:
+                        time.sleep(0.5)
+                else:
+                    raise RuntimeError('could not read ID')
+                self._log.info('enabled.')
+            else:
+                self._log.warning('already enabled.')
+
     def begin_calibration(self) -> None:
         '''
         Begin the sensor's self-calibration routine....
@@ -747,25 +812,23 @@ class BNO085(Component):
         )
         self._calibration_complete = False
 
-    @property
-    def calibration_status(self) -> int:
+    def _quaternion_to_euler(self, quat_i, quat_j, quat_k, quat_real):
         '''
-        Get the status of the self-calibration.
+        Convert quaternion to Tait-Bryan Euler angles (yaw, pitch, roll).
+        returns tuple of (yaw_rad, pitch_rad, roll_rad).
         '''
-        self._send_me_command(
-            [
-                0,  # calibrate accel
-                0,  # calibrate gyro
-                0,  # calibrate mag
-                _ME_GET_CAL,
-                0,  # calibrate planar acceleration
-                0,  # 'on_table' calibration
-                0,  # reserved
-                0,  # reserved
-                0,  # reserved
-            ]
-        )
-        return self._magnetometer_accuracy
+        # roll (x-axis rotation)
+        sinr_cosp = 2.0 * (quat_real * quat_i + quat_j * quat_k)
+        cosr_cosp = 1.0 - 2.0 * (quat_i * quat_i + quat_j * quat_j)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+        # pitch (y-axis rotation)
+        sinp = 2.0 * (quat_real * quat_j - quat_k * quat_i)
+        pitch = math.asin(max(-1.0, min(1.0, sinp)))  # clamp to [-1, 1]
+        # yaw (z-axis rotation)
+        siny_cosp = 2.0 * (quat_real * quat_k + quat_i * quat_j)
+        cosy_cosp = 1.0 - 2.0 * (quat_j * quat_j + quat_k * quat_k)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        return yaw, pitch, roll
 
     def _send_me_command(self, subcommand_params: Optional[list[int]]) -> None:
         start_time = time.monotonic()
