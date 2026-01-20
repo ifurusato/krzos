@@ -811,8 +811,14 @@ class BNO085(Component):
         if not self.enabled:
             self._log.info('enabling bno085…')
             Component.enable(self)
-            # initialize I2C and sensor (your original code from initialize())
+            # initialize I2C and sensor 
             self._i2c = SMBus(self._i2c_bus_number)
+            # initialize buffers
+            self._dbuf = bytearray(2)
+            self._data_buffer = bytearray(_DATA_BUFFER_SIZE)
+            self._packet_slices = _INITIAL_REPORTS.copy()
+            self._sequence_number = [0] * _BNO_CHANNEL_GYRO_ROTATION_VECTOR
+            # reset and check ID
             for _ in range(3):
                 self.soft_reset()
                 try:
@@ -822,19 +828,14 @@ class BNO085(Component):
                     time.sleep(0.5)
             else:
                 raise RuntimeError('could not read ID')
-            # initialize buffers (was also in initialize())
-            self._dbuf = bytearray(2)
-            self._data_buffer = bytearray(_DATA_BUFFER_SIZE)
-            self._packet_slices = _INITIAL_REPORTS.copy()
-            self._sequence_number = [0] * _BNO_CHANNEL_GYRO_ROTATION_VECTOR
             # enable default sensor features
             self.enable_feature(BNO_REPORT_ACCELEROMETER)
             self.enable_feature(BNO_REPORT_GYROSCOPE)
             self.enable_feature(BNO_REPORT_MAGNETOMETER)
             self.enable_feature(BNO_REPORT_ROTATION_VECTOR)
-            self._log.info('bno085 enabled.')
+            self._log.info('enabled.')
         else:
-            self._log.warning('bno085 already enabled.')
+            self._log.warning('already enabled.')
 
     def poll(self):
         '''
@@ -842,29 +843,23 @@ class BNO085(Component):
         returns corrected yaw in degrees, or None if no quaternion available.
         '''
         if self.closed:
-            self._log.warning('bno085 is closed.')
+            self._log.warning('already closed.')
             return None
-
         # process available sensor packets
         self._process_available_packets()
-
         # get quaternion
         quat = self.quaternion
         if quat is None:
             return None
-
         # convert quaternion to Euler angles (yaw, pitch, roll in radians)
         self._yaw, self._pitch, self._roll = self._quaternion_to_euler(*quat)
-
         # apply declination to yaw
         self._yaw += self._declination
-
         # normalize yaw to [0, 2π)
         if self._yaw < 0:
             self._yaw += 2 * math.pi
         elif self._yaw >= 2 * math.pi:
             self._yaw -= 2 * math.pi
-
         # apply axis swapping/inversion
         if self._swap_pitch_roll:
             self._pitch, self._roll = self._roll, self._pitch
@@ -874,23 +869,19 @@ class BNO085(Component):
             self._roll *= -1.0
         if self._invert_yaw:
             self._yaw *= -1.0
-
         # apply trim corrections
         self._corrected_pitch = self._pitch + self._pitch_trim
         self._corrected_roll = self._roll + self._roll_trim
         self._corrected_yaw = self._yaw - self._yaw_trim
-
         # normalize corrected yaw to [0, 2π)
         if self._corrected_yaw < 0:
             self._corrected_yaw += 2 * math.pi
         elif self._corrected_yaw >= 2 * math.pi:
             self._corrected_yaw -= 2 * math.pi
-
         # update stability tracking
         self._queue.append(self._corrected_yaw)
         if len(self._queue) > 1:
             self._stdev = self._circular_stdev(self._queue)
-
         return math.degrees(self._corrected_yaw)
 
     def begin_calibration(self) -> None:
@@ -1095,10 +1086,8 @@ class BNO085(Component):
             _response_seq_number,
         ) = report_body
         command_status, *_rest = response_values
-
         if command == _ME_CALIBRATE and command_status == 0:
             self._me_calibration_started_at = time.monotonic()
-
         if command == _SAVE_DCD:
             if command_status == 0:
                 self._dcd_saved_at = time.monotonic()
@@ -1111,11 +1100,9 @@ class BNO085(Component):
             return
         _report_name = _REPORT_NAMES.get(report_id, 'UNKNOWN')
         self._log.debug('processing report: {}'.format(_report_name))
-
         if report_id == BNO_REPORT_STEP_COUNTER:
             self._readings[report_id] = _parse_step_couter_report(report_bytes)
             return
-
         if report_id == BNO_REPORT_SHAKE_DETECTOR:
             shake_detected = _parse_shake_report(report_bytes)
             try:
@@ -1124,12 +1111,10 @@ class BNO085(Component):
             except KeyError:
                 pass
             return
-
         if report_id == BNO_REPORT_STABILITY_CLASSIFIER:
             stability_classification = _parse_stability_classifier_report(report_bytes)
             self._readings[BNO_REPORT_STABILITY_CLASSIFIER] = stability_classification
             return
-
         if report_id == BNO_REPORT_ACTIVITY_CLASSIFIER:
             activity_classification = _parse_activity_classifier_report(report_bytes)
             self._readings[BNO_REPORT_ACTIVITY_CLASSIFIER] = activity_classification

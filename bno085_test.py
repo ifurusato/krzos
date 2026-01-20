@@ -35,12 +35,7 @@ try:
 
     _log.info('initializing BNO085…')
     bno = BNO085(_config, level=Level.INFO)
-    
-    _log.info('enabling sensor reports…')
-    bno.enable_feature(BNO_REPORT_ACCELEROMETER)
-    bno.enable_feature(BNO_REPORT_GYROSCOPE)
-    bno.enable_feature(BNO_REPORT_MAGNETOMETER)
-    bno.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+    bno.enable()
     
     _log.info('reading sensor data…')
     while True:
