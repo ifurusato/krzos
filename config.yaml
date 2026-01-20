@@ -442,9 +442,11 @@ kros:
             invert_roll:                   True
             invert_pitch:                  True
             stability_threshold:              0.09         # max standard deviation to determine calibration
+        bno085:
+            i2c_address:                   0x4A            # I²C address (default 0x4A)
+            declination:                     23.97         # declination at operating location
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
-            declination:                     23.97         # declination at operating location
             poll_rate_hz:                   150            # how often the IMU is polled
             vertical_mount:               False            # True: vertical like Pimoroni, or False: horizontal like Adafruit
             bench_calibrate:               True            # if true, calibrate the IMU manually while on the rotating bench
