@@ -20,7 +20,6 @@ from core.convert import Convert
 from core.orientation import Orientation
 from core.rdof import RDoF
 from core.logger import Logger, Level
-from hardware.i2c_scanner import I2CScanner
 from core.config_loader import ConfigLoader
 from hardware.icm20948 import Icm20948
 from hardware.digital_pot import DigitalPotentiometer # for calibration only
@@ -46,10 +45,9 @@ try:
     # read YAML configuration
     _config = ConfigLoader(Level.INFO).configure()
 
-    _i2c_scanner = I2CScanner(_config, level=Level.WARN)
-    if _i2c_scanner.has_address([_i2c_address]):
-        _log.info('using digital pot.')
-        _pot = DigitalPotentiometer(_config, i2c_address=_i2c_address, level=Level.INFO)
+    _log.info('using digital pot.')
+    _pot = DigitalPotentiometer(_config, i2c_address=_i2c_address, level=Level.INFO)
+
     if _pot:
         if _trim_axis:
             if _trim_axis == RDoF.YAW:
@@ -72,9 +70,6 @@ try:
     if CALIBRATE:
         if not _icm20948.is_calibrated:
             _icm20948.bench_calibrate()
-#   _icm20948.include_heading(HEADING_TEST)
-#   _icm20948.set_poll_rate_hz(2)
-
     # just scan continually
     _icm20948.scan(enabled=True, callback=None)
 
