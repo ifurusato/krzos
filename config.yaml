@@ -609,6 +609,9 @@ kros:
           - address:                       0x38
             name:                "HT0740 Switch"
             required:                     False
+          - address:                       0x3C
+            name:                   '1.12" OLED'
+            required:                     False
           - address:                       0x40
             name:         "INA260 Power Monitor"
             required:                     False # TEMP
@@ -621,9 +624,9 @@ kros:
           - address:                       0x49
             name:          "AS7262 Spectrometer"
             required:                     False
-          - address:                       0x3C
-            name:                   '1.12" OLED'
-            required:                     False
+          - address:                       0x4A
+            name:                 "BNO085 IMU"
+            required:                      True
           - address:                       0x69
             name:                 "ICM20948 IMU"
             required:                     False

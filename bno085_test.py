@@ -22,40 +22,71 @@ from hardware.bno085 import (
 
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
+from core.rdof import RDoF
 from hardware.bno085 import BNO085
+from hardware.digital_pot import DigitalPotentiometer # for calibration only
 
 _log = Logger('bno085-test', level=Level.INFO)
 
 
 bno = None
 
+#_trim_axis = None #RDoF.YAW
+_trim_axis = RDoF.ROLL
+
 try:
+
     # read YAML configuration
     _config = ConfigLoader(Level.INFO).configure()
 
+    _pot = DigitalPotentiometer(_config, level=Level.INFO)
+    if _pot:
+        _log.info('configuring digital pot…')
+        if _trim_axis:
+            if _trim_axis == RDoF.YAW:
+#               _pot.set_output_range(-π, π) # ±180° adjustment range
+                _pot.set_output_range(-π/2.0, π/2.0) # ±90° adjustment range
+#               _pot.set_output_range(-π/4.0, π/4.0) # ±45° adjustment range
+            else:
+#               _pot.set_output_range(-0.5 * π, 0.5 * π)  # ±90° adjustment range
+#               _pot.set_output_range(-0.17453293, 0.17453293) # ±10° adjustment range
+#               _pot.set_output_range(-0.08726646, 0.08726646) # ±5° adjustment range
+#               _pot.set_output_range(-0.05235988, 0.05235988) # ±3° adjustment range
+                _pot.set_output_range(-0.03490659, 0.03490659) # ±2° adjustment range
+
     _log.info('initializing BNO085…')
     bno = BNO085(_config, level=Level.INFO)
+    if _trim_axis:
+        bno.adjust_trim(_trim_axis)
     bno.enable()
     
     _log.info('reading sensor data…')
     while True:
 
+        bno.poll()
+
         # accelerometer:
-        accel_x, accel_y, accel_z = bno.acceleration
-        _log.info(Fore.YELLOW + 'accel:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} m/s^2'.format(accel_x, accel_y, accel_z))
+#       accel_x, accel_y, accel_z = bno.acceleration
+#       _log.info(Fore.YELLOW + 'accel:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} m/s^2'.format(accel_x, accel_y, accel_z))
         
         # gyroscope:
-        gyro_x, gyro_y, gyro_z = bno.gyro
-        _log. info(Fore.MAGENTA + 'gyro:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} rad/s'.format(gyro_x, gyro_y, gyro_z))
+#       gyro_x, gyro_y, gyro_z = bno.gyro
+#       _log. info(Fore.MAGENTA + 'gyro:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} rad/s'.format(gyro_x, gyro_y, gyro_z))
         
         # magnetometer:
-        mag_x, mag_y, mag_z = bno.magnetic
-        _log.info(Fore.CYAN + 'mag:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} uT'.format(mag_x, mag_y, mag_z))
+#       mag_x, mag_y, mag_z = bno.magnetic
+#       _log.info(Fore.CYAN + 'mag:  X: {:4.2f}  Y: {:4.2f}  Z: {:4.2f} uT'.format(mag_x, mag_y, mag_z))
         
         # rotation vector quaternion:
-        quat_i, quat_j, quat_k, quat_real = bno.quaternion
-        _log.info(Fore.GREEN + 'rvq:  I: {:4.2f}  J: {:4.2f}  K: {:4.2f}  Real: {:4.2f}\n'.format(quat_i, quat_j, quat_k, quat_real))
+#       quat_i, quat_j, quat_k, quat_real = bno.quaternion
+#       _log.info(Fore.GREEN + 'rvq:  I: {:4.2f}  J: {:4.2f}  K: {:4.2f}  Real: {:4.2f}'.format(quat_i, quat_j, quat_k, quat_real))
 #       _log.info('')
+
+        # euler angles in degrees:
+        pitch = bno.pitch
+        roll  = bno.roll
+        yaw   = bno.yaw
+        _log.info(Fore.WHITE + 'euler: pitch: {:8.4f}°; roll: {:8.4f}°; yaw: {:8.4f}°\n'.format(pitch, roll, yaw))
 
         time.sleep(0.5)
 
@@ -69,6 +100,8 @@ finally:
     _log.info('closing BNO085…')
     if bno:
         bno.close()
+    if _pot:
+        _pot.close()
     _log.info('test complete.')
 
 #EOF

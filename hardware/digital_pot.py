@@ -94,6 +94,10 @@ class DigitalPotentiometer(Component):
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
+    @property
+    def i2c_address(self):
+        return self._i2c_addr
+
     def set_input_range(self, in_min, in_max):
         '''
         Used to change the input minimum and maximum values.

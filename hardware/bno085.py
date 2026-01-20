@@ -19,6 +19,8 @@ from math import pi as π
 from collections import namedtuple, deque
 from struct import pack_into, unpack_from
 from typing import Any, Optional
+from colorama import init, Fore, Style
+init()
 
 try:
     from smbus2 import SMBus, i2c_msg
@@ -27,6 +29,10 @@ except ImportError:
 
 from core.component import Component
 from core.logger import Logger, Level
+from core.rdof import RDoF
+from hardware.digital_pot import DigitalPotentiometer
+
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 # channel names for debug output
 _CHANNEL_NAMES = {
@@ -532,7 +538,30 @@ class BNO085(Component):
         self._gyro_accuracy   = 0
         self._accel_accuracy  = 0
         self._two_ended_sequence_numbers = {}
+        # trim adjust
+        self._digital_pot = None
+        self._trim_adjust = 0.0
+        self._adjust_rdof = None  # which RDoF to adjust with pot
+        # configure potentiometer
+        _component_registry = Component.get_registry()
+        _digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
+        if _digital_pot:
+            self._digital_pot = _digital_pot
+            self._log.info('using digital pot at: ' + Fore.GREEN + '0x{:02X}'.format(self._digital_pot.i2c_address))
+            # assume output range is already set
         self._log.info('ready.')
+
+    def adjust_trim(self, rdof):
+        '''
+        Enable trim adjustment for the specified rotational degree of freedom.
+        '''
+        if not isinstance(rdof, RDoF):
+            raise ValueError('argument must be RDoF enum')
+        if self._digital_pot is None:
+            self._log.warning('digital potentiometer not available, trim adjustment disabled.')
+            return
+        self._adjust_rdof = rdof
+        self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -873,6 +902,21 @@ class BNO085(Component):
             self._roll *= -1.0
         if self._invert_yaw:
             self._yaw *= -1.0
+
+        # apply trim adjustment if enabled
+        if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
+            self._trim_adjust = self._digital_pot.get_scaled_value(False)
+            # TODO
+            self._log.info(Fore.BLACK + 'pitch trim: {:5.3f}'.format(self._trim_adjust))
+        elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
+            self._trim_adjust = self._digital_pot.get_scaled_value(False)
+            self._log.info(Fore.BLACK + 'roll trim: {:5.3f}'.format(self._trim_adjust))
+            # TODO
+        elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
+            self._trim_adjust = self._digital_pot.get_scaled_value(False)
+            self._log.info(Fore.BLACK + 'yaw trim: {:5.3f}'.format(self._trim_adjust))
+            # TODO
+
         # apply trim corrections
         self._corrected_pitch = self._pitch + self._pitch_trim
         self._corrected_roll = self._roll + self._roll_trim
