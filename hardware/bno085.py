@@ -4,12 +4,16 @@
 # Copyright 2020-2026 by Ichiro Furusato. All rights reserved.
 # Portions Copyright (c) 2020 Bryan Siepert for Adafruit Industries (MIT License)
 #
-# BNO085 IMU driver for CPython (refactored from CircuitPython version)
+# author:   Ichiro Furusato
+# created:  2026-01-20
+# modified: 2026-01-20
 #
+# BNO085 IMU driver for CPython (refactored from CircuitPython version)
 
 from __future__ import annotations
 
 import time
+from math import pi as π
 from collections import namedtuple
 from struct import pack_into, unpack_from
 from typing import Any, Optional
@@ -19,6 +23,7 @@ try:
 except ImportError:
     raise ImportError('smbus2 required: pip install smbus2')
 
+from core.component import Component
 from core.logger import Logger, Level
 
 # channel names for debug output
@@ -80,68 +85,68 @@ _REPORT_NAMES = {
 }
 
 # channel constants
-BNO_CHANNEL_SHTP_COMMAND = 0
-BNO_CHANNEL_EXE = 1
-_BNO_CHANNEL_CONTROL = 2
-_BNO_CHANNEL_INPUT_SENSOR_REPORTS = 3
+_BNO_CHANNEL_SHTP_COMMAND              = 0
+_BNO_CHANNEL_EXE                       = 1
+_BNO_CHANNEL_CONTROL                   = 2
+_BNO_CHANNEL_INPUT_SENSOR_REPORTS      = 3
 _BNO_CHANNEL_WAKE_INPUT_SENSOR_REPORTS = 4
-_BNO_CHANNEL_GYRO_ROTATION_VECTOR = 5
+_BNO_CHANNEL_GYRO_ROTATION_VECTOR      = 5
 
 # command/report IDs
-_GET_FEATURE_REQUEST = 0xFE
-_SET_FEATURE_COMMAND = 0xFD
-_GET_FEATURE_RESPONSE = 0xFC
-_BASE_TIMESTAMP = 0xFB
-_TIMESTAMP_REBASE = 0xFA
-_SHTP_REPORT_PRODUCT_ID_RESPONSE = 0xF8
-_SHTP_REPORT_PRODUCT_ID_REQUEST = 0xF9
-_FRS_WRITE_REQUEST = 0xF7
-_FRS_WRITE_DATA = 0xF6
-_FRS_WRITE_RESPONSE = 0xF5
-_FRS_READ_REQUEST = 0xF4
-_FRS_READ_RESPONSE = 0xF3
-_COMMAND_REQUEST = 0xF2
-_COMMAND_RESPONSE = 0xF1
+_GET_FEATURE_REQUEST                   = 0xFE
+_SET_FEATURE_COMMAND                   = 0xFD
+_GET_FEATURE_RESPONSE                  = 0xFC
+_BASE_TIMESTAMP                        = 0xFB
+_TIMESTAMP_REBASE                      = 0xFA
+_SHTP_REPORT_PRODUCT_ID_RESPONSE       = 0xF8
+_SHTP_REPORT_PRODUCT_ID_REQUEST        = 0xF9
+_FRS_WRITE_REQUEST                     = 0xF7
+_FRS_WRITE_DATA                        = 0xF6
+_FRS_WRITE_RESPONSE                    = 0xF5
+_FRS_READ_REQUEST                      = 0xF4
+_FRS_READ_RESPONSE                     = 0xF3
+_COMMAND_REQUEST                       = 0xF2
+_COMMAND_RESPONSE                      = 0xF1
 
 # calibration commands
-_SAVE_DCD = 0x6
-_ME_CALIBRATE = 0x7
-_ME_CAL_CONFIG = 0x00
-_ME_GET_CAL = 0x01
+_SAVE_DCD                              = 0x6
+_ME_CALIBRATE                          = 0x7
+_ME_CAL_CONFIG                         = 0x00
+_ME_GET_CAL                            = 0x01
 
 # sensor report IDs
-BNO_REPORT_ACCELEROMETER = 0x01
-BNO_REPORT_GYROSCOPE = 0x02
-BNO_REPORT_MAGNETOMETER = 0x03
-BNO_REPORT_LINEAR_ACCELERATION = 0x04
-BNO_REPORT_ROTATION_VECTOR = 0x05
-BNO_REPORT_GRAVITY = 0x06
-BNO_REPORT_GAME_ROTATION_VECTOR = 0x08
+BNO_REPORT_ACCELEROMETER               = 0x01
+BNO_REPORT_GYROSCOPE                   = 0x02
+BNO_REPORT_MAGNETOMETER                = 0x03
+BNO_REPORT_LINEAR_ACCELERATION         = 0x04
+BNO_REPORT_ROTATION_VECTOR             = 0x05
+BNO_REPORT_GRAVITY                     = 0x06
+BNO_REPORT_GAME_ROTATION_VECTOR        = 0x08
 BNO_REPORT_GEOMAGNETIC_ROTATION_VECTOR = 0x09
-BNO_REPORT_STEP_COUNTER = 0x11
-BNO_REPORT_STABILITY_CLASSIFIER = 0x13
-BNO_REPORT_RAW_ACCELEROMETER = 0x14
-BNO_REPORT_RAW_GYROSCOPE = 0x15
-BNO_REPORT_RAW_MAGNETOMETER = 0x16
-BNO_REPORT_SHAKE_DETECTOR = 0x19
-BNO_REPORT_ACTIVITY_CLASSIFIER = 0x1E
+BNO_REPORT_STEP_COUNTER                = 0x11
+BNO_REPORT_STABILITY_CLASSIFIER        = 0x13
+BNO_REPORT_RAW_ACCELEROMETER           = 0x14
+BNO_REPORT_RAW_GYROSCOPE               = 0x15
+BNO_REPORT_RAW_MAGNETOMETER            = 0x16
+BNO_REPORT_SHAKE_DETECTOR              = 0x19
+BNO_REPORT_ACTIVITY_CLASSIFIER         = 0x1E
 BNO_REPORT_GYRO_INTEGRATED_ROTATION_VECTOR = 0x2A
 
 # timing/config constants
 _DEFAULT_REPORT_INTERVAL = 50000  # microseconds = 50ms
-_QUAT_READ_TIMEOUT = 0.500  # seconds
-_PACKET_READ_TIMEOUT = 2.000  # seconds
-_FEATURE_ENABLE_TIMEOUT = 2.0
-_DEFAULT_TIMEOUT = 2.0
-_BNO_HEADER_LEN = 4
-DATA_BUFFER_SIZE = 512
+_QUAT_READ_TIMEOUT       = 0.500  # seconds
+_PACKET_READ_TIMEOUT     = 2.000  # seconds
+_FEATURE_ENABLE_TIMEOUT  = 2.0
+_DEFAULT_TIMEOUT         = 2.0
+_BNO_HEADER_LEN          = 4
+_DATA_BUFFER_SIZE        = 512
 
 # Q-point scalars for fixed-point conversion
-_Q_POINT_14_SCALAR = 2 ** (14 * -1)
-_Q_POINT_12_SCALAR = 2 ** (12 * -1)
-_Q_POINT_9_SCALAR = 2 ** (9 * -1)
-_Q_POINT_8_SCALAR = 2 ** (8 * -1)
-_Q_POINT_4_SCALAR = 2 ** (4 * -1)
+_Q_POINT_14_SCALAR       = 2 ** (14 * -1)
+_Q_POINT_12_SCALAR       = 2 ** (12 * -1)
+_Q_POINT_9_SCALAR        = 2 ** (9 * -1)
+_Q_POINT_8_SCALAR        = 2 ** (8 * -1)
+_Q_POINT_4_SCALAR        = 2 ** (4 * -1)
 
 # report length lookup
 _REPORT_LENGTHS = {
@@ -201,7 +206,7 @@ _INITIAL_REPORTS = {
 
 _ENABLED_ACTIVITIES = 0x1FF
 
-REPORT_ACCURACY_STATUS = [
+_REPORT_ACCURACY_STATUS = [
     'Accuracy Unreliable',
     'Low Accuracy',
     'Medium Accuracy',
@@ -213,6 +218,7 @@ PacketHeader = namedtuple(
     ['channel_number', 'sequence_number', 'data_length', 'packet_byte_count'],
 )
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class PacketError(Exception):
     '''
     raised when the packet could not be parsed
@@ -373,6 +379,7 @@ def x_separate_batch(packet, report_slices: list[Any]) -> None:
         report_slices.append([report_slice[0], report_slice])
         next_byte_index = next_byte_index + required_bytes
 
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class Packet:
     '''
     a class representing a Hillcrest Laboratory Sensor Hub Transport packet
@@ -456,26 +463,30 @@ class Packet:
             return True
         return False
 
-class BNO085:
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+class BNO085(Component):
+    NAME = 'bno085'
+    HALF_PI = π / 2.0
     '''
     BNO085 9-DoF IMU driver for CPython using SMBus2.
 
     This is a refactored version of the Adafruit CircuitPython library,
     adapted for use with standard CPython on Raspberry Pi.
 
-    : param i2c_bus_number: I2C bus number (default 1 for /dev/i2c-1)
-    :param address:         I2C address (default 0x4A)
-    :param level:           logging level
+    Args:
+        config:          the application configuration
+        level:           the log level
     '''
-    _DEFAULT_ADDRESS = 0x4A
-
-    def __init__(self, i2c_bus_number: int = 1, address: int = _DEFAULT_ADDRESS, level: Level = Level.INFO) -> None:
-        self._log = Logger('bno085', level=level)
-        self._i2c_bus_number = i2c_bus_number
-        self._address = address
-        self._i2c = SMBus(i2c_bus_number)
-        self._log.info('opened I2C bus {} at address 0x{:02X}'.format(i2c_bus_number, address))
-        self._data_buffer: bytearray = bytearray(DATA_BUFFER_SIZE)
+    def __init__(self, config, level=Level.INFO):
+        self._log = Logger(BNO085.NAME, level=level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
+        self._log.info('initialising bno085…')
+        # configuration
+        _cfg = config['kros'].get('hardware').get('bno085')
+        self._i2c_address = _cfg.get('i2c_address', 0x4A) # default is 0x4A
+        self._i2c = SMBus(1)
+        self._log.info('opened I2C bus {} at address 0x{:02X}'.format(1, self._i2c_address))
+        self._data_buffer: bytearray = bytearray(_DATA_BUFFER_SIZE)
         self._command_buffer: bytearray = bytearray(12)
         self._packet_slices: list[Any] = []
         self._sequence_number: list[int] = [0, 0, 0, 0, 0, 0]
@@ -487,6 +498,7 @@ class BNO085:
         self._id_read = False
         self._readings: dict[int, Any] = {}
         self.initialize()
+        self._log.info('ready.')
 
     def initialize(self) -> None:
         '''
@@ -811,7 +823,7 @@ class BNO085:
                         return new_packet
                 else:
                     return new_packet
-            if new_packet.channel_number not in {BNO_CHANNEL_EXE, BNO_CHANNEL_SHTP_COMMAND}:
+            if new_packet.channel_number not in {_BNO_CHANNEL_EXE, _BNO_CHANNEL_SHTP_COMMAND}:
                 self._log.debug('passing packet to handler for de-slicing')
                 self._handle_packet(new_packet)
         raise RuntimeError('timed out waiting for a packet on channel', channel_number)
@@ -1034,9 +1046,9 @@ class BNO085:
         self._log.debug('soft resetting…')
         data = bytearray(1)
         data[0] = 1
-        _seq = self._send_packet(BNO_CHANNEL_EXE, data)
+        _seq = self._send_packet(_BNO_CHANNEL_EXE, data)
         time.sleep(0.5)
-        _seq = self._send_packet(BNO_CHANNEL_EXE, data)
+        _seq = self._send_packet(_BNO_CHANNEL_EXE, data)
         time.sleep(0.5)
 
         for _i in range(3):
@@ -1058,7 +1070,7 @@ class BNO085:
 
         # write using smbus2
         try:
-            write_msg = i2c_msg.write(self._address, list(self._data_buffer[: write_length]))
+            write_msg = i2c_msg.write(self._i2c_address, list(self._data_buffer[: write_length]))
             self._i2c.i2c_rdwr(write_msg)
         except Exception as e:
             self._log.error('I2C write error: {}'.format(e))
@@ -1072,7 +1084,7 @@ class BNO085:
         reads the first 4 bytes available as a header
         '''
         try:
-            read_msg = i2c_msg.read(self._address, 4)
+            read_msg = i2c_msg.read(self._i2c_address, 4)
             self._i2c.i2c_rdwr(read_msg)
             for i, byte in enumerate(read_msg):
                 self._data_buffer[i] = byte
@@ -1085,7 +1097,7 @@ class BNO085:
     def _read_packet(self) -> Packet:
         # read header first
         try:
-            read_msg = i2c_msg.read(self._address, 4)
+            read_msg = i2c_msg.read(self._i2c_address, 4)
             self._i2c.i2c_rdwr(read_msg)
             for i, byte in enumerate(read_msg):
                 self._data_buffer[i] = byte
@@ -1117,11 +1129,11 @@ class BNO085:
         '''
         self._log.debug('trying to read {} bytes'.format(requested_read_length))
         total_read_length = requested_read_length + 4
-        if total_read_length > DATA_BUFFER_SIZE:
+        if total_read_length > _DATA_BUFFER_SIZE:
             self._data_buffer = bytearray(total_read_length)
             self._log.warning('increased _data_buffer to bytearray({})'.format(total_read_length))
         try:
-            read_msg = i2c_msg.read(self._address, total_read_length)
+            read_msg = i2c_msg.read(self._i2c_address, total_read_length)
             self._i2c.i2c_rdwr(read_msg)
             for i, byte in enumerate(read_msg):
                 self._data_buffer[i] = byte

@@ -19,13 +19,22 @@ from hardware.bno085 import (
     BNO_REPORT_MAGNETOMETER,
     BNO_REPORT_ROTATION_VECTOR,
 )
+
 from core.logger import Logger, Level
+from core.config_loader import ConfigLoader
+from hardware.bno085 import BNO085
 
 _log = Logger('bno085-test', level=Level.INFO)
 
+
+bno = None
+
 try:
-    _log.info('initializing BNO085 on I2C bus 1 at default address 0x4A…')
-    bno = BNO085(i2c_bus_number=1, level=Level.INFO)
+    # read YAML configuration
+    _config = ConfigLoader(Level.INFO).configure()
+
+    _log.info('initializing BNO085…')
+    bno = BNO085(_config, level=Level.INFO)
     
     _log.info('enabling sensor reports…')
     bno.enable_feature(BNO_REPORT_ACCELEROMETER)
@@ -63,7 +72,8 @@ except Exception as e:
     traceback.print_exc()
 finally:
     _log.info('closing BNO085…')
-    bno.close()
+    if bno:
+        bno.close()
     _log.info('test complete.')
 
 #EOF

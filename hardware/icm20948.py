@@ -47,8 +47,9 @@ class Icm20948(Component):
     a calibration check, an optional console, and numeric display of yaw,
     as well as making raw accelerometer and gyroscope values available.
 
-    :param config:          the application configuration
-    :param level:           the log level
+    Args:
+        config:          the application configuration
+        level:           the log level
     '''
     def __init__(self, config, level=Level.INFO):
         self._log = Logger(Icm20948.NAME, level)
