@@ -497,12 +497,21 @@ class BNO085(Component):
         self._magnetometer_accuracy = 0
         self._id_read = False
         self._readings: dict[int, Any] = {}
-        self.initialize()
         self._log.info('ready.')
 
-    def initialize(self) -> None:
+    def enable(self):
+        if not self.closed:
+            if not self.enabled:
+                Component.enable(self)
+                self.initialize()
+                # TODO
+                self._log.info('enabled.')
+            else:
+                self._log.warning('already enabled.')
+
+    def initialize(self):
         '''
-        initialize the sensor
+        Initialize the sensor.
         '''
         for _ in range(3):
             self.soft_reset()
@@ -517,7 +526,7 @@ class BNO085(Component):
     @property
     def magnetic(self) -> Optional[tuple[float, float, float]]:
         '''
-        a tuple of the current magnetic field measurements on the X, Y, and Z axes
+        A tuple of the current magnetic field measurements on the X, Y, and Z axes.
         '''
         self._process_available_packets()
         try:
@@ -528,7 +537,7 @@ class BNO085(Component):
     @property
     def quaternion(self) -> Optional[tuple[float, float, float, float]]:
         '''
-        a quaternion representing the current rotation vector
+        A quaternion representing the current rotation vector.
         '''
         self._process_available_packets()
         try:
@@ -539,7 +548,7 @@ class BNO085(Component):
     @property
     def geomagnetic_quaternion(self) -> Optional[tuple[float, float, float, float]]:
         '''
-        a quaternion representing the current geomagnetic rotation vector
+        A quaternion representing the current geomagnetic rotation vector.
         '''
         self._process_available_packets()
         try:
@@ -550,10 +559,10 @@ class BNO085(Component):
     @property
     def game_quaternion(self) -> Optional[tuple[float, float, float, float]]:
         '''
-        a quaternion representing the current rotation vector expressed as a quaternion with no
+        A quaternion representing the current rotation vector expressed as a quaternion with no
         specific reference for heading, while roll and pitch are referenced against gravity. to
         prevent sudden jumps in heading due to corrections, the game_quaternion property is not
-        corrected using the magnetometer. some drift is expected
+        corrected using the magnetometer. some drift is expected.
         '''
         self._process_available_packets()
         try:
@@ -564,7 +573,7 @@ class BNO085(Component):
     @property
     def steps(self) -> Optional[int]:
         '''
-        the number of steps detected since the sensor was initialized
+        The number of steps detected since the sensor was initialized.
         '''
         self._process_available_packets()
         try:
@@ -575,8 +584,8 @@ class BNO085(Component):
     @property
     def linear_acceleration(self) -> Optional[tuple[float, float, float]]:
         '''
-        a tuple representing the current linear acceleration values on the X, Y, and Z
-        axes in meters per second squared
+        A tuple representing the current linear acceleration values on the X, Y, and Z
+        axes in meters per second squared.
         '''
         self._process_available_packets()
         try:
@@ -587,8 +596,8 @@ class BNO085(Component):
     @property
     def acceleration(self) -> Optional[tuple[float, float, float]]:
         '''
-        a tuple representing the acceleration measurements on the X, Y, and Z
-        axes in meters per second squared
+        A tuple representing the acceleration measurements on the X, Y, and Z
+        axes in meters per second squared.
         '''
         self._process_available_packets()
         try:
@@ -599,8 +608,8 @@ class BNO085(Component):
     @property
     def gravity(self) -> Optional[tuple[float, float, float]]:
         '''
-        a tuple representing the gravity vector in the X, Y, and Z components
-        axes in meters per second squared
+        A tuple representing the gravity vector in the X, Y, and Z components
+        axes in meters per second squared.
         '''
         self._process_available_packets()
         try:
@@ -611,8 +620,8 @@ class BNO085(Component):
     @property
     def gyro(self) -> Optional[tuple[float, float, float]]:
         '''
-        a tuple representing Gyro's rotation measurements on the X, Y, and Z
-        axes in radians per second
+        A tuple representing gyro's rotation measurements on the X, Y, and Z
+        axes in radians per second.
         '''
         self._process_available_packets()
         try:
@@ -625,9 +634,9 @@ class BNO085(Component):
         '''
         True if a shake was detected on any axis since the last time it was checked
 
-        this property has a "latching" behavior where once a shake is detected, it will stay in a
+        This property has a "latching" behavior where once a shake is detected, it will stay in a
         "shaken" state until the value is read. this prevents missing shake events but means that
-        this property is not guaranteed to reflect the shake state at the moment it is read
+        this property is not guaranteed to reflect the shake state at the moment it is read.
         '''
         self._process_available_packets()
         try:
@@ -642,15 +651,15 @@ class BNO085(Component):
     @property
     def stability_classification(self) -> Optional[str]:
         '''
-        returns the sensor's assessment of its current stability, one of:
+        Returns the sensor's assessment of its current stability, one of:
 
-        * "Unknown" - the sensor is unable to classify the current stability
-        * "On Table" - the sensor is at rest on a stable surface with very little vibration
-        * "Stationary" -  the sensor's motion is below the stable threshold but
-        the stable duration requirement has not been met. this output is only available when
-        gyro calibration is enabled
-        * "Stable" - the sensor's motion has met the stable threshold and duration requirements.
-        * "In motion" - the sensor is moving.
+        * "Unknown"    - the sensor is unable to classify the current stability
+        * "On Table"   - the sensor is at rest on a stable surface with very little vibration
+        * "Stationary" - the sensor's motion is below the stable threshold but the stable 
+                         duration requirement has not been met. this output is only available 
+                         when gyro calibration is enabled
+        * "Stable"     - the sensor's motion has met the stable threshold and duration requirements
+        * "In motion"  - the sensor is moving
         '''
         self._process_available_packets()
         try:
@@ -662,18 +671,18 @@ class BNO085(Component):
     @property
     def activity_classification(self) -> Optional[dict]:
         '''
-        returns the sensor's assessment of the activity that is creating the motions
+        Returns the sensor's assessment of the activity that is creating the motions
         that it is sensing, one of:
 
-        * "Unknown"
-        * "In-Vehicle"
-        * "On-Bicycle"
-        * "On-Foot"
-        * "Still"
-        * "Tilting"
-        * "Walking"
-        * "Running"
-        * "On Stairs"
+          * "Unknown"
+          * "In-Vehicle"
+          * "On-Bicycle"
+          * "On-Foot"
+          * "Still"
+          * "Tilting"
+          * "Walking"
+          * "Running"
+          * "On Stairs"
         '''
         self._process_available_packets()
         try:
@@ -685,7 +694,7 @@ class BNO085(Component):
     @property
     def raw_acceleration(self) -> Optional[tuple[int, int, int]]:
         '''
-        returns the sensor's raw, unscaled value from the accelerometer registers
+        Returns the sensor's raw, unscaled value from the accelerometer registers.
         '''
         self._process_available_packets()
         try:
@@ -697,7 +706,7 @@ class BNO085(Component):
     @property
     def raw_gyro(self) -> Optional[tuple[int, int, int]]:
         '''
-        returns the sensor's raw, unscaled value from the gyro registers
+        Returns the sensor's raw, unscaled value from the gyro registers.
         '''
         self._process_available_packets()
         try:
@@ -709,7 +718,7 @@ class BNO085(Component):
     @property
     def raw_magnetic(self) -> Optional[tuple[int, int, int]]:
         '''
-        returns the sensor's raw, unscaled value from the magnetometer registers
+        Returns the sensor's raw, unscaled value from the magnetometer registers.
         '''
         self._process_available_packets()
         try:
@@ -720,7 +729,7 @@ class BNO085(Component):
 
     def begin_calibration(self) -> None:
         '''
-        begin the sensor's self-calibration routine
+        Begin the sensor's self-calibration routine....
         '''
         # start calibration for accel, gyro, and mag
         self._send_me_command(
@@ -741,7 +750,7 @@ class BNO085(Component):
     @property
     def calibration_status(self) -> int:
         '''
-        get the status of the self-calibration
+        Get the status of the self-calibration.
         '''
         self._send_me_command(
             [
@@ -776,7 +785,7 @@ class BNO085(Component):
 
     def save_calibration_data(self) -> None:
         '''
-        save the self-calibration data
+        Save the self-calibration data.
         '''
         start_time = time.monotonic()
         local_buffer = bytearray(12)
@@ -793,7 +802,6 @@ class BNO085(Component):
                 return
         raise RuntimeError('could not save calibration data')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     def _process_available_packets(self, max_packets: Optional[int] = None) -> None:
         processed_count = 0
         while self._data_ready:
@@ -954,13 +962,9 @@ class BNO085(Component):
         pack_into('<I', set_feature_report, 13, sensor_specific_config)
         return set_feature_report
 
-    def enable_feature(
-        self,
-        feature_id: int,
-        report_interval: int = _DEFAULT_REPORT_INTERVAL,
-    ) -> None:
+    def enable_feature(self, feature_id: int, report_interval: int = _DEFAULT_REPORT_INTERVAL,) -> None:
         '''
-        used to enable a given feature of the BNO08x
+        Used to enable a given feature of the BNO08x.
         '''
         self._log.debug('enabling feature id: {}'.format(feature_id))
 
@@ -1008,7 +1012,6 @@ class BNO085(Component):
     def _parse_sensor_id(self) -> Optional[int]:
         if not self._data_buffer[4] == _SHTP_REPORT_PRODUCT_ID_RESPONSE:
             return None
-
         sw_major = self._get_data(2, '<B')
         sw_minor = self._get_data(3, '<B')
         sw_patch = self._get_data(12, '<H')
@@ -1041,7 +1044,7 @@ class BNO085(Component):
 
     def soft_reset(self) -> None:
         '''
-        reset the sensor to an initial unconfigured state
+        Reset the sensor to an initial unconfigured state.
         '''
         self._log.debug('soft resetting…')
         data = bytearray(1)
@@ -1081,7 +1084,7 @@ class BNO085(Component):
 
     def _read_header(self):
         '''
-        reads the first 4 bytes available as a header
+        Reads the first 4 bytes available as a header.
         '''
         try:
             read_msg = i2c_msg.read(self._i2c_address, 4)
@@ -1125,7 +1128,7 @@ class BNO085(Component):
 
     def _read(self, requested_read_length):
         '''
-        returns true if all requested data was read
+        Returns true if all requested data was read.
         '''
         self._log.debug('trying to read {} bytes'.format(requested_read_length))
         total_read_length = requested_read_length + 4
@@ -1148,12 +1151,19 @@ class BNO085(Component):
     def _get_report_seq_id(self, report_id: int) -> int:
         return self._two_ended_sequence_numbers.get(report_id, 0)
 
-    def close(self):
+    def disable(self):
         '''
-        close the I2C bus
+        Closes the I2C bus.
         '''
         if self._i2c:
             self._i2c.close()
             self._log.info('I2C bus closed')
+        super().disable()
+
+    def close(self):
+        '''
+        Closes the BNO085. This calls disable.
+        '''
+        super().close()
 
 #EOF
