@@ -456,6 +456,15 @@ kros:
             queue_length:                 100              # stability tracking queue size
             stability_threshold:          0.09             # radians - stdev threshold for calibration
             min_calibration_accuracy:       2              # 0-3, minimum mag accuracy for is_calibrated
+            # additional calibration related properties:
+            bench_calibrate:             True              # if True, run manual bench calibration on startup
+            motion_calibrate:           False              # if True, run automatic rotation calibration on startup
+            calibration_rotation:         450              # degrees to rotate during motion calibration
+            auto_save_calibration:       True              # if True, save calibration to flash after successful calibration
+            use_saved_calibration:      False              # if True, use previously saved calibration from flash
+            play_sound:                  True              # play audio feedback during calibration
+            show_console:                True              # display calibration info to console
+            show_matrix11x7:             True              # display heading on numeric display
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)
             poll_rate_hz:                   150            # how often the IMU is polled

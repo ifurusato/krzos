@@ -31,6 +31,7 @@ from core.component import Component
 from core.logger import Logger, Level
 from core.rdof import RDoF
 from hardware.digital_pot import DigitalPotentiometer
+from hardware.rotation_controller import RotationController
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -511,6 +512,14 @@ class BNO085(Component):
         self._invert_pitch    = _cfg.get('invert_pitch', False)
         self._invert_roll     = _cfg.get('invert_roll', False)
         self._invert_yaw      = _cfg.get('invert_yaw', False)
+        self._bench_calibrate = _cfg.get('bench_calibrate', False)
+        self._motion_calibrate      = _cfg.get('motion_calibrate', False)
+        self._calibration_rotation  = _cfg.get('calibration_rotation', 450)
+        self._auto_save_calibration = _cfg.get('auto_save_calibration', True)
+        self._use_saved_calibration = _cfg.get('use_saved_calibration', False)
+        self._play_sound      = _cfg.get('play_sound', False)
+        self._show_console    = _cfg.get('show_console', False)
+        self._show_matrix11x7 = _cfg.get('show_matrix11x7', False)
         self._id_read  = False
         self._readings = {}
         # stability tracking
@@ -519,6 +528,8 @@ class BNO085(Component):
         self._min_calibration_accuracy = _cfg.get('min_calibration_accuracy', 2)
         self._queue = deque([], self._queue_length)
         self._stdev = 0.0
+        self._mean_yaw = 0
+        self._mean_yaw_radians = None
         # euler angles (uncorrected, in radians)
         self._pitch = 0.0
         self._roll  = 0.0
@@ -549,6 +560,24 @@ class BNO085(Component):
             self._digital_pot = _digital_pot
             self._log.info('using digital pot at: ' + Fore.GREEN + '0x{:02X}'.format(self._digital_pot.i2c_address))
             # assume output range is already set
+        # numeric display for heading
+        self._numeric_display = None
+        if self._show_matrix11x7:
+            _numeric_display = _component_registry.get(NumericDisplay. NAME)
+            if _numeric_display: 
+                self._numeric_display = _numeric_display
+            else:
+                from hardware.numeric_display import NumericDisplay
+                self._numeric_display = NumericDisplay()
+    # rotation controller for motion calibration
+    self._rotation_controller = None
+    if self._motion_calibrate:
+        _rotation_controller = _component_registry.get(RotationController. NAME)
+        if _rotation_controller:
+            self._rotation_controller = _rotation_controller
+        else:
+            self._log.warning('rotation controller not found in registry; motion calibration disabled.')
+            self._motion_calibrate = False
         self._log.info('ready.')
 
     def adjust_trim(self, rdof):
@@ -564,6 +593,41 @@ class BNO085(Component):
         self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+@property
+def mean_yaw(self):
+    '''
+    Return mean yaw from stability queue (degrees).
+    '''
+    return self._mean_yaw
+
+@property
+def mean_yaw_radians(self):
+    '''
+    Return mean yaw from stability queue (radians).
+    '''
+    return self._mean_yaw_radians
+
+@property
+def accelerometer(self):
+    '''
+    Alias for acceleration to match ICM20948/USFS API.
+    '''
+    return self. acceleration
+
+@property
+def gyroscope(self):
+    '''
+    Alias for gyro to match ICM20948/USFS API.
+    '''
+    return self.gyro
+
+@property
+def numeric_display(self):
+    '''
+    Return numeric display instance if available.
+    '''
+    return self._numeric_display
 
     @property
     def magnetic(self) -> Optional[tuple[float, float, float]]:
@@ -833,6 +897,41 @@ class BNO085(Component):
     def mag_accuracy(self):
         '''magnetometer calibration quality (0-3)'''
         return self._magnetometer_accuracy
+
+    @property
+    def mean_yaw(self):
+        '''
+        Return mean yaw from stability queue (degrees).
+        '''
+        return self._mean_yaw
+
+    @property
+    def mean_yaw_radians(self):
+        '''
+        Return mean yaw from stability queue (radians).
+        '''
+        return self._mean_yaw_radians
+
+    @property
+    def accelerometer(self):
+        '''
+        Alias for acceleration to match ICM20948/USFS API.
+        '''
+        return self. acceleration
+
+    @property
+    def gyroscope(self):
+        '''
+        Alias for gyro to match ICM20948/USFS API.
+        '''
+        return self.gyro
+
+    @property
+    def numeric_display(self):
+        '''
+        Return numeric display instance if available.
+        '''
+        return self._numeric_display
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
