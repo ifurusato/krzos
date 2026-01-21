@@ -564,7 +564,7 @@ class BNO085(Component):
         # numeric display for heading
         self._numeric_display = None
         if self._show_matrix11x7:
-            _numeric_display = _component_registry.get(NumericDisplay. NAME)
+            _numeric_display = _component_registry.get(NumericDisplay.NAME)
             if _numeric_display: 
                 self._numeric_display = _numeric_display
             else:
@@ -573,7 +573,7 @@ class BNO085(Component):
         # rotation controller for motion calibration
         self._rotation_controller = None
         if self._motion_calibrate:
-            _rotation_controller = _component_registry.get(RotationController. NAME)
+            _rotation_controller = _component_registry.get(RotationController.NAME)
             if _rotation_controller:
                 self._rotation_controller = _rotation_controller
             else:
@@ -883,7 +883,7 @@ class BNO085(Component):
         '''
         Alias for acceleration to match ICM20948/USFS API.
         '''
-        return self. acceleration
+        return self.acceleration
 
     @property
     def gyroscope(self):
@@ -992,16 +992,16 @@ class BNO085(Component):
         # apply trim adjustment if enabled
         if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
-            # TODO
+            self._pitch_trim = self._pitch_trim + self._trim_adjust
             self._log.info(Fore.BLACK + 'pitch trim: {:5.3f}'.format(self._trim_adjust))
         elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
+            self._roll_trim = self._roll_trim + self._trim_adjust
             self._log.info(Fore.BLACK + 'roll trim: {:5.3f}'.format(self._trim_adjust))
-            # TODO
         elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
+            self._yaw_trim = self._yaw_trim + self._trim_adjust
             self._log.info(Fore.BLACK + 'yaw trim: {:5.3f}'.format(self._trim_adjust))
-            # TODO
 
         # apply trim corrections
         self._corrected_pitch = self._pitch + self._pitch_trim
@@ -1016,6 +1016,23 @@ class BNO085(Component):
         self._queue.append(self._corrected_yaw)
         if len(self._queue) > 1:
             self._stdev = self._circular_stdev(self._queue)
+        # calculate mean yaw from queue
+        if len(self._queue) > 0:
+            sin_sum = sum(math.sin(a) for a in self._queue)
+            cos_sum = sum(math.cos(a) for a in self._queue)
+            n = len(self._queue)
+            self._mean_yaw_radians = math.atan2(sin_sum / n, cos_sum / n)
+            if self._mean_yaw_radians < 0:
+                self._mean_yaw_radians += 2 * π
+            self._mean_yaw = int(round(math.degrees(self._mean_yaw_radians)))
+        # update display if configured
+        if self._show_matrix11x7 and self._numeric_display:
+            from hardware.numeric_display import NumericDisplay
+            if self. is_calibrated:
+                self._numeric_display.set_brightness(NumericDisplay.HIGH_BRIGHTNESS)
+            else:
+                self._numeric_display.set_brightness(NumericDisplay.LOW_BRIGHTNESS)
+            self._numeric_display.show_int(int(math.degrees(self._corrected_yaw)))
         return math.degrees(self._corrected_yaw)
 
     def begin_calibration(self) -> None:
