@@ -31,6 +31,7 @@ from core.component import Component
 from core.logger import Logger, Level
 from core.rdof import RDoF
 from hardware.digital_pot import DigitalPotentiometer
+from hardware.numeric_display import NumericDisplay
 from hardware.rotation_controller import RotationController
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -569,15 +570,15 @@ class BNO085(Component):
             else:
                 from hardware.numeric_display import NumericDisplay
                 self._numeric_display = NumericDisplay()
-    # rotation controller for motion calibration
-    self._rotation_controller = None
-    if self._motion_calibrate:
-        _rotation_controller = _component_registry.get(RotationController. NAME)
-        if _rotation_controller:
-            self._rotation_controller = _rotation_controller
-        else:
-            self._log.warning('rotation controller not found in registry; motion calibration disabled.')
-            self._motion_calibrate = False
+        # rotation controller for motion calibration
+        self._rotation_controller = None
+        if self._motion_calibrate:
+            _rotation_controller = _component_registry.get(RotationController. NAME)
+            if _rotation_controller:
+                self._rotation_controller = _rotation_controller
+            else:
+                self._log.warning('rotation controller not found in registry; motion calibration disabled.')
+                self._motion_calibrate = False
         self._log.info('ready.')
 
     def adjust_trim(self, rdof):
@@ -593,41 +594,6 @@ class BNO085(Component):
         self._log.info('trim adjustment enabled for: {}'.format(rdof.label))
 
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-@property
-def mean_yaw(self):
-    '''
-    Return mean yaw from stability queue (degrees).
-    '''
-    return self._mean_yaw
-
-@property
-def mean_yaw_radians(self):
-    '''
-    Return mean yaw from stability queue (radians).
-    '''
-    return self._mean_yaw_radians
-
-@property
-def accelerometer(self):
-    '''
-    Alias for acceleration to match ICM20948/USFS API.
-    '''
-    return self. acceleration
-
-@property
-def gyroscope(self):
-    '''
-    Alias for gyro to match ICM20948/USFS API.
-    '''
-    return self.gyro
-
-@property
-def numeric_display(self):
-    '''
-    Return numeric display instance if available.
-    '''
-    return self._numeric_display
 
     @property
     def magnetic(self) -> Optional[tuple[float, float, float]]:
