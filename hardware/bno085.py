@@ -565,10 +565,9 @@ class BNO085(Component):
         self._numeric_display = None
         if self._show_matrix11x7:
             _numeric_display = _component_registry.get(NumericDisplay.NAME)
-            if _numeric_display: 
+            if _numeric_display:
                 self._numeric_display = _numeric_display
             else:
-                from hardware.numeric_display import NumericDisplay
                 self._numeric_display = NumericDisplay()
         # rotation controller for motion calibration
         self._rotation_controller = None
@@ -908,7 +907,7 @@ class BNO085(Component):
         if not self.enabled:
             self._log.info('enabling bno085…')
             Component.enable(self)
-            # initialize I2C and sensor 
+            # initialize I2C and sensor
             self._i2c = SMBus(self._i2c_bus_number)
             # initialize buffers
             self._dbuf = bytearray(2)
@@ -934,6 +933,29 @@ class BNO085(Component):
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')
+
+    def enable_matrix11x7(self, enable):
+        '''
+        enable/disable Matrix11x7 display if available.
+        '''
+        if self._numeric_display:
+            self._show_matrix11x7 = enable
+
+    def show_info(self):
+        '''
+        display pitch, roll, yaw with trim info.
+        '''
+        _info = Fore.YELLOW  + 'pitch: {:  6.2f}; '.format(self.pitch)
+        _info += Fore.WHITE + 'roll: {: 6.2f}; '.format(self.roll)
+        _info += Fore.GREEN  + 'yaw: {:6.2f}; '.format(self.yaw)
+        if self._adjust_rdof:
+            if self._adjust_rdof == RDoF.YAW:
+                _info += Fore.CYAN + Style.DIM + 'yaw trim:   {:7.4f}'.format(self._yaw_trim)
+            elif self._adjust_rdof == RDoF.PITCH:
+                _info += Fore.CYAN + Style.DIM + 'pitch trim:  {:7.4f}'.format(self._pitch_trim)
+            elif self._adjust_rdof == RDoF.ROLL:
+                _info += Fore.CYAN + Style.DIM + 'roll trim: {:7.4f}'.format(self._roll_trim)
+        self._log.info(_info)
 
     def _read_hardware(self):
         '''
@@ -1027,8 +1049,7 @@ class BNO085(Component):
             self._mean_yaw = int(round(math.degrees(self._mean_yaw_radians)))
         # update display if configured
         if self._show_matrix11x7 and self._numeric_display:
-            from hardware.numeric_display import NumericDisplay
-            if self. is_calibrated:
+            if self.is_calibrated:
                 self._numeric_display.set_brightness(NumericDisplay.HIGH_BRIGHTNESS)
             else:
                 self._numeric_display.set_brightness(NumericDisplay.LOW_BRIGHTNESS)
