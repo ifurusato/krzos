@@ -27,7 +27,7 @@ from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 from core.rate import Rate
 from core.rdof import RDoF
-from hardware.bno085 import BNO085
+from hardware.bno085_imu import Bno085
 from hardware.digital_pot import DigitalPotentiometer # for calibration only
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -62,7 +62,7 @@ try:
 #               _pot.set_output_range(-0.03490659, 0.03490659) # ±2° adjustment range
 
     log.info('initializing BNO085…')
-    bno = BNO085(_config, level=Level.INFO)
+    bno = Bno085(_config, level=Level.INFO)
     if trim_axis:
         bno.adjust_trim(trim_axis)
     bno.enable()
