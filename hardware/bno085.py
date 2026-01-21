@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-01-20
-# modified: 2026-01-20
+# modified: 2026-01-21
 #
 # BNO085 IMU driver for CPython (refactored from CircuitPython version)
 
@@ -506,13 +506,13 @@ class BNO085(Component):
         # declination and trim (read from config in degrees, store in radians)
         _declination_degrees  = _cfg.get('declination', 13.8)
         self._declination     = math.radians(_declination_degrees)
-        self._log.info('declination: {: 5.3f}° ({:.6f} rad)'.format(_declination_degrees, self._declination))
-        _pitch_trim_degrees   = _cfg.get('pitch_trim', 0.0)
-        _roll_trim_degrees    = _cfg.get('roll_trim', 0.0)
-        _yaw_trim_degrees     = _cfg.get('yaw_trim', 0.0)
-        self._pitch_trim      = math.radians(_pitch_trim_degrees)
-        self._roll_trim       = math.radians(_roll_trim_degrees)
-        self._yaw_trim        = math.radians(_yaw_trim_degrees)
+        self._pitch_trim      = _cfg.get('pitch_trim', 0.0)
+        self._roll_trim       = _cfg.get('roll_trim', 0.0)
+        self._yaw_trim        = _cfg.get('yaw_trim', 0.0)
+        self._log.info('declination: {:+7.3f}° ({:+9.6f} rad)'.format(_declination_degrees, self._declination))
+        self._log.info('pitch trim:  {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._pitch_trim), self._pitch_trim))
+        self._log.info('roll trim:   {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._roll_trim), self._roll_trim))
+        self._log.info('yaw trim:    {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._yaw_trim), self._yaw_trim))
         # axis configuration
         self._swap_pitch_roll = _cfg.get('swap_pitch_roll', False)
         self._invert_pitch    = _cfg.get('invert_pitch', False)
@@ -1191,6 +1191,17 @@ class BNO085(Component):
         self._corrected_pitch = self._pitch + self._pitch_trim
         self._corrected_roll = self._roll + self._roll_trim
         self._corrected_yaw = self._yaw - self._yaw_trim
+
+#       # DEBUG
+#       _count = next(self._poll_counter)
+#       if _count % 20 == 0:
+#           self._log.info('RAW:   pitch={:7.4f} rad ({:6.2f}°), roll={:7.4f} rad ({:6.2f}°), yaw={:7.4f} rad ({:6.2f}°)'.format(
+#               self._pitch, math.degrees(self._pitch), self._roll, math.degrees(self._roll), self._yaw, math.degrees(self._yaw)))
+#           self._log.info('TRIM: pitch={:7.4f} rad ({:6.2f}°), roll={:7.4f} rad ({:6.2f}°), yaw={:7.4f} rad ({:6.2f}°)'.format(
+#               self._pitch_trim, math.degrees(self._pitch_trim), self._roll_trim, math.degrees(self._roll_trim), self._yaw_trim, math.degrees(self._yaw_trim)))
+#           self._log.info('CORR: pitch={:7.4f} rad ({:6.2f}°), roll={:7.4f} rad ({:6.2f}°), yaw={:7.4f} rad ({:6.2f}°)'.format(
+#               self._corrected_pitch, math.degrees(self._corrected_pitch), self._corrected_roll, math.degrees(self._corrected_roll), self._corrected_yaw, math.degrees(self._corrected_yaw)))
+
         # normalize corrected yaw to [0, 2π)
         if self._corrected_yaw < 0:
             self._corrected_yaw += 2 * math.pi
