@@ -22,8 +22,8 @@ from core.rdof import RDoF
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
 #from hardware.icm20948 import Icm20948
-#from hardware.icm20948_s import Icm20948
-from hardware.icm20948_o import Icm20948
+from hardware.icm20948_s import Icm20948
+#from hardware.icm20948_o import Icm20948
 from hardware.digital_pot import DigitalPotentiometer # for calibration only
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -53,8 +53,8 @@ try:
     if _pot:
         if _trim_axis:
             if _trim_axis == RDoF.YAW:
-#               _pot.set_output_range(-π, π) # ±180° adjustment range
-                _pot.set_output_range(-π/2.0, π/2.0) # ±90° adjustment range
+                _pot.set_output_range(-π, π) # ±180° adjustment range
+#               _pot.set_output_range(-π/2.0, π/2.0) # ±90° adjustment range
 #               _pot.set_output_range(-π/4.0, π/4.0) # ±45° adjustment range
             else:
 #               _pot.set_output_range(-0.5 * π, 0.5 * π)  # ±90° adjustment range
