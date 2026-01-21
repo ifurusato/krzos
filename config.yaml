@@ -446,9 +446,9 @@ kros:
             i2c_bus_number:                  1             # I2C bus (1 = /dev/i2c-1)
             i2c_address:                  0x4A             # default BNO085 address
             declination:                 23.97             # declination at operating location
-            pitch_trim:                   0.0              # pitch offset correction (degrees)
-            roll_trim:                    0.0              # roll offset correction (degrees)
-            yaw_trim:                     0.0              # yaw offset correction (degrees)
+            pitch_trim:                  -0.067            # pitch offset correction (radians)
+            roll_trim:                    0.050            # roll offset correction (radians)
+            yaw_trim:                    -1.2202           # -0.810 # yaw offset correction (radians)
             swap_pitch_roll:            False              # swap pitch/roll axes for different mount
             invert_pitch:               False              # invert pitch axis
             invert_roll:                False              # invert roll axis
@@ -460,10 +460,10 @@ kros:
             bench_calibrate:             True              # if True, run manual bench calibration on startup
             motion_calibrate:           False              # if True, run automatic rotation calibration on startup
             calibration_rotation:         450              # degrees to rotate during motion calibration
-            auto_save_calibration:       True              # if True, save calibration to flash after successful calibration
-            use_saved_calibration:      False              # if True, use previously saved calibration from flash
+            auto_save_calibration:      False              # if True, save calibration to flash after successful calibration
+            use_saved_calibration:       True              # if True, use previously saved calibration from flash
             play_sound:                  True              # play audio feedback during calibration
-            show_console:                True              # display calibration info to console
+            show_console:               False              # display calibration info to console
             show_matrix11x7:             True              # display heading on numeric display
         icm20948:
             i2c_address:                   0x69            # I²C address (default 0x68)

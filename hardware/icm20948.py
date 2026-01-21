@@ -9,6 +9,7 @@
 # created:  2024-05-20
 # modified: 2026-01-16
 
+import sys, select
 import time
 import traceback
 import itertools
@@ -390,9 +391,6 @@ class Icm20948(Component):
                         self._log.info('[{:3d}] calibrating at: '.format(_count) + Fore.GREEN + '{}°…'.format(_yaw_degrees))
                 except Exception as e:
                     self._log.error('{} encountered, exiting: {}\n{}'.format(type(e), e, traceback.format_exc()))
-
-                import sys, select
-
                 if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                     line = input()
                     _rotation_complete = True
