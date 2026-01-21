@@ -9,6 +9,8 @@
 # created:  2026-01-20
 
 import time
+from math import pi as π
+import itertools
 from colorama import init, Fore, Style
 init()
 
@@ -22,6 +24,7 @@ from hardware.bno085 import (
 
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
+from core.rate import Rate
 from core.rdof import RDoF
 from hardware.bno085 import BNO085
 from hardware.digital_pot import DigitalPotentiometer # for calibration only
@@ -31,8 +34,10 @@ _log = Logger('bno085-test', level=Level.INFO)
 
 bno = None
 
-#_trim_axis = None #RDoF.YAW
-_trim_axis = RDoF.ROLL
+_trim_axis = None
+#_trim_axis = RDoF.PITCH
+#_trim_axis = RDoF.ROLL
+_trim_axis = RDoF.YAW
 
 try:
 
@@ -60,6 +65,9 @@ try:
         bno.adjust_trim(_trim_axis)
     bno.enable()
     
+    poll_rate_hz = 10
+    rate = Rate(poll_rate_hz, Level.ERROR)
+
     _log.info('reading sensor data…')
     while True:
 
@@ -88,7 +96,11 @@ try:
         yaw   = bno.yaw
         _log.info(Fore.WHITE + 'euler: pitch: {:8.4f}°; roll: {:8.4f}°; yaw: {:8.4f}°\n'.format(pitch, roll, yaw))
 
-        time.sleep(0.5)
+        counter = itertools.count()
+        if next(counter) % 10 == 0:
+            imu.show_info()
+
+        rate.wait()
 
 except KeyboardInterrupt:
     _log.info('Ctrl-C caught; exiting…')

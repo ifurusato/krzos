@@ -29,10 +29,13 @@ except ImportError:
 
 from core.component import Component
 from core.logger import Logger, Level
+from core.rate import Rate
 from core.rdof import RDoF
+from core.rotation import Rotation
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.numeric_display import NumericDisplay
 from hardware.rotation_controller import RotationController
+from hardware.rotation_controller import RotationPhase
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -519,7 +522,7 @@ class BNO085(Component):
         self._auto_save_calibration = _cfg.get('auto_save_calibration', True)
         self._use_saved_calibration = _cfg.get('use_saved_calibration', False)
         self._play_sound      = _cfg.get('play_sound', False)
-        self._show_console    = _cfg.get('show_console', False)
+        self._show_console    = False #_cfg.get('show_console', False)
         self._show_matrix11x7 = _cfg.get('show_matrix11x7', False)
         self._id_read  = False
         self._readings = {}
@@ -545,10 +548,13 @@ class BNO085(Component):
         self._dbuf            = None
         self._data_buffer     = None
         self._packet_slices   = None
+        self._command_buffer  = bytearray(12)
         self._sequence_number = None
         self._magnetometer_accuracy = 0
         self._gyro_accuracy   = 0
         self._accel_accuracy  = 0
+        self._me_calibration_started_at = 0.0
+        self._dcd_saved_at    = 0.0
         self._two_ended_sequence_numbers = {}
         # trim adjust
         self._digital_pot = None
@@ -930,6 +936,19 @@ class BNO085(Component):
             self.enable_feature(BNO_REPORT_GYROSCOPE)
             self.enable_feature(BNO_REPORT_MAGNETOMETER)
             self.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+
+            # check for saved calibration
+            time.sleep(0.5) # allow sensor to load saved calibration data
+            self._process_available_packets()
+            if self._use_saved_calibration and self._magnetometer_accuracy >= self._min_calibration_accuracy:
+                self._log.info('BNO085 loaded saved calibration (mag accuracy: {})'.format(self._magnetometer_accuracy))
+                self._run_stability_check()
+            else:
+                if not self._use_saved_calibration:
+                    self._log.info('use_saved_calibration=False, running fresh calibration')
+                else:
+                    self._log.info('no saved calibration (mag accuracy: {}), running calibration'.format(self._magnetometer_accuracy))
+                self._run_calibration()
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')
@@ -945,17 +964,148 @@ class BNO085(Component):
         '''
         display pitch, roll, yaw with trim info.
         '''
-        _info = Fore.YELLOW  + 'pitch: {:  6.2f}; '.format(self.pitch)
-        _info += Fore.WHITE + 'roll: {: 6.2f}; '.format(self.roll)
+        _info  = Fore.YELLOW + 'pitch: {:  6.2f}; '.format(self.pitch)
+        _info += Fore.WHITE  + 'roll: {: 6.2f}; '.format(self.roll)
         _info += Fore.GREEN  + 'yaw: {:6.2f}; '.format(self.yaw)
         if self._adjust_rdof:
             if self._adjust_rdof == RDoF.YAW:
-                _info += Fore.CYAN + Style.DIM + 'yaw trim:   {:7.4f}'.format(self._yaw_trim)
+                _info += Fore.BLUE + 'yaw trim: {:7.4f}'.format(self._yaw_trim)
             elif self._adjust_rdof == RDoF.PITCH:
-                _info += Fore.CYAN + Style.DIM + 'pitch trim:  {:7.4f}'.format(self._pitch_trim)
+                _info += Fore.BLUE + 'pitch trim: {:7.4f}'.format(self._pitch_trim)
             elif self._adjust_rdof == RDoF.ROLL:
-                _info += Fore.CYAN + Style.DIM + 'roll trim: {:7.4f}'.format(self._roll_trim)
+                _info += Fore.BLUE + 'roll trim: {:7.4f}'.format(self._roll_trim)
         self._log.info(_info)
+
+        '''
+        poll to fill queue and verify stability with saved calibration.
+        '''
+        from core.rate import Rate
+        _rate = Rate(20, level=Level.WARN)
+        for _ in range(20):
+            self.poll()
+            _rate.wait()
+        if self.is_calibrated and self._stdev < self._stability_threshold:
+            self._log.info('ready with saved calibration (stdev:  {:.4f})'.format(self._stdev))
+        else:
+            self._log.warning('saved calibration unstable, running calibration…')
+            self._run_calibration()
+
+    def _run_calibration(self):
+        '''
+        run calibration based on config flags.
+        '''
+        if self._motion_calibrate:
+            success = self.motion_calibrate()
+        elif self._bench_calibrate:
+            success = self.bench_calibrate()
+        else:
+            self._log.warning('no calibration method configured')
+            return
+        if success and self._auto_save_calibration:
+            self._log.info('saving calibration to flash…')
+            self.save_calibration_data()
+            self._log.info('calibration saved.')
+
+    def bench_calibrate(self):
+        '''
+        Manual bench calibration - user rotates sensor through 3D space.
+        Returns True if successful, False otherwise.
+        '''
+        self._log.info('starting bench calibration…')
+        if self._play_sound:
+            from hardware.player import Player
+            Player.play('chatter-1')
+        # begin hardware calibration
+        self.begin_calibration()
+        self.clear_queue()
+        # rotation phase
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n\n    press Return to begin rotation phase…\n')
+        input()
+        self._log.info(Fore.WHITE + Style.BRIGHT + '\n    rotate sensor through a horizontal 360° motion, then press Return when complete…\n')
+        _rate = Rate(20, level=Level.WARN)
+        _limit = 1800  # 90 seconds at 20Hz
+        _count = 0
+        # poll during rotation to allow sensor to collect calibration data
+        while _count < _limit:
+            self.poll()
+            if self._show_console:
+                self._log.info('mag accuracy: {}; stdev: {:.4f}'.format(self._magnetometer_accuracy, self._stdev))
+            _rate.wait()
+            _count += 1
+            # check if user pressed return (non-blocking would be better, but this is simple)
+        self._log.info(Fore.CYAN + 'press Return when rotation complete…')
+        input()
+        # stability measurement phase
+        self._log.info(Fore.GREEN + 'measuring stability…')
+        self.clear_queue()
+        _count = 0
+        while _count < _limit:
+            self.poll()
+            if self._show_console:
+                self._log.info('mag accuracy: {}; stdev: {:.4f}'.format(self._magnetometer_accuracy, self._stdev))
+            # check completion criteria
+            if self.is_calibrated and self._stdev < self._stability_threshold:
+                self._log.info(Fore.GREEN + Style.BRIGHT + 'calibration successful! (mag:  {}, stdev: {:.4f})'.format(
+                    self._magnetometer_accuracy, self._stdev))
+                if self._play_sound:
+                    Player.play('chatter-2')
+                return True
+            _rate.wait()
+            _count += 1
+        # timeout
+        self._log.warning('calibration timeout (mag: {}, stdev: {:.4f})'.format(
+            self._magnetometer_accuracy, self._stdev))
+        return False
+
+    def motion_calibrate(self):
+        '''
+        Automatic motion calibration - uses RotationController to rotate robot.
+        Returns True if successful, False otherwise.
+        '''
+        if not self._rotation_controller:
+            self._log.error('rotation controller not available for motion calibration')
+            return False
+        self._log.info('starting motion calibration…')
+        if self._play_sound:
+            from hardware.player import Player
+            Player.play('chatter-1')
+        # begin hardware calibration
+        self.begin_calibration()
+        self.clear_queue()
+        # register poll callback to update IMU during rotation
+        self._rotation_controller.add_poll_callback(self.poll)
+        # start rotation
+        self._log.info(Fore.YELLOW + 'beginning automatic rotation of {}°…'.format(self._calibration_rotation))
+        success = self._rotation_controller.rotate_blocking(self._calibration_rotation, Rotation.CLOCKWISE)
+        # remove callback
+        self._rotation_controller.remove_poll_callback(self.poll)
+        if not success:
+            self._log.error('rotation failed during calibration')
+            return False
+        self._log.info(Fore.GREEN + 'rotation complete, measuring stability…')
+        # stability measurement phase
+        self.clear_queue()
+        _rate = Rate(20, level=Level.WARN)
+        _limit = 1800  # 90 seconds at 20Hz
+        _count = 0
+        while _count < _limit:
+            self.poll()
+            if self._show_console:
+                self._log.info('mag accuracy: {}  stdev: {:.4f}'.format(
+                    self._magnetometer_accuracy, self._stdev))
+            # check completion criteria
+            if self.is_calibrated and self._stdev < self._stability_threshold:
+                self._log.info(Fore.GREEN + Style.BRIGHT + 'calibration successful! (mag:  {}, stdev: {:.4f})'.format(
+                    self._magnetometer_accuracy, self._stdev))
+                if self._play_sound:
+                    Player.play('chatter-2')
+                return True
+            _rate.wait()
+            _count += 1
+        # timeout
+        self._log.warning('calibration timeout (mag: {}, stdev: {:.4f})'.format(
+            self._magnetometer_accuracy, self._stdev))
+        return False
 
     def _read_hardware(self):
         '''
@@ -965,17 +1115,17 @@ class BNO085(Component):
         Specific downstream computation is performed using these values in poll().
         '''
         # quaternion
-        _quat = self.quaternion()
+        _quat = self.quaternion
         # acceleration
-        _accel = self.acceleration()
+        _accel = self.acceleration
         # gyroscope
-        _gyro = self.gyro()
+        _gyro = self.gyro
         # magnetometer
-        _mag = self.magnetic()
+        _mag = self.magnetic
         # raw data (if needed)
-        _raw_accel = self.raw_acceleration()
-        _raw_gyro = self.raw_gyro()
-        _raw_mag = self.raw_magnetic()
+#       _raw_accel = self.raw_acceleration
+#       _raw_gyro = self.raw_gyro
+#       _raw_mag = self.raw_magnetic
 
     def poll(self):
         '''
@@ -994,6 +1144,7 @@ class BNO085(Component):
             return None
         # convert quaternion to Euler angles (yaw, pitch, roll in radians)
         self._yaw, self._pitch, self._roll = self._quaternion_to_euler(*quat)
+        self._log.info('🌰 quat: {}; raw yaw: {:.4f} rad ({:.2f}°)'.format(quat, self._yaw, math.degrees(self._yaw)))
         # apply declination to yaw
         self._yaw += self._declination
         # normalize yaw to [0, 2π)
@@ -1015,15 +1166,15 @@ class BNO085(Component):
         if self._adjust_rdof == RDoF.PITCH and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._pitch_trim = self._pitch_trim + self._trim_adjust
-            self._log.info(Fore.BLACK + 'pitch trim: {:5.3f}'.format(self._trim_adjust))
+#           self._log.info(Fore.BLACK + 'pitch trim: {:5.3f}'.format(self._trim_adjust))
         elif self._adjust_rdof == RDoF.ROLL and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._roll_trim = self._roll_trim + self._trim_adjust
-            self._log.info(Fore.BLACK + 'roll trim: {:5.3f}'.format(self._trim_adjust))
+#           self._log.info(Fore.BLACK + 'roll trim: {:5.3f}'.format(self._trim_adjust))
         elif self._adjust_rdof == RDoF.YAW and self._digital_pot:
             self._trim_adjust = self._digital_pot.get_scaled_value(False)
             self._yaw_trim = self._yaw_trim + self._trim_adjust
-            self._log.info(Fore.BLACK + 'yaw trim: {:5.3f}'.format(self._trim_adjust))
+#           self._log.info(Fore.BLACK + 'yaw trim: {:5.3f}'.format(self._trim_adjust))
 
         # apply trim corrections
         self._corrected_pitch = self._pitch + self._pitch_trim
@@ -1054,6 +1205,8 @@ class BNO085(Component):
             else:
                 self._numeric_display.set_brightness(NumericDisplay.LOW_BRIGHTNESS)
             self._numeric_display.show_int(int(math.degrees(self._corrected_yaw)))
+            self._log.info(Fore.RED + '🍊 yaw: {:4.2f}; corrected yaw: {:4.2f}'.format(self._yaw, self._corrected_yaw))
+
         return math.degrees(self._corrected_yaw)
 
     def begin_calibration(self) -> None:
