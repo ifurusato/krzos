@@ -21,7 +21,9 @@ from core.orientation import Orientation
 from core.rdof import RDoF
 from core.logger import Logger, Level
 from core.config_loader import ConfigLoader
-from hardware.icm20948 import Icm20948
+#from hardware.icm20948 import Icm20948
+#from hardware.icm20948_s import Icm20948
+from hardware.icm20948_o import Icm20948
 from hardware.digital_pot import DigitalPotentiometer # for calibration only
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -62,10 +64,10 @@ try:
                 _pot.set_output_range(-0.03490659, 0.03490659) # ±2° adjustment range
 
     _icm20948 = Icm20948(_config, level=Level.INFO)
+    time.sleep(1)
     _icm20948._show_console = True
     if _trim_axis:
         _icm20948.adjust_trim(_trim_axis)
-    _icm20948.include_accel_gyro(ACCEL_GYRO_TEST)
     _icm20948.enable()
     if CALIBRATE:
         if not _icm20948.is_calibrated:

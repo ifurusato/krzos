@@ -472,7 +472,6 @@ kros:
             calibration_rotation:           450            # how many degrees to rotate during calibration?
             stability_threshold:              0.07         # max standard deviation (2.9°/0.05rad; 4.6°/0.08rad; 5.7°/0.10rad) to determine stability
             cardinal_tolerance:               0.0698132    # tolerance to cardinal points (4° in radians; 0.0523599rad is 3°)
-            include_accel_gyro:            True            # if true, poll heading data
             include_heading:               True            # if true, poll accelerometer and gyroscope data
             play_sound:                    True            # if True, play sound to indicate calibration
         irq_clock:                                         # external clock

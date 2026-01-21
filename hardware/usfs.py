@@ -404,6 +404,24 @@ class Usfs(Component):
         '''
         return self._gx, self._gy, self._gz
 
+    def _read_hardware(self):
+        '''
+        Reads hardware and updates quaternion, accelerometer, gyroscope,
+        and barometer values. Quaternions will be processed in poll().
+        '''
+        # these hardware reads update self._usfs (external library state)
+        # directly; raw values for orientation will be extracted in poll().
+        # accelerometer
+        if self._usfs.gotAccelerometer():
+            self._ax, self._ay, self._az = self._usfs.readAccelerometer()
+        # gyroscope
+        if self._usfs.gotGyrometer():
+            self._gx, self._gy, self._gz = self._usfs.readGyrometer()
+        # barometer/altimeter
+        if self._usfs.gotBarometer():
+            self._pressure, self._temperature = self._usfs.readBarometer()
+            self._altitude = (1.0 - math.pow(self._pressure / 1013.25, 0.190295)) * 44330
+
     def poll(self):
         '''
         Polls the hardware and sets all the available properties, returning
@@ -417,6 +435,8 @@ class Usfs(Component):
             self._log.error('error starting USFS: {}'.format(self._usfs.getErrorString()))
             self.close()
             return None
+
+        self._read_hardware()
 
         # Define output variables from updated quaternion---these are Tait-Bryan
         # angles, commonly used in aircraft orientation. In this coordinate

@@ -870,6 +870,26 @@ class BNO085(Component):
         else:
             self._log.warning('already enabled.')
 
+    def _read_hardware(self):
+        '''
+        Reads hardware sensor reports and updates cached data for quaternion,
+        accelerometer, gyroscope, and magnetometer.
+
+        Specific downstream computation is performed using these values in poll().
+        '''
+        # quaternion
+        _quat = self.quaternion()
+        # acceleration
+        _accel = self.acceleration()
+        # gyroscope
+        _gyro = self.gyro()
+        # magnetometer
+        _mag = self.magnetic()
+        # raw data (if needed)
+        _raw_accel = self.raw_acceleration()
+        _raw_gyro = self.raw_gyro()
+        _raw_mag = self.raw_magnetic()
+
     def poll(self):
         '''
         poll sensor, update Euler angles with trim/declination applied.
@@ -878,6 +898,7 @@ class BNO085(Component):
         if self.closed:
             self._log.warning('already closed.')
             return None
+        self._read_hardware()
         # process available sensor packets
         self._process_available_packets()
         # get quaternion
