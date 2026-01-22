@@ -71,26 +71,26 @@ class Bno085(BNO085, Component):
         self._pitch_trim = _cfg.get('pitch_trim', 0.0)
         self._roll_trim = _cfg.get('roll_trim', 0.0)
         self._yaw_trim = _cfg.get('yaw_trim', 0.0)
-        self._log.info('declination: {:+7.3f}° ({:+9.6f} rad)'.format(_declination_degrees, self._declination))
-        self._log.info('pitch trim:  {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._pitch_trim), self._pitch_trim))
-        self._log.info('roll trim:   {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._roll_trim), self._roll_trim))
-        self._log.info('yaw trim:    {:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._yaw_trim), self._yaw_trim))
+        self._log.info('declination: ' + Fore.GREEN + '{:+7.3f}° ({:+9.6f} rad)'.format(_declination_degrees, self._declination))
+        self._log.info('pitch trim:  ' + Fore.GREEN + '{:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._pitch_trim), self._pitch_trim))
+        self._log.info('roll trim:   ' + Fore.GREEN + '{:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._roll_trim), self._roll_trim))
+        self._log.info('yaw trim:    ' + Fore.GREEN + '{:+7.3f}° ({:+9.6f} rad)'.format(math.degrees(self._yaw_trim), self._yaw_trim))
         # axis configuration
-        self._swap_pitch_roll = _cfg.get('swap_pitch_roll', False)
-        self._invert_pitch = _cfg.get('invert_pitch', False)
-        self._invert_roll = _cfg.get('invert_roll', False)
-        self._invert_yaw = _cfg.get('invert_yaw', False)
+        self._swap_pitch_roll  = _cfg.get('swap_pitch_roll', False)
+        self._invert_pitch     = _cfg.get('invert_pitch', False)
+        self._invert_roll      = _cfg.get('invert_roll', False)
+        self._invert_yaw       = _cfg.get('invert_yaw', False)
         # calibration configuration
-        self._bench_calibrate = _cfg.get('bench_calibrate', False)
+        self._bench_calibrate  = _cfg.get('bench_calibrate', False)
         self._motion_calibrate = _cfg.get('motion_calibrate', False)
-        self._calibration_rotation = _cfg.get('calibration_rotation', 450)
+        self._calibration_rotation  = _cfg.get('calibration_rotation', 450)
         self._auto_save_calibration = _cfg.get('auto_save_calibration', True)
         self._use_saved_calibration = _cfg.get('use_saved_calibration', False)
-        self._play_sound = _cfg.get('play_sound', False)
-        self._show_console = _cfg.get('show_console', False)
-        self._show_matrix11x7 = _cfg.get('show_matrix11x7', False)
+        self._play_sound       = _cfg.get('play_sound', False)
+        self._show_console     = _cfg.get('show_console', False)
+        self._show_matrix11x7  = _cfg.get('show_matrix11x7', False)
         # stability tracking
-        self._queue_length = _cfg.get('queue_length', 100)
+        self._queue_length     = _cfg.get('queue_length', 100)
         self._stability_threshold = _cfg.get('stability_threshold', 0.09)
         self._min_calibration_accuracy = _cfg.get('min_calibration_accuracy', 2)
         self._queue = deque([], self._queue_length)
@@ -99,12 +99,12 @@ class Bno085(BNO085, Component):
         self._mean_yaw_radians = None
         # euler angles (uncorrected, in radians)
         self._pitch = 0.0
-        self._roll = 0.0
-        self._yaw = 0.0
+        self._roll  = 0.0
+        self._yaw   = 0.0
         # corrected euler angles (after trim applied, in radians)
         self._corrected_pitch = 0.0
-        self._corrected_roll = 0.0
-        self._corrected_yaw = 0.0
+        self._corrected_roll  = 0.0
+        self._corrected_yaw   = 0.0
         # trim adjust
         self._digital_pot = None
         self._trim_adjust = 0.0
