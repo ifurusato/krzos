@@ -36,7 +36,7 @@ from hardware.digital_pot import DigitalPotentiometer # for calibration only
 trim_axis = None
 #trim_axis = RDoF.PITCH
 #trim_axis = RDoF.ROLL
-#trim_axis = RDoF.YAW
+trim_axis = RDoF.YAW
 
 log = Logger('bno085-test', level=Level.INFO)
 bno = None

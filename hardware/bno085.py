@@ -444,9 +444,7 @@ class BNO085:
     def __init__(self, i2c_id=1, i2c_address=0x4A):
         self._i2c_bus_number = i2c_id
         self._i2c_address = i2c_address
-
         # sensor state
-        self._enabled = False
         self._i2c = None
         self._dbuf = None
         self._data_buffer = None
@@ -455,7 +453,6 @@ class BNO085:
         self._sequence_number = None
         self._readings = {}
         self._id_read = False
-
         # calibration state
         self._magnetometer_accuracy = 0
         self._gyro_accuracy = 0
@@ -464,13 +461,7 @@ class BNO085:
         self._dcd_saved_at = 0.0
         self._two_ended_sequence_numbers = {}
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    # Properties
-
-    @property
-    def enabled(self):
-        '''returns True if sensor is enabled'''
-        return self._enabled
+    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
     def magnetic(self) -> Optional[tuple[float, float, float]]:
@@ -488,7 +479,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_ROTATION_VECTOR]
         except KeyError:
-            raise RuntimeError('no quaternion report found, is it enabled?  ') from None
+            raise RuntimeError('no quaternion report found, is it enabled?') from None
 
     @property
     def geomagnetic_quaternion(self) -> Optional[tuple[float, float, float, float]]:
@@ -497,7 +488,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_GEOMAGNETIC_ROTATION_VECTOR]
         except KeyError:
-            raise RuntimeError('no geomag quaternion report found, is it enabled?  ') from None
+            raise RuntimeError('no geomag quaternion report found, is it enabled?') from None
 
     @property
     def game_quaternion(self) -> Optional[tuple[float, float, float, float]]:
@@ -509,7 +500,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_GAME_ROTATION_VECTOR]
         except KeyError:
-            raise RuntimeError('no game quaternion report found, is it enabled? ') from None
+            raise RuntimeError('no game quaternion report found, is it enabled?') from None
 
     @property
     def steps(self) -> Optional[int]:
@@ -527,7 +518,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_LINEAR_ACCELERATION]
         except KeyError:
-            raise RuntimeError('no lin. accel report found, is it enabled?  ') from None
+            raise RuntimeError('no lin. accel report found, is it enabled?') from None
 
     @property
     def acceleration(self) -> Optional[tuple[float, float, float]]:
@@ -536,7 +527,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_ACCELEROMETER]
         except KeyError:
-            raise RuntimeError('no accel report found, is it enabled?  ') from None
+            raise RuntimeError('no accel report found, is it enabled?') from None
 
     @property
     def gravity(self) -> Optional[tuple[float, float, float]]:
@@ -545,7 +536,7 @@ class BNO085:
         try:
             return self._readings[BNO_REPORT_GRAVITY]
         except KeyError:
-            raise RuntimeError('no gravity report found, is it enabled? ') from None
+            raise RuntimeError('no gravity report found, is it enabled?') from None
 
     @property
     def gyro(self) -> Optional[tuple[float, float, float]]:
@@ -660,20 +651,16 @@ class BNO085:
     # Public methods
 
     def enable(self):
-        '''enable the hardware for the sensor'''
-        if self._enabled:
-            print('WARNING: BNO085 already enabled')
-            return
-
+        '''
+        Enable the hardware for the sensor.
+        '''
         # initialize I2C and sensor
         self._i2c = SMBus(self._i2c_bus_number)
-
         # initialize buffers
         self._dbuf = bytearray(2)
         self._data_buffer = bytearray(_DATA_BUFFER_SIZE)
         self._packet_slices: list[Any] = []
         self._sequence_number = [0] * (_BNO_CHANNEL_GYRO_ROTATION_VECTOR + 1)
-
         # reset and check ID
         for attempt in range(3):
             self.soft_reset()
@@ -692,29 +679,19 @@ class BNO085:
         self.enable_feature(BNO_REPORT_MAGNETOMETER)
         self.enable_feature(BNO_REPORT_ROTATION_VECTOR)
 
-        self._enabled = True
-
     def disable(self):
-        '''disable sensor and close I2C bus'''
-        if not self._enabled:
-            print('WARNING: BNO085 already disabled')
-            return
-
+        '''
+        Disable sensor and close I2C bus.
+        '''
         if self._i2c:
             self._i2c.close()
             self._i2c = None
-
-        self._enabled = False
 
     def update(self):
         '''
         read hardware sensor reports and update cached data.
         call this before accessing sensor properties.
         '''
-        if not self._enabled:
-            print('WARNING: BNO085 not enabled, cannot update')
-            return
-
         # access properties to trigger internal updates
         _ = self.quaternion
         _ = self.acceleration
