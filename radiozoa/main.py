@@ -15,7 +15,7 @@
 import sys
 import time
 import stm
-from pyb import Pin, Timer
+from pyb import Pin, LED, Timer
 
 from colors import*
 #from i2c_slave import I2CSlave    # IRQ based
@@ -27,11 +27,34 @@ for mod in ['main', 'i2c_slave', 'controller']:
     if mod in sys.modules:
         del sys.modules[mod]
 
+class LedBlinker:
+    def __init__(self, on_ms, off_ms):
+        self.led = LED(1)
+        self.on_ticks = on_ms
+        self.off_ticks = off_ms
+        self.is_on = True
+        self.counter = 0
+        self.timer = Timer(4)
+        self.led.on()
+        self.timer.init(freq=1000, callback=self.toggle)
+    
+    def toggle(self, timer):
+        self.counter += 1
+        if self.is_on and self.counter >= self.on_ticks:
+            self.led.off()
+            self.is_on = False
+            self.counter = 0
+        elif not self.is_on and self.counter >= self.off_ticks:
+            self.led.on()
+            self.is_on = True
+            self.counter = 0
+
 def main():
+    BLINKER     = True
     TIMER2_SOFT = False
-    TIMER2_HARD = True
-    TIMER5      = True
-    I2C_SLAVE   = True
+    TIMER2_HARD = False
+    TIMER5      = False
+    I2C_SLAVE   = False
     slave  = None
     timer2 = None
     timer5 = None
@@ -39,6 +62,9 @@ def main():
     try:
 
         controller = Controller()
+
+        if BLINKER:
+            blinker = LedBlinker(50, 1950)
 
         if TIMER2_SOFT:
             clock_pin = Pin('A0', Pin.OUT_PP)
@@ -67,9 +93,9 @@ def main():
             # set up a 2Hz timer to call the controller's step()
             timer5 = Timer(5)
             timer5.init(freq=2,
-                        callback=controller.step, 
+                        callback=controller.step,
                         hard=False)
-        
+
         if I2C_SLAVE:
             # set up I2C slave
             slave = I2CSlave(i2c_id=2, i2c_address=0x45)
@@ -88,13 +114,14 @@ def main():
 
     except KeyboardInterrupt:
         print('\nCtrl-C caught; exiting…')
-        if slave:
-            slave.disable()
+#       if slave:
+#           slave.disable()
     finally:
-        if timer2:
-            timer2.deinit()
-        if timer5:
-            timer5.deinit()
+#       if timer2:
+#           timer2.deinit()
+#       if timer5:
+#           timer5.deinit()
+        pass
 
 main()
 
