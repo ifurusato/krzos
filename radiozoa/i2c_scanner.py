@@ -12,8 +12,20 @@
 import machine
 
 class I2CScanner:
-    def __init__(self, i2c_bus=1):
-        self.i2c = machine.I2C(i2c_bus)
+    '''
+    Do not specify SDA or SCL for the STM32, only the bus number.
+    You may need to modify this for your microcontroller.
+
+    Args:
+        id:    identifies a particular I2C peripheral. Allowed values depend on the particular port/board.
+        scl:   should be a pin object specifying the pin to use for SCL.
+        sda:   should be a pin object specifying the pin to use for SDA.
+    '''
+    def __init__(self, i2c_bus=1, scl=None, sda=None):
+        if scl and sda:
+            self.i2c = machine.I2C(i2c_bus, scl=scl, sda=sda)
+        else:
+            self.i2c = machine.I2C(i2c_bus)
         self._devices = []
 
     @property
@@ -31,7 +43,8 @@ class I2CScanner:
         self._devices = self.i2c.scan()
         if len(self._devices) == 0:
             print("no I2C devices found.")
-        print("I2C scan complete: {} devices found.".format(len(self._devices)))
+        else:
+            print("I2C scan complete: {} devices found.".format(len(self._devices)))
         return self._devices
 
     def has_hex_address(self, addr):
@@ -42,7 +55,7 @@ class I2CScanner:
 
     def i2cdetect(self):
         '''
-        Display I2C device addresses in i2cdetect format.
+        Display I2C device addresses in i2cdetect format to stdout.
         Scans if not already done, then prints a formatted grid.
         '''
         if not self._devices:

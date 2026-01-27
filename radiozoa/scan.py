@@ -3,7 +3,7 @@ import sys
 from i2c_scanner import I2CScanner
 
 # force module reload
-for mod in ['i2c_scanner']:
+for mod in ['scan', 'i2c_scanner']:
     if mod in sys.modules:
         del sys.modules[mod]
 

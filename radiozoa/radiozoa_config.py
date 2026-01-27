@@ -24,7 +24,7 @@ class RadiozoaConfig:
     Device pseudo-enum.
     '''
     def __init__(self, i2c_bus=1, level=Level.INFO):
-        self._log = Logger('radiozoa-config', level=level)
+        self._log = Logger('radiozoa-conf', level=level)
         self._level = level
         self._i2c_bus_number = i2c_bus
         self._default_i2c_address = 0x29
