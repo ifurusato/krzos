@@ -24,10 +24,10 @@ class PixelState:
         self.base_color = color
         self.color = color.rgb
         self.phase = phase
-    
+
     def is_active(self):
         return self.base_color != COLOR_BLACK
-    
+
     def reset(self):
         self.base_color = COLOR_BLACK
         self.color = self.base_color.rgb
@@ -474,7 +474,7 @@ class Controller:
                 else:
                     return 'ERR'
 
-            elif _arg0 == "theme": 
+            elif _arg0 == "theme":
                 if _arg1:
                     if _arg1 == 'on':
                         self._init_theme()
@@ -483,7 +483,7 @@ class Controller:
                     elif _arg1 == 'off':
                         self._enable_theme = False
                         return 'ACK'
-                    elif _arg1 == 'hz': 
+                    elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer3.deinit()
@@ -534,7 +534,7 @@ class Controller:
                             self._pulse_steps = steps
                             return 'ACK'
                         return 'ERR'
-                    else: 
+                    else:
                         print("ERROR: could not process input:  '{}'".format(cmd))
                         return 'ERR'
                     return 'ACK'

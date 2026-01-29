@@ -135,6 +135,13 @@ The Radiozoa board contains eight VL53L0X sensors. This can be connected to the
 default I2C bus 1, or configured to operate on the alternate I2C bus 0 (which is
 the configuration choice set in config.yaml).
 
+There is a separate development effort in the ./radiozoa directory, aiming to
+provide Radiozoa functionality using a dedicated microcontroller (in this case,
+an STM32F405, but any other would be possible). This includes an I2CScanner class
+that as a byproduct supports a microcontroller version of the command line tool
+i2cdetect. A version of the I2CScanner class without bespoke dependencies is
+available as i2c_scanner_m.py.
+
 In order to enable I2C bus 0 you must add the following to /boot/firmware/config.txt::
 
     dtparam=i2c_vc=on

@@ -67,9 +67,9 @@ def main():
             # set up a 2Hz timer to call the controller's step()
             timer5 = Timer(5)
             timer5.init(freq=2,
-                        callback=controller.step, 
+                        callback=controller.step,
                         hard=False)
-        
+
         if I2C_SLAVE:
             # set up I2C slave
             slave = I2CSlave(i2c_id=2, i2c_address=0x45)

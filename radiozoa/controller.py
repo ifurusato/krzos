@@ -6,11 +6,11 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-02
+# modified: 2026-01-03
 
 import sys
 import time
-import math, random # for think()
+import math, random
 from pyb import LED, Timer
 from machine import RTC
 
@@ -22,58 +22,67 @@ class PixelState:
         self.base_color = color
         self.color = color.rgb
         self.phase = phase
-    
+
     def is_active(self):
         return self.base_color != COLOR_BLACK
-    
+
     def reset(self):
         self.base_color = COLOR_BLACK
         self.color = self.base_color.rgb
         self.phase = 0.0
 
 class Controller:
+    STRIP_PIN = 'B12'
     RING_PIN  = 'B14'
     '''
     A controller for command strings received from the I2CSlave.
-
-    As an example this controls a NeoPixel ring.
     '''
     def __init__(self):
         self._slave = None
-        # heartbeat feature
+        # blink support
+        self._enable_blink    = False
+        self._blink_index     = -1
+        self._blink_direction = 1
+        self._blink_color     = COLOR_TANGERINE
+        # odometry heartbeat feature
         self._heartbeat_enabled     = True
         self._heartbeat_on_time_ms  = 50
         self._heartbeat_off_time_ms = 2950
         self._heartbeat_timer = 0
         self._heartbeat_state = False
-        self._position        = '0 0'
-        self._velocity        = '0 0'
         # rotation
         self._ring_offset     = 0
+        self._rotate_direction = 1 # 1 or -1
         self._enable_rotate   = False
         self._ring_model = [PixelState() for _ in range(24)]
-        # thinking
-        self._enable_think    = False
+        # theme
+        self._enable_theme    = False
         self._pulse_steps = 40
-        self._think_target_pixels = 12 # default
+        self._theme_target_pixels = 12 # default
+        self._all  = Color.all_colors()
         self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
                        COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
-                       COLOR_PURPLE, COLOR_SKY_BLUE
-        ]
+                       COLOR_PURPLE, COLOR_SKY_BLUE ]
         self._warm = [ COLOR_RED, COLOR_YELLOW, COLOR_DARK_RED, COLOR_DARK_YELLOW,
-                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER
-        ]
-        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO,
+                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER ]
+        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_RED,
                        COLOR_VIOLET, COLOR_PINK, COLOR_FUCHSIA, COLOR_PURPLE, COLOR_SKY_BLUE,
-                       COLOR_WHITE, COLOR_TANGERINE, COLOR_AMBER, COLOR_RED
-        ]
+                       COLOR_WHITE, COLOR_APPLE, COLOR_EMERALD, COLOR_TANGERINE, COLOR_AMBER ]
+        self._grey = [ COLOR_WHITE, COLOR_GREY_0, COLOR_GREY_1, COLOR_GREY_2, COLOR_GREY_3,
+                       COLOR_GREY_4, COLOR_GREY_5, COLOR_GREY_6, COLOR_GREY_7 ]
+        self._dark = [ COLOR_DARK_RED, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
+                       COLOR_DARK_MAGENTA, COLOR_DARK_YELLOW, COLOR_PURPLE ]
         self._palettes = {
+            'all':  self._all,
             'cool': self._cool,
             'warm': self._warm,
-            'wild': self._wild
+            'wild': self._wild,
+            'grey': self._grey,
+            'dark': self._dark
         }
-        # instantiate pixel ring
-        self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, color_order='GRB', brightness=0.1)
+        # instantiate ring, strip & odometer
+        self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
+        self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
         self.reset_ring()
         self._last_update_ts  = self._get_time()
         self._timer3 = Timer(3)
@@ -107,36 +116,30 @@ class Controller:
             self._heartbeat(delta_ms)
 
     def _heartbeat(self, delta_ms):
-        '''
-        Can be used to enable/disable a function with a scheduled on and off time.
-        '''
         self._heartbeat_timer += delta_ms
         if self._heartbeat_state:
             if self._heartbeat_timer >= self._heartbeat_on_time_ms:
-                # do some work here during on time
                 self._heartbeat_state = False
                 self._heartbeat_timer = 0
         else:
             if self._heartbeat_timer >= self._heartbeat_off_time_ms:
-                # do some work here during off time
                 self._heartbeat_state = True
                 self._heartbeat_timer = 0
 
     def step(self, t):
-        self._led_pulse()
+        if self._enable_blink:
+            self.blink()
+        else:
+            self._led_pulse()
 
     def heading_to_pixel(self, heading_deg):
         pixel = round((180 + heading_deg) / 15) % 24
         return pixel
 
     def get_color(self, name, second_token):
-        try:
-            if second_token: # e.g., "dark cyan"
-                name = '{} {}'.format(name, second_token)
-            return Color.get(name)
-        except Exception as e:
-            print("ERROR: {} raised getting color: {}".format(type(e), e))
-            return COLOR_RED
+        if second_token: # e.g., "dark cyan"
+            name = '{} {}'.format(name, second_token)
+        return Color.get(name)
 
     # ring .......................................
 
@@ -146,8 +149,8 @@ class Controller:
     def _action(self, t):
         if self._enable_rotate:
             self.rotate_ring()
-        if self._enable_think:
-            self.think()
+        if self._enable_theme:
+            self.theme()
 
     def set_ring(self, ring):
         self._ring = ring
@@ -161,6 +164,7 @@ class Controller:
     def rotate_ring(self, shift=1):
         if abs(shift) > 24:
             raise ValueError('shift value outside of bounds.')
+        shift *= self._rotate_direction
         self._ring_offset = (self._ring_offset + shift) % 24
         self.update_ring()
 
@@ -176,7 +180,6 @@ class Controller:
         self._ring.set_color(index, color.rgb)
 
     def populate(self, count, palette_name):
-        print("getting palette: '{}'".format(palette_name))
         palette = self._palettes.get(palette_name)
         if palette is None:
             print("no such palette: '{}'".format(palette_name))
@@ -195,18 +198,16 @@ class Controller:
             self._ring_model[i].color = color.rgb
         self.update_ring()
 
-    # thinking ...................................
+    # themes .....................................
 
-    def _init_think(self, reset=False):
-        print('_init_think() reset: {}'.format(reset))
+    def _init_theme(self, reset=False):
         if reset:
             self.reset_ring()
             existing_count = 0
         else:
             existing_count = sum(1 for p in self._ring_model if p.is_active())
-        new_pixels_needed = max(0, self._think_target_pixels - existing_count)
+        new_pixels_needed = max(0, self._theme_target_pixels - existing_count)
         available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
-        print('existing: {}; needed: {}'.format(existing_count, new_pixels_needed))
         if new_pixels_needed > 0:
             empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
             for _ in range(new_pixels_needed):
@@ -220,7 +221,7 @@ class Controller:
                 self._ring_model[pos].phase = random.random()
         self.update_ring()
 
-    def think(self):
+    def theme(self):
         for index in range(24):
             pixel = self._ring_model[index]
             if not pixel.is_active():
@@ -231,16 +232,25 @@ class Controller:
             pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
-    def x_think(self):
-        for index in range(24):
-            pixel = self._ring_model[index]
-            if not pixel.is_active():
-                continue
-            pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
-            brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
-            r, g, b = pixel.base_color.rgb
-            pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
-        self.update_ring()
+    # strip ......................................
+
+    def reset_strip(self):
+        for index in range(8):
+            self._strip.set_color(index, COLOR_BLACK)
+
+    def blink(self):
+        if self._enable_blink:
+            self._led.off()
+            self._strip.set_color(index=(0 if self._blink_index < 0 else self._blink_index), color=COLOR_BLACK)
+            time.sleep_ms(50)
+            # update index for next time
+            self._blink_index += self._blink_direction
+            self._strip.set_color(index=self._blink_index, color=self._blink_color)
+            # bounce at the ends
+            if self._blink_index >= 7:
+                self._blink_direction = -1
+            elif self._blink_index <= 0:
+                self._blink_direction = 1
 
     # ............................................
 
@@ -266,6 +276,7 @@ class Controller:
             print('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
             RTC().datetime(self._parse_timestamp(timestamp))
             print('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
+            self._blink_color = COLOR_AMBER
             return 'ACK'
         except Exception as e:
             print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
@@ -276,15 +287,13 @@ class Controller:
         Processes the callback from the I2C slave, returning 'ACK', 'NACK' or 'ERR'.
 
         Commands:
-            odo pos | vel | reset
-                led on | off
-                rf get
-                rf set <value> | None
             time get | set <timestamp>
+            strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
-            rotate <n> | on | off | hz <n>
-            think on | off | hz <n> | pixels <n> | steps <n> | cool <n> | warm <n>
+            rotate <n> | on | off | hz <n> | fwd/cw | rev/ccw
+            theme on | off | hz <n> | pixels <n> | steps <n> | <theme-name> <n>
             heartbeat on | off
+            blink on | off
             rgb <n> <red> <green> <blue>
             heading <degrees> <color>
             get
@@ -310,6 +319,38 @@ class Controller:
                     return self._rtc_to_iso(RTC().datetime())
                 return 'ERR'
 
+            elif _arg0 == "strip":
+                if self._strip:
+                    if _arg1 == 'clear':
+                        self.reset_strip()
+                        return 'ACK'
+                    elif _arg1 == 'all':
+                        # e.g., strip all blue
+                        if _arg2 == 'off':
+                            self.reset_strip()
+                            return 'ACK'
+                        else:
+                            color = self.get_color(_arg2, _arg3)
+                            for idx in range(8):
+                                self._strip.set_color(idx, color)
+                            return 'ACK'
+                    else:
+                        # e.g.:  strip 3 blue
+                        index = int(_arg1) - 1
+                        if 0 <= index <= 7:
+                            color = self.get_color(_arg2, _arg3)
+                            if color:
+                                self._strip.set_color(index,color)
+                                return 'ACK'
+                        else:
+                            print("index value {} out of bounds (1-8).".format(index))
+                            return 'ERR'
+
+                    print("ERROR: could not process input: '{}'".format(cmd))
+                else:
+                    print('ERROR: no LED strip available.')
+                return 'ERR'
+
             elif _arg0 == "ring":
                 if self._ring:
                     try:
@@ -323,13 +364,9 @@ class Controller:
                                 return 'ACK'
                             else:
                                 color = self.get_color(_arg2, _arg3)
-                                if color:
-                                    for idx in range(24):
-                                        self.set_ring_color(index, color)
-                                    return 'ACK'
-                                else:
-                                    print('color not found.')
-                                    return 'ERR'
+                                for idx in range(24):
+                                    self.set_ring_color(index, color)
+                                return 'ACK'
                         else:
                             index = int(_arg1) - 1
                             if 0 <= index <= 23:
@@ -337,16 +374,10 @@ class Controller:
                                 if color:
                                     self.set_ring_color(index, color)
                                     return 'ACK'
-                                else:
-                                    print('no color returned.')
-                                    return 'ERR'
                             else:
                                 print("index value {} out of bounds (1-24).".format(index))
                                 return 'ERR'
                         print("ERROR: could not process input: '{}'".format(cmd))
-                    except Exception as e:
-                        print('{} raised due to ring command: {}'.format(type(e), e))
-                        return 'ERR'
                     finally:
                         self._enable_rotate = _rotating
                 else:
@@ -357,14 +388,24 @@ class Controller:
                 if _arg1:
                     if _arg1 == 'on':
                         self._enable_rotate = True
+                        return 'ACK'
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                        return 'ACK'
+                    elif _arg1 == 'fwd' or _arg1 == 'cw':
+                        self._rotate_direction = 1
+                        return 'ACK'
+                    elif _arg1 == 'rev' or _arg1 == 'ccw':
+                        self._rotate_direction = -1
+                        return 'ACK'
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer3.deinit()
                             self._timer3.init(freq=hz, callback=self._action, hard=False)
-                        return 'ERR'
+                            return 'ACK'
+                        else:
+                            return 'ERR'
                     else:
                         shift = int(_arg1)
                         self.rotate_ring(shift)
@@ -372,14 +413,16 @@ class Controller:
                 else:
                     return 'ERR'
 
-            elif _arg0 == "think": 
+            elif _arg0 == "theme":
                 if _arg1:
                     if _arg1 == 'on':
-                        self._init_think()
-                        self._enable_think = True
+                        self._init_theme()
+                        self._enable_theme = True
+                        return 'ACK'
                     elif _arg1 == 'off':
-                        self._enable_think = False
-                    elif _arg1 == 'hz': 
+                        self._enable_theme = False
+                        return 'ACK'
+                    elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer3.deinit()
@@ -387,37 +430,42 @@ class Controller:
                             return 'ACK'
                         return 'ERR'
                     elif _arg1 == 'pixels':
-                        _thinking = self._enable_think
+                        _themed = self._enable_theme
                         try:
-                            self._enable_think = False
+                            self._enable_theme = False
                             target = int(_arg2)
                             if 1 <= target <= 24:
-                                self._think_target_pixels = target
-                                self._init_think(reset=True)
+                                self._theme_target_pixels = target
+                                self._init_theme(reset=True)
                                 return 'ACK'
                             return 'ERR'
                         finally:
-                            self._enable_think = _thinking
+                            self._enable_theme = _themed
                     elif _arg1 in self._palettes:
-                        _thinking = self._enable_think
+                        print('a. theme')
+                        _themed = self._enable_theme
                         _rotating = self._enable_rotate
                         self._enable_rotate = False
-                        self._enable_think = False
+                        self._enable_theme = False
                         self._ring_offset = 0
                         try:
                             target = int(_arg2)
-                            self._think_target_pixels = target
+                            print('b. theme; target: {}'.format(target))
+                            self._theme_target_pixels = target
                             if 1 <= target <= 24:
                                 self.populate(target, _arg1)
+                                print('c. ACK theme; target: {}'.format(target))
                                 return 'ACK'
-                            return 'ERR'
+                            else:
+                                print('d. ERR theme; target: {}'.format(target))
+                                return 'ERR'
                         except Exception as e:
                             print('{} raised with palette name: {}'.format(type(e), e))
                             return 'ERR'
                         finally:
-                            print('finally. palette: {}; count: {}'.format(_arg1, _arg2))
-                            self._enable_think = _thinking
+                            self._enable_theme = _themed
                             self._enable_rotate = _rotating
+                        return 'ACK'
 
                     elif _arg1 == 'steps':
                         steps = int(_arg2)
@@ -425,7 +473,7 @@ class Controller:
                             self._pulse_steps = steps
                             return 'ACK'
                         return 'ERR'
-                    else: 
+                    else:
                         print("ERROR: could not process input:  '{}'".format(cmd))
                         return 'ERR'
                     return 'ACK'
@@ -438,6 +486,20 @@ class Controller:
                     return 'ACK'
                 elif _arg1 == 'off':
                     self._heartbeat_enabled = False
+                    return 'ACK'
+                else:
+                    print("ERROR: unrecognised argument: '{}'".format(_arg1))
+                    return 'ERR'
+
+            elif _arg0 == "blink":
+                if _arg1 == 'on':
+                    self._enable_blink = True
+                    return 'ACK'
+                elif _arg1 == 'off':
+                    self._enable_blink = False
+                    self.reset_strip()
+                    self._blink_index = -1
+                    self._blink_direction = 1
                     return 'ACK'
                 else:
                     print("ERROR: unrecognised argument: '{}'".format(_arg1))
@@ -461,12 +523,14 @@ class Controller:
                 return 'ACK'
 
             elif _arg0 == "ping":
-                return 'ACK'
+                return 'PING'
 
             elif _arg0 == "close":
                 self._enable_rotate     = False
                 self._heartbeat_enabled = False
+                self._enable_blink      = False
                 self.reset_ring()
+                self.reset_strip()
                 return 'ACK'
 
             # get/set (data request)

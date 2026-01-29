@@ -15,56 +15,38 @@
 import sys
 import time
 import stm
-from pyb import Pin, LED, Timer
+from pyb import Pin, Timer
 
 from colors import*
 #from i2c_slave import I2CSlave    # IRQ based
 from i2c_slave_mem import I2CSlave # memory-based
 from controller import Controller
+from blinker import Blinker
 
 # force module reload
 for mod in ['main', 'i2c_slave', 'controller']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-class LedBlinker:
-    def __init__(self, on_ms, off_ms):
-        self.led = LED(1)
-        self.on_ticks = on_ms
-        self.off_ticks = off_ms
-        self.is_on = True
-        self.counter = 0
-        self.timer = Timer(4)
-        self.led.on()
-        self.timer.init(freq=1000, callback=self.toggle)
-    
-    def toggle(self, timer):
-        self.counter += 1
-        if self.is_on and self.counter >= self.on_ticks:
-            self.led.off()
-            self.is_on = False
-            self.counter = 0
-        elif not self.is_on and self.counter >= self.off_ticks:
-            self.led.on()
-            self.is_on = True
-            self.counter = 0
-
 def main():
-    BLINKER     = True
+
+    BLINKER     = False
     TIMER2_SOFT = False
     TIMER2_HARD = False
     TIMER5      = False
     I2C_SLAVE   = False
-    slave  = None
-    timer2 = None
-    timer5 = None
+
+    slave       = None
+    timer2      = None
+    timer5      = None
+    blinker     = None
 
     try:
 
         controller = Controller()
 
         if BLINKER:
-            blinker = LedBlinker(50, 1950)
+            blinker = Blinker(50, 1950)
 
         if TIMER2_SOFT:
             clock_pin = Pin('A0', Pin.OUT_PP)
