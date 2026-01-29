@@ -16,6 +16,9 @@ from machine import RTC
 
 from colors import*
 from pixel import Pixel
+from configure import Configure
+from radiozoa_sensor import RadiozoaSensor
+from scanner import Scanner
 
 class PixelState:
     def __init__(self, color=COLOR_BLACK, phase=0.0):
@@ -90,7 +93,46 @@ class Controller:
         # LED support
         self._led = LED(1)
         self._timer7 = Timer(7)
+        # radiozoa
+        self._radiozoa = None
+        self._scanner = None
         print('ready.')
+
+    @property
+    def ring(self):
+        return self._ring
+
+    @property
+    def radiozoa(self):
+        return self._radiozoa
+
+    def _radiozoa_init(self):
+        '''
+        Initialise the Radiozoa sensor.
+        '''
+        config = Configure()
+        if config.configure():
+            self._radiozoa = RadiozoaSensor()
+            self._scanner = Scanner(controller=self)
+        else:
+            print('fail.')
+
+    def _radiozoa_start(self):
+        if not self._radiozoa:
+            self._radiozoa_init()
+            time.sleep_ms(250)
+        if self._radiozoa:
+            self._radiozoa.start_ranging()
+            self._scanner.enable()
+        else:
+            print('failed to start: radiozoa not configured.')
+
+    def _radiozoa_stop(self):
+        if self._radiozoa:
+            self._scanner.disable()
+            self._radiozoa.stop_ranging()
+        else:
+            print('failed to stop: radiozoa not configured.')
 
     def _led_pulse(self, duration_ms=20):
         self._led.on()
@@ -165,7 +207,7 @@ class Controller:
     def update_ring(self):
         for index in range(24):
             rotated_index = (index - self._ring_offset) % 24
-            self._ring. set_color(index, self._ring_model[rotated_index].color)
+            self._ring.set_color(index, self._ring_model[rotated_index].color)
 
     def set_ring_color(self, index, color):
         actual_index = (index + self._ring_offset) % 24
@@ -275,6 +317,7 @@ class Controller:
         Processes the callback from the I2C slave, returning 'ACK', 'NACK' or 'ERR'.
 
         Commands:
+            radiozoa init | start | stop
             time get | set <timestamp>
             strip off | all <color> | <n> <color>
             ring off | <color> | <n> <color>
@@ -305,6 +348,18 @@ class Controller:
                     return self._set_time(_arg2)
                 elif _arg1 == 'get':
                     return self._rtc_to_iso(RTC().datetime())
+                return 'ERR'
+
+            elif _arg0 == "radiozoa":
+                if _arg1 == 'init':
+                    self._radiozoa_init()
+                    return 'ACK'
+                elif _arg1 == 'start':
+                    self._radiozoa_start()
+                    return 'ACK'
+                elif _arg1 == 'stop':
+                    self._radiozoa_stop()
+                    return 'ACK'
                 return 'ERR'
 
             elif _arg0 == "strip":

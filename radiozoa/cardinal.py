@@ -13,14 +13,17 @@ from math import pi as π
 
 class Cardinal:
     _registry = []
+    _by_id    = {}
 
-    def __init__(self, num, name, abbrev, degrees, radians):
+    def __init__(self, num, abbrev, name, pixel, degrees, radians):
         self._id      = num
-        self._name    = name
         self._abbrev  = abbrev
+        self._name    = name
+        self._pixel   = pixel
         self._degrees = degrees
         self._radians = radians
         Cardinal._registry.append(self)
+        Cardinal._by_id[num] = self
 
     @property
     def id(self):
@@ -31,6 +34,10 @@ class Cardinal:
         return self._name
 
     @property
+    def pixel(self):
+        return self._pixel
+
+    @property
     def abbrev(self):
         return self._abbrev
 
@@ -39,13 +46,17 @@ class Cardinal:
         return self._degrees
 
     @property
-    def radian(self):
-        return self._radian
+    def radians(self):
+        return self._radians
+
+    @classmethod
+    def from_id(cls, num):
+        return cls._by_id.get(num, None)
 
     def __eq__(self, other):
         if isinstance(other, Cardinal):
             return self._name == other._name
-        return self == other
+        return False
 
     def __hash__(self):
         return hash(self._name)
@@ -53,14 +64,14 @@ class Cardinal:
     def __repr__(self):
         return self._name
 
-NORTH     = (0, 'N',  'north',        0, 0.0 )
-NORTHEAST = (1, 'NE', 'north-east',  45, π * 0.25 )
-EAST      = (2, 'E',  'east',        90, π * 0.50 )
-SOUTHEAST = (3, 'SE', 'south-east', 135, π * 0.75 )
-SOUTH     = (4, 'S',  'south',      180, π )
-SOUTHWEST = (5, 'SW', 'south-west', 225, π * 1.25 )
-WEST      = (6, 'W',  'west',       270, π * 1.50 )
-NORTHWEST = (7, 'NW', 'north-west', 315, π * 1.75 )
-UNKNOWN   = (8, 'U',  'unknown',     -1, -1.0 )
+NORTH     = Cardinal(0, 'N',  'north',      13,   0, 0.0 )
+NORTHEAST = Cardinal(1, 'NE', 'north-east', 16,  45, π * 0.25 )
+EAST      = Cardinal(2, 'E',  'east',       19,  90, π * 0.50 )
+SOUTHEAST = Cardinal(3, 'SE', 'south-east', 22, 135, π * 0.75 )
+SOUTH     = Cardinal(4, 'S',  'south',       1, 180, π )
+SOUTHWEST = Cardinal(5, 'SW', 'south-west',  4, 225, π * 1.25 )
+WEST      = Cardinal(6, 'W',  'west',        7, 270, π * 1.50 )
+NORTHWEST = Cardinal(7, 'NW', 'north-west', 10, 315, π * 1.75 )
+UNKNOWN   = Cardinal(8, 'U',  'unknown',    -1,  -1, -1.0 )
 
 #EOF
