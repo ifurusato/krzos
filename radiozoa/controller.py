@@ -92,8 +92,6 @@ class Controller:
         self._timer7 = Timer(7)
         print('ready.')
 
-    # led ........................................
-
     def _led_pulse(self, duration_ms=20):
         self._led.on()
         self._timer7.deinit()
@@ -101,8 +99,6 @@ class Controller:
 
     def _off(self, timer):
         self._led.off()
-
-    # ............................................
 
     def set_slave(self, slave):
         self._slave = slave
@@ -140,8 +136,6 @@ class Controller:
         if second_token: # e.g., "dark cyan"
             name = '{} {}'.format(name, second_token)
         return Color.get(name)
-
-    # ring .......................................
 
     def _set_rotation_pending(self, t):
         self._rotation_pending = True
@@ -198,8 +192,6 @@ class Controller:
             self._ring_model[i].color = color.rgb
         self.update_ring()
 
-    # themes .....................................
-
     def _init_theme(self, reset=False):
         if reset:
             self.reset_ring()
@@ -232,8 +224,6 @@ class Controller:
             pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
-    # strip ......................................
-
     def reset_strip(self):
         for index in range(8):
             self._strip.set_color(index, COLOR_BLACK)
@@ -251,8 +241,6 @@ class Controller:
                 self._blink_direction = -1
             elif self._blink_index <= 0:
                 self._blink_direction = 1
-
-    # ............................................
 
     def _parse_timestamp(self, ts):
         year    = int(ts[0:4])
