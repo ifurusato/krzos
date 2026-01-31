@@ -86,7 +86,9 @@ class I2CMaster(Component):
             out_msg = pack_message(message)
             try:
                 resp_bytes = self._i2c_write_and_read(out_msg)
-                return unpack_message(resp_bytes)
+                response = unpack_message(resp_bytes)
+                self._log.info(Fore.MAGENTA + "response: '{}'".format(response))
+                return response
             except Exception as e:
 #               self._log.error('{} raised by send request: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 self._log.error('{} raised by send request: {}'.format(type(e), e))

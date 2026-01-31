@@ -16,23 +16,9 @@ from machine import RTC
 
 from colors import*
 from pixel import Pixel
+from pixel_state import PixelState
 from configure import Configure
 from radiozoa_sensor import RadiozoaSensor
-from scanner import Scanner
-
-class PixelState:
-    def __init__(self, color=COLOR_BLACK, phase=0.0):
-        self.base_color = color
-        self.color = color.rgb
-        self.phase = phase
-
-    def is_active(self):
-        return self.base_color != COLOR_BLACK
-
-    def reset(self):
-        self.base_color = COLOR_BLACK
-        self.color = self.base_color.rgb
-        self.phase = 0.0
 
 class Controller:
     STRIP_PIN = 'B12'
@@ -42,6 +28,8 @@ class Controller:
     '''
     def __init__(self):
         self._slave = None
+        self._scanner = None
+        self._radiozoa = None
         # blink support
         self._enable_blink    = False
         self._blink_index     = -1
@@ -93,9 +81,6 @@ class Controller:
         # LED support
         self._led = LED(1)
         self._timer7 = Timer(7)
-        # radiozoa
-        self._radiozoa = None
-        self._scanner = None
         print('ready.')
 
     @property
@@ -112,6 +97,8 @@ class Controller:
         '''
         config = Configure()
         if config.configure():
+            from scanner import Scanner
+
             self._radiozoa = RadiozoaSensor()
             self._scanner = Scanner(controller=self)
         else:
@@ -362,6 +349,44 @@ class Controller:
                     return 'ACK'
                 return 'ERR'
 
+            elif _arg0 == "lower":
+                print("executing lower...")
+                if not self._radiozoa:
+                    self._radiozoa_init()
+                    time.sleep_ms(250)
+                    self._radiozoa_start()
+                    time.sleep_ms(50)
+                if self._scanner:
+                    data = "7777 7777 7777 7777"
+                    try:
+                        data = " ".join("{:04d}".format(v) for v in self._scanner.lower)
+                    except Exception as e:
+                        print('{} raised by lower: {}'.format(type(e), e))
+                        data = "3333 3333 3333 3333"
+                    finally:
+                        print("returning lower: {}".format(data))
+                        return data
+                return 'ERR'
+
+            elif _arg0 == "upper":
+                print("executing upper...")
+                if not self._radiozoa:
+                    self._radiozoa_init()
+                    time.sleep_ms(250)
+                    self._radiozoa_start()
+                    time.sleep_ms(50)
+                if self._scanner:
+                    data = "7777 7777 7777 7777"
+                    try:
+                        data = " ".join("{:04d}".format(v) for v in self._scanner.upper)
+                    except Exception as e:
+                        print('{} raised by upper: {}'.format(type(e), e))
+                        data = "3333 3333 3333 3333"
+                    finally:
+                        print("returning upper: {}".format(data))
+                        return data
+                return 'ERR'
+
             elif _arg0 == "strip":
                 if self._strip:
                     if _arg1 == 'clear':
@@ -577,6 +602,10 @@ class Controller:
                 return 'ACK'
 
             # get/set (data request)
+            elif _arg0 == "data":
+                # send test data
+                return '0000 1111 2222 3333'
+
             elif _arg0 == "get":
                 return 'ACK' # called on 2nd request for data
             elif _arg0 == "clear":

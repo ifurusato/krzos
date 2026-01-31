@@ -1,3 +1,13 @@
+#!/micropython
+# -*- coding: utf-8 -*-
+#
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Ichiro Furusato
+# created:  2026-01-27
+# modified: 2026-01-31
 
 import pyb
 import time
@@ -5,9 +15,10 @@ import micropython
 
 from cardinal import Cardinal, NORTH
 
-micropython.alloc_emergency_exception_buf(100)
+#micropython.alloc_emergency_exception_buf(100)
 
 class Scanner:
+    OUT_OF_RANGE = 9999
     def __init__(self, controller=None):
         if controller is None:
             raise ValueError('no controller provided.')
@@ -21,6 +32,18 @@ class Scanner:
         self._max_distance_mm = 1000
         self._running = False
         self._pending = False
+        self._lower = (Scanner.OUT_OF_RANGE,) * 4
+        self._upper = (Scanner.OUT_OF_RANGE,) * 4
+
+    @property
+    def lower(self):
+        print('lower: {}'.format(self._lower))
+        return self._lower
+
+    @property
+    def upper(self):
+        print('upper: {}'.format(self._upper))
+        return self._upper
 
     def enable(self):
         self._running = True
@@ -43,7 +66,15 @@ class Scanner:
         self._pending = False
         if self._radiozoa:
 #           start = time.ticks_ms()
-            distances = self._radiozoa.get_distances()
+#           distances = self._radiozoa.get_distances()
+            distances = tuple(
+                v if v is not None else Scanner.OUT_OF_RANGE
+                for v in self._radiozoa.get_distances()
+            )
+            self._lower, self._upper = distances[:4], distances[4:]
+#           recompose to 8
+#           self._distances = self._lower + self._upper
+#           print('type: {}; length: {}'.format(type(distances), len(distances)))
 #           elapsed_ms = time.ticks_diff(time.ticks_ms(), start)
 #           print('poll: {}ms elapsed.'.format(elapsed_ms))
             for index, dist in enumerate(distances):
