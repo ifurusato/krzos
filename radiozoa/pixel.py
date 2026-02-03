@@ -12,6 +12,7 @@
 import time
 from machine import Pin
 from neopixel import NeoPixel
+from colors import Color
 
 class Pixel:
     def __init__(self, pin=None, pixel_count=1, color_order='GRB', brightness=0.33):
@@ -53,7 +54,9 @@ class Pixel:
 
     def set_color(self, index=None, color=None):
         _index = self._pixel_index if index is None else index
-        if color is None:
+        if isinstance(color, Color):
+            self._neopixel[_index] = color.rgb
+        elif color is None:
             self._neopixel[_index] = (0, 0, 0)
         else:
             self._neopixel[_index] = color

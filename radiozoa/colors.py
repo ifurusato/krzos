@@ -7,35 +7,39 @@
 #
 # author:   Murray Altheim
 # created:  2024-08-14
-# modified: 2025-12-30
+# modified: 2026-02-04
 
 class Color:
     _registry = []
 
     def __init__(self, name, rgb):
-        self.name = name
-        self.rgb = rgb
+        self._name = name
+        self._rgb = rgb
         Color._registry.append(self)
 
+    @property
+    def rgb(self):
+        return self._rgb
+
     def __getitem__(self, index):
-        return self.rgb[index]
+        return self._rgb[index]
 
     def __iter__(self):
-        return iter(self.rgb)
+        return iter(self._rgb)
 
     def __len__(self):
-        return len(self.rgb)
+        return len(self._rgb)
 
     def __eq__(self, other):
         if isinstance(other, Color):
-            return self.rgb == other.rgb
-        return self.rgb == other
+            return self._rgb == other._rgb
+        return self._rgb == other
 
     def __hash__(self):
-        return hash(self.rgb)
+        return hash(self._rgb)
 
     def __repr__(self):
-        return '{} {}'.format(self.name, self.rgb)
+        return '{} {}'.format(self._name, self._rgb)
 
     @classmethod
     def all_colors(cls):
@@ -49,7 +53,7 @@ class Color:
         key = name.lower().replace("_", " ")
         for c in cls._registry:
             # normalize stored name: strip leading "COLOR_" and lowercase
-            norm = c.name.lower().replace("color_", "").replace("_", " ")
+            norm = c._name.lower().replace("color_", "").replace("_", " ")
             if norm == key:
                 return c
         return None
@@ -62,6 +66,7 @@ COLOR_BLUE          = Color("COLOR_BLUE",         (  0,   0, 255))
 COLOR_CYAN          = Color("COLOR_CYAN",         (  0, 255, 255))
 COLOR_MAGENTA       = Color("COLOR_MAGENTA",      (255,   0, 255))
 COLOR_YELLOW        = Color("COLOR_YELLOW",       (250, 150,   0))
+COLOR_GREY          = Color("COLOR_GREY",         ( 40,  40,  40))
 
 COLOR_DARK_RED      = Color("COLOR_DARK_RED",     ( 22,   0,   0))
 COLOR_DARK_GREEN    = Color("COLOR_DARK_GREEN",   (  0,  24,   0))
@@ -80,7 +85,7 @@ COLOR_EMERALD       = Color("COLOR_EMERALD",      (  0,  90,  10))
 COLOR_DEEP_CYAN     = Color("COLOR_DEEP_CYAN",    (  0,  11,  11))
 COLOR_CORNFLOWER    = Color("COLOR_CORNFLOWER",   ( 60,  90, 142))
 COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
-COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  75, 130))
+COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  16,  50))
 COLOR_LAVENDER      = Color("COLOR_LAVENDER",     ( 24,  11, 130))
 COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
 COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
