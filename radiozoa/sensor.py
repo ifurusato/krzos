@@ -7,9 +7,9 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-01-27
-# modified: 2026-01-31
+# modified: 2026-02-01
 
-import pyb
+from machine import Timer
 import time
 import micropython
 
@@ -17,13 +17,16 @@ from cardinal import Cardinal, NORTH
 
 #micropython.alloc_emergency_exception_buf(100)
 
-class Scanner:
+class Sensor:
     OUT_OF_RANGE = 9999
+    '''
+    Wraps access to the set of the Radiozoa's VL53L0X ToF sensors.
+    '''
     def __init__(self, controller=None):
         if controller is None:
             raise ValueError('no controller provided.')
         self._controller = controller
-        self._timer = pyb.Timer(2, freq=60)
+        self._timer = Timer(2)
         self._radiozoa = self._controller.radiozoa
         self._ring = self._controller.ring
 #       self._scheduled_task = self._test_task
@@ -32,27 +35,38 @@ class Scanner:
         self._max_distance_mm = 1000
         self._running = False
         self._pending = False
-        self._lower = (Scanner.OUT_OF_RANGE,) * 4
-        self._upper = (Scanner.OUT_OF_RANGE,) * 4
+        self._lower = (Sensor.OUT_OF_RANGE,) * 4
+        self._upper = (Sensor.OUT_OF_RANGE,) * 4
+        self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
+        self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
 
     @property
     def lower(self):
-        print('lower: {}'.format(self._lower))
+#       print('lower: {}'.format(self._lower))
         return self._lower
 
     @property
+    def lower_fmt(self):
+        return self._lower_fmt
+
+    @property
     def upper(self):
-        print('upper: {}'.format(self._upper))
+#       print('upper: {}'.format(self._upper))
         return self._upper
 
+    @property
+    def upper_fmt(self):
+        return self._upper_fmt
+
     def enable(self):
-        self._running = True
-        self._timer.callback(self._irq_handler)
+        if not self._running:
+            self._running = True
+            self._timer.init(freq=60, mode=Timer.PERIODIC, callback=self._irq_handler)
 
     def disable(self):
-        self._running = False
-        self._timer.callback(None)
-        self._timer.deinit()
+        if not self._running:
+            self._running = False
+            self._timer.deinit()
 
     def _test_task(self, t):
         self._pending = False
@@ -68,10 +82,12 @@ class Scanner:
 #           start = time.ticks_ms()
 #           distances = self._radiozoa.get_distances()
             distances = tuple(
-                v if v is not None else Scanner.OUT_OF_RANGE
+                v if v is not None else Sensor.OUT_OF_RANGE
                 for v in self._radiozoa.get_distances()
             )
             self._lower, self._upper = distances[:4], distances[4:]
+            self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
+            self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
 #           recompose to 8
 #           self._distances = self._lower + self._upper
 #           print('type: {}; length: {}'.format(type(distances), len(distances)))
@@ -79,7 +95,7 @@ class Scanner:
 #           print('poll: {}ms elapsed.'.format(elapsed_ms))
             for index, dist in enumerate(distances):
                 cardinal = Cardinal.from_id(index)
-                color = self._color_for_distance(dist)
+                color = self._color_for_distance(cardinal, dist)
 #               if cardinal is NORTH:
 #                   print('cardinal: {}; distance: {}mm; pixel: {}; color: {}'.format(cardinal.name, dist, cardinal.pixel, color))
                 self._ring.set_color(cardinal.pixel - 1, color)
@@ -96,8 +112,8 @@ class Scanner:
                 print(e)
                 pass
 
-    def _color_for_distance(self, distance):
-        if distance == None or distance > self._max_distance_mm:
+    def _color_for_distance(self, cardinal, distance):
+        if distance is None or distance > self._max_distance_mm:
             return (0, 0, 0)  # black (off)
         if distance <= self._min_distance_mm:
             return (255, 0, 0)  # red

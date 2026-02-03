@@ -29,7 +29,7 @@ for mod in ['main', 'configure', 'i2c_scanner', 'radiozoa_config']:
 class Configure:
     def __init__(self):
         self._log = Logger('configure', level=Level.INFO)
-        self._blinker = Blinker(50, 250)
+        self._blinker = Blinker(on_ms=50, off_ms=250)
         self._scanner = I2CScanner(i2c_bus=1)
         self._default_i2c_address = 0x29
         self._devices = []

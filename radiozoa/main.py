@@ -7,33 +7,50 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-29
+# modified: 2026-02-01
 #
 # I2C1:  SCL=PB6   SDA=PB7
 # I2C2:  SCL=PB10  SDA=PB11
 
-#                             ⛔ UNUSED: use start.py 
+I2C_ID        = 0
+I2C_ADDRESS   = 0x47
+RELOAD        = True
+USE_BLINKER   = False
+USE_I2C_SLAVE = True
+AUTOSTART_RADIOZOA = True
 
 import sys
 import time
-import stm
-from pyb import Pin, Timer
+import gc
+from colorama import Fore, Style
 
 from colors import*
 from controller import Controller
 from blinker import Blinker
 
-# force module reload
-for mod in ['main', 'i2c_slave', 'controller']:
-    if mod in sys.modules:
-        del sys.modules[mod]
+if RELOAD:
+    # force module reload
+    for mod in ['main', 'device', 'i2c_slave', 'controller']:
+        if mod in sys.modules:
+            del sys.modules[mod]
+    gc.collect()
+
+def get_slave():
+    try:
+        print('🤢 a.')
+#       from i2c_slave import I2CSlave    # IRQ based
+        from i2c_slave_mem import I2CSlave # memory-based
+        print('🤢 b. setting up I2C slave on I2C{} at address 0x{:02X}…'.format(I2C_ID, I2C_ADDRESS))
+        # set up I2C slave
+        slave = I2CSlave(i2c_id=I2C_ID, i2c_address=I2C_ADDRESS)
+        print('🤢 c. ready.')
+        return slave
+    except Exception as e:
+        print(Fore.RED + '{} raised creating I2C slave: {}'.format(type(e), e) + Style.RESET_ALL)
+        sys.print_exception(e)
+        raise
 
 def start():
-
-    USE_BLINKER   = False
-    USE_TIMER5    = False
-    USE_I2C_SLAVE = False
-    AUTOSTART_RADIOZOA = True
 
     blinker       = None
     timer5        = None
@@ -44,24 +61,15 @@ def start():
         controller = Controller()
 
         if USE_BLINKER:
-            blinker = Blinker(50, 1950)
-
-        if AUTOSTART_RADIOZOA:
-            controller.process('radiozoa start')
-
-        if USE_TIMER5:
-            # set up a 2Hz timer to call the controller's step()
-            timer5 = Timer(5)
-            timer5.init(freq=2,
-                        callback=controller.step,
-                        hard=False)
+            blinker = Blinker(on_ms=50, off_ms=1950)
 
         if USE_I2C_SLAVE:
-           #from i2c_slave import I2CSlave    # IRQ based
-            from i2c_slave_mem import I2CSlave # memory-based
+#           from i2c_slave import I2CSlave    # IRQ based
+#           from i2c_slave_mem import I2CSlave # memory-based
+#           slave = I2CSlave(i2c_id=I2C_ID, i2c_address=I2C_ADDRESS)
 
             # set up I2C slave
-            slave = I2CSlave(i2c_id=2, i2c_address=0x45)
+            slave = get_slave()
             slave.add_callback(controller.process)
             controller.set_slave(slave)
             slave.enable()
@@ -74,6 +82,9 @@ def start():
                 controller.tick(delta_ms)
                 slave.check_and_process()
                 time.sleep_ms(1)
+
+        if AUTOSTART_RADIOZOA:
+            controller.process('radiozoa start')
 
     except KeyboardInterrupt:
         print('\nCtrl-C caught; exiting…')

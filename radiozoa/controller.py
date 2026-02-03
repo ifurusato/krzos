@@ -6,13 +6,17 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-03
+# modified: 2026-02-01
 
 import sys
 import time
 import math, random
-from pyb import LED, Timer
+#from machine import LED
+from machine import Timer
 from machine import RTC
+
+import neopixel
+import tinys3
 
 from colors import*
 from pixel import Pixel
@@ -22,19 +26,14 @@ from radiozoa_sensor import RadiozoaSensor
 
 class Controller:
     STRIP_PIN = 'B12'
-    RING_PIN  = 'B14'
+    RING_PIN  = 44 #'B14'
     '''
     A controller for command strings received from the I2CSlave.
     '''
     def __init__(self):
         self._slave = None
-        self._scanner = None
+        self._sensor = None
         self._radiozoa = None
-        # blink support
-        self._enable_blink    = False
-        self._blink_index     = -1
-        self._blink_direction = 1
-        self._blink_color     = COLOR_TANGERINE
         # odometry heartbeat feature
         self._heartbeat_enabled     = True
         self._heartbeat_on_time_ms  = 50
@@ -71,16 +70,16 @@ class Controller:
             'grey': self._grey,
             'dark': self._dark
         }
-        # instantiate ring, strip & odometer
-        self._strip = Pixel(pin=Controller.STRIP_PIN, pixel_count=8, brightness=0.1)
+        # neopixel (née LED) support
+        self._pixel = Pixel(pin=tinys3.RGB_DATA, pixel_count=1)
+#       tinys3.set_pixel_power(1)
+        # instantiate ring
         self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
         self.reset_ring()
         self._last_update_ts  = self._get_time()
-        self._timer3 = Timer(3)
-        self._timer3.init(freq=24, callback=self._action, hard=False)
-        # LED support
-        self._led = LED(1)
-        self._timer7 = Timer(7)
+        self._timer0 = Timer(0)
+        self._timer1 = Timer(1)
+        self._timer1.init(freq=24, mode=Timer.PERIODIC, callback=self._action)
         print('ready.')
 
     @property
@@ -95,14 +94,18 @@ class Controller:
         '''
         Initialise the Radiozoa sensor.
         '''
-        config = Configure()
-        if config.configure():
-            from scanner import Scanner
+        try:
+            config = Configure()
+            if config.configure():
+                from sensor import Sensor
 
-            self._radiozoa = RadiozoaSensor()
-            self._scanner = Scanner(controller=self)
-        else:
-            print('fail.')
+                self._radiozoa = RadiozoaSensor()
+                self._sensor = Sensor(controller=self)
+            else:
+                print('fail.')
+        except Exception as e:
+            print("ERROR: {} raised by radiozoa_init: {}".format(type(e), e))
+            sys.print_exception()
 
     def _radiozoa_start(self):
         if not self._radiozoa:
@@ -110,24 +113,24 @@ class Controller:
             time.sleep_ms(250)
         if self._radiozoa:
             self._radiozoa.start_ranging()
-            self._scanner.enable()
+            self._sensor.enable()
         else:
             print('failed to start: radiozoa not configured.')
 
     def _radiozoa_stop(self):
         if self._radiozoa:
-            self._scanner.disable()
+            self._sensor.disable()
             self._radiozoa.stop_ranging()
         else:
             print('failed to stop: radiozoa not configured.')
 
     def _led_pulse(self, duration_ms=20):
-        self._led.on()
-        self._timer7.deinit()
-        self._timer7.init(period=duration_ms, callback=self._off)
+        self._led_on()
+        self._timer0.deinit()
+        self._timer0.init(period=duration_ms, mode=Timer.PERIODIC, callback=self._off)
 
     def _off(self, timer):
-        self._led.off()
+        self._led_off()
 
     def set_slave(self, slave):
         self._slave = slave
@@ -152,10 +155,7 @@ class Controller:
                 self._heartbeat_timer = 0
 
     def step(self, t):
-        if self._enable_blink:
-            self.blink()
-        else:
-            self._led_pulse()
+        self._led_pulse()
 
     def heading_to_pixel(self, heading_deg):
         pixel = round((180 + heading_deg) / 15) % 24
@@ -197,6 +197,7 @@ class Controller:
             self._ring.set_color(index, self._ring_model[rotated_index].color)
 
     def set_ring_color(self, index, color):
+#       print("set ring {} color to: {}".format(index, color))
         actual_index = (index + self._ring_offset) % 24
         self._ring_model[actual_index].base_color = color
         self._ring_model[actual_index].color = color.rgb
@@ -253,24 +254,6 @@ class Controller:
             pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
         self.update_ring()
 
-    def reset_strip(self):
-        for index in range(8):
-            self._strip.set_color(index, COLOR_BLACK)
-
-    def blink(self):
-        if self._enable_blink:
-            self._led.off()
-            self._strip.set_color(index=(0 if self._blink_index < 0 else self._blink_index), color=COLOR_BLACK)
-            time.sleep_ms(50)
-            # update index for next time
-            self._blink_index += self._blink_direction
-            self._strip.set_color(index=self._blink_index, color=self._blink_color)
-            # bounce at the ends
-            if self._blink_index >= 7:
-                self._blink_direction = -1
-            elif self._blink_index <= 0:
-                self._blink_direction = 1
-
     def _parse_timestamp(self, ts):
         year    = int(ts[0:4])
         month   = int(ts[4:6])
@@ -293,11 +276,18 @@ class Controller:
             print('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
             RTC().datetime(self._parse_timestamp(timestamp))
             print('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
-            self._blink_color = COLOR_AMBER
             return 'ACK'
         except Exception as e:
             print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
             return 'ERR'
+
+    def _led_on(self):
+#       self._led.on()
+        self._pixel.set_color(0, COLOR_RED)
+
+    def _led_off(self):
+#       self._led.off()
+        self._pixel.set_color(0, COLOR_BLACK)
 
     def process(self, cmd):
         '''
@@ -319,7 +309,7 @@ class Controller:
             close
         '''
         try:
-            print("cmd: '{}'".format(cmd))
+#           print("cmd: '{}'".format(cmd))
             parts = cmd.lower().split()
             if len(parts) == 0:
                 return 'ERR'
@@ -328,6 +318,7 @@ class Controller:
             _arg2 = parts[2] if len(parts) > 2 else None
             _arg3 = parts[3] if len(parts) > 3 else None
             _arg4 = parts[4] if len(parts) > 4 else None
+#           print("cmd: '{}'; arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, _arg0, _arg1, _arg2, _arg3, _arg4))
 
             if _arg0 == "time":
 #               print('time: {}, {}'.format(_arg1, _arg2))
@@ -350,73 +341,21 @@ class Controller:
                 return 'ERR'
 
             elif _arg0 == "lower":
-                print("executing lower...")
-                if not self._radiozoa:
-                    self._radiozoa_init()
-                    time.sleep_ms(250)
-                    self._radiozoa_start()
-                    time.sleep_ms(50)
-                if self._scanner:
-                    data = "7777 7777 7777 7777"
+                if self._sensor:
                     try:
-                        data = " ".join("{:04d}".format(v) for v in self._scanner.lower)
+                        return self._sensor.lower_fmt
                     except Exception as e:
                         print('{} raised by lower: {}'.format(type(e), e))
-                        data = "3333 3333 3333 3333"
-                    finally:
-                        print("returning lower: {}".format(data))
-                        return data
+                        return "7777 7777 7777 7777"
                 return 'ERR'
 
             elif _arg0 == "upper":
-                print("executing upper...")
-                if not self._radiozoa:
-                    self._radiozoa_init()
-                    time.sleep_ms(250)
-                    self._radiozoa_start()
-                    time.sleep_ms(50)
-                if self._scanner:
-                    data = "7777 7777 7777 7777"
+                if self._sensor:
                     try:
-                        data = " ".join("{:04d}".format(v) for v in self._scanner.upper)
+                        return self._sensor.upper_fmt
                     except Exception as e:
                         print('{} raised by upper: {}'.format(type(e), e))
-                        data = "3333 3333 3333 3333"
-                    finally:
-                        print("returning upper: {}".format(data))
-                        return data
-                return 'ERR'
-
-            elif _arg0 == "strip":
-                if self._strip:
-                    if _arg1 == 'clear':
-                        self.reset_strip()
-                        return 'ACK'
-                    elif _arg1 == 'all':
-                        # e.g., strip all blue
-                        if _arg2 == 'off':
-                            self.reset_strip()
-                            return 'ACK'
-                        else:
-                            color = self.get_color(_arg2, _arg3)
-                            for idx in range(8):
-                                self._strip.set_color(idx, color)
-                            return 'ACK'
-                    else:
-                        # e.g.:  strip 3 blue
-                        index = int(_arg1) - 1
-                        if 0 <= index <= 7:
-                            color = self.get_color(_arg2, _arg3)
-                            if color:
-                                self._strip.set_color(index,color)
-                                return 'ACK'
-                        else:
-                            print("index value {} out of bounds (1-8).".format(index))
-                            return 'ERR'
-
-                    print("ERROR: could not process input: '{}'".format(cmd))
-                else:
-                    print('ERROR: no LED strip available.')
+                        return "7777 7777 7777 7777"
                 return 'ERR'
 
             elif _arg0 == "ring":
@@ -427,13 +366,16 @@ class Controller:
                             self.reset_ring()
                             return 'ACK'
                         elif _arg1 == 'all':
-                            if _arg2 == 'off':
+                            if _arg2 == 'off' or _arg2 == 'clear':
                                 self.reset_ring()
                                 return 'ACK'
                             else:
                                 color = self.get_color(_arg2, _arg3)
+                                if not color:
+                                    print("ERROR: could not find color: arg2: '{}'; arg3: '{}'".format(_arg2, _arg3))
+                                    return 'ERR'
                                 for idx in range(24):
-                                    self.set_ring_color(index, color)
+                                    self.set_ring_color(idx, color)
                                 return 'ACK'
                         else:
                             index = int(_arg1) - 1
@@ -469,8 +411,8 @@ class Controller:
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
-                            self._timer3.deinit()
-                            self._timer3.init(freq=hz, callback=self._action, hard=False)
+                            self._timer1.deinit()
+                            self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
                             return 'ACK'
                         else:
                             return 'ERR'
@@ -493,8 +435,8 @@ class Controller:
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
-                            self._timer3.deinit()
-                            self._timer3.init(freq=hz, callback=self._action, hard=False)
+                            self._timer1.deinit()
+                            self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
                             return 'ACK'
                         return 'ERR'
                     elif _arg1 == 'pixels':
@@ -559,20 +501,6 @@ class Controller:
                     print("ERROR: unrecognised argument: '{}'".format(_arg1))
                     return 'ERR'
 
-            elif _arg0 == "blink":
-                if _arg1 == 'on':
-                    self._enable_blink = True
-                    return 'ACK'
-                elif _arg1 == 'off':
-                    self._enable_blink = False
-                    self.reset_strip()
-                    self._blink_index = -1
-                    self._blink_direction = 1
-                    return 'ACK'
-                else:
-                    print("ERROR: unrecognised argument: '{}'".format(_arg1))
-                    return 'ERR'
-
             elif _arg0 == "rgb":
                 # e.g., rgb 3 130 40 242
                 index = int(_arg1)
@@ -596,9 +524,7 @@ class Controller:
             elif _arg0 == "close":
                 self._enable_rotate     = False
                 self._heartbeat_enabled = False
-                self._enable_blink      = False
                 self.reset_ring()
-                self.reset_strip()
                 return 'ACK'
 
             # get/set (data request)

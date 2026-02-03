@@ -1,3 +1,5 @@
+# micropython partial port of traceback
+
 import sys
 
 def format_tb(tb, limit):
@@ -19,3 +21,4 @@ def print_exc(limit=None, file=None, chain=True):
 
 def format_exc(limit=None, chain=True):
     return "".join(format_exception(*sys.exc_info(), limit=limit, chain=chain))
+

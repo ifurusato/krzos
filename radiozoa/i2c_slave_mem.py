@@ -7,23 +7,26 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-12-31
+# modified: 2026-02-01
 #
 # I2C slave using single memory buffer for STM32F405
 
 import sys
-from machine import I2CTarget
+from machine import Pin, I2CTarget
 
 try:
     from upy.message_util import pack_message, unpack_message
 except ImportError:
     from message_util import pack_message, unpack_message
 
+from colorama import Fore, Style
+
 __I2C_ID      = 1
 __I2C_ADDRESS = 0x45
 _I2C_PINS     = {
-    1: ('B6',  'B7'),
-    2: ('B10', 'B11'),
+    0: (7,  6),        # ESP32
+    1: ('B6',  'B7'),  # STM32F405
+    2: ('B10', 'B11'), # STM32F405
 }
 
 class I2CSlave:
@@ -31,10 +34,12 @@ class I2CSlave:
     Single buffer memory-based I2C slave.
     '''
     def __init__(self, i2c_id=None, i2c_address=None):
-        self._i2c_id      = i2c_id if i2c_id else __I2C_ID
+        self._i2c_id      = i2c_id if i2c_id is not None else __I2C_ID
         self._i2c_address = i2c_address if i2c_address else __I2C_ADDRESS
-        self._i2c_scl_pin, self._i2c_sda_pin = _I2C_PINS[self._i2c_id]
-        print('I2C slave configured for SDA on pin {}, SCL on pin {}'.format(self._i2c_sda_pin, self._i2c_scl_pin))
+        _i2c_scl_pin, _i2c_sda_pin = _I2C_PINS[self._i2c_id]
+        self._scl = Pin(_i2c_scl_pin)
+        self._sda = Pin(_i2c_sda_pin)
+        print('I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin))
         self._i2c = None
         self._mem_buf = bytearray(64)
         self._rx_copy = bytearray(64)
@@ -46,9 +51,10 @@ class I2CSlave:
             self._mem_buf[i] = init_msg[i]
 
     def enable(self):
-        self._i2c = I2CTarget(self._i2c_id, self._i2c_address, mem=self._mem_buf)
+        i2c_id = self._i2c_id
+        self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf, scl=self._scl, sda=self._sda)
         self._i2c.irq(self._irq_handler, trigger=I2CTarget.IRQ_END_WRITE, hard=False)
-        print('I2C slave enabled on I2C{} address {:#04x}'.format(self._i2c_id, self._i2c_address))
+        print(Fore.GREEN + 'I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address) + Style.RESET_ALL)
 
     def disable(self):
         if self._i2c:

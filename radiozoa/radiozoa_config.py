@@ -49,9 +49,9 @@ class RadiozoaConfig:
         Configure all XSHUT pins as outputs based on Device pseudo-enum.
         '''
         for dev in Device.all():
-            pin = Pin(dev.xshut, Pin.OUT_PP)
+            pin = Pin(dev.xshut, Pin.OUT) # on pyb, OUT_PP
             self._xshut_pins[dev.index] = pin
-            self._log.info("configured pin {} for sensor {} as output.".format(dev.xshut, dev.label))
+            self._log.info(Fore.WHITE + "configured XSHUT pin {} for sensor {} on 0x{:02X} as output.".format(dev.xshut, dev.label, dev.i2c_address))
 
     def close(self):
         '''
@@ -103,10 +103,10 @@ class RadiozoaConfig:
         pin = self._xshut_pins.get(device_index)
         if pin:
             if value:
-                pin.high()
+                pin.on() # pin.high()
                 self._log.debug(Style.DIM + "set device {} pin HIGH.".format(device_index))
             else:
-                pin.low()
+                pin.off() # pin.low()
                 self._log.debug(Style.DIM + "set device {} pin LOW.".format(device_index))
         else:
             raise RuntimeError('pin not available for device {}.'.format(device_index))

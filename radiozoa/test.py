@@ -1,22 +1,30 @@
 
 import sys
-import pyb
+import time
+
+from cardinal import Cardinal
+from controller import Controller
 
 # auto-clear: remove cached modules to force reload
 for mod in ['test']:
     if mod in sys.modules:
         del sys.modules[mod]
 
-# initialize I2C1 as controller (master)
-i2c = pyb.I2C(2, pyb.I2C.CONTROLLER)
+try:
 
-# Scan for devices
-devices = i2c.scan()
+    controller = Controller()
 
-print("I2C devices found:", [hex(d) for d in devices])
+    for cardinal in Cardinal._registry:
+        print('cardinal: {}; pixel: {}'.format(cardinal.name, cardinal.pixel))
+        controller.process('ring {} orange'.format(cardinal.pixel))
+        time.sleep(2.0)
+        controller.process('ring {} black'.format(cardinal.pixel))
+        time.sleep(0.2)
 
-if 0x38 in devices:
-    print("✅ Device found at address 0x38")
-else:
-    print("❌ No device found at address 0x38")
+except KeyboardInterrupt:
+    print("Ctrl-C caught.")
+except Exception as e:
+    print("{} raised: {}".format(type(e), e))
+finally: 
+    print("complete.")
 

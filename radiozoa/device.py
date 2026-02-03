@@ -7,7 +7,7 @@
 #
 # author:   Murray Altheim
 # created:  2026-01-27
-# modified: 2026-01-27
+# modified: 2026-02-01
 #
 # Instances defined at bottom.
 
@@ -102,13 +102,13 @@ class Device:
 
 # STM32F405 Radiozoa Pinout
 #             XS   DIR   ADDR   PIN    WIRE COLOR
-N0  = Device( 0,  'N0',  0x30, 'A6') # red/grey
-NE1 = Device( 1,  'NE1', 0x31, 'B0') # red/white
-E2  = Device( 2,  'E2',  0x32, 'A5') # green/grey
-SE3 = Device( 3,  'SE3', 0x33, 'C5') # green/white
-S4  = Device( 4,  'S4',  0x34, 'A4') # blue/grey
-SW5 = Device( 5,  'SW5', 0x35, 'C4') # blue/white
-W6  = Device( 6,  'W6',  0x36, 'A3') # grey
-NW7 = Device( 7,  'NW7', 0x37, 'A7') # white
+N0  = Device( 0,  'N0',  0x30,  1) # red/grey
+NE1 = Device( 1,  'NE1', 0x31, 35) # red/white
+E2  = Device( 2,  'E2',  0x32,  2) # green/grey
+SE3 = Device( 3,  'SE3', 0x33, 37) # green/white
+S4  = Device( 4,  'S4',  0x34,  3) # blue/grey
+SW5 = Device( 5,  'SW5', 0x35, 36) # blue/white
+W6  = Device( 6,  'W6',  0x36,  4) # grey
+NW7 = Device( 7,  'NW7', 0x37, 34) # white
 
 #EOF

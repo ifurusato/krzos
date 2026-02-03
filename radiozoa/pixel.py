@@ -1,26 +1,33 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2026 by Murray Altheim. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Murray Altheim
 # created:  2025-05-23
-# modified: 2025-12-30
+# modified: 2025-02-01
 
 import time
-import machine
+from machine import Pin
 from neopixel import NeoPixel
 
 class Pixel:
     def __init__(self, pin=None, pixel_count=1, color_order='GRB', brightness=0.33):
         if pin is None:
             raise ValueError('pin must be specified.')
+        elif isinstance(pin, Pin):
+            _pin = pin
+        elif isinstance(pin, int) or isinstance(pin, str):
+            _pin = Pin(pin, Pin.OUT)
+        else:
+            raise TypeError('expected Pin or int for pin specification, not {}.'.format(type(pin)))
+        print('configuring neopixel on pin {}.'.format(pin))
         self._pixel_count = pixel_count
         self._pixel_index = 0
         self._brightness = brightness
-        self._neopixel = NeoPixel(machine.Pin(pin, machine.Pin.OUT), pixel_count, color_order=color_order, brightness=brightness)
+        self._neopixel = NeoPixel(_pin, pixel_count, color_order=color_order, brightness=brightness)
         self.set_color(index=None, color=None)
         print('neopixel ready on pin {}.'.format(pin))
 
