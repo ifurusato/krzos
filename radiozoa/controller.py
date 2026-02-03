@@ -352,6 +352,7 @@ class Controller:
                 return 'ERR'
 
             elif _arg0 == "lower":
+                return "0000 1111 2222 3333"
                 if self._sensor:
                     try:
                         _exit_color = COLOR_DARK_GREEN
@@ -363,6 +364,7 @@ class Controller:
                 return 'ERR'
 
             elif _arg0 == "upper":
+                return "4444 5555 6666 7777"
                 if self._sensor:
                     try:
                         _exit_color = COLOR_DARK_GREEN
@@ -372,6 +374,9 @@ class Controller:
                         return "7777 7777 7777 7777"
                 _exit_color = COLOR_RED
                 return 'ERR'
+
+            elif _arg0 == "complete":
+                return "0000 1111 2222 3333 4444 5555 6666 7777"
 
             elif _arg0 == "ring":
                 if self._ring:

@@ -28,6 +28,7 @@ _I2C_PINS     = {
     1: ('B6',  'B7'),  # STM32F405
     2: ('B10', 'B11'), # STM32F405
 }
+_MEM_LENGTH = 64
 
 class I2CSlave:
     '''
@@ -41,8 +42,8 @@ class I2CSlave:
         self._sda = Pin(_i2c_sda_pin)
         print('I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin))
         self._i2c = None
-        self._mem_buf = bytearray(64)
-        self._rx_copy = bytearray(64)
+        self._mem_buf = bytearray(_MEM_LENGTH)
+        self._rx_copy = bytearray(_MEM_LENGTH)
         self._callback = None
         self._new_cmd = False
         # initialize with ACK
