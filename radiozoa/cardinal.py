@@ -72,6 +72,5 @@ SOUTH     = Cardinal(4, 'S',  'south',       1, 180, π )
 SOUTHWEST = Cardinal(5, 'SW', 'south-west',  4, 225, π * 1.25 )
 WEST      = Cardinal(6, 'W',  'west',        7, 270, π * 1.50 )
 NORTHWEST = Cardinal(7, 'NW', 'north-west', 10, 315, π * 1.75 )
-UNKNOWN   = Cardinal(8, 'U',  'unknown',    -1,  -1, -1.0 )
 
 #EOF
