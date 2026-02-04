@@ -16,6 +16,7 @@ import time
 from machine import Pin, I2CTarget
 
 from colorama import Fore, Style
+from logger import Logger, Level
 from message_util import pack_message, unpack_message
 
 __I2C_ID      = 1
@@ -36,12 +37,13 @@ class I2CSlave:
     Memory-based I2C slave with proper separation of RX and TX data.
     '''
     def __init__(self, i2c_id=None, i2c_address=None):
+        self._log = Logger('i2c_slave', level=Level.INFO)
         self._i2c_id      = i2c_id if i2c_id is not None else __I2C_ID
         self._i2c_address = i2c_address if i2c_address else __I2C_ADDRESS
         _i2c_scl_pin, _i2c_sda_pin = _I2C_PINS[self._i2c_id]
         self._scl = Pin(_i2c_scl_pin)
         self._sda = Pin(_i2c_sda_pin)
-        print(Fore.CYAN + Style.DIM + 'I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin) + Style.RESET_ALL)
+        self._log.info(Style.DIM + 'I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin))
         self._i2c = None
         self._mem_buf = bytearray(_MEM_LENGTH)
         self._rx_copy = bytearray(_MEM_LENGTH)
@@ -52,13 +54,13 @@ class I2CSlave:
         init_msg = pack_message("ACK")
         for i in range(len(init_msg)):
             self._mem_buf[i] = init_msg[i]
-        print(Fore.CYAN + 'I2C slave ready.' + Style.RESET_ALL)
+        self._log.info('I2C slave ready.')
 
     def enable(self):
         i2c_id = self._i2c_id
         self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf, scl=self._scl, sda=self._sda)
         self._i2c.irq(self._irq_handler, trigger=I2CTarget.IRQ_END_WRITE, hard=False)
-        print(Fore.GREEN + 'I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address) + Style.RESET_ALL)
+        self._log.info(Fore.GREEN + 'I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address))
 
     def disable(self):
         if self._i2c:
@@ -92,7 +94,7 @@ class I2CSlave:
                 else:
                     resp_bytes = _PACKED_ACK
             except Exception as e:
-                print("error: {}".format(e))
+                self._log.error("{} raised: {} [1]".format(type(e), e))
                 resp_bytes = _PACKED_ERR
             try:
                 for i in range(len(resp_bytes)):
@@ -100,7 +102,7 @@ class I2CSlave:
                 for i in range(len(resp_bytes), _MEM_LENGTH):
                     self._mem_buf[i] = 0
             except Exception as e:
-                print("error: {}".format(e))
+                self._log.error("{} raised: {} [2]".format(type(e), e))
             finally:
                 self._processing = False
 

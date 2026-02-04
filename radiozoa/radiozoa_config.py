@@ -19,9 +19,9 @@ from device import Device
 
 class RadiozoaConfig:
     '''
-    Configures all VL53L0X sensors on the Radiozoa sensor board to their unique I2C
-    addresses by toggling XSHUT pins and setting addresses as specified in the
-    Device pseudo-enum.
+    Configures all VL53L0X sensors on the Radiozoa sensor board to their unique
+    I2C addresses by toggling XSHUT pins and setting addresses as specified in
+    the Device pseudo-enum.
     '''
     def __init__(self, i2c_bus=1, level=Level.INFO):
         self._log = Logger('radiozoa-conf', level=level)

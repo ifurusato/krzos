@@ -26,7 +26,6 @@ from colorama import Fore, Style
 
 from colors import*
 from controller import Controller
-from blinker import Blinker
 
 if RELOAD:
     # force module reload
@@ -67,6 +66,8 @@ def start():
         controller = Controller()
 
         if USE_BLINKER:
+            from blinker import Blinker
+
             blinker = Blinker(on_ms=50, off_ms=1950)
 
         if USE_I2C_SLAVE:

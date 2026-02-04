@@ -36,7 +36,7 @@ class Blinker:
         self.off_ticks = off_ms
 
     def _led_on(self):
-        self._pixel.set_color(0, COLOR_RED)
+        self._pixel.set_color(0, COLOR_CYAN)
 
     def _led_off(self):
         self._pixel.set_color(0, COLOR_BLACK)

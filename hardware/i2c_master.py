@@ -23,6 +23,7 @@ from upy.message_util import pack_message, unpack_message
 class I2CMaster(Component):
     I2C_BUS_ID  = 1     # the I2C bus number; on a Raspberry Pi the default is 1
     I2C_ADDRESS = 0x43  # the default I2C address
+    WRITE_READ_DELAY_SEC = 0.010 # this may need adjusting for reliability
     '''
     Abstract base class for an I2C master controller.
     '''
@@ -40,7 +41,6 @@ class I2CMaster(Component):
         self._i2c_address = i2c_address if i2c_address else I2CMaster.I2C_ADDRESS
         self._timeset = timeset
         self._fail_on_exception = False
-        self._write_read_delay_s = 0.010 # this may need adjusting for reliability
         try:
             self._bus = smbus2.SMBus(self._i2c_bus_id)
             self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus_id, self._i2c_address))
@@ -64,7 +64,7 @@ class I2CMaster(Component):
         msg_with_addr = [0x00] + list(out_msg)
         write_msg = smbus2.i2c_msg.write(self._i2c_address, msg_with_addr)
         self._bus.i2c_rdwr(write_msg)
-        time.sleep(self._write_read_delay_s)
+        time.sleep(I2CMaster.WRITE_READ_DELAY_SEC)
         # write register address 0, then read
         write_addr = smbus2.i2c_msg.write(self._i2c_address, [0x00])
         read_msg = smbus2.i2c_msg.read(self._i2c_address, 64)

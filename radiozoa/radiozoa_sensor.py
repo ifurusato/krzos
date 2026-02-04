@@ -31,7 +31,7 @@ class RadiozoaSensor:
     FAR_THRESHOLD   = 1000
 
     def __init__(self, i2c_bus=1, level=Level.INFO):
-        self._log = Logger('radiozoa-sensor', level=level)
+        self._log = Logger('radiozoa', level=level)
         self._i2c_bus_number = i2c_bus
         self._i2c = I2C(i2c_bus)
         self._sensors = {}
