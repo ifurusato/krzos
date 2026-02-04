@@ -9,15 +9,15 @@
 # created:  2025-11-16
 # modified: 2026-01-03
 
-from hardware.stm32_controller import Stm32Controller
+from hardware.radiozoa_controller import RadiozoaController
 
 I2C_ADDRESS = 0x47
 ALWAYS_DATA_REQUEST = False
 
 def main():
     try:
-#       master = I2CMaster(Stm32Controller.NAME, i2c_address=0x45, timeset=True)
-        master = Stm32Controller(i2c_address=I2C_ADDRESS)
+#       master = I2CMaster(RadiozoaController.NAME, i2c_address=0x45, timeset=True)
+        master = RadiozoaController(i2c_address=I2C_ADDRESS)
         master.enable()
         while True:
             user_msg = input('Enter command string to send ("quit" to exit): ')

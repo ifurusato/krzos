@@ -19,7 +19,7 @@ kros:
     component:
         enable_external_clock:             True            # if True use external clock, ignoring loop delay value
         enable_vl53l5cx:                   True            # if True enable VL53L5CX ToF sensor
-        enable_stm32_controller:           True            # enable STM32F405 for neopixel strip and ring
+        enable_radiozoa_controller:        True            # enable Radiozoa controller for neopixel strip and ring
         enable_tinyfx_controller:          True            # enable Tiny FX for sounds and lighting fx
         enable_gamepad:                    True            # enable gamepad support
         enable_icm20948:                  False            # enable ICM20948 IMU
@@ -503,7 +503,7 @@ kros:
         tinyfx-controller:
             i2c_bus_id:                       1
             i2c_address:                   0x43
-        stm32-controller:
+        radiozoa-controller:
             i2c_bus_id:                       1
             i2c_address:                   0x45
         player:                                            # Tiny FX sound player

@@ -352,30 +352,37 @@ class Controller:
                 return 'ERR'
 
             elif _arg0 == "lower":
+                _exit_color = COLOR_DARK_GREEN
                 return "0000 1111 2222 3333"
-                if self._sensor:
-                    try:
-                        _exit_color = COLOR_DARK_GREEN
-                        return self._sensor.lower_fmt
-                    except Exception as e:
-                        print('{} raised by lower: {}'.format(type(e), e))
-                        return "7777 7777 7777 7777"
-                _exit_color = COLOR_RED
-                return 'ERR'
+#               if self._sensor:
+#                   try:
+#                       _exit_color = COLOR_DARK_GREEN
+#                       return self._sensor.lower_fmt
+#                   except Exception as e:
+#                       print('{} raised by lower: {}'.format(type(e), e))
+#                       return "7777 7777 7777 7777"
+#               _exit_color = COLOR_RED
+#               return 'ERR'
 
             elif _arg0 == "upper":
+                _exit_color = COLOR_DARK_GREEN
                 return "4444 5555 6666 7777"
-                if self._sensor:
-                    try:
-                        _exit_color = COLOR_DARK_GREEN
-                        return self._sensor.upper_fmt
-                    except Exception as e:
-                        print('{} raised by upper: {}'.format(type(e), e))
-                        return "7777 7777 7777 7777"
-                _exit_color = COLOR_RED
-                return 'ERR'
+#               if self._sensor:
+#                   try:
+#                       _exit_color = COLOR_DARK_GREEN
+#                       return self._sensor.upper_fmt
+#                   except Exception as e:
+#                       print('{} raised by upper: {}'.format(type(e), e))
+#                       return "7777 7777 7777 7777"
+#               _exit_color = COLOR_RED
+#               return 'ERR'
 
-            elif _arg0 == "complete":
+            elif _arg0 == "short":
+                _exit_color = COLOR_DARK_GREEN
+                return "0000 1111"
+
+            elif _arg0 == "long":
+                _exit_color = COLOR_DARK_GREEN
                 return "0000 1111 2222 3333 4444 5555 6666 7777"
 
             elif _arg0 == "ring":
