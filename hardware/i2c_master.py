@@ -40,6 +40,7 @@ class I2CMaster(Component):
         self._i2c_address = i2c_address if i2c_address else I2CMaster.I2C_ADDRESS
         self._timeset = timeset
         self._fail_on_exception = False
+        self._write_read_delay_s = 0.010 # this may need adjusting for reliability
         try:
             self._bus = smbus2.SMBus(self._i2c_bus_id)
             self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus_id, self._i2c_address))
@@ -63,7 +64,7 @@ class I2CMaster(Component):
         msg_with_addr = [0x00] + list(out_msg)
         write_msg = smbus2.i2c_msg.write(self._i2c_address, msg_with_addr)
         self._bus.i2c_rdwr(write_msg)
-        time.sleep(0.008) # TOO SLOW! 0.003 if not using radiozoa
+        time.sleep(self._write_read_delay_s)
         # write register address 0, then read
         write_addr = smbus2.i2c_msg.write(self._i2c_address, [0x00])
         read_msg = smbus2.i2c_msg.read(self._i2c_address, 64)

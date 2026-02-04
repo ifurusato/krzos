@@ -17,7 +17,6 @@ I2C_ADDRESS   = 0x47
 RELOAD        = True
 USE_BLINKER   = False
 USE_I2C_SLAVE = True
-AUTOSTART_RADIOZOA = True
 
 import sys
 import time
@@ -76,20 +75,8 @@ def start():
             controller.set_slave(slave)
             slave.enable()
             last_time = time.ticks_ms()
-
-            # run event loop - sensor task will be created later with "radiozoa start"
+            # run event loop
             asyncio.run(i2c_loop(controller, slave))
-
-#           while True:
-#               current_time = time.ticks_ms()
-#               delta_ms = time.ticks_diff(current_time, last_time)
-#               last_time = current_time
-#               controller.tick(delta_ms)
-#               slave.check_and_process()
-#               time.sleep_ms(1)
-
-        if AUTOSTART_RADIOZOA:
-            controller.process('radiozoa start')
 
     except KeyboardInterrupt:
         print('\nCtrl-C caught; exiting…')

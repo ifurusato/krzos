@@ -11,7 +11,6 @@
 import sys
 import time
 import math, random
-#from machine import LED
 from machine import Timer
 from machine import RTC
 from colorama import Fore, Style
@@ -33,14 +32,14 @@ _PACKED_ERR  = pack_message('ERR')
 _PACKED_PING = pack_message('PING')
 
 class Controller:
-    STRIP_PIN = 'B12'
-    RING_PIN  = 44 #'B14'
+    RING_PIN = 44
     '''
     A controller for command strings received from the I2CSlave.
     '''
     def __init__(self):
-        self._slave = None
-        self._sensor = None
+        self._startup_ms = time.ticks_ms()
+        self._slave    = None
+        self._sensor   = None
         self._radiozoa = None
         # odometry heartbeat feature
         self._heartbeat_enabled     = False
@@ -48,6 +47,7 @@ class Controller:
         self._heartbeat_off_time_ms = 2950
         self._heartbeat_timer = 0
         self._heartbeat_state = False
+        self._stop_at = None
         # rotation
         self._ring_offset     = 0
         self._rotate_direction = 1 # 1 or -1
@@ -89,6 +89,8 @@ class Controller:
         self._timer1_hz = 24
         self._timer1 = Timer(1)
         self._timer1.init(freq=self._timer1_hz, mode=Timer.PERIODIC, callback=self._action)
+        self._radiozoa_autostart = True
+        self._radiozoa_started   = False
         print(Fore.CYAN + 'controller ready.' + Style.RESET_ALL)
 
     @property
@@ -151,6 +153,18 @@ class Controller:
     def tick(self, delta_ms):
         if self._heartbeat_enabled:
             self._heartbeat(delta_ms)
+        if self._stop_at:
+            if time.ticks_diff(time.ticks_ms(), self._stop_at) >= 0:
+                self._stop_at = None
+                self._pixel.set_color(0, COLOR_BLACK)
+        if self._radiozoa_autostart and not self._radiozoa_started:
+            if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= 7000:
+                self._radiozoa_started = True
+                self.after_7_seconds()
+
+    def after_7_seconds(self):
+        print('7 SECONDS HAS PASSED.')
+        self._radiozoa_start()
 
     def _heartbeat(self, delta_ms):
         self._heartbeat_timer += delta_ms
@@ -318,8 +332,10 @@ class Controller:
             clear
             close
         '''
-        _pixel_off = True
-        _exit_color = COLOR_BLACK
+        _show_state = True
+        if _show_state:
+            self._stop_at = time.ticks_add(time.ticks_ms(), 1000)  # stop 1 second later
+        _exit_color = COLOR_BLACK # default
         self._pixel.set_color(0, COLOR_CYAN)
         try:
 #           print("cmd: '{}'".format(cmd))
@@ -415,7 +431,7 @@ class Controller:
                 return _PACKED_ERR
 
             elif _arg0 == "pixel":
-                _pixel_off = False
+                _show_state = False
                 if self._pixel:
                     if _arg1 == 'off' or _arg1 == 'clear':
                         color = COLOR_BLACK
@@ -616,7 +632,7 @@ class Controller:
             _exit_color = COLOR_RED
             return _PACKED_ERR
         finally:
-            if _pixel_off:
+            if _show_state:
                 self._pixel.set_color(0, _exit_color)
 
 #EOF
