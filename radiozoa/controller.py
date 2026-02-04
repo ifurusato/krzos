@@ -20,9 +20,16 @@ import tinys3
 
 from colors import*
 from pixel import Pixel
+from message_util import pack_message
 from pixel_state import PixelState
 from configure import Configure
 from radiozoa_sensor import RadiozoaSensor
+
+# pre-packed constant responses
+_PACKED_ACK  = pack_message('ACK')
+_PACKED_NACK = pack_message('NACK')
+_PACKED_ERR  = pack_message('ERR')
+_PACKED_PING = pack_message('PING')
 
 class Controller:
     STRIP_PIN = 'B12'
@@ -277,10 +284,10 @@ class Controller:
             RTC().datetime(self._parse_timestamp(timestamp))
             print('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
 #           print('time set.')
-            return 'ACK'
+            return _PACKED_ACK
         except Exception as e:
             print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
-            return 'ERR'
+            return _PACKED_ERR
 
     def _led_on(self):
 #       self._led.on()
@@ -317,7 +324,7 @@ class Controller:
             parts = cmd.lower().split()
             if len(parts) == 0:
                 _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
             _arg0 = parts[0]
             _arg1 = parts[1] if len(parts) > 1 else None
             _arg2 = parts[2] if len(parts) > 2 else None
@@ -329,77 +336,37 @@ class Controller:
 #               print('time: {}, {}'.format(_arg1, _arg2))
                 if _arg1 == 'set':
                     _exit_color = COLOR_DARK_GREEN
-                    return self._set_time(_arg2)
+                    return pack_message(self._set_time(_arg2))
                 elif _arg1 == 'get':
                     _exit_color = COLOR_DARK_GREEN
-                    return self._rtc_to_iso(RTC().datetime())
+                    return pack_message(self._rtc_to_iso(RTC().datetime()))
                 _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
 
             elif _arg0 == "radiozoa":
                 if _arg1 == 'init':
                     self._radiozoa_init()
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 elif _arg1 == 'start':
                     self._radiozoa_start()
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 elif _arg1 == 'stop':
                     self._radiozoa_stop()
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 _exit_color = COLOR_RED
-                return 'ERR'
-
-            elif _arg0 == "lower":
-#               return "0000 1111 2222 3333"
-                if self._sensor:
-                    try:
-                        _exit_color = COLOR_DARK_GREEN
-                        _value = self._sensor.lower_fmt
-                        print('value: {}'.format(_value))
-                        return _value
-                    except Exception as e:
-                        print('{} raised by lower: {}'.format(type(e), e))
-                        return "6666 6666 6666 6666"
-                else:
-                    print('no sensor.')
-                _exit_color = COLOR_RED
-                return 'ERR'
-
-            elif _arg0 == "upper":
-#               return "4444 5555 6666 7777"
-                if self._sensor:
-                    try:
-                        _exit_color = COLOR_DARK_GREEN
-                        _value = self._sensor.upper_fmt
-                        print('value: {}'.format(_value))
-                        return _value
-                    except Exception as e:
-                        print('{} raised by upper: {}'.format(type(e), e))
-                        return "7777 7777 7777 7777"
-                else:
-                    print('no sensor.')
-                _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
 
             elif _arg0 == "distances":
-#               return "0000 1111 2222 3333 4444 5555 6666 7777"
                 if self._sensor:
-#                   try:
-#                       _value = self._sensor.distances_fmt
-#                       print('value: {}'.format(_value))
-#                       return _value
                     _exit_color = COLOR_DARK_GREEN
-                    return self._sensor.distances_fmt
-#                   except Exception as e:
-#                       print('{} raised by distances: {}'.format(type(e), e))
-#                       return "8888 8888 8888 8888"
+                    return self._sensor.distances_packed
                 else:
                     print('no sensor.')
                 _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
 
             elif _arg0 == "ring":
                 if self._ring:
@@ -408,22 +375,22 @@ class Controller:
                         if _arg1 == 'clear':
                             self.reset_ring()
                             _exit_color = COLOR_BLACK
-                            return 'ACK'
+                            return _PACKED_ACK
                         elif _arg1 == 'all':
                             if _arg2 == 'off' or _arg2 == 'clear':
                                 self.reset_ring()
                                 _exit_color = COLOR_DARK_GREEN
-                                return 'ACK'
+                                return _PACKED_ACK
                             else:
                                 color = self.get_color(_arg2, _arg3)
                                 if not color:
                                     print("ERROR: could not find color: arg2: '{}'; arg3: '{}'".format(_arg2, _arg3))
                                     _exit_color = COLOR_RED
-                                    return 'ERR'
+                                    return _PACKED_ERR
                                 for idx in range(24):
                                     self.set_ring_color(idx, color)
                                 _exit_color = COLOR_DARK_GREEN
-                                return 'ACK'
+                                return _PACKED_ACK
                         else:
                             index = int(_arg1) - 1
                             if 0 <= index <= 23:
@@ -431,18 +398,18 @@ class Controller:
                                 if color:
                                     self.set_ring_color(index, color)
                                     _exit_color = COLOR_DARK_GREEN
-                                    return 'ACK'
+                                    return _PACKED_ACK
                             else:
                                 print("index value {} out of bounds (1-24).".format(index))
                                 _exit_color = COLOR_RED
-                                return 'ERR'
+                                return _PACKED_ERR
                         print("ERROR: could not process input: '{}'".format(cmd))
                     finally:
                         self._enable_rotate = _rotating
                 else:
                     print('ERROR: no LED ring available.')
                 _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
 
             elif _arg0 == "pixel":
                 _pixel_off = False
@@ -454,50 +421,50 @@ class Controller:
                     if not color:
                         print("ERROR: could not find color: arg1: '{}'; arg2: '{}'".format(_arg1, _arg2))
                         _exit_color = COLOR_RED
-                        return 'ERR'
+                        return _PACKED_ERR
                     self._pixel.set_color(0, color)
-                    return 'ACK'
+                    return _PACKED_ACK
                 else:
                     print('ERROR: no pixel available.')
                 _exit_color = COLOR_RED
-                return 'ERR'
+                return _PACKED_ERR
 
             elif _arg0 == "rotate":
                 if _arg1:
                     if _arg1 == 'on':
                         self._enable_rotate = True
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'off':
                         self._enable_rotate = False
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'fwd' or _arg1 == 'cw':
                         self._rotate_direction = 1
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'rev' or _arg1 == 'ccw':
                         self._rotate_direction = -1
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer1.deinit()
                             self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
                             _exit_color = COLOR_DARK_GREEN
-                            return 'ACK'
+                            return _PACKED_ACK
                         else:
                             _exit_color = COLOR_RED
-                            return 'ERR'
+                            return _PACKED_ERR
                     else:
                         shift = int(_arg1)
                         self.rotate_ring(shift)
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 else:
                     _exit_color = COLOR_RED
-                    return 'ERR'
+                    return _PACKED_ERR
 
             elif _arg0 == "theme":
                 if _arg1:
@@ -505,20 +472,20 @@ class Controller:
                         self._init_theme()
                         self._enable_theme = True
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'off':
                         self._enable_theme = False
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
                             self._timer1.deinit()
                             self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
                             _exit_color = COLOR_DARK_GREEN
-                            return 'ACK'
+                            return _PACKED_ACK
                         _exit_color = COLOR_RED
-                        return 'ERR'
+                        return _PACKED_ERR
                     elif _arg1 == 'pixels':
                         _themed = self._enable_theme
                         try:
@@ -528,9 +495,9 @@ class Controller:
                                 self._theme_target_pixels = target
                                 self._init_theme(reset=True)
                                 _exit_color = COLOR_DARK_GREEN
-                                return 'ACK'
+                                return _PACKED_ACK
                             _exit_color = COLOR_RED
-                            return 'ERR'
+                            return _PACKED_ERR
                         finally:
                             self._enable_theme = _themed
 
@@ -546,51 +513,51 @@ class Controller:
                             if 1 <= target <= 24:
                                 self.populate(target, _arg1)
                                 _exit_color = COLOR_DARK_GREEN
-                                return 'ACK'
+                                return _PACKED_ACK
                             else:
                                 _exit_color = COLOR_RED
-                                return 'ERR'
+                                return _PACKED_ERR
                         except Exception as e:
                             print('{} raised with palette name: {}'.format(type(e), e))
                             _exit_color = COLOR_RED
-                            return 'ERR'
+                            return _PACKED_ERR
                         finally:
                             self._enable_theme = _themed
                             self._enable_rotate = _rotating
                         _exit_color = COLOR_DARK_GREEN
-                        return 'ACK'
+                        return _PACKED_ACK
 
                     elif _arg1 == 'steps':
                         steps = int(_arg2)
                         if steps > 0:
                             self._pulse_steps = steps
                             _exit_color = COLOR_DARK_GREEN
-                            return 'ACK'
+                            return _PACKED_ACK
                         _exit_color = COLOR_RED
-                        return 'ERR'
+                        return _PACKED_ERR
                     else:
                         print("ERROR: could not process input:  '{}'".format(cmd))
                         _exit_color = COLOR_RED
-                        return 'ERR'
+                        return _PACKED_ERR
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 else:
                     _exit_color = COLOR_RED
-                    return 'ERR'
+                    return _PACKED_ERR
 
             elif _arg0 == "heartbeat":
                 if _arg1 == 'on':
                     self._heartbeat_enabled = True
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 elif _arg1 == 'off':
                     self._heartbeat_enabled = False
                     _exit_color = COLOR_DARK_GREEN
-                    return 'ACK'
+                    return _PACKED_ACK
                 else:
                     print("ERROR: unrecognised argument: '{}'".format(_arg1))
                     _exit_color = COLOR_RED
-                    return 'ERR'
+                    return _PACKED_ERR
 
             elif _arg0 == "rgb":
                 # e.g., rgb 3 130 40 242
@@ -600,7 +567,7 @@ class Controller:
                 blue  = int(_arg4)
                 self._ring.set_color(index, (red, green, blue))
                 _exit_color = COLOR_DARK_GREEN
-                return 'ACK'
+                return _PACKED_ACK
 
             elif _arg0 == "heading":
                 # e.g., heading 87 blue | heading 87 off
@@ -609,24 +576,24 @@ class Controller:
                 color = self.get_color(_arg2, _arg3)
                 self._ring.set_color(index, color)
                 _exit_color = COLOR_DARK_GREEN
-                return 'ACK'
+                return _PACKED_ACK
 
             elif _arg0 == "ping":
                 _exit_color = COLOR_DARK_GREEN
-                return 'PING'
+                return _PACKED_PING
 
             # get/set (data request)
             elif _arg0 == "data":
                 # send test data
                 _exit_color = COLOR_FUCHSIA
-                return '0000 1111 2222 3333'
+                return packed_message('0000 1111 2222 3333')
 
             elif _arg0 == "close":
                 self._enable_rotate     = False
                 self._heartbeat_enabled = False
                 self.reset_ring()
                 _exit_color = COLOR_BLACK
-                return 'ACK'
+                return _PACKED_ACK
 
             else:
                 print("unrecognised command: '{}'{}{}{}".format(
@@ -635,15 +602,15 @@ class Controller:
                         "; arg1: '{}'".format(_arg1) if _arg1 else '',
                         "; arg2: '{}'".format(_arg2) if _arg2 else ''))
                 _exit_color = COLOR_ORANGE
-                return 'NACK'
+                return _PACKED_NACK
             _exit_color = COLOR_DARK_GREEN
-            return 'ACK'
+            return _PACKED_ACK
 
         except Exception as e:
             print("ERROR: {} raised by controller: {}".format(type(e), e))
             sys.print_exception()
             _exit_color = COLOR_RED
-            return 'ERR'
+            return _PACKED_ERR
         finally:
             if _pixel_off:
                 self._pixel.set_color(0, _exit_color)

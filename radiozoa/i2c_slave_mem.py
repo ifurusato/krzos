@@ -15,12 +15,8 @@ import sys
 import time
 from machine import Pin, I2CTarget
 
-try:
-    from upy.message_util import pack_message, unpack_message
-except ImportError:
-    from message_util import pack_message, unpack_message
-
 from colorama import Fore, Style
+from message_util import pack_message, unpack_message
 
 __I2C_ID      = 1
 __I2C_ADDRESS = 0x45
@@ -30,6 +26,10 @@ _I2C_PINS     = {
     2: ('B10', 'B11'), # STM32F405
 }
 _MEM_LENGTH = 64
+
+# pre-packed constant responses
+_PACKED_ACK  = pack_message('ACK')
+_PACKED_ERR  = pack_message('ERR')
 
 class I2CSlave:
     '''
@@ -77,6 +77,33 @@ class I2CSlave:
                 self._new_cmd = True
 
     def check_and_process(self):
+        if self._new_cmd and not self._processing:
+            self._new_cmd = False
+            self._processing = True
+            msg_len = self._rx_copy[0]
+            try:
+                rx_bytes = bytes(self._rx_copy[:msg_len + 2])
+                cmd = unpack_message(rx_bytes)
+                if self._callback:
+                    resp_bytes = self._callback(cmd)
+                    if not resp_bytes:
+                        resp_bytes = _PACKED_ACK
+                else:
+                    resp_bytes = _PACKED_ACK
+            except Exception as e:
+                print("E: {}".format(e))
+                resp_bytes = _PACKED_ERR
+            try:
+                for i in range(len(resp_bytes)):
+                    self._mem_buf[i] = resp_bytes[i]
+                for i in range(len(resp_bytes), _MEM_LENGTH):
+                    self._mem_buf[i] = 0
+            except Exception as e:
+                print("E2: {}".format(e))
+            finally:
+                self._processing = False
+
+    def z_check_and_process(self):
         if self._new_cmd and not self._processing:
             self._new_cmd = False
             self._processing = True

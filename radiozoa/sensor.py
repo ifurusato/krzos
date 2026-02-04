@@ -15,6 +15,7 @@ import time
 import micropython
 
 from cardinal import Cardinal, NORTH
+from message_util import pack_message
 
 class Sensor:
     OUT_OF_RANGE = 9999
@@ -30,6 +31,7 @@ class Sensor:
         self._running = False
         self._distances = (Sensor.OUT_OF_RANGE,) * 8
         self._distances_fmt = "1111 1111 1111 1111 1111 1111 1111 1111"
+        self._distances_packed = pack_message(self._distances_fmt)
         self._task = None
 
     @property
@@ -39,6 +41,10 @@ class Sensor:
     @property
     def distances_fmt(self):
         return self._distances_fmt
+
+    @property
+    def distances_packed(self):
+        return self._distances_packed
 
     def enable(self):
         if not self._running:
@@ -60,6 +66,7 @@ class Sensor:
                         for v in self._radiozoa.get_distances()
                     )
                     self._distances_fmt = " ".join("{:04d}".format(v) for v in self._distances)
+                    self._distances_packed = pack_message(self._distances_fmt)
                     for index, dist in enumerate(self._distances):
                         cardinal = Cardinal.from_id(index)
                         color = self._color_for_distance(cardinal, dist)
