@@ -76,7 +76,6 @@ def start():
             controller.set_slave(slave)
             slave.enable()
             last_time = time.ticks_ms()
-            print('I2C slave active…')
 
             # run event loop - sensor task will be created later with "radiozoa start"
             asyncio.run(i2c_loop(controller, slave))

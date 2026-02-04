@@ -14,6 +14,7 @@ import math, random
 #from machine import LED
 from machine import Timer
 from machine import RTC
+from colorama import Fore, Style
 
 import neopixel
 import tinys3
@@ -42,7 +43,7 @@ class Controller:
         self._sensor = None
         self._radiozoa = None
         # odometry heartbeat feature
-        self._heartbeat_enabled     = True
+        self._heartbeat_enabled     = False
         self._heartbeat_on_time_ms  = 50
         self._heartbeat_off_time_ms = 2950
         self._heartbeat_timer = 0
@@ -85,9 +86,10 @@ class Controller:
         self.reset_ring()
         self._last_update_ts  = self._get_time()
         self._timer0 = Timer(0)
+        self._timer1_hz = 24
         self._timer1 = Timer(1)
-        self._timer1.init(freq=24, mode=Timer.PERIODIC, callback=self._action)
-        print('ready.')
+        self._timer1.init(freq=self._timer1_hz, mode=Timer.PERIODIC, callback=self._action)
+        print(Fore.CYAN + 'controller ready.' + Style.RESET_ALL)
 
     @property
     def ring(self):
@@ -131,13 +133,13 @@ class Controller:
         else:
             print('failed to stop: radiozoa not configured.')
 
-    def _led_pulse(self, duration_ms=20):
-        self._led_on()
+    def step(self):
+        self._pixel.set_color(0, COLOR_CYAN)
         self._timer0.deinit()
-        self._timer0.init(period=duration_ms, mode=Timer.PERIODIC, callback=self._off)
+        self._timer0.init(period=20, mode=Timer.PERIODIC, callback=self._led_off)
 
-    def _off(self, timer):
-        self._led_off()
+    def _led_off(self, timer=None):
+        self._pixel.set_color(0, COLOR_BLACK)
 
     def set_slave(self, slave):
         self._slave = slave
@@ -159,10 +161,8 @@ class Controller:
         else:
             if self._heartbeat_timer >= self._heartbeat_off_time_ms:
                 self._heartbeat_state = True
+                self.step()
                 self._heartbeat_timer = 0
-
-    def step(self, t):
-        self._led_pulse()
 
     def heading_to_pixel(self, heading_deg):
         pixel = round((180 + heading_deg) / 15) % 24
@@ -289,13 +289,15 @@ class Controller:
             print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
             return _PACKED_ERR
 
-    def _led_on(self):
-#       self._led.on()
-        self._pixel.set_color(0, COLOR_RED)
-
-    def _led_off(self):
-#       self._led.off()
-        self._pixel.set_color(0, COLOR_BLACK)
+    def _restart_timer(self, freq=None):
+        '''
+        Restart timer 1 if either rotate or theme is enabled.
+        '''
+        if freq:
+            self._timer1_hz = freq
+        self._timer1.deinit()
+        if self._enable_rotate or self._enable_theme:
+            self._timer1.init(freq=self._timer1_hz, mode=Timer.PERIODIC, callback=self._action)
 
     def process(self, cmd):
         '''
@@ -336,7 +338,7 @@ class Controller:
 #               print('time: {}, {}'.format(_arg1, _arg2))
                 if _arg1 == 'set':
                     _exit_color = COLOR_DARK_GREEN
-                    return pack_message(self._set_time(_arg2))
+                    return self._set_time(_arg2)
                 elif _arg1 == 'get':
                     _exit_color = COLOR_DARK_GREEN
                     return pack_message(self._rtc_to_iso(RTC().datetime()))
@@ -354,6 +356,7 @@ class Controller:
                     return _PACKED_ACK
                 elif _arg1 == 'stop':
                     self._radiozoa_stop()
+                    self.reset_ring()
                     _exit_color = COLOR_DARK_GREEN
                     return _PACKED_ACK
                 _exit_color = COLOR_RED
@@ -433,10 +436,12 @@ class Controller:
                 if _arg1:
                     if _arg1 == 'on':
                         self._enable_rotate = True
+                        self._restart_timer()
                         _exit_color = COLOR_DARK_GREEN
                         return _PACKED_ACK
                     elif _arg1 == 'off':
                         self._enable_rotate = False
+                        self._restart_timer()
                         _exit_color = COLOR_DARK_GREEN
                         return _PACKED_ACK
                     elif _arg1 == 'fwd' or _arg1 == 'cw':
@@ -450,8 +455,7 @@ class Controller:
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
-                            self._timer1.deinit()
-                            self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
+                            self._restart_timer(hz)
                             _exit_color = COLOR_DARK_GREEN
                             return _PACKED_ACK
                         else:
@@ -475,13 +479,13 @@ class Controller:
                         return _PACKED_ACK
                     elif _arg1 == 'off':
                         self._enable_theme = False
+                        self._restart_timer()
                         _exit_color = COLOR_DARK_GREEN
                         return _PACKED_ACK
                     elif _arg1 == 'hz':
                         hz = int(_arg2)
                         if hz > 0:
-                            self._timer1.deinit()
-                            self._timer1.init(freq=hz, mode=Timer.PERIODIC, callback=self._action)
+                            self._restart_timer(hz)
                             _exit_color = COLOR_DARK_GREEN
                             return _PACKED_ACK
                         _exit_color = COLOR_RED

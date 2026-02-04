@@ -51,7 +51,7 @@ class RadiozoaConfig:
         for dev in Device.all():
             pin = Pin(dev.xshut, Pin.OUT) # on pyb, OUT_PP
             self._xshut_pins[dev.index] = pin
-            self._log.info(Fore.WHITE + "configured XSHUT pin {} for sensor {} on 0x{:02X} as output.".format(dev.xshut, dev.label, dev.i2c_address))
+            self._log.info("configured XSHUT pin {} for sensor {} on 0x{:02X} as output.".format(dev.xshut, dev.label, dev.i2c_address))
 
     def close(self):
         '''

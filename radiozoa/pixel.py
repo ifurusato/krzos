@@ -24,13 +24,13 @@ class Pixel:
             _pin = Pin(pin, Pin.OUT)
         else:
             raise TypeError('expected Pin or int for pin specification, not {}.'.format(type(pin)))
-        print('configuring neopixel on pin {}.'.format(pin))
+#       print('configuring neopixel on pin {}.'.format(pin))
         self._pixel_count = pixel_count
         self._pixel_index = 0
         self._brightness = brightness
         self._neopixel = NeoPixel(_pin, pixel_count, color_order=color_order, brightness=brightness)
         self.set_color(index=None, color=None)
-        print('neopixel ready on pin {}.'.format(pin))
+#       print('neopixel ready on pin {}.'.format(pin))
 
     @property
     def pixel_count(self):

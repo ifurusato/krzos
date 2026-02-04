@@ -41,7 +41,7 @@ class I2CSlave:
         _i2c_scl_pin, _i2c_sda_pin = _I2C_PINS[self._i2c_id]
         self._scl = Pin(_i2c_scl_pin)
         self._sda = Pin(_i2c_sda_pin)
-        print('I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin))
+        print(Fore.CYAN + Style.DIM + 'I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin) + Style.RESET_ALL)
         self._i2c = None
         self._mem_buf = bytearray(_MEM_LENGTH)
         self._rx_copy = bytearray(_MEM_LENGTH)
@@ -52,6 +52,7 @@ class I2CSlave:
         init_msg = pack_message("ACK")
         for i in range(len(init_msg)):
             self._mem_buf[i] = init_msg[i]
+        print(Fore.CYAN + 'I2C slave ready.' + Style.RESET_ALL)
 
     def enable(self):
         i2c_id = self._i2c_id
