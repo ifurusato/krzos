@@ -70,7 +70,7 @@ class NofsOdometer(Component):
         timestamp = self._odometer.ts
         '''
         try:
-            response = self._master.send_data_request('odo ts')
+            response = self._master.send_request('odo ts')
             if response is None:
                 self._log.warning('None: data response on position.')
             elif response == 'ACK':
@@ -110,7 +110,7 @@ class NofsOdometer(Component):
         x, y = self._odometer.position
         '''
         try:
-            response = self._master.send_data_request('odo pos')
+            response = self._master.send_request('odo pos')
             if response is None:
                 self._log.warning('_get_position() None: data response on position.')
             elif response == 'ACK':
@@ -155,7 +155,7 @@ class NofsOdometer(Component):
         vx, vy = self._odometer.velocity
         '''
         try:
-            response = self._master.send_data_request('odo vel')
+            response = self._master.send_request('odo vel')
             if response is None:
                 self._log.warning('None: data response on velocity.')
             elif response == 'ACK':
@@ -199,7 +199,7 @@ class NofsOdometer(Component):
         self._odometer.reset
         '''
         try:
-            response = self._master.send_data_request('odo reset')
+            response = self._master.send_request('odo reset')
             if response is None:
                 self._log.warning(Fore.MAGENTA + 'None: data response on reset.')
             elif response == 'ACK':

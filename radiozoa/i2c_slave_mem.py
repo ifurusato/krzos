@@ -7,11 +7,12 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-01
+# modified: 2026-02-04
 #
-# I2C slave using single memory buffer for STM32F405
+# I2C slave using single memory buffer for ESP32-S3
 
 import sys
+import time
 from machine import Pin, I2CTarget
 
 try:
@@ -32,7 +33,7 @@ _MEM_LENGTH = 64
 
 class I2CSlave:
     '''
-    Single buffer memory-based I2C slave.
+    Memory-based I2C slave with proper separation of RX and TX data.
     '''
     def __init__(self, i2c_id=None, i2c_address=None):
         self._i2c_id      = i2c_id if i2c_id is not None else __I2C_ID
@@ -46,6 +47,7 @@ class I2CSlave:
         self._rx_copy = bytearray(_MEM_LENGTH)
         self._callback = None
         self._new_cmd = False
+        self._processing = False
         # initialize with ACK
         init_msg = pack_message("ACK")
         for i in range(len(init_msg)):
@@ -75,8 +77,9 @@ class I2CSlave:
                 self._new_cmd = True
 
     def check_and_process(self):
-        if self._new_cmd:
+        if self._new_cmd and not self._processing:
             self._new_cmd = False
+            self._processing = True
             msg_len = self._rx_copy[0]
             try:
                 rx_bytes = bytes(self._rx_copy[:msg_len + 2])
@@ -90,13 +93,15 @@ class I2CSlave:
             except Exception as e:
                 print("ERROR: {} during processing: {}".format(type(e), e))
                 response = "ERR"
-            # pack response directly into shared mem buffer
             try:
                 resp_bytes = pack_message(str(response))
                 for i in range(len(resp_bytes)):
                     self._mem_buf[i] = resp_bytes[i]
-
+                for i in range(len(resp_bytes), _MEM_LENGTH):
+                    self._mem_buf[i] = 0
             except Exception as e:
                 print("ERROR: {} during response: {}".format(type(e), e))
+            finally:
+                self._processing = False
 
 #EOF

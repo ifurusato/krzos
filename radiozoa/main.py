@@ -7,8 +7,8 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-01
-#
+# modified: 2026-02-04
+
 # I2C1:  SCL=PB6   SDA=PB7
 # I2C2:  SCL=PB10  SDA=PB11
 
@@ -37,13 +37,9 @@ if RELOAD:
 
 def get_slave():
     try:
-        print('🤢 a.')
-#       from i2c_slave import I2CSlave    # IRQ based
         from i2c_slave_mem import I2CSlave # memory-based
-        print('🤢 b. setting up I2C slave on I2C{} at address 0x{:02X}…'.format(I2C_ID, I2C_ADDRESS))
-        # set up I2C slave
+
         slave = I2CSlave(i2c_id=I2C_ID, i2c_address=I2C_ADDRESS)
-        print('🤢 c. ready.')
         return slave
     except Exception as e:
         print(Fore.RED + '{} raised creating I2C slave: {}'.format(type(e), e) + Style.RESET_ALL)
@@ -64,11 +60,6 @@ def start():
             blinker = Blinker(on_ms=50, off_ms=1950)
 
         if USE_I2C_SLAVE:
-#           from i2c_slave import I2CSlave    # IRQ based
-#           from i2c_slave_mem import I2CSlave # memory-based
-#           slave = I2CSlave(i2c_id=I2C_ID, i2c_address=I2C_ADDRESS)
-
-            # set up I2C slave
             slave = get_slave()
             slave.add_callback(controller.process)
             controller.set_slave(slave)

@@ -50,7 +50,7 @@ class TinyFxController(I2CMaster):
         occurs and the value is therefore unavailable.
         '''
         try:
-            response = self.send_data_request('pir')
+            response = self.send_request('pir')
             self._log.info('pir response: {}'.format(response))
             elapsed_sec = int(response)
             self._log.info('pir response as int: {}sec'.format(elapsed_sec))

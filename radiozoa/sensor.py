@@ -39,6 +39,16 @@ class Sensor:
         self._upper = (Sensor.OUT_OF_RANGE,) * 4
         self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
         self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
+        self._distances = (Sensor.OUT_OF_RANGE,) * 8
+        self._distances_fmt = "5555 5555 5555 5555 5555 5555 5555 5555"
+
+    @property
+    def distances(self):
+        return self._distances
+
+    @property
+    def distances_fmt(self):
+        return self._distances_fmt
 
     @property
     def lower(self):
@@ -81,19 +91,20 @@ class Sensor:
         if self._radiozoa:
 #           start = time.ticks_ms()
 #           distances = self._radiozoa.get_distances()
-            distances = tuple(
+            self._distances = tuple(
                 v if v is not None else Sensor.OUT_OF_RANGE
                 for v in self._radiozoa.get_distances()
             )
-            self._lower, self._upper = distances[:4], distances[4:]
+            self._lower, self._upper = self._distances[:4], self._distances[4:]
             self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
             self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
+            self._distances_fmt = " ".join("{:04d}".format(v) for v in self._distances)
 #           recompose to 8
 #           self._distances = self._lower + self._upper
 #           print('type: {}; length: {}'.format(type(distances), len(distances)))
 #           elapsed_ms = time.ticks_diff(time.ticks_ms(), start)
 #           print('poll: {}ms elapsed.'.format(elapsed_ms))
-            for index, dist in enumerate(distances):
+            for index, dist in enumerate(self._distances):
                 cardinal = Cardinal.from_id(index)
                 color = self._color_for_distance(cardinal, dist)
 #               if cardinal is NORTH:

@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-03
+# modified: 2026-02-04
 
 from hardware.radiozoa_controller import RadiozoaController
 
@@ -16,7 +16,6 @@ ALWAYS_DATA_REQUEST = False
 
 def main():
     try:
-#       master = I2CMaster(RadiozoaController.NAME, i2c_address=0x45, timeset=True)
         master = RadiozoaController(i2c_address=I2C_ADDRESS)
         master.enable()
         while True:
@@ -26,15 +25,9 @@ def main():
             print('user msg: {}'.format(user_msg))
             if len(user_msg) == 0:
                 continue
-            data_request = user_msg.startswith('!')
-            if data_request:
-                user_msg = user_msg[1:]
-            if ALWAYS_DATA_REQUEST or data_request:
-                response = master.send_data_request(user_msg)
-                print('data response: {}'.format(response))
-            else:
-                response = master.send_request(user_msg)
-                print('response: {}'.format(response))
+            response = master.send_request(user_msg)
+            print('response: {}'.format(response))
+
     except KeyboardInterrupt:
         print('Ctrl-C caught, exiting…')
     except Exception as e:

@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-01
+# modified: 2026-02-04
 
 import sys
 import time
@@ -276,6 +276,7 @@ class Controller:
             print('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
             RTC().datetime(self._parse_timestamp(timestamp))
             print('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
+#           print('time set.')
             return 'ACK'
         except Exception as e:
             print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
@@ -352,38 +353,53 @@ class Controller:
                 return 'ERR'
 
             elif _arg0 == "lower":
-                _exit_color = COLOR_DARK_GREEN
-                return "0000 1111 2222 3333"
-#               if self._sensor:
-#                   try:
-#                       _exit_color = COLOR_DARK_GREEN
-#                       return self._sensor.lower_fmt
-#                   except Exception as e:
-#                       print('{} raised by lower: {}'.format(type(e), e))
-#                       return "7777 7777 7777 7777"
-#               _exit_color = COLOR_RED
-#               return 'ERR'
+#               return "0000 1111 2222 3333"
+                if self._sensor:
+                    try:
+                        _exit_color = COLOR_DARK_GREEN
+                        _value = self._sensor.lower_fmt
+                        print('value: {}'.format(_value))
+                        return _value
+                    except Exception as e:
+                        print('{} raised by lower: {}'.format(type(e), e))
+                        return "6666 6666 6666 6666"
+                else:
+                    print('no sensor.')
+                _exit_color = COLOR_RED
+                return 'ERR'
 
             elif _arg0 == "upper":
-                _exit_color = COLOR_DARK_GREEN
-                return "4444 5555 6666 7777"
-#               if self._sensor:
+#               return "4444 5555 6666 7777"
+                if self._sensor:
+                    try:
+                        _exit_color = COLOR_DARK_GREEN
+                        _value = self._sensor.upper_fmt
+                        print('value: {}'.format(_value))
+                        return _value
+                    except Exception as e:
+                        print('{} raised by upper: {}'.format(type(e), e))
+                        return "7777 7777 7777 7777"
+                else:
+                    print('no sensor.')
+                _exit_color = COLOR_RED
+                return 'ERR'
+
+            elif _arg0 == "distances":
+#               return "0000 1111 2222 3333 4444 5555 6666 7777"
+                if self._sensor:
 #                   try:
-#                       _exit_color = COLOR_DARK_GREEN
-#                       return self._sensor.upper_fmt
+#                       _value = self._sensor.distances_fmt
+#                       print('value: {}'.format(_value))
+#                       return _value
+                    _exit_color = COLOR_DARK_GREEN
+                    return self._sensor.distances_fmt
 #                   except Exception as e:
-#                       print('{} raised by upper: {}'.format(type(e), e))
-#                       return "7777 7777 7777 7777"
-#               _exit_color = COLOR_RED
-#               return 'ERR'
-
-            elif _arg0 == "short":
-                _exit_color = COLOR_DARK_GREEN
-                return "0000 1111"
-
-            elif _arg0 == "long":
-                _exit_color = COLOR_DARK_GREEN
-                return "0000 1111 2222 3333 4444 5555 6666 7777"
+#                       print('{} raised by distances: {}'.format(type(e), e))
+#                       return "8888 8888 8888 8888"
+                else:
+                    print('no sensor.')
+                _exit_color = COLOR_RED
+                return 'ERR'
 
             elif _arg0 == "ring":
                 if self._ring:
@@ -599,26 +615,18 @@ class Controller:
                 _exit_color = COLOR_DARK_GREEN
                 return 'PING'
 
-            elif _arg0 == "close":
-                self._enable_rotate     = False
-                self._heartbeat_enabled = False
-                self.reset_ring()
-                _exit_color = COLOR_BLACK
-                return 'ACK'
-
             # get/set (data request)
             elif _arg0 == "data":
                 # send test data
                 _exit_color = COLOR_FUCHSIA
                 return '0000 1111 2222 3333'
 
-            elif _arg0 == "get":
-                _exit_color = COLOR_DARK_GREEN
-                return 'ACK' # called on 2nd request for data
-
-            elif _arg0 == "clear":
-                _exit_color = COLOR_DARK_GREEN
-                return 'ACK' # called on 3rd request for data
+            elif _arg0 == "close":
+                self._enable_rotate     = False
+                self._heartbeat_enabled = False
+                self.reset_ring()
+                _exit_color = COLOR_BLACK
+                return 'ACK'
 
             else:
                 print("unrecognised command: '{}'{}{}{}".format(
@@ -630,6 +638,7 @@ class Controller:
                 return 'NACK'
             _exit_color = COLOR_DARK_GREEN
             return 'ACK'
+
         except Exception as e:
             print("ERROR: {} raised by controller: {}".format(type(e), e))
             sys.print_exception()
