@@ -41,6 +41,7 @@ class Controller:
     def __init__(self):
         self._log = Logger('ctrl', level=Level.INFO)
         self._startup_ms = time.ticks_ms()
+        self._start_services_delay_ms = 250
         self._slave    = None
         self._sensor   = None
         self._radiozoa = None
@@ -124,7 +125,8 @@ class Controller:
                 self._stop_at = None
                 self._pixel.set_color(0, COLOR_BLACK)
         if Controller.RADIOZOA_AUTOSTART and not self._radiozoa_started:
-            if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= 7000:
+            if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= self._start_services_delay_ms:
+                self._radiozoa_started = True
                 self._start_services()
 
     def set_slave(self, slave):
@@ -509,8 +511,9 @@ class Controller:
         return self.process(cmd)
 
     def _start_services(self):
+        time_elapsed = time.ticks_ms() - self._startup_ms
+        self._log.info(Fore.GREEN + 'starting services after {}ms'.format(time_elapsed))
         self._radiozoa_start()
-        self._radiozoa_started = True
 
     def _step(self):
         self._pixel.set_color(0, COLOR_CYAN)
