@@ -90,6 +90,35 @@ class I2CSlave:
                         response = "ACK"
                 else:
                     response = "ACK"
+#               print('cmd: "{}"; rsp: "{}"'.format(cmd, response[:20] if len(response) > 20 else response))
+            except Exception as e:
+                print("E: {}".format(e))
+                response = "ERR"
+            try:
+                resp_bytes = pack_message(str(response))
+                for i in range(len(resp_bytes)):
+                    self._mem_buf[i] = resp_bytes[i]
+                for i in range(len(resp_bytes), _MEM_LENGTH):
+                    self._mem_buf[i] = 0
+            except Exception as e:
+                print("E2: {}".format(e))
+            finally:
+                self._processing = False
+
+    def x_check_and_process(self):
+        if self._new_cmd and not self._processing:
+            self._new_cmd = False
+            self._processing = True
+            msg_len = self._rx_copy[0]
+            try:
+                rx_bytes = bytes(self._rx_copy[:msg_len + 2])
+                cmd = unpack_message(rx_bytes)
+                if self._callback:
+                    response = self._callback(cmd)
+                    if not response:
+                        response = "ACK"
+                else:
+                    response = "ACK"
             except Exception as e:
                 print("ERROR: {} during processing: {}".format(type(e), e))
                 response = "ERR"

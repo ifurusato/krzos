@@ -22,6 +22,7 @@ AUTOSTART_RADIOZOA = True
 import sys
 import time
 import gc
+import asyncio
 from colorama import Fore, Style
 
 from colors import*
@@ -46,6 +47,16 @@ def get_slave():
         sys.print_exception(e)
         raise
 
+async def i2c_loop(controller, slave):
+    last_time = time.ticks_ms()
+    while True:
+        current_time = time.ticks_ms()
+        delta_ms = time.ticks_diff(current_time, last_time)
+        last_time = current_time
+        controller.tick(delta_ms)
+        slave.check_and_process()
+        await asyncio.sleep_ms(1)
+
 def start():
 
     blinker       = None
@@ -66,13 +77,17 @@ def start():
             slave.enable()
             last_time = time.ticks_ms()
             print('I2C slave active…')
-            while True:
-                current_time = time.ticks_ms()
-                delta_ms = time.ticks_diff(current_time, last_time)
-                last_time = current_time
-                controller.tick(delta_ms)
-                slave.check_and_process()
-                time.sleep_ms(1)
+
+            # run event loop - sensor task will be created later with "radiozoa start"
+            asyncio.run(i2c_loop(controller, slave))
+
+#           while True:
+#               current_time = time.ticks_ms()
+#               delta_ms = time.ticks_diff(current_time, last_time)
+#               last_time = current_time
+#               controller.tick(delta_ms)
+#               slave.check_and_process()
+#               time.sleep_ms(1)
 
         if AUTOSTART_RADIOZOA:
             controller.process('radiozoa start')

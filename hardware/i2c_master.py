@@ -63,7 +63,7 @@ class I2CMaster(Component):
         msg_with_addr = [0x00] + list(out_msg)
         write_msg = smbus2.i2c_msg.write(self._i2c_address, msg_with_addr)
         self._bus.i2c_rdwr(write_msg)
-        time.sleep(0.005) # 0.003 if not using radiozoa
+        time.sleep(0.020) # 0.003 if not using radiozoa
         # write register address 0, then read
         write_addr = smbus2.i2c_msg.write(self._i2c_address, [0x00])
         read_msg = smbus2.i2c_msg.read(self._i2c_address, 64)

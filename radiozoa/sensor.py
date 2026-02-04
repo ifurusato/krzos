@@ -7,40 +7,30 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-01-27
-# modified: 2026-02-01
+# modified: 2026-02-04
 
+import asyncio
 from machine import Timer
 import time
 import micropython
 
 from cardinal import Cardinal, NORTH
 
-#micropython.alloc_emergency_exception_buf(100)
-
 class Sensor:
     OUT_OF_RANGE = 9999
-    '''
-    Wraps access to the set of the Radiozoa's VL53L0X ToF sensors.
-    '''
+    
     def __init__(self, controller=None):
         if controller is None:
             raise ValueError('no controller provided.')
         self._controller = controller
-        self._timer = Timer(2)
         self._radiozoa = self._controller.radiozoa
         self._ring = self._controller.ring
-#       self._scheduled_task = self._test_task
-        self._scheduled_task = self._rainbow_task
         self._min_distance_mm = 50 
         self._max_distance_mm = 1000
         self._running = False
-        self._pending = False
-        self._lower = (Sensor.OUT_OF_RANGE,) * 4
-        self._upper = (Sensor.OUT_OF_RANGE,) * 4
-        self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
-        self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
         self._distances = (Sensor.OUT_OF_RANGE,) * 8
-        self._distances_fmt = "5555 5555 5555 5555 5555 5555 5555 5555"
+        self._distances_fmt = "1111 1111 1111 1111 1111 1111 1111 1111"
+        self._task = None
 
     @property
     def distances(self):
@@ -50,93 +40,48 @@ class Sensor:
     def distances_fmt(self):
         return self._distances_fmt
 
-    @property
-    def lower(self):
-#       print('lower: {}'.format(self._lower))
-        return self._lower
-
-    @property
-    def lower_fmt(self):
-        return self._lower_fmt
-
-    @property
-    def upper(self):
-#       print('upper: {}'.format(self._upper))
-        return self._upper
-
-    @property
-    def upper_fmt(self):
-        return self._upper_fmt
-
     def enable(self):
         if not self._running:
             self._running = True
-            self._timer.init(freq=60, mode=Timer.PERIODIC, callback=self._irq_handler)
+            self._task = asyncio.create_task(self._poll_loop())
 
     def disable(self):
-        if not self._running:
+        if self._running:
             self._running = False
-            self._timer.deinit()
+            if self._task:
+                self._task.cancel()
 
-    def _test_task(self, t):
-        self._pending = False
-        if self._radiozoa:
-            self._radiozoa.print_distances()
-        else:
-            print("no radiozoa: disabling…")
-            self.disable()
-
-    def _rainbow_task(self, t):
-        self._pending = False
-        if self._radiozoa:
-#           start = time.ticks_ms()
-#           distances = self._radiozoa.get_distances()
-            self._distances = tuple(
-                v if v is not None else Sensor.OUT_OF_RANGE
-                for v in self._radiozoa.get_distances()
-            )
-            self._lower, self._upper = self._distances[:4], self._distances[4:]
-            self._lower_fmt = " ".join("{:04d}".format(v) for v in self._lower)
-            self._upper_fmt = " ".join("{:04d}".format(v) for v in self._upper)
-            self._distances_fmt = " ".join("{:04d}".format(v) for v in self._distances)
-#           recompose to 8
-#           self._distances = self._lower + self._upper
-#           print('type: {}; length: {}'.format(type(distances), len(distances)))
-#           elapsed_ms = time.ticks_diff(time.ticks_ms(), start)
-#           print('poll: {}ms elapsed.'.format(elapsed_ms))
-            for index, dist in enumerate(self._distances):
-                cardinal = Cardinal.from_id(index)
-                color = self._color_for_distance(cardinal, dist)
-#               if cardinal is NORTH:
-#                   print('cardinal: {}; distance: {}mm; pixel: {}; color: {}'.format(cardinal.name, dist, cardinal.pixel, color))
-                self._ring.set_color(cardinal.pixel - 1, color)
-        else:
-            print("no radiozoa: disabling…")
-            self.disable()
-
-    def _irq_handler(self, t):
-        if self._running and not self._pending:
-            self._pending = True
+    async def _poll_loop(self):
+        while self._running:
             try:
-                micropython.schedule(self._scheduled_task, None)
-            except RuntimeError as e:
-                print(e)
-                pass
+                if self._radiozoa:
+                    self._distances = tuple(
+                        v if v is not None else Sensor.OUT_OF_RANGE
+                        for v in self._radiozoa.get_distances()
+                    )
+                    self._distances_fmt = " ".join("{:04d}".format(v) for v in self._distances)
+                    for index, dist in enumerate(self._distances):
+                        cardinal = Cardinal.from_id(index)
+                        color = self._color_for_distance(cardinal, dist)
+                        self._ring.set_color(cardinal.pixel - 1, color)
+                else:
+                    print("no radiozoa: disabling…")
+                    self.disable()
+            except Exception as e:
+                print("error in poll_loop: {}".format(e))
+            
+            await asyncio.sleep_ms(50)  # 20Hz polling
 
     def _color_for_distance(self, cardinal, distance):
         if distance is None or distance > self._max_distance_mm:
-            return (0, 0, 0)  # black (off)
+            return (0, 0, 0)
         if distance <= self._min_distance_mm:
-            return (255, 0, 0)  # red
-        # normalize to 0.0 .. 1.0
+            return (255, 0, 0)
         ratio = distance / self._max_distance_mm
-        # hue sweep: red (0°) → purple (~300°)
         hue = ratio * 300
         return self._hsv_to_rgb(hue, 1.0, 1.0)
 
     def _hsv_to_rgb(self, h, s, v):
-        # h: 0..360
-        # s, v: 0..1
         if s == 0:
             val = int(v * 255)
             return val, val, val
