@@ -106,35 +106,20 @@ class OpticalFlowSensor(Component):
             self._poll_thread = None
         self._log.info('polling thread stopped.')
 
-    def _poll_task_fn(self):
+    def set_led(self, value):
         '''
-        thread function to poll the sensor for motion data.
+        turn the white LEDs on or off.
         '''
-        while self._running:
-            try:
-                x, y = self._nofs.get_motion()
-                with self._lock:
-                    self._x = x * self._x_trim
-                    self._y = y * self._y_trim
-                    self._tx += self._x
-                    self._ty += self._y
-            except Exception as e:
-                self._log.error('error polling sensor: {}'.format(e))
-            time.sleep(self._poll_interval)
-
-    def _poll_on_demand(self):
-        '''
-        poll the sensor once and update values.
-        '''
-        try:
-            x, y = self._nofs.get_motion()
-            with self._lock:
-                self._x = x * self._x_trim
-                self._y = y * self._y_trim
-                self._tx += self._x
-                self._ty += self._y
-        except Exception as e:
-            self._log.error('error polling sensor: {}'.format(e))
+        if value is True:
+            time.sleep(0.2)
+            self._nofs._write(0x7f, 0x14)
+            self._nofs._write(0x6f, 0x1c) # DEC 28
+            self._nofs._write(0x7f, 0x00)
+        else:
+            time.sleep(0.2)
+            self._nofs._write(0x7f, 0x14)
+            self._nofs._write(0x6f, 0x00) 
+            self._nofs._write(0x7f, 0x00)
 
     def relative(self):
         '''
@@ -165,7 +150,48 @@ class OpticalFlowSensor(Component):
         _dist_y = int(_abs_y / self._spmm)
         return _dist_x, _dist_y
 
+    def x_variance(self):
+        '''
+        Return the lateral variance as a percentage of longitudinal movement.
+
+        Shows the inverse of y_variance(): how much lateral drift (X) there 
+        is relative to forward/backward movement (Y).
+
+        In practical terms:
+
+            y_variance() would be useful when you're trying to move in the 
+                X direction and want to know how much you're drifting in Y.
+            x_variance() would be useful when you're trying to move in the 
+                Y direction (forward/backward) and want to know how much 
+                you're drifting sideways in X.
+
+        For a robot moving forward, x_variance() would tell you if it's veering 
+        to port or starboard instead of going straight. For a robot strafing 
+        sideways, y_variance() would tell you if it's drifting forward or aft 
+        instead of going purely lateral.
+
+        So whether you use x_variance() depends on whether you care about lateral 
+        drift during forward/backward movement.
+        '''
+        with self._lock:
+            return 0 if self._ty == 0 else int( self._tx / self._ty * 100.0 )
+
+
     def y_variance(self):
+        '''
+        The y_variance() method returns the ratio of _ty to _tx as a percentage.
+
+        Specifically:
+
+            If _tx is 0, it returns 0 (to avoid division by zero)
+            Otherwise, it returns int(_ty / _tx * 100.0)
+
+        So if the sensor has moved 100 units in X and 50 units in Y, it would 
+        return 50 (meaning Y movement is 50% of X movement).
+
+        If Y and X movement are equal, it returns 100. If there's more Y movement 
+        than X, it returns a value greater than 100.
+        '''
         with self._lock:
             return 0 if self._tx == 0 else int( self._ty / self._tx * 100.0 )
 
@@ -178,7 +204,41 @@ class OpticalFlowSensor(Component):
         '''
         closes the sensor.
         '''
+        self.set_led(False)
         self.stop()
         Component.close(self) # calls disable
+
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def _poll_task_fn(self):
+        '''
+        thread function to poll the sensor for motion data.
+        '''
+        while self._running:
+            try:
+                x, y = self._nofs.get_motion()
+                with self._lock:
+                    self._x = x * self._x_trim
+                    self._y = y * self._y_trim
+                    self._tx += self._x
+                    self._ty += self._y
+            except Exception as e:
+                self._log.error('error polling sensor: {}'.format(e))
+            time.sleep(self._poll_interval)
+
+    def _poll_on_demand(self):
+        '''
+        poll the sensor once and update values.
+        '''
+        try:
+            x, y = self._nofs.get_motion()
+            with self._lock:
+                self._x = x * self._x_trim
+                self._y = y * self._y_trim
+                self._tx += self._x
+                self._ty += self._y
+        except Exception as e:
+            self._log.error('error polling sensor: {}'.format(e))
 
 #EOF
