@@ -336,7 +336,8 @@ kros:
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)
             subpixel:                     False            # better accuracy for longer distance, fractional disparity 32-levels
             left_right_check:              True            # better handling for occlusions
-        paa5100je:                                         # PAA5100JE Optical Flow Sensor
+        ofs:                                               # PMW3901 or PAA5100JE Optical Flow Sensor
+            near:                         False            # if near use PAA5100JE else PMW3901 
             rotation:                       180            # permitted values: 0, 90, 180 or 270
             x_trim:                         1.0            # percentage X trim (as a multiplier)
             y_trim:                         0.92           # percentage Y trim (as a multiplier)
