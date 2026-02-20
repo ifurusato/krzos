@@ -14,6 +14,8 @@
 # by "stop".
 
 import time
+import sys
+import select
 import argparse
 from threading import Event, Lock, Thread
 from colorama import init, Fore, Style
@@ -88,14 +90,11 @@ def read_xy():
     except (ValueError, TypeError):
         return None
 
-def perform_scan(master, tfxc):
+button_pressed = False
+
+def perform_scan(master, tfxc, xy):
     try:
-        xy = read_xy()
-        if xy is not None:
-            print(Fore.CYAN + 'xy: ' + Fore.GREEN + '{}\n'.format(xy) + Style.RESET_ALL)
-        else:
-            xy = 0,0
-            print(Fore.CYAN + 'xy: 0,0' + Style.RESET_ALL)
+        print(Fore.CYAN + 'xy: ' + Fore.GREEN + '{}\n'.format(xy) + Style.RESET_ALL)
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
 
         for _ in range(BUTTON_DELAY_SEC):
@@ -106,50 +105,22 @@ def perform_scan(master, tfxc):
         print('response: {}'.format(response))
         time.sleep(1)
         
+        x, y = xy
         response = master.send_request(DISTANCES_COMMAND)
         while response is None or response == DISTANCES_COMMAND:
             print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
             response = master.send_request(DISTANCES_COMMAND)
-        print(Fore.CYAN + 'response: ' + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
-
-    except Exception as e:
-        print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
-
-def x_perform_scan(master, tfxc):
-    try:
-
-        xy = read_xy()
-        if xy is not None:
-            print(Fore.CYAN + 'xy: ' + Fore.GREEN + '{}\n'.format(xy) + Style.RESET_ALL)
-        else:
-            xy = 0,0
-            print(Fore.CYAN + 'xy: 0,0' + Style.RESET_ALL)
-
-        print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
-
-        for _ in range(BUTTON_DELAY_SEC):
-            resp = tfxc.send_request(TICK_COMMAND)
-            print('response: {}'.format(resp))
-            time.sleep(1)
-        resp = tfxc.send_request(BEEP_COMMAND)
-        print('response: {}'.format(resp))
-        time.sleep(1)
-
-        response = None
-        while response == DISTANCES_COMMAND or response == None:
-            response = master.send_request(DISTANCES_COMMAND)
-            if response is None or response == DISTANCES_COMMAND:
-                print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
-            else:
-                print(Fore.CYAN + 'response: ' + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
+        print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{}) '.format(x, y) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
 
     except Exception as e:
         print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
 
 
 button = None
+
 def main():
 
+    global button_pressed
     worker_thread = None
     stop_event    = Event()
     i2c_lock      = Lock()
@@ -173,19 +144,38 @@ def main():
         print('\nEnter command string to send (Ctrl-C or "exit" to exit):')
 
         def button_handler(pressed):
+            global button_pressed
             if pressed:
                 print("pressed.")
             else:
                 print("released…")
-                perform_scan(master, tfxc)
+                button_pressed = True
 
         button = InterruptButton(pin=21, debounce_ms=50, callback=button_handler)
 
         last_user_msg = None
+        print(prompt, end='', flush=True)
+        
         while True:
-            user_msg = input(prompt)
+            if button_pressed:
+                button_pressed = False
+                print()  # newline after prompt
+                xy = read_xy()
+                if xy is None:
+                    xy = 0, 0
+                perform_scan(master, tfxc, xy)
+                print(prompt, end='', flush=True)
+                continue
+
+            # check if input is available with timeout
+            ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if not ready:
+                continue
+
+            user_msg = sys.stdin.readline().strip()
 
             if not user_msg:
+                print(prompt, end='', flush=True)
                 continue
             elif last_user_msg is not None and user_msg == 'r':
                 # repeat last command
@@ -199,6 +189,7 @@ def main():
                     stop_event.clear()
                     worker_thread = Thread(target=worker_loop, args=(master, stop_event, i2c_lock), daemon=True,)
                     worker_thread.start()
+                print(prompt, end='', flush=True)
                 continue
             elif user_msg == 'stop':
                 if worker_thread and worker_thread.is_alive():
@@ -206,6 +197,7 @@ def main():
                     worker_thread.join()
                 else:
                     print("worker not running")
+                print(prompt, end='', flush=True)
                 continue
 
             print('user msg: {}'.format(user_msg))
@@ -213,12 +205,10 @@ def main():
                 response = master.send_request(user_msg)
                 if response == user_msg:
                     print('🍓 response matches input.')
-#   def get_write_read_delay_ms(self):
-#   def reset_write_read_delay_ms(self):
-#   def set_write_read_delay_ms(self, delay_ms):
 
             print('response: {}'.format(response))
             last_user_msg = user_msg
+            print(prompt, end='', flush=True)
 
     except OSError as e:
         print('unable to connect with device at 0x{:02X}'.format(i2c_address))
@@ -231,6 +221,7 @@ def main():
         if worker_thread and worker_thread.is_alive():
             stop_event.set()
             worker_thread.join()
+
 
 if __name__ == '__main__':
     main()
