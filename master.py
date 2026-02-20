@@ -23,7 +23,7 @@ init()
 
 from i2c_master import I2CMaster
 from hardware.tinyfx_controller import TinyFxController
-from quad_tree_viz import OccupancyGrid, GridVisualiser
+from adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
 
 # pushbutton support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -62,6 +62,7 @@ BUTTON_DELAY_SEC  = 5            # how many seconds after pushbutton to do scan
 TICK_COMMAND      = 'play tick'
 BEEP_COMMAND      = 'play beep'
 DISTANCES_COMMAND = 'distances'
+TRIM_OCCUPANCY_MAP_TO_DATA = True
 
 def worker_loop(master, stop_event, lock):
     '''
@@ -108,8 +109,49 @@ def read_xy():
     except (ValueError, TypeError):
         return None
 
+def load_scan_data(filename):
+    '''
+    Load and process scan data from a text file.
+    each line: x y heading distance1 distance2 ... distance8
+    '''
+    global occupancy_map
+    
+    try:
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+        scan_count = 0
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split()
+            if len(parts) != 11:
+                print('skipping invalid line: {}'.format(line))
+                continue
+            x = int(parts[0])
+            y = int(parts[1])
+            heading = int(parts[2])
+            distances = ' '.join(parts[3:11])
+            # initialize map on first scan
+            if occupancy_map is None:
+                occupancy_map = AdaptiveOccupancyMap(min_cell_size=50, initial_size=8000)
+                print(Fore.MAGENTA + 'adaptive occupancy map initialized' + Style.RESET_ALL)
+            # add sensor reading to map
+            occupancy_map.process_sensor_reading(distances, x, y, heading)
+            scan_count += 1
+            print(Fore.CYAN + 'loaded scan {}: '.format(scan_count) + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(distances) + Style.RESET_ALL)
+        print(Fore.MAGENTA + '{} scans loaded from {}'.format(scan_count, filename) + Style.RESET_ALL)
+        return True
+        
+    except FileNotFoundError:
+        print(Fore.RED + 'file not found: {}'.format(filename) + Style.RESET_ALL)
+        return False
+    except Exception as e:
+        print(Fore.RED + 'ERROR loading scan data: {}'.format(e) + Style.RESET_ALL)
+        return False
+
 def perform_scan(master, tfxc, xyz):
-    global occupancy_grid
+    global occupancy_map
     try:
         print(Fore.CYAN + 'xyz: ' + Fore.GREEN + '{}\n'.format(xyz) + Style.RESET_ALL)
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
@@ -129,14 +171,14 @@ def perform_scan(master, tfxc, xyz):
             response = master.send_request(DISTANCES_COMMAND)
         print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
 
-        # initialize grid on first scan
-        if occupancy_grid is None:
-            occupancy_grid = OccupancyGrid(cell_size=50, max_range=4000)
-            print(Fore.MAGENTA + 'occupancy grid initialized' + Style.RESET_ALL)
+        # initialize map on first scan
+        if occupancy_map is None:
+            occupancy_map = AdaptiveOccupancyMap(min_cell_size=50, initial_size=8000)
+            print(Fore.MAGENTA + 'adaptive occupancy map initialized' + Style.RESET_ALL)
 
-        # add sensor reading to grid
-        occupancy_grid.process_sensor_reading(response, x, y, heading)
-        print(Fore.MAGENTA + 'sensor reading added to grid' + Style.RESET_ALL)
+        # add sensor reading to map
+        occupancy_map.process_sensor_reading(response, x, y, heading)
+        print(Fore.MAGENTA + 'sensor reading added to map' + Style.RESET_ALL)
 
     except Exception as e:
         print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
@@ -146,7 +188,7 @@ def perform_scan(master, tfxc, xyz):
 
 button = None
 button_pressed = False
-occupancy_grid = None
+occupancy_map = None
 
 def main():
 
@@ -235,11 +277,22 @@ def main():
                 continue
 
             elif user_msg == 'viz':
-                if occupancy_grid is None:
-                    print("no grid data available - press button to scan first")
+                if occupancy_map is None:
+                    print("no map data available - press button to scan first")
                 else:
-                    visualiser = GridVisualiser(occupancy_grid)
-                    visualiser.generate_svg("grid_map.svg")
+                    if TRIM_OCCUPANCY_MAP_TO_DATA:
+                        occupancy_map.trim_to_data(margin_mm=100)
+                    visualizer = MapVisualizer(occupancy_map)
+                    visualizer.generate_svg("occupancy_map.svg")
+                print(prompt, end='', flush=True)
+                continue
+
+            elif user_msg.startswith('load '):
+                filename = user_msg[5:].strip()
+                if not filename:
+                    print("usage: load <filename>")
+                else:
+                    load_scan_data(filename)
                 print(prompt, end='', flush=True)
                 continue
 
@@ -247,7 +300,7 @@ def main():
             with i2c_lock:
                 response = master.send_request(user_msg)
                 if response == user_msg:
-                    print('🍓 response matches input.')
+                    print(Fore.YELLOW + 'response matches input.' + Style.RESET_ALL)
 
             print('response: {}'.format(response))
             last_user_msg = user_msg
