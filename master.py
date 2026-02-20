@@ -23,6 +23,7 @@ init()
 
 from i2c_master import I2CMaster
 from hardware.tinyfx_controller import TinyFxController
+from quad_tree_viz import OccupancyGrid, GridVisualiser
 
 # pushbutton support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -108,6 +109,7 @@ def read_xy():
         return None
 
 def perform_scan(master, tfxc, xyz):
+    global occupancy_grid
     try:
         print(Fore.CYAN + 'xyz: ' + Fore.GREEN + '{}\n'.format(xyz) + Style.RESET_ALL)
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
@@ -127,11 +129,24 @@ def perform_scan(master, tfxc, xyz):
             response = master.send_request(DISTANCES_COMMAND)
         print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
 
+        # initialize grid on first scan
+        if occupancy_grid is None:
+            occupancy_grid = OccupancyGrid(cell_size=50, max_range=4000)
+            print(Fore.MAGENTA + 'occupancy grid initialized' + Style.RESET_ALL)
+
+        # add sensor reading to grid
+        occupancy_grid.process_sensor_reading(response, x, y, heading)
+        print(Fore.MAGENTA + 'sensor reading added to grid' + Style.RESET_ALL)
+
     except Exception as e:
         print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
 
+
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
 button = None
 button_pressed = False
+occupancy_grid = None
 
 def main():
 
@@ -192,11 +207,14 @@ def main():
             if not user_msg:
                 print(prompt, end='', flush=True)
                 continue
+
             elif last_user_msg is not None and user_msg == 'r':
                 # repeat last command
                 user_msg = last_user_msg
+
             elif user_msg.strip() == 'exit' or user_msg.strip() == 'quit':
                 break
+
             elif user_msg == 'go':
                 if worker_thread and worker_thread.is_alive():
                     print("worker already running")
@@ -206,12 +224,22 @@ def main():
                     worker_thread.start()
                 print(prompt, end='', flush=True)
                 continue
+
             elif user_msg == 'stop':
                 if worker_thread and worker_thread.is_alive():
                     stop_event.set()
                     worker_thread.join()
                 else:
                     print("worker not running")
+                print(prompt, end='', flush=True)
+                continue
+
+            elif user_msg == 'viz':
+                if occupancy_grid is None:
+                    print("no grid data available - press button to scan first")
+                else:
+                    visualiser = GridVisualiser(occupancy_grid)
+                    visualiser.generate_svg("grid_map.svg")
                 print(prompt, end='', flush=True)
                 continue
 
