@@ -40,6 +40,15 @@ class RadiozoaConfig:
         self._configure_sensor_addresses()
         self._log.info('all sensor addresses configured.')
 
+    def reset(self):
+        from device import N0
+        dev = N0
+        self._log.info(Fore.YELLOW + "reset: temporarily shutting down sensor {} at XSHUT pin {}…".format(dev.label, dev.xshut))
+        self._set_xshut(dev.index, False)
+        time.sleep_ms(250)
+        self._set_xshut(dev.index, True)
+        self._log.info(Fore.YELLOW + 'radiozoa reset.\n')
+
     def _setup_i2c(self):
         self._i2c = I2C(self._i2c_bus_number)
         self._log.info('I2C{} open.'.format(self._i2c_bus_number))
@@ -67,6 +76,7 @@ class RadiozoaConfig:
             self._log.info("shutting down sensor {} at XSHUT pin {}…".format(dev.label, dev.xshut))
             self._set_xshut(dev.index, False)
             time.sleep_ms(50)
+        self._log.info('all sensors shut down.\n')
 
     def _configure_sensor_addresses(self):
         '''

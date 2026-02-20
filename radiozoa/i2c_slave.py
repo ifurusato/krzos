@@ -7,60 +7,48 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-04
+# modified: 2026-02-07
 #
-# I2C slave using single memory buffer for ESP32-S3
+# I2C slave using single memory buffer for ESP32-S3.
 
 import sys
 import time
 from machine import Pin, I2CTarget
 
-from colorama import Fore, Style
-from logger import Logger, Level
 from message_util import pack_message, unpack_message
 
-__I2C_ID      = 1
-__I2C_ADDRESS = 0x45
-_I2C_PINS     = {
-    0: (7,  6),        # ESP32
-    1: ('B6',  'B7'),  # STM32F405
-    2: ('B10', 'B11'), # STM32F405
-}
-_MEM_LENGTH = 64
-
-# pre-packed constant responses
-_PACKED_ACK  = pack_message('ACK')
-_PACKED_ERR  = pack_message('ERR')
 
 class I2CSlave:
+    MEM_LENGTH = 64
+    # pre-packed constant responses
+    PACKED_ACK  = pack_message('ACK')
+    PACKED_ERR  = pack_message('ERR')
     '''
     Memory-based I2C slave with proper separation of RX and TX data.
     '''
-    def __init__(self, i2c_id=None, i2c_address=None):
-        self._log = Logger('i2c_slave', level=Level.INFO)
-        self._i2c_id      = i2c_id if i2c_id is not None else __I2C_ID
-        self._i2c_address = i2c_address if i2c_address else __I2C_ADDRESS
-        _i2c_scl_pin, _i2c_sda_pin = _I2C_PINS[self._i2c_id]
-        self._scl = Pin(_i2c_scl_pin)
-        self._sda = Pin(_i2c_sda_pin)
-        self._log.info(Style.DIM + 'I2C slave configured for SDA on pin {}, SCL on pin {}'.format(_i2c_sda_pin, _i2c_scl_pin))
+    def __init__(self, i2c_id, scl, sda, i2c_address):
+        self._i2c_id      = i2c_id
+        self._scl_pin     = Pin(scl)
+        self._sda_pin     = Pin(sda)
+        self._i2c_address = i2c_address
+        print('I2C slave configured with SDA on pin {}, SCL on pin {}'.format(sda, scl))
         self._i2c = None
-        self._mem_buf = bytearray(_MEM_LENGTH)
-        self._rx_copy = bytearray(_MEM_LENGTH)
+        self._mem_buf = bytearray(I2CSlave.MEM_LENGTH)
+        self._rx_copy = bytearray(I2CSlave.MEM_LENGTH)
         self._callback = None
         self._new_cmd = False
         self._processing = False
         # initialize with ACK
-        init_msg = pack_message("ACK")
+        init_msg = I2CSlave.PACKED_ACK
         for i in range(len(init_msg)):
             self._mem_buf[i] = init_msg[i]
-        self._log.info('I2C slave ready.')
+        print('I2C slave ready.')
 
     def enable(self):
         i2c_id = self._i2c_id
-        self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf, scl=self._scl, sda=self._sda)
+        self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf, scl=self._scl_pin, sda=self._sda_pin)
         self._i2c.irq(self._irq_handler, trigger=I2CTarget.IRQ_END_WRITE, hard=False)
-        self._log.info(Fore.GREEN + 'I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address))
+        print('I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address))
 
     def disable(self):
         if self._i2c:
@@ -90,19 +78,19 @@ class I2CSlave:
                 if self._callback:
                     resp_bytes = self._callback(cmd)
                     if not resp_bytes:
-                        resp_bytes = _PACKED_ACK
+                        resp_bytes = I2CSlave.PACKED_ACK
                 else:
-                    resp_bytes = _PACKED_ACK
+                    resp_bytes = I2CSlave.PACKED_ACK
             except Exception as e:
-                self._log.error("{} raised: {} [1]".format(type(e), e))
-                resp_bytes = _PACKED_ERR
+                print("ERROR: {} raised: {} [1]".format(type(e), e))
+                resp_bytes = I2CSlave.PACKED_ERR
             try:
                 for i in range(len(resp_bytes)):
                     self._mem_buf[i] = resp_bytes[i]
-                for i in range(len(resp_bytes), _MEM_LENGTH):
+                for i in range(len(resp_bytes), I2CSlave.MEM_LENGTH):
                     self._mem_buf[i] = 0
             except Exception as e:
-                self._log.error("{} raised: {} [2]".format(type(e), e))
+                print("ERROR: {} raised: {} [2]".format(type(e), e))
             finally:
                 self._processing = False
 

@@ -29,16 +29,25 @@ class Configure:
         self._scanner = I2CScanner(i2c_bus=1)
         self._default_i2c_address = 0x29
         self._devices = []
+        self._radiozoa_config = None
+        self._log.info('ready.')
+
+    @property
+    def radiozoa_config(self):
+        return self._radiozoa_config
 
     def get_devices(self):
         return self._devices
 
-    def configure(self):
+    def configure(self, force=False):
         '''
         Returns True if successful.
         '''
         try:
-            self._log.info(Style.BRIGHT + "radiozoa sensor configuration…")
+            if force:
+                self._log.info(Fore.GREEN + "radiozoa sensor configuration… " + Style.BRIGHT + '(forced)')
+            else:
+                self._log.info(Fore.GREEN + "radiozoa sensor configuration…")
             for dev in Device.all():
                 self._log.info("device '{}'; I2C address: 0x{:02X}; xshut: {}".format(dev.label, dev.i2c_address, dev.xshut))
             # scan for existing sensors
@@ -49,16 +58,16 @@ class Configure:
             self._log.info("checking for default address and missing sensors…")
             _has_default = self._scanner.has_hex_address(self._default_i2c_address)
             _missing = [ addr for addr in _sensor_addresses if not self._scanner.has_hex_address(addr) ]
-            if _has_default or _missing:
+            if force or _has_default or _missing:
                 self._scanner.i2cdetect(Fore.WHITE)
                 if _has_default:
                     self._log.info(Fore.YELLOW + "found default 0x{:02X} device; reassigning radiozoa addresses…".format(self._default_i2c_address))
                 if _missing:
                     self._log.info(Fore.YELLOW + "missing sensor addresses: {}".format([ "0x{:02X}".format(addr) for addr in _missing ]))
                 try:
-                    radiozoa_config = RadiozoaConfig(i2c_bus=1, level=Level.INFO)
-                    radiozoa_config.configure()
-                    radiozoa_config.close()
+                    self._radiozoa_config = RadiozoaConfig(i2c_bus=1, level=Level.INFO)
+                    self._radiozoa_config.configure()
+#                   self._radiozoa_config.close()
                 except Exception as e:
                     self._log.error("{} raised during RadiozoaConfig configuration: {}".format(type(e), e))
                     raise

@@ -40,6 +40,10 @@ class RadiozoaSensor:
         self._distance_offset = 50
         self._log.info('ready.')
 
+    @property
+    def is_ranging(self): 
+        return self._is_ranging
+
     def _create_sensors(self):
         '''
         Creates VL53L0X instances for all eight sensors using Device pseudo-enum.

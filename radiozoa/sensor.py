@@ -28,11 +28,15 @@ class Sensor:
         self._ring = self._controller.ring
         self._min_distance_mm = 50 
         self._max_distance_mm = 1000
-        self._running = False
+        self._enabled = False
         self._distances = (Sensor.OUT_OF_RANGE,) * 8
         self._distances_fmt = "1111 1111 1111 1111 1111 1111 1111 1111"
         self._distances_packed = pack_message(self._distances_fmt)
         self._task = None
+
+    @property
+    def enabled(self):
+        return self._enabled
 
     @property
     def distances(self):
@@ -47,18 +51,18 @@ class Sensor:
         return self._distances_packed
 
     def enable(self):
-        if not self._running:
-            self._running = True
+        if not self._enabled:
+            self._enabled = True
             self._task = asyncio.create_task(self._poll_loop())
 
     def disable(self):
-        if self._running:
-            self._running = False
+        if self._enabled:
+            self._enabled = False
             if self._task:
                 self._task.cancel()
 
     async def _poll_loop(self):
-        while self._running:
+        while self._enabled:
             try:
                 if self._radiozoa:
                     self._distances = tuple(

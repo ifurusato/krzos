@@ -7,43 +7,64 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-04
-
-# I2C1:  SCL=PB6   SDA=PB7
-# I2C2:  SCL=PB10  SDA=PB11
-
-I2C_ID        = 0
-I2C_ADDRESS   = 0x47
-RELOAD        = True
-USE_BLINKER   = False
-USE_I2C_SLAVE = True
+# modified: 2026-02-07
 
 import sys
 import time
-import gc
 import asyncio
 from colorama import Fore, Style
 
 from colors import*
 from controller import Controller
+from i2c_slave import I2CSlave
+from pixel import Pixel
 
-if RELOAD:
+# configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+RELOAD_MODULES  = True
+I2C_ID          = 0
+I2C_ADDRESS     = 0x47
+
+IS_TINYS3 = True
+if IS_TINYS3:
+    import tinys3
+
+    BOARD_NAME   = 'UM TinyS3'
+    SCL_PIN      = 7
+    SDA_PIN      = 6
+    NEOPIXEL_PIN = tinys3.RGB_DATA
+    COLOR_ORDER  = 'GRB'
+else:
+    BOARD_NAME   = 'WaveShare ESP32-S3 Tiny'
+    SCL_PIN      = 1
+    SDA_PIN      = 2
+    NEOPIXEL_PIN = 21
+    COLOR_ORDER  = 'RGB'
+
+print('configuring for {}…'.format(BOARD_NAME))
+
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+if RELOAD_MODULES:
+    import gc
+
     # force module reload
     for mod in ['main', 'device', 'i2c_slave', 'controller']:
         if mod in sys.modules:
             del sys.modules[mod]
     gc.collect()
 
-def get_slave():
-    try:
-        from i2c_slave_mem import I2CSlave # memory-based
-
-        slave = I2CSlave(i2c_id=I2C_ID, i2c_address=I2C_ADDRESS)
-        return slave
-    except Exception as e:
-        print(Fore.RED + '{} raised creating I2C slave: {}'.format(type(e), e) + Style.RESET_ALL)
-        sys.print_exception(e)
-        raise
+def create_pixel():
+    '''
+    Initialises NeoPixel support. If not using a UM TinyS3, set IS_TINYS3 to False
+    and modify this method accordingly.
+    '''
+    _pixel = Pixel(pin=NEOPIXEL_PIN, pixel_count=1, color_order=COLOR_ORDER)
+    if IS_TINYS3:
+        tinys3.set_pixel_power(1)
+    print('NeoPixel configured on pin {}'.format(NEOPIXEL_PIN))
+    _pixel.set_color(0, (0, 0, 0))
+    return _pixel
 
 async def i2c_loop(controller, slave):
     last_time = time.ticks_ms()
@@ -56,29 +77,19 @@ async def i2c_loop(controller, slave):
         await asyncio.sleep_ms(1)
 
 def start():
-
-    blinker       = None
-    timer5        = None
-    slave         = None
-
     try:
-
-        controller = Controller()
-
-        if USE_BLINKER:
-            from blinker import Blinker
-
-            blinker = Blinker(on_ms=50, off_ms=1950)
-
-        if USE_I2C_SLAVE:
-            slave = get_slave()
-            slave.add_callback(controller.process)
-            controller.set_slave(slave)
-            slave.enable()
-            last_time = time.ticks_ms()
-            # run event loop
-            asyncio.run(i2c_loop(controller, slave))
-
+        pixel = create_pixel()
+        controller = Controller(pixel)
+        slave = I2CSlave(i2c_id=I2C_ID, scl=SCL_PIN, sda=SDA_PIN, i2c_address=I2C_ADDRESS)
+        slave.add_callback(controller.process)
+        controller.set_slave(slave)
+        slave.enable()
+        last_time = time.ticks_ms()
+        # run event loop
+        asyncio.run(i2c_loop(controller, slave))
+    except Exception as e:
+        print(Fore.RED + '{} raised starting in main: {}'.format(type(e), e) + Style.RESET_ALL)
+        sys.print_exception(e)
     except KeyboardInterrupt:
         print('\nCtrl-C caught; exiting…')
 

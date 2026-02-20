@@ -10,6 +10,7 @@
 # modified: 2026-02-04
 
 import time
+from threading import Thread
 from datetime import datetime as dt, timezone
 import smbus2
 import traceback
@@ -40,6 +41,7 @@ class I2CMaster(Component):
         self._i2c_bus_id  = i2c_bus_id if i2c_bus_id else I2CMaster.I2C_BUS_ID
         self._i2c_address = i2c_address if i2c_address else I2CMaster.I2C_ADDRESS
         self._timeset = timeset
+        self._timeout = 0.5 # 500 ms
         self._fail_on_exception = False
         try:
             self._bus = smbus2.SMBus(self._i2c_bus_id)
@@ -75,6 +77,40 @@ class I2CMaster(Component):
             if 1 <= msg_len <= 62:
                 return bytes(resp_buf[:msg_len+2])
         raise RuntimeError("bad message length or slave not ready.")
+
+    def send_request_with_timeout(self, message, timeout=None):
+        '''
+        Send a message and return the response.
+        If the I2C slave does not respond within `timeout` seconds, return None.
+        '''
+        if not self.enabled:
+            self._log.warning("cannot send request: disabled.")
+            return None
+        if timeout is None:
+            timeout = self._timeout
+        # handle "time set" message if needed
+        if message.startswith("time set"):
+            now = dt.now(timezone.utc)
+            self._log.info(Fore.GREEN + 'setting time to: {}'.format(now.isoformat()))
+            ts = now.strftime("%Y%m%d-%H%M%S")
+            message = message.replace("now", ts)
+        out_msg = pack_message(message)
+        result = {}
+        # worker function runs the blocking _i2c_write_and_read
+        def target():
+            try:
+                resp_bytes = self._i2c_write_and_read(out_msg)
+                result['response'] = unpack_message(resp_bytes)
+            except Exception as e:
+                self._log.error(f"{type(e)} raised in send_request: {e}")
+                result['response'] = None
+        thread = Thread(target=target)
+        thread.start()
+        thread.join(timeout=timeout)  # wait up to timeout
+        if thread.is_alive():
+            self._log.warning(f"send_request timed out after {timeout}s")
+            return None  # timeout occurred
+        return result.get('response')
 
     def send_request(self, message):
         '''

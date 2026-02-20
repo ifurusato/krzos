@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2019-12-23
-# modified: 2025-09-09
+# modified: 2026-02-20
 #
 # An enum for expressing the Cardinal directions.
 
@@ -24,7 +24,6 @@ class Cardinal(Enum):
     SOUTHWEST = ( 5, 'SW', 'south-west', 225, π * 1.25 )
     WEST      = ( 6, 'W',  'west',       270, π * 1.50 )
     NORTHWEST = ( 7, 'NW', 'north-west', 315, π * 1.75 )
-    UNKNOWN   = ( 8, 'U',  'unknown',     -1, -1.0 )
 
     # ignore the first param since it's already set by __new__
     def __init__(self, num, abbrev, label, degrees, radians):
