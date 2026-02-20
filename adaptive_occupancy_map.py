@@ -34,6 +34,7 @@ class AdaptiveCell:
         self.observation_count = 0      # total times this cell was observed
         self.occupied_count = 0         # times it was observed as occupied
         self.occupancy_probability = 0.0  # occupied_count / observation_count
+        self.measured_distance = None   # actual sensor distance to obstacle
         self.children = None  # None = leaf node, list = subdivided
 
     def is_leaf(self):
@@ -179,25 +180,16 @@ class AdaptiveOccupancyMap:
                 cell.occupied_count = leaf.occupied_count
                 cell.occupancy_probability = leaf.occupancy_probability
 
-    def x_expand_root_if_needed(self, x, y):
-        '''
-        expand root cell if point is outside current bounds
-        '''
-        while not self.root.contains_point(x, y):
-            # double the root size in all directions
-            old_root = self.root
-            new_size = old_root.size * 2
-            half = new_size / 2
-            # create new larger root
-            self.root = AdaptiveCell(-half, -half, half, half)
-            self.root.state = 'mixed'
-            self.root.subdivide()
-            # find which quadrant the old root belongs in and place it there
-            for child in self.root.children:
-                if child.contains_point(old_root.center_x, old_root.center_y):
-                    # replace this child with the old root
-                    self.root.children[self.root.children.index(child)] = old_root
-                    break
+            if cell:
+                cell.state = leaf.state
+                cell.is_origin = leaf.is_origin
+                cell.is_robot_position = leaf.is_robot_position
+                cell.observation_count = leaf.observation_count
+                cell.occupied_count = leaf.occupied_count
+                cell.occupancy_probability = leaf.occupancy_probability
+                # copy measured distance if it exists
+                if leaf.measured_distance is not None:
+                    cell.measured_distance = leaf.measured_distance
 
     def get_cell(self, x, y):
         '''
@@ -265,9 +257,9 @@ class AdaptiveOccupancyMap:
                 # at obstacle distance, mark as occupied
                 if not cell.is_origin:
                     cell.mark_occupied()
-                    # store scan origin for this obstacle
-                    if not hasattr(cell, 'scan_origin'):
-                        cell.scan_origin = (start_x, start_y)
+                    # store the actual measured distance from sensor
+                    if cell.measured_distance is None:
+                        cell.measured_distance = distance_mm
                 break
             else:
                 # before obstacle, mark as free
@@ -367,12 +359,9 @@ class MapVisualizer:
                 if cell.is_origin:
                     self._write_cell_rect(file, cell, "red", "red", stroke_width=0.5)
                 elif cell.state == 'occupied':
-                    # calculate distance from scan origin, not map origin
-                    if hasattr(cell, 'scan_origin'):
-                        scan_x, scan_y = cell.scan_origin
-                        dx = cell.center_x - scan_x
-                        dy = cell.center_y - scan_y
-                        distance_mm = math.sqrt(dx * dx + dy * dy)
+                    # use the actual measured distance from the sensor
+                    if cell.measured_distance is not None:
+                        distance_mm = cell.measured_distance
                     else:
                         # fallback to distance from map origin
                         distance_mm = math.sqrt(cell.center_x * cell.center_x + cell.center_y * cell.center_y)
@@ -387,7 +376,6 @@ class MapVisualizer:
                     self._write_cell_rect(file, cell, self.ROBOT_POSITION_COLOR, "black", stroke_width=0.5)
             file.write('</g>\n')
             file.write('</svg>\n')
-
         occupied_count = sum(1 for c in cells if c.state == 'occupied')
         free_count = sum(1 for c in cells if c.state == 'free')
         robot_positions = sum(1 for c in cells if c.is_robot_position)
