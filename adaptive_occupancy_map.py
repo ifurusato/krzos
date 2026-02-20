@@ -206,6 +206,17 @@ class AdaptiveOccupancyMap:
         self._expand_root_if_needed(x, y)
         return self._find_cell_for_point(x, y, self.min_cell_size)
 
+    def _rotate_cardinal(self, cardinal, heading_degrees):
+        '''
+        rotate a cardinal direction by the robot's heading
+        heading: 0=north, 90=east, 180=south, 270=west
+        '''
+        # convert heading to number of 45-degree steps
+        steps = int(heading_degrees / 45) % 8
+        # rotate the cardinal index
+        new_index = (cardinal.id + steps) % 8
+        return Cardinal.from_index(new_index)
+
     def process_sensor_reading(self, reading_string, robot_x=0, robot_y=0, robot_heading=0):
         '''
         Parse sensor reading string and update cells.
@@ -215,7 +226,6 @@ class AdaptiveOccupancyMap:
         readings = [int(r) for r in reading_string.split()]
         if len(readings) != 8:
             raise ValueError("expected 8 sensor readings, got {}".format(len(readings)))
-        
         # mark robot position
         robot_cell = self.get_cell(robot_x, robot_y)
         if robot_cell:
@@ -224,13 +234,14 @@ class AdaptiveOccupancyMap:
             # mark origin on first reading at 0,0
             if robot_x == 0 and robot_y == 0 and robot_cell.observation_count == 1:
                 robot_cell.is_origin = True
-        
         for i in range(8):
             distance_mm = readings[i]
             if distance_mm in (0, 9999):
                 continue
             cardinal = Cardinal.from_index(i)
-            self._trace_ray(robot_x, robot_y, cardinal, distance_mm)
+            # rotate cardinal based on robot heading
+            world_cardinal = self._rotate_cardinal(cardinal, robot_heading)
+            self._trace_ray(robot_x, robot_y, world_cardinal, distance_mm)
 
     def _trace_ray(self, start_x, start_y, cardinal, distance_mm):
         '''
@@ -254,6 +265,9 @@ class AdaptiveOccupancyMap:
                 # at obstacle distance, mark as occupied
                 if not cell.is_origin:
                     cell.mark_occupied()
+                    # store scan origin for this obstacle
+                    if not hasattr(cell, 'scan_origin'):
+                        cell.scan_origin = (start_x, start_y)
                 break
             else:
                 # before obstacle, mark as free
@@ -324,18 +338,9 @@ class MapVisualizer:
 
     def generate_svg(self, filename="occupancy_map.svg"):
         '''
-        generate SVG file showing the occupancy map
+        Generate SVG file showing the occupancy map.
         '''
         x_min, y_min, x_max, y_max = self.map.get_bounds()
-        
-#       # calculate SVG bounds
-#       min_x = x_min * self._scale
-#       max_x = x_max * self._scale
-#       min_y = y_min * self._scale
-#       max_y = y_max * self._scale
-#       width = max_x - min_x
-#       height = max_y - min_y
-        
         # calculate SVG bounds with Y-flip
         min_x = x_min * self._scale
         max_x = x_max * self._scale
@@ -344,41 +349,43 @@ class MapVisualizer:
         max_y = -y_min * self._scale
         width = max_x - min_x
         height = max_y - min_y
-        
         cells = self.map.get_all_cells()
-        
         # generate content and write to file
         with open(filename, "w") as file:
             file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             file.write('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="{} {} {} {}">\n'.format(
                 min_x, min_y, width, height))
-            
             # draw free cells first
             file.write('<g id="free-cells">\n')
             for cell in cells:
                 if cell.state == 'free':
                     self._write_cell_rect(file, cell, self.FREE_CELL_COLOR, "none")
             file.write('</g>\n')
-            
             # draw occupied cells and origin
             file.write('<g id="occupied-cells">\n')
             for cell in cells:
                 if cell.is_origin:
                     self._write_cell_rect(file, cell, "red", "red", stroke_width=0.5)
                 elif cell.state == 'occupied':
-                    distance_mm = math.sqrt(cell.center_x * cell.center_x + cell.center_y * cell.center_y)
+                    # calculate distance from scan origin, not map origin
+                    if hasattr(cell, 'scan_origin'):
+                        scan_x, scan_y = cell.scan_origin
+                        dx = cell.center_x - scan_x
+                        dy = cell.center_y - scan_y
+                        distance_mm = math.sqrt(dx * dx + dy * dy)
+                    else:
+                        # fallback to distance from map origin
+                        distance_mm = math.sqrt(cell.center_x * cell.center_x + cell.center_y * cell.center_y)
                     rgb = self._color_for_distance(distance_mm)
                     fill = self._rgb_to_svg_color(rgb)
                     self._write_cell_rect(file, cell, fill, "black", stroke_width=0.5)
             file.write('</g>\n')
-            
             # draw robot positions
             file.write('<g id="robot-positions">\n')
             for cell in cells:
                 if cell.is_robot_position and not cell.is_origin:
                     self._write_cell_rect(file, cell, self.ROBOT_POSITION_COLOR, "black", stroke_width=0.5)
             file.write('</g>\n')
-            
             file.write('</svg>\n')
 
         occupied_count = sum(1 for c in cells if c.state == 'occupied')
