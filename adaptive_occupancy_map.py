@@ -154,6 +154,35 @@ class AdaptiveOccupancyMap:
         '''
         expand root cell if point is outside current bounds
         '''
+        if self.root.contains_point(x, y):
+            return
+        # save all leaf cells
+        old_leaves = self.root.get_all_leaf_cells()
+        # determine new size needed
+        current_half = self.root.size / 2
+        new_half = current_half
+        while not (-new_half <= x <= new_half and -new_half <= y <= new_half):
+            new_half *= 2
+        # create new root
+        self.root = AdaptiveCell(-new_half, -new_half, new_half, new_half)
+        # reinsert all old data by directly subdividing and copying
+        for leaf in old_leaves:
+            if leaf.state == 'unknown' and not leaf.is_origin and not leaf.is_robot_position:
+                continue  # skip empty cells
+            # find or create cell at this position
+            cell = self._find_cell_for_point(leaf.center_x, leaf.center_y, self.min_cell_size)
+            if cell:
+                cell.state = leaf.state
+                cell.is_origin = leaf.is_origin
+                cell.is_robot_position = leaf.is_robot_position
+                cell.observation_count = leaf.observation_count
+                cell.occupied_count = leaf.occupied_count
+                cell.occupancy_probability = leaf.occupancy_probability
+
+    def x_expand_root_if_needed(self, x, y):
+        '''
+        expand root cell if point is outside current bounds
+        '''
         while not self.root.contains_point(x, y):
             # double the root size in all directions
             old_root = self.root
