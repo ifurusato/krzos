@@ -81,6 +81,23 @@ def worker_loop(master, stop_event, lock):
     finally:
         print("worker thread stopping")
 
+def read_xyz():
+    try:
+        print(Fore.WHITE + "Enter x,y,heading: " + Style.RESET_ALL, end="", flush=True)
+        raw = input().strip()
+        parts = raw.split(",")
+        if len(parts) == 2:
+            # backwards compatible: x,y without heading
+            x_str, y_str = parts
+            return int(x_str.strip()), int(y_str.strip()), 0
+        elif len(parts) == 3:
+            x_str, y_str, h_str = parts
+            return int(x_str.strip()), int(y_str.strip()), int(h_str.strip())
+        else:
+            return None
+    except (ValueError, TypeError):
+        return None
+
 def read_xy():
     try:
         print(Fore.WHITE + "Enter x,y: " + Style.RESET_ALL, end="", flush=True)
@@ -90,11 +107,9 @@ def read_xy():
     except (ValueError, TypeError):
         return None
 
-button_pressed = False
-
-def perform_scan(master, tfxc, xy):
+def perform_scan(master, tfxc, xyz):
     try:
-        print(Fore.CYAN + 'xy: ' + Fore.GREEN + '{}\n'.format(xy) + Style.RESET_ALL)
+        print(Fore.CYAN + 'xyz: ' + Fore.GREEN + '{}\n'.format(xyz) + Style.RESET_ALL)
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
 
         for _ in range(BUTTON_DELAY_SEC):
@@ -105,18 +120,18 @@ def perform_scan(master, tfxc, xy):
         print('response: {}'.format(response))
         time.sleep(1)
         
-        x, y = xy
+        x, y, heading = xyz
         response = master.send_request(DISTANCES_COMMAND)
         while response is None or response == DISTANCES_COMMAND:
             print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
             response = master.send_request(DISTANCES_COMMAND)
-        print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{}) '.format(x, y) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
+        print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
 
     except Exception as e:
         print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
 
-
 button = None
+button_pressed = False
 
 def main():
 
@@ -159,11 +174,11 @@ def main():
         while True:
             if button_pressed:
                 button_pressed = False
-                print()  # newline after prompt
-                xy = read_xy()
-                if xy is None:
-                    xy = 0, 0
-                perform_scan(master, tfxc, xy)
+                print() # newline after prompt
+                xyz = read_xyz()
+                if xyz is None:
+                    xyz = 0, 0, 0
+                perform_scan(master, tfxc, xyz)
                 print(prompt, end='', flush=True)
                 continue
 
