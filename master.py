@@ -79,8 +79,6 @@ def worker_loop(master, stop_event, lock):
     finally:
         print("worker thread stopping")
 
-#       raw = input(Fore.WHITE + "Enter x,y: " + Style.RESET_ALL).strip()
-
 def read_xy():
     try:
         print(Fore.WHITE + "Enter x,y: " + Style.RESET_ALL, end="", flush=True)
@@ -90,17 +88,34 @@ def read_xy():
     except (ValueError, TypeError):
         return None
 
-def x_read_xy():
-    try:
-        raw = input("Enter x,y: ").strip()
-        x_str, y_str = raw.split(",", 1)
-        x = int(x_str.strip())
-        y = int(y_str.strip())
-        return x, y
-    except (ValueError, TypeError):
-        return None
-
 def perform_scan(master, tfxc):
+    try:
+        xy = read_xy()
+        if xy is not None:
+            print(Fore.CYAN + 'xy: ' + Fore.GREEN + '{}\n'.format(xy) + Style.RESET_ALL)
+        else:
+            xy = 0,0
+            print(Fore.CYAN + 'xy: 0,0' + Style.RESET_ALL)
+        print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
+
+        for _ in range(BUTTON_DELAY_SEC):
+            response = tfxc.send_request(TICK_COMMAND)
+            print('response: {}'.format(response))
+            time.sleep(1)
+        response = tfxc.send_request(BEEP_COMMAND)
+        print('response: {}'.format(response))
+        time.sleep(1)
+        
+        response = master.send_request(DISTANCES_COMMAND)
+        while response is None or response == DISTANCES_COMMAND:
+            print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
+            response = master.send_request(DISTANCES_COMMAND)
+        print(Fore.CYAN + 'response: ' + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
+
+    except Exception as e:
+        print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
+
+def x_perform_scan(master, tfxc):
     try:
 
         xy = read_xy()
@@ -112,16 +127,16 @@ def perform_scan(master, tfxc):
 
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
 
-#       with lock:
         for _ in range(BUTTON_DELAY_SEC):
-            response = tfxc.send_request(TICK_COMMAND)
-            print('response: {}'.format(response))
+            resp = tfxc.send_request(TICK_COMMAND)
+            print('response: {}'.format(resp))
             time.sleep(1)
-        response = tfxc.send_request(BEEP_COMMAND)
-        print('response: {}'.format(response))
+        resp = tfxc.send_request(BEEP_COMMAND)
+        print('response: {}'.format(resp))
         time.sleep(1)
-        response = DISTANCES_COMMAND
-        while response == DISTANCES_COMMAND:
+
+        response = None
+        while response == DISTANCES_COMMAND or response == None:
             response = master.send_request(DISTANCES_COMMAND)
             if response is None or response == DISTANCES_COMMAND:
                 print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
