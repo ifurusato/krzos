@@ -6,120 +6,92 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-04
+# modified: 2026-02-12
 
 import sys
 import time
 import math, random
-from machine import Timer
 from machine import RTC
-from colorama import Fore, Style
-
-import neopixel
-import tinys3
 
 from colors import*
-from pixel import Pixel
-from message_util import pack_message
 from logger import Logger, Level
-from pixel_state import PixelState
-from configure import Configure
-from radiozoa_sensor import RadiozoaSensor
-from radiozoa_config import RadiozoaConfig
+from message_util import pack_message
 
 class Controller:
-    RING_PIN = 44
-    AUTOSTART_SERVICES = False
-    AUTOSTART_DELAY_MS = 250            # delay in milliseconds before auto-start
+    _AUTOSTART_SERVICES = True           # auto-start services after delay
+    _AUTOSTART_DELAY_MS = 7000           # delay in milliseconds before auto-start
     # pre-packed constant responses
-    PACKED_ACK  = pack_message('ACK')   # acknowledge okay
-    PACKED_NACK = pack_message('NACK')  # acknowledge bad command
-    PACKED_ERR  = pack_message('ERR')   # processing error occurred
-    PACKED_PING = pack_message('PING')  # processing error occurred
+    _PACKED_ACK  = pack_message('ACK')   # acknowledge okay
+    _PACKED_NACK = pack_message('NACK')  # acknowledge bad command
+    _PACKED_ERR  = pack_message('ERR')   # processing error occurred
+    _PACKED_PING = pack_message('PING')  # processing error occurred
+    _PACKED_DATA = pack_message('0000 1111 2222 3333 4444 5555 6666 7777') # sample data, packed
     '''
     A controller for command strings received from the I2CSlave.
 
     Args:
-        pixel:    an instance of the Pixel class, provides NeoPixel support
+        config: the application configuration
     '''
-    def __init__(self, pixel):
-        self._log = Logger('ctrl', level=Level.INFO)
-        self._startup_ms = time.ticks_ms()
-        self._slave    = None
-        self._sensor   = None
-        self._radiozoa = None
-        self._config   = None
-        # neopixel (née LED) support
-        self._pixel = pixel
-        self._pixel.set_color(0, COLOR_TANGERINE)
-        # odometry heartbeat feature
+    def __init__(self, config, level=Level.INFO):
+        self._log = Logger('controller', level=level)
+        self._startup_ms            = time.ticks_ms()
+        self._config                = config
+        self._name                  = config['name']
+        self._family                = config['family']
+#       self._log.info('family set to: {}'.format(self._family))
+        self._slave                 = None
+        # neopixel support
+        self._pixel = self._create_pixel()
+        # heartbeat feature
         self._heartbeat_enabled     = False
         self._heartbeat_on_time_ms  = 50
         self._heartbeat_off_time_ms = 2950
-        self._heartbeat_timer = 0
-        self._heartbeat_state = False
-        self._stop_at = None
-        self._pixel_persist = False
-        # rotation
-        self._ring_offset     = 0
-        self._rotate_direction = 1 # 1 or -1
-        self._enable_rotate   = False
-        self._ring_model = [PixelState() for _ in range(24)]
-        # theme
-        self._enable_theme    = False
-        self._pulse_steps = 40
-        self._theme_target_pixels = 12 # default
-        self._all  = Color.all_colors()
-        self._cool = [ COLOR_BLUE, COLOR_CYAN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
-                       COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_VIOLET, COLOR_DEEP_CYAN,
-                       COLOR_PURPLE, COLOR_SKY_BLUE ]
-        self._warm = [ COLOR_RED, COLOR_YELLOW, COLOR_DARK_RED, COLOR_DARK_YELLOW,
-                       COLOR_ORANGE, COLOR_TANGERINE, COLOR_PINK, COLOR_FUCHSIA, COLOR_AMBER ]
-        self._wild = [ COLOR_MAGENTA, COLOR_DARK_MAGENTA, COLOR_CORNFLOWER, COLOR_INDIGO, COLOR_RED,
-                       COLOR_VIOLET, COLOR_PINK, COLOR_FUCHSIA, COLOR_PURPLE, COLOR_SKY_BLUE,
-                       COLOR_WHITE, COLOR_APPLE, COLOR_EMERALD, COLOR_TANGERINE, COLOR_AMBER ]
-        self._grey = [ COLOR_WHITE, COLOR_GREY_0, COLOR_GREY_1, COLOR_GREY_2, COLOR_GREY_3,
-                       COLOR_GREY_4, COLOR_GREY_5, COLOR_GREY_6, COLOR_GREY_7 ]
-        self._dark = [ COLOR_DARK_RED, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
-                       COLOR_DARK_MAGENTA, COLOR_DARK_YELLOW, COLOR_PURPLE ]
-        self._palettes = {
-            'all':  self._all,
-            'cool': self._cool,
-            'warm': self._warm,
-            'wild': self._wild,
-            'grey': self._grey,
-            'dark': self._dark
-        }
-        # instantiate ring
-        self._ring  = Pixel(pin=Controller.RING_PIN, pixel_count=24, brightness=0.1)
-        self.reset_ring()
-        self._last_update_ts  = self._get_time()
-        self._timer0 = Timer(0)
-        self._timer1_hz = 24
-        self._timer1 = Timer(1)
-        self._timer1.init(freq=self._timer1_hz, mode=Timer.PERIODIC, callback=self._action)
-        self._radiozoa_started   = False
-        self._pixel.set_color(0, COLOR_BLACK)
+        self._heartbeat_timer       = 0
+        self._heartbeat_state       = False
+        self._stop_at               = None
+        self._pixel_persist         = False
+        # instantiate pixel and timer
+        self._pixel_timer           = None
+        self._pixel_timer_freq_hz   = 50
+        self._create_pixel_timer()
+        self._services_started      = False
+        self._autostart_delay_ms    = Controller._AUTOSTART_DELAY_MS
         self._log.info('ready.')
+
+    @property
+    def name(self):
+        return self._name
+
+    def _create_pixel(self):
+        from pixel import Pixel
+
+        _pixel_pin = self._config['pixel_pin']
+        if self._family == 'TINYS3':
+            import tinys3
+
+            _pixel_pin = tinys3.RGB_DATA
+            tinys3.set_pixel_power(1)
+        _pixel = Pixel(pin=_pixel_pin, pixel_count=1, color_order=self._config['color_order'])
+        self._log.info('NeoPixel configured on pin {}'.format(_pixel_pin))
+        _pixel.set_color(0, COLOR_CYAN)
+        time.sleep_ms(100)
+        _pixel.set_color(0, COLOR_BLACK)
+        return _pixel
+
+    def _create_pixel_timer(self):
+        try:
+            from machine import Timer
+
+            self._pixel_timer = Timer(0)
+            self._pixel_timer.init(freq=self._pixel_timer_freq_hz, callback=self._led_off)
+        except Exception as e:
+            sys.print_exception(e)
 
     # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
-    def ring(self):
-        return self._ring
-
-    @property
-    def radiozoa(self):
-        return self._radiozoa
-
-    def set_ring(self, ring):
-        self._ring = ring
-        self.reset_ring()
-
-    def reset_ring(self):
-        for pixel in self._ring_model:
-            pixel.reset()
-        self._update_ring()
+    def pixel(self):
+        return self._pixel
 
     def tick(self, delta_ms):
         if self._heartbeat_enabled:
@@ -129,54 +101,94 @@ class Controller:
                 self._stop_at = None
                 if not self._pixel_persist:
                     self._pixel.set_color(0, COLOR_BLACK)
-        if Controller.AUTOSTART_SERVICES and not self._radiozoa_started:
-            if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= Controller.AUTOSTART_DELAY_MS:
-                self._radiozoa_started = True
+        if Controller._AUTOSTART_SERVICES and not self._services_started:
+            if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= self._autostart_delay_ms:
+        
+                self._services_started = True
                 self._start_services()
 
     def set_slave(self, slave):
         self._slave = slave
         self._slave.add_callback(self._on_command)
 
+    def pre_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
+        '''
+        Pre-process the arguments, returning a response and color if a match occurs.
+        Such a match precludes further processing.
+        '''
+#       self._log.info("controller: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
+        if arg0 == "__extend_here__":
+            return None, None
+        else:
+            return None, None
+
+    def post_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
+        '''
+        Post-process the arguments, returning a response and color if a match occurs.
+        Absent a match by this point is considered an error condition.
+        '''
+#       self._log.info("post-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
+        if arg0 == "__extend_here__":
+            return None, None
+        else:
+            return None, None
+
+    def print_help(self):
+        print('''
+Commands:
+
+    name                                    # return the name of the configured board
+    time get | set <timestamp>              # set/get RTC time
+    pixel off | <color> | <n> <color>       # control NeoPixel
+    persist on | off                        # persist pixel after setting
+    rgb [<n>] <red> <green> <blue>          # set NeoPixel to RGB
+    heartbeat on | off                      # control heartbeat flash
+    ping                                    # returns "PING"
+    data                                    # return sample data
+    reset                                   # force hardware reset''')
+
     def process(self, cmd):
         '''
         Processes the callback from the I2C slave, returning 'ACK', 'NACK' or 'ERR'.
+        This calls pre_process() and post_process() in turn.
 
-        Commands:
-            radiozoa init | start | stop | reset
-            distances
-            time get | set <timestamp>
-            ring off | <color> | <n> <color>
-            rotate <n> | on | off | hz <n> | fwd/cw | rev/ccw
-            theme on | off | hz <n> | pixels <n> | steps <n> | <theme-name> <n>
-            heartbeat on | off
-            rgb <n> <red> <green> <blue>
-            heading <degrees> <color>
-            ping
-            data
-            close
-            reset
+        See get_help() for list of available commands.
         '''
         _show_state = True
         if _show_state:
             self._stop_at = time.ticks_add(time.ticks_ms(), 1000)  # stop 1 second later
         _exit_color = COLOR_BLACK # default
-        self._pixel.set_color(0, COLOR_CYAN)
+#       self._pixel.set_color(0, COLOR_CYAN)
         try:
-#           self._log.debug("cmd: '{}'".format(cmd))
+#           self._log.info("cmd: '{}'".format(cmd))
             parts = cmd.lower().split()
             if len(parts) == 0:
                 _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
+                return Controller._PACKED_ERR
             _arg0 = parts[0]
             _arg1 = parts[1] if len(parts) > 1 else None
             _arg2 = parts[2] if len(parts) > 2 else None
             _arg3 = parts[3] if len(parts) > 3 else None
             _arg4 = parts[4] if len(parts) > 4 else None
-#           self._log.debug("cmd: '{}'; arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, _arg0, _arg1, _arg2, _arg3, _arg4))
+#           self._log.info("cmd: '{}'; arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, _arg0, _arg1, _arg2, _arg3, _arg4))
 
-            if _arg0 == "time":
-#               self._log.debug('time: {}, {}'.format(_arg1, _arg2))
+            # pre-process
+            _response, __exit_color = self.pre_process(cmd, _arg0, _arg1, _arg2, _arg3, _arg4)
+            if _response is not None:
+                _exit_color = __exit_color
+                return _response
+
+            if _arg0 == "name":
+                _exit_color = COLOR_DARK_GREEN
+                return pack_message(self._name)
+
+            elif _arg0 == "help":
+                self.print_help()
+                _exit_color = COLOR_DARK_GREEN
+                return Controller._PACKED_ACK
+
+            elif _arg0 == "time":
+#               self._log.info('time: {}, {}'.format(_arg1, _arg2))
                 if _arg1 == 'set':
                     _exit_color = COLOR_DARK_GREEN
                     return self._set_time(_arg2)
@@ -184,399 +196,162 @@ class Controller:
                     _exit_color = COLOR_DARK_GREEN
                     return pack_message(self._rtc_to_iso(RTC().datetime()))
                 _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
-
-            elif _arg0 == "radiozoa":
-                if _arg1 == 'init':
-                    self._radiozoa_init()
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                elif _arg1 == 'start':
-                    self._radiozoa_start()
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                elif _arg1 == 'stop':
-                    self._radiozoa_stop()
-                    self.reset_ring()
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                elif _arg1 == 'reset':
-                    self._radiozoa_reset()
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
-
-            elif _arg0 == "distances":
-                if self._sensor:
-                    _exit_color = COLOR_DARK_GREEN
-                    return self._sensor.distances_packed
-                else:
-                    self._log.error('no sensor.')
-                _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
-
-            elif _arg0 == "ring":
-                if self._ring:
-                    try:
-                        _rotating = self._enable_rotate
-                        if _arg1 == 'clear':
-                            self.reset_ring()
-                            _exit_color = COLOR_BLACK
-                            return Controller.PACKED_ACK
-                        elif _arg1 == 'all':
-                            if _arg2 == 'off' or _arg2 == 'clear':
-                                self.reset_ring()
-                                _exit_color = COLOR_DARK_GREEN
-                                return Controller.PACKED_ACK
-                            else:
-                                color = self._get_color(_arg2, _arg3)
-                                if not color:
-                                    self._log.error("could not find color: arg2: '{}'; arg3: '{}'".format(_arg2, _arg3))
-                                    _exit_color = COLOR_RED
-                                    return Controller.PACKED_ERR
-                                for idx in range(24):
-                                    self._set_ring_color(idx, color)
-                                _exit_color = COLOR_DARK_GREEN
-                                return Controller.PACKED_ACK
-                        else:
-                            index = int(_arg1) - 1
-                            if 0 <= index <= 23:
-                                color = self._get_color(_arg2, _arg3)
-                                if color:
-                                    self._set_ring_color(index, color)
-                                    _exit_color = COLOR_DARK_GREEN
-                                    return Controller.PACKED_ACK
-                            else:
-                                self._log.error("index value {} out of bounds (1-24).".format(index))
-                                _exit_color = COLOR_RED
-                                return Controller.PACKED_ERR
-                        self._log.error("could not process input: '{}'".format(cmd))
-                    finally:
-                        self._enable_rotate = _rotating
-                else:
-                    self._log.error('no LED ring available.')
-                _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
+                return Controller._PACKED_ERR
 
             elif _arg0 == "pixel":
+                # any calls to pixel disable heartbeat
+                self._enable_heartbeat(False)
                 _show_state = False
                 if self._pixel:
                     if _arg1 == 'off' or _arg1 == 'clear':
                         color = COLOR_BLACK
                     else:
                         color = self._get_color(_arg1, _arg2)
-                    if color is None:
-                        self._log.error("could not find color: arg1: '{}'; arg2: '{}'".format(_arg1, _arg2))
+                    if not color:
+                        self._log.warning("could not find color: arg1: '{}'; arg2: '{}'".format(_arg1, _arg2))
                         _exit_color = COLOR_RED
-                        return Controller.PACKED_ERR
-                    else:
-                        # any valid calls to set pixel disable heartbeat
-                        self._enable_heartbeat(False)
+                        return Controller._PACKED_ERR
                     self._pixel.set_color(0, color)
-                    return Controller.PACKED_ACK
+                    return Controller._PACKED_ACK
                 else:
-                    self._log.error('no pixel available.')
+                    self._log.warning('no pixel available.')
                 _exit_color = COLOR_RED
-                return Controller.PACKED_ERR
-
-            elif _arg0 == "rotate":
-                if _arg1:
-                    if _arg1 == 'on':
-                        self._enable_rotate = True
-                        self._restart_timer()
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'off':
-                        self._enable_rotate = False
-                        self._restart_timer()
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'fwd' or _arg1 == 'cw':
-                        self._rotate_direction = 1
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'rev' or _arg1 == 'ccw':
-                        self._rotate_direction = -1
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'hz':
-                        hz = int(_arg2)
-                        if hz > 0:
-                            self._restart_timer(hz)
-                            _exit_color = COLOR_DARK_GREEN
-                            return Controller.PACKED_ACK
-                        else:
-                            _exit_color = COLOR_RED
-                            return Controller.PACKED_ERR
-                    else:
-                        shift = int(_arg1)
-                        self._rotate_ring(shift)
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                else:
-                    _exit_color = COLOR_RED
-                    return Controller.PACKED_ERR
-
-            elif _arg0 == "theme":
-                if _arg1:
-                    if _arg1 == 'on':
-                        self._init_theme()
-                        self._enable_theme = True
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'off':
-                        self._enable_theme = False
-                        self._restart_timer()
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-                    elif _arg1 == 'hz':
-                        hz = int(_arg2)
-                        if hz > 0:
-                            self._restart_timer(hz)
-                            _exit_color = COLOR_DARK_GREEN
-                            return Controller.PACKED_ACK
-                        _exit_color = COLOR_RED
-                        return Controller.PACKED_ERR
-                    elif _arg1 == 'pixels':
-                        _themed = self._enable_theme
-                        try:
-                            self._enable_theme = False
-                            target = int(_arg2)
-                            if 1 <= target <= 24:
-                                self._theme_target_pixels = target
-                                self._init_theme(reset=True)
-                                _exit_color = COLOR_DARK_GREEN
-                                return Controller.PACKED_ACK
-                            _exit_color = COLOR_RED
-                            return Controller.PACKED_ERR
-                        finally:
-                            self._enable_theme = _themed
-
-                    elif _arg1 in self._palettes:
-                        _themed = self._enable_theme
-                        _rotating = self._enable_rotate
-                        self._enable_rotate = False
-                        self._enable_theme = False
-                        self._ring_offset = 0
-                        try:
-                            target = int(_arg2)
-                            self._theme_target_pixels = target
-                            if 1 <= target <= 24:
-                                self._populate(target, _arg1)
-                                _exit_color = COLOR_DARK_GREEN
-                                return Controller.PACKED_ACK
-                            else:
-                                _exit_color = COLOR_RED
-                                return Controller.PACKED_ERR
-                        except Exception as e:
-                            self._log.error('{} raised with palette name: {}'.format(type(e), e))
-                            _exit_color = COLOR_RED
-                            return Controller.PACKED_ERR
-                        finally:
-                            self._enable_theme = _themed
-                            self._enable_rotate = _rotating
-                        _exit_color = COLOR_DARK_GREEN
-                        return Controller.PACKED_ACK
-
-                    elif _arg1 == 'steps':
-                        steps = int(_arg2)
-                        if steps > 0:
-                            self._pulse_steps = steps
-                            _exit_color = COLOR_DARK_GREEN
-                            return Controller.PACKED_ACK
-                        _exit_color = COLOR_RED
-                        return Controller.PACKED_ERR
-                    else:
-                        self._log.error("could not process input:  '{}'".format(cmd))
-                        _exit_color = COLOR_RED
-                        return Controller.PACKED_ERR
-                    _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
-                else:
-                    _exit_color = COLOR_RED
-                    return Controller.PACKED_ERR
+                return Controller._PACKED_ERR
 
             elif _arg0 == "persist":
-                if _arg1 == 'on':   
+                if _arg1 == 'on':
                     self._pixel_persist = True
                     _exit_color = COLOR_BLACK # otherwise it'd be on
-                    return Controller.PACKED_ACK
+                    return Controller._PACKED_ACK
                 elif _arg1 == 'off':
                     self._pixel_persist = False
                     _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
+                    return Controller._PACKED_ACK
                 else:
-                    print("ERROR: unrecognised persist argument: {}'".format(_arg1))
+                    self._log.error("unrecognised persist argument: {}'".format(_arg1))
                     _exit_color = COLOR_RED
-                    return Controller.PACKED_ERR
+                    return Controller._PACKED_ERR
 
             elif _arg0 == "heartbeat":
                 if _arg1 == 'on':
                     self._pixel_persist = False # contradictory, so off
                     self._enable_heartbeat(True)
                     _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
+                    return Controller._PACKED_ACK
                 elif _arg1 == 'off':
                     self._enable_heartbeat(False)
                     _exit_color = COLOR_DARK_GREEN
-                    return Controller.PACKED_ACK
+                    return Controller._PACKED_ACK
                 else:
-                    self._log.error("ERROR: unrecognised argument: '{}'".format(_arg1))
+                    self._log.error("unrecognised argument: '{}'".format(_arg1))
                     _exit_color = COLOR_RED
-                    return Controller.PACKED_ERR
+                    return Controller._PACKED_ERR
 
             elif _arg0 == "rgb":
-                # e.g., rgb 3 130 40 242
-                index = int(_arg1)
-                red   = int(_arg2)
-                green = int(_arg3)
-                blue  = int(_arg4)
-                self._ring.set_color(index, (red, green, blue))
-                _exit_color = COLOR_DARK_GREEN
-                return Controller.PACKED_ACK
-
-            elif _arg0 == "heading":
-                # e.g., heading 87 blue | heading 87 off
-                degrees = int(_arg1)
-                index = self._heading_to_pixel(degrees)
-                color = self._get_color(_arg2, _arg3)
-                self._ring.set_color(index, color)
-                _exit_color = COLOR_DARK_GREEN
-                return Controller.PACKED_ACK
+                # e.g., rgb [3] 130 40 242
+                self._enable_heartbeat(False)
+                _show_state = False
+                if _arg4:
+                    index = int(_arg1)
+                    red   = int(_arg2)
+                    green = int(_arg3)
+                    blue  = int(_arg4)
+                else:
+                    index = 1
+                    red   = int(_arg1)
+                    green = int(_arg2)
+                    blue  = int(_arg3)
+                self._log.info("rgb: index: {}; red: '{}'; green: '{}'; blue: '{}'".format(index, red, green, blue))
+                self._pixel.set_color(index, (red, green, blue))
+                return Controller._PACKED_ACK
 
             elif _arg0 == "ping":
                 _exit_color = COLOR_DARK_GREEN
-                return Controller.PACKED_PING
+                return Controller._PACKED_PING
 
-            # get/set (data request)
-            elif _arg0 == "data":
-                # send test data
-                _exit_color = COLOR_FUCHSIA
-                return packed_message('0000 1111 2222 3333')
-
-            elif _arg0 == "close":
-                self._enable_rotate = False
-                self._enable_heartbeat(False)
-                self.reset_ring()
-                _exit_color = COLOR_BLACK
-                return Controller.PACKED_ACK
+            elif _arg0 == "data": # data request (TBD)
+#               _exit_color = COLOR_FUCHSIA
+#               return Controller._PACKED_DATA
+                _message, _exit_color = self._get_data()
+                return pack_message(_message)
 
             elif _arg0 == "reset":
                 import machine
 
-                self._log.info(Fore.YELLOW + 'performing microcontroller reset…')
+                self._log.info('performing microcontroller reset…')
                 machine.reset()
-                return Controller.PACKED_ACK
+                return Controller._PACKED_ACK
 
             else:
-                self._log.warning("unrecognised command: '{}'{}{}{}".format(
-                        cmd,
-                        "; arg0: '{}'".format(_arg0) if _arg0 else '',
-                        "; arg1: '{}'".format(_arg1) if _arg1 else '',
-                        "; arg2: '{}'".format(_arg2) if _arg2 else ''))
-                _exit_color = COLOR_ORANGE
-                return Controller.PACKED_NACK
-            _exit_color = COLOR_DARK_GREEN
-            return Controller.PACKED_ACK
+                # post-process
+                _response, _exit_color = self.post_process(cmd, _arg0, _arg1, _arg2, _arg3, _arg4)
+                if _response is not None:
+                    _exit_color = __exit_color
+                    return _response
+                else:
+                    self._log.warning("unrecognised command '{}' as arguments: {}{}{}{}{}".format(
+                            cmd,
+                            "; arg0: '{}'".format(_arg0) if _arg0 else '',
+                            "; arg1: '{}'".format(_arg1) if _arg1 else '',
+                            "; arg2: '{}'".format(_arg2) if _arg2 else '',
+                            "; arg3: '{}'".format(_arg3) if _arg3 else '',
+                            "; arg2: '{}'".format(_arg4) if _arg4 else ''))
+                    return Controller._PACKED_NACK, COLOR_ORANGE
 
         except Exception as e:
-            self._log.info("{} raised by controller: {}".format(type(e), e))
-            sys.print_exception()
+            self._log.error("{} raised by controller: {}".format(type(e), e))
+            sys.print_exception(e)
             _exit_color = COLOR_RED
-            return Controller.PACKED_ERR
+            return Controller._PACKED_ERR
         finally:
             if _show_state:
                 self._pixel.set_color(0, _exit_color)
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def _radiozoa_reset(self):
-        if not self._radiozoa:
-            self._log.info('no radiozoa available.')
-            return Controller.PACKED_ERR
-        if not self._config:
-            self._log.info('no radiozoa config available.')
-            return Controller.PACKED_ERR
-        if self._radiozoa.is_ranging:
-            self._radiozoa.stop_ranging()
-            time.sleep(0.5)
-        try:
-            self._log.info(Fore.MAGENTA + 'reset radiozoa…')
-            if self._sensor:
-                self._sensor.disable()
-            self._radiozoa_init(force=True)
-#           self._config.configure(force=True)
-            self._log.info('radiozoa reset.')
-            return Controller.PACKED_ACK
-        except Exception as e:
-            self._log.error("{} raised during Radiozoa reset: {}".format(type(e), e))
-            return Controller.PACKED_ERR
-
-    def _radiozoa_init(self, force=False):
+    def _get_data(self):
         '''
-        Initialise the Radiozoa sensor.
+        Return data (TBD).
         '''
-        try:
-            if self._config is None:
-                self._config = Configure()
-            if self._config.configure(force=force):
-                from sensor import Sensor
-
-                if self._radiozoa is None:
-                    self._radiozoa = RadiozoaSensor()
-                if self._sensor is None:
-                    self._sensor = Sensor(controller=self)
-            else:
-                raise Exception('radiozoa init fail.')
-        except Exception as e:
-            self._log.error("{} raised by radiozoa_init: {}".format(type(e), e))
-            sys.print_exception()
-
-    def _radiozoa_start(self):
-        self._log.info('starting radiozoa…')
-        if not self._radiozoa:
-            self._radiozoa_init()
-            time.sleep_ms(250)
-        if self._radiozoa:
-            self._radiozoa.start_ranging()
-            self._sensor.enable()
-            # disable heartbeat
-            self._enable_heartbeat(False)
-        else:
-            self._log.error('failed to start: radiozoa not configured.')
-
-    def _radiozoa_stop(self):
-        self._log.info('stopping radiozoa…')
-        if self._radiozoa:
-            self._sensor.disable()
-            self._radiozoa.stop_ranging()
-            # enable heartbeat
-            self._enable_heartbeat(True)
-        else:
-            self._log.error('failed to stop: radiozoa not configured.')
-
-    def _led_off(self, timer=None):
-        self._pixel.set_color(0, COLOR_BLACK)
+        _data = '0000 1111 2222 33333' # 20 chars
+#       _data = '0000 1111 2222 3333 4444 5555 6666 77777' # 40 characters
+#       _data = '0000 1111 2222 3333 4444 5555 6666 7777 8888 9999 AAAA BBBB CC' # 62 chars
+#       self._log.info('data: {} chars.'.format(len(_data)))
+        _exit_color = COLOR_FUCHSIA
+        return _data, _exit_color
 
     def _on_command(self, cmd):
+        '''
+        The callback from the I2C slave, passes the command on for processing,
+        returning the result.
+        '''
         return self.process(cmd)
 
+    def _led_off(self, timer=None):
+        if self._pixel:
+            self._pixel.set_color(0, COLOR_BLACK)
+
     def _start_services(self):
+        '''
+        This method is called upon startup, after a preset delay. It can be overridden
+        as necessary to start any application-level services.
+        '''
         time_elapsed = time.ticks_ms() - self._startup_ms
-        self._log.info(Fore.GREEN + 'starting services after {}ms'.format(time_elapsed))
+        self._log.info('starting services after {}ms'.format(time_elapsed))
         self._enable_heartbeat(True)
-        self._radiozoa_start()
+        pass # whatever services to be started after a delay
 
     def _enable_heartbeat(self, enabled):
         self._heartbeat_enabled = enabled
         if not enabled:
-            self._timer0.deinit()
+            self._pixel_timer.deinit()
 
     def _beat(self):
         self._pixel.set_color(0, COLOR_DARK_CYAN)
-        self._timer0.deinit()
-        self._timer0.init(period=20, mode=Timer.PERIODIC, callback=self._led_off)
+        if self._pixel_timer:
+            self._pixel_timer.deinit()
+#           self._pixel_timer.init(freq=self._pixel_timer_freq_hz)
+            self._pixel_timer.init(freq=self._pixel_timer_freq_hz, callback=self._led_off)
 
     def _heartbeat(self, delta_ms):
         self._heartbeat_timer += delta_ms
@@ -590,10 +365,6 @@ class Controller:
                 self._beat()
                 self._heartbeat_timer = 0
 
-    def _heading_to_pixel(self, heading_deg):
-        pixel = round((180 + heading_deg) / 15) % 24
-        return pixel
-
     def _get_color(self, name, second_token):
         if second_token: # e.g., "dark cyan"
             name = '{} {}'.format(name, second_token)
@@ -603,79 +374,7 @@ class Controller:
         self._rotation_pending = True
 
     def _action(self, t):
-        if self._enable_rotate:
-            self._rotate_ring()
-        if self._enable_theme:
-            self._theme()
-
-    def _rotate_ring(self, shift=1):
-        if abs(shift) > 24:
-            raise ValueError('shift value outside of bounds.')
-        shift *= self._rotate_direction
-        self._ring_offset = (self._ring_offset + shift) % 24
-        self._update_ring()
-
-    def _update_ring(self):
-        for index in range(24):
-            rotated_index = (index - self._ring_offset) % 24
-            self._ring.set_color(index, self._ring_model[rotated_index].color)
-
-    def _set_ring_color(self, index, color):
-        actual_index = (index + self._ring_offset) % 24
-        self._ring_model[actual_index].base_color = color
-        self._ring_model[actual_index].color = color.rgb
-        self._ring.set_color(index, color.rgb)
-
-    def _populate(self, count, palette_name):
-        palette = self._palettes.get(palette_name)
-        if palette is None:
-            self._log.error("no such palette: '{}'".format(palette_name))
-            return
-        for pixel in self._ring_model:
-            pixel.reset()
-            pixel.phase = random.random()
-        selected = []
-        available = list(range(24))
-        for _ in range(count):
-            idx = random.randrange(len(available))
-            selected.append(available.pop(idx))
-        for i in selected:
-            color = random.choice(palette)
-            self._ring_model[i]. base_color = color
-            self._ring_model[i].color = color.rgb
-        self._update_ring()
-
-    def _init_theme(self, reset=False):
-        if reset:
-            self.reset_ring()
-            existing_count = 0
-        else:
-            existing_count = sum(1 for p in self._ring_model if p.is_active())
-        new_pixels_needed = max(0, self._theme_target_pixels - existing_count)
-        available_colors = [c for c in Color.all_colors() if c != COLOR_BLACK]
-        if new_pixels_needed > 0:
-            empty_positions = [i for i in range(24) if not self._ring_model[i].is_active()]
-            for _ in range(new_pixels_needed):
-                if not empty_positions:
-                    break
-                idx = random.randrange(len(empty_positions))
-                pos = empty_positions.pop(idx)
-                color = random.choice(available_colors)
-                self._ring_model[pos].base_color = color
-                self._ring_model[pos].color = color.rgb
-                self._ring_model[pos].phase = random.random()
-        self._update_ring()
-
-    def _theme(self):
-        for index in range(24):
-            pixel = self._ring_model[index]
-            if not pixel.is_active():
-                continue
-            pixel.phase = (pixel.phase + 1.0 / self._pulse_steps) % 1.0
-            brightness = (math.sin(pixel.phase * 2 * math.pi) + 1) / 2
-            r, g, b = pixel.base_color.rgb
-            pixel.color = (int(r * brightness), int(g * brightness), int(b * brightness))
-        self._update_ring()
+        pass
 
     def _parse_timestamp(self, ts):
         year    = int(ts[0:4])
@@ -699,19 +398,9 @@ class Controller:
             self._log.info('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
             RTC().datetime(self._parse_timestamp(timestamp))
             self._log.info('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
-            return Controller.PACKED_ACK
+            return Controller._PACKED_ACK
         except Exception as e:
             self._log.error("{} raised by tinyfx controller: {}".format(type(e), e))
-            return Controller.PACKED_ERR
-
-    def _restart_timer(self, freq=None):
-        '''
-        Restart timer 1 if either rotate or theme is enabled.
-        '''
-        if freq:
-            self._timer1_hz = freq
-        self._timer1.deinit()
-        if self._enable_rotate or self._enable_theme:
-            self._timer1.init(freq=self._timer1_hz, mode=Timer.PERIODIC, callback=self._action)
+            return Controller._PACKED_ERR
 
 #EOF

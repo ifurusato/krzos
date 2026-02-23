@@ -1,10 +1,18 @@
+#!/micropython
+# -*- coding: utf-8 -*-
+#
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License.
+#
+# author:   Ichiro Furusato
+# created:  2025-11-16
+# modified: 2026-02-05
 
 import sys, gc
-from colorama import Fore, Style
 from controller import Controller
 
 # force module reload
-for mod in ['main', 'device', 'i2c_slave', 'controller']:
+for mod in ['main', 'i2c_slave', 'controller']:
     if mod in sys.modules:
         del sys.modules[mod]
 gc.collect()
@@ -12,34 +20,27 @@ gc.collect()
 def run_cli():
 
     ctrl = Controller()
-    prompt = Fore.WHITE + "▶ " + Style.RESET_ALL
+    prompt = "▶ "
 
-    print(Fore.CYAN + "Controller CLI" + Style.RESET_ALL)
-    print(Fore.CYAN + "Type 'quit' or 'exit' to return to REPL." + Style.RESET_ALL)
-
+    print("Controller CLI")
+    print("Type 'quit' or 'exit' to return to REPL.")
     while True:
-        print('🌰 a.')
         try:
             cmd = input(prompt).strip()
         except (EOFError, KeyboardInterrupt):
-            print(Fore.CYAN + "\nexiting CLI" + Style.RESET_ALL)
+            print("\nexiting CLI")
             break
-        print('🌰 b.')
         if not cmd:
-            print('🌰 c.')
             continue
         elif cmd in ("quit", "exit"):
-            print('🌰 d.')
-            print(Fore.CYAN + "bye." + Style.RESET_ALL)
+            print("bye.")
             break
         try:
-            print("🌰 e. cmd: '{}'".format(cmd))
+            print("cmd: '{}'".format(cmd))
             ctrl.process(cmd)
-            print('🌰 f.')
         except Exception as e:
-            print(Fore.RED + "{} raised by control: {}".format(type(e), e) + Style.RESET_ALL)
-            sys.print_exception()
-        print('🌰 z.')
+            print("{} raised by control: {}".format(type(e), e))
+            sys.print_exception(e)
 
 run_cli()
 

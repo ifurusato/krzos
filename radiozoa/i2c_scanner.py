@@ -7,12 +7,11 @@
 #
 # author:   Murray Altheim
 # created:  2026-01-27
-# modified: 2026-01-28
+# modified: 2026-02-17
 
 import machine
 
 from colorama import Fore, Style
-from logger import Logger, Level
 
 class I2CScanner:
     '''
@@ -24,14 +23,14 @@ class I2CScanner:
         scl:   should be a pin object specifying the pin to use for SCL.
         sda:   should be a pin object specifying the pin to use for SDA.
     '''
-    def __init__(self, i2c_bus=1, scl=None, sda=None, level=Level.INFO):
-        self._log = Logger('i2c-scanner', level=level)
+    def __init__(self, i2c_id=1, scl=None, sda=None):
+        self._i2c_id = i2c_id
         if scl and sda:
-            self.i2c = machine.I2C(i2c_bus, scl=scl, sda=sda)
+            self.i2c = machine.I2C(i2c_id, scl=scl, sda=sda)
         else:
-            self.i2c = machine.I2C(i2c_bus)
+            self.i2c = machine.I2C(i2c_id)
         self._devices = []
-        self._log.info('ready.')
+        print(Fore.CYAN + 'ready.' + Style.RESET_ALL)
 
     @property
     def devices(self):
@@ -44,12 +43,12 @@ class I2CScanner:
         '''
         Scan all valid 7-bit I2C addresses, returning a list of found addresses.
         '''
-        self._log.info(Style.DIM + "starting I2C scan…")
+        print(Fore.CYAN + Style.DIM + 'starting I2C{} scan…'.format(self._i2c_id) + Style.RESET_ALL)
         self._devices = self.i2c.scan()
         if len(self._devices) == 0:
-            self._log.warning("no I2C devices found.")
+            print(Fore.CYAN + 'no I2C devices found.' + Style.RESET_ALL)
         else:
-            self._log.info('I2C scan complete: ' + Fore.GREEN + "{} devices found.".format(len(self._devices)))
+            print(Fore.CYAN + 'I2C scan complete: ' + Fore.GREEN + '{} devices found.'.format(len(self._devices)) + Style.RESET_ALL)
         return self._devices
 
     def has_hex_address(self, addr):

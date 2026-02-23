@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-01-29
-# modified: 2026-01-29
+# modified: 2026-02-17
 
 import time
 from machine import I2C
@@ -17,6 +17,7 @@ from logger import Logger, Level
 from cardinal import Cardinal
 from device import Device
 from vl53l0x import VL53L0X
+from vl53l1x import VL53L1X
 
 class RadiozoaSensor:
     '''
@@ -30,10 +31,9 @@ class RadiozoaSensor:
     MID_THRESHOLD   = 600
     FAR_THRESHOLD   = 1000
 
-    def __init__(self, i2c_bus=1, level=Level.INFO):
+    def __init__(self, i2c_id=1, level=Level.INFO):
         self._log = Logger('radiozoa', level=level)
-        self._i2c_bus_number = i2c_bus
-        self._i2c = I2C(i2c_bus)
+        self._i2c = I2C(i2c_id)
         self._sensors = {}
         self._is_ranging = False
         self._create_sensors()
@@ -46,18 +46,28 @@ class RadiozoaSensor:
 
     def _create_sensors(self):
         '''
-        Creates VL53L0X instances for all eight sensors using Device pseudo-enum.
+        Creates VL53L0X, VL53L1X or null instances for all eight sensors using Device pseudo-enum.
         '''
         for dev in Device.all():
             cardinal = Cardinal._registry[dev.index]
             self._log.info('creating sensor {} at 0x{:02X}…'.format(cardinal.name, dev.i2c_address))
             try:
-                sensor = VL53L0X(self._i2c, address=dev.i2c_address)
+                if dev.impl == 'VL53L0X':
+                    sensor = VL53L0X(self._i2c, address=dev.i2c_address)
+                elif dev.impl == 'VL53L1X':
+                    sensor = VL53L1X(self._i2c, address=dev.i2c_address)
+                else:
+                    sensor = None
                 self._sensors[cardinal] = sensor
-                self._log.debug('sensor {} created.'.format(cardinal.name))
+                self._log.info('sensor {} created.'.format(cardinal.name))
             except Exception as e:
                 self._log.error('{} raised creating sensor {}: {}'.format(type(e), cardinal.name, e))
                 raise
+
+    def dump(self):
+        for cardinal, sensor in self._sensors.items():
+            if sensor:
+                sensor.stop()
 
     def start_ranging(self):
         '''
@@ -66,11 +76,12 @@ class RadiozoaSensor:
         if not self._is_ranging:
             self._log.info('starting ranging…')
             for cardinal, sensor in self._sensors.items():
-                try:
-                    sensor.start()
-                    self._log.debug('sensor {} ranging started.'.format(cardinal.name))
-                except Exception as e:
-                    self._log.error('{} raised starting sensor {}: {}'.format(type(e), cardinal.name, e))
+                if sensor:
+                    try:
+                        sensor.start()
+                        self._log.info('sensor {} ranging started.'.format(cardinal.name))
+                    except Exception as e:
+                        self._log.error('{} raised starting sensor {}: {}'.format(type(e), cardinal.name, e))
             self._is_ranging = True
             time.sleep_ms(100)
             self._log.info('ranging started.')
@@ -84,11 +95,12 @@ class RadiozoaSensor:
         if self._is_ranging:
             self._log.info('stopping ranging…')
             for cardinal, sensor in self._sensors.items():
-                try:
-                    sensor.stop()
-                    self._log.debug('sensor {} ranging stopped.'.format(cardinal.name))
-                except Exception as e:
-                    self._log.error('{} raised stopping sensor {}: {}'.format(type(e), cardinal.name, e))
+                if sensor:
+                    try:
+                        sensor.stop()
+                        self._log.info('sensor {} ranging stopped.'.format(cardinal.name))
+                    except Exception as e:
+                        self._log.error('{} raised stopping sensor {}: {}'.format(type(e), cardinal.name, e))
             self._is_ranging = False
             self._log.info('ranging stopped.')
         else:
@@ -110,11 +122,11 @@ class RadiozoaSensor:
                 dist = max(0, sensor.read() - self._distance_offset)
                 return dist
             except Exception as e:
-                self._log.warning('{} reading sensor {}: {}'.format(type(e), cardinal.name, e))
-                return None
+                self._log.error('{} raised reading sensor {}: {}'.format(type(e), cardinal.name, e))
+                return Sensor.OUT_OF_RANGE
         else:
-            self._log.error('no sensor for cardinal {}'.format(cardinal.name))
-            return None
+            self._log.warning('no sensor for cardinal {}'.format(cardinal.name))
+            return Sensor.OUT_OF_RANGE
 
     def get_distances(self, cardinals=None):
         '''
@@ -125,7 +137,8 @@ class RadiozoaSensor:
                                                    If None, returns all eight sensor readings.
 
         Returns:
-            list: List of distances in mm (or None for failed reads), order matches Cardinal registry.
+            list: List of distances in mm (or Sensor.OUT_OF_RANGE for failed reads), order matches
+            Cardinal registry.
         '''
         if cardinals is None:
             # return all eight distances in registry order
@@ -137,10 +150,10 @@ class RadiozoaSensor:
                         dist = max(0, sensor.read() - self._distance_offset)
                         distances.append(dist)
                     except Exception as e:
-                        self._log.warning('{} reading sensor {}: {}'.format(type(e), cardinal.name, e))
-                        distances.append(None)
+                        self._log.error('{} reading sensor {}: {}'.format(type(e), cardinal.name, e))
+                        distances.append(Sensor.OUT_OF_RANGE)
                 else:
-                    distances.append(None)
+                    distances.append(Sensor.OUT_OF_RANGE)
             return distances
         else:
             # return only specified cardinals
@@ -152,10 +165,10 @@ class RadiozoaSensor:
                         dist = max(0, sensor.read() - self._distance_offset)
                         distances.append(dist)
                     except Exception as e:
-                        self._log.warning('{} reading sensor {}: {}'.format(type(e), cardinal.name, e))
-                        distances.append(None)
+                        self._log.error('{} reading sensor {}: {}'.format(type(e), cardinal.name, e))
+                        distances.append(Sensor.OUT_OF_RANGE)
                 else:
-                    distances.append(None)
+                    distances.append(Sensor.OUT_OF_RANGE)
             return distances
 
     def _color_for_distance(self, dist):

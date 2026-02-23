@@ -5,6 +5,7 @@
 from micropython import const
 import ustruct
 import time
+from exceptions import TimeoutError
 
 _IO_TIMEOUT        = const(1000)
 _SYSRANGE_START    = const(0x00)
@@ -38,24 +39,21 @@ _PRE_RANGE_CONFIG_TIMEOUT_MACROP_HI   = const(0x51)
 _FINAL_RANGE_CONFIG_VCSEL_PERIOD      = const(0x70)
 _FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI = const(0x71)
 
-class TimeoutError(RuntimeError):
-    pass
-
 class VL53L0X():
     def __init__(self, i2c, address=0x29):
-        self.i2c = i2c
-        self.address = address
+        self._i2c = i2c
+        self._address = address
         time.sleep_ms(100) # give the I2C time to init
         self.init()
         self._started = False
-        self.measurement_timing_budget_us = 0
-        self.set_measurement_timing_budget(self.measurement_timing_budget_us)
-        self.enables = {"tcc": 0,
+        self._measurement_timing_budget_us = 0
+        self.set_measurement_timing_budget(self._measurement_timing_budget_us)
+        self._enables = {"tcc": 0,
                         "dss": 0,
                         "msrc": 0,
                         "pre_range": 0,
                         "final_range": 0}
-        self.timeouts = {"pre_range_vcsel_period_pclks": 0,
+        self._timeouts = {"pre_range_vcsel_period_pclks": 0,
                          "msrc_dss_tcc_mclks": 0,
                          "msrc_dss_tcc_us": 0,
                          "pre_range_mclks": 0,
@@ -64,7 +62,7 @@ class VL53L0X():
                          "final_range_mclks": 0,
                          "final_range_us": 0
                          }
-        self.vcsel_period_type = ["VcselPeriodPreRange", "VcselPeriodFinalRange"]
+        self._vcsel_period_type = ["VcselPeriodPreRange", "VcselPeriodFinalRange"]
 
     def ping(self):
         self.start()
@@ -75,11 +73,11 @@ class VL53L0X():
     def _registers(self, register, values=None, struct='B'):
         if values is None:
             size = ustruct.calcsize(struct)
-            data = self.i2c.readfrom_mem(self.address, register, size)
+            data = self._i2c.readfrom_mem(self._address, register, size)
             values = ustruct.unpack(struct, data)
             return values
         data = ustruct.pack(struct, *values)
-        self.i2c.writeto_mem(self.address, register, data)
+        self._i2c.writeto_mem(self._address, register, data)
 
     def _register(self, register, value=None, struct='B'):
         if value is None:
@@ -280,7 +278,7 @@ class VL53L0X():
         vcsel_period_reg = self.encode_Vcsel_period(period_pclks)
         self.get_sequence_step_enables()
         self.get_sequence_step_timeouts()
-        if type == self.vcsel_period_type[0]:
+        if type == self._vcsel_period_type[0]:
             if period_pclks == 12:
                 self._register(_PRE_RANGE_CONFIG_VALID_PHASE_HIGH, 0x18)
             elif period_pclks == 14:
@@ -293,11 +291,11 @@ class VL53L0X():
                 return False
             self._register(_PRE_RANGE_CONFIG_VALID_PHASE_LOW, 0x08)
             self._register(_PRE_RANGE_CONFIG_VCSEL_PERIOD, vcsel_period_reg)
-            new_pre_range_timeout_mclks = self.timeout_microseconds_to_Mclks(self.timeouts["pre_range_us"], period_pclks)
+            new_pre_range_timeout_mclks = self.timeout_microseconds_to_Mclks(self._timeouts["pre_range_us"], period_pclks)
             self._register(_PRE_RANGE_CONFIG_TIMEOUT_MACROP_HI, self.encode_timeout(new_pre_range_timeout_mclks))
-            new_msrc_timeout_mclks = self.timeout_microseconds_to_Mclks(self.timeouts["msrc_dss_tcc_us"], period_pclks)
+            new_msrc_timeout_mclks = self.timeout_microseconds_to_Mclks(self._timeouts["msrc_dss_tcc_us"], period_pclks)
             self._register(_MSRC_CONFIG_TIMEOUT_MACROP, 255 if new_msrc_timeout_mclks > 256 else (new_msrc_timeout_mclks - 1))
-        elif type == self.vcsel_period_type[1]:
+        elif type == self._vcsel_period_type[1]:
             if period_pclks == 8:
                 self._register(_FINAL_RANGE_CONFIG_VALID_PHASE_HIGH, 0x10)
                 self._register(_FINAL_RANGE_CONFIG_VALID_PHASE_LOW, 0x08)
@@ -334,13 +332,13 @@ class VL53L0X():
                 return False
 
             self._register(_FINAL_RANGE_CONFIG_VCSEL_PERIOD, vcsel_period_reg)
-            new_final_range_timeout_mclks = self.timeout_microseconds_to_Mclks(self.timeouts["final_range_us"], period_pclks)
-            if self.enables["pre_range"]:
+            new_final_range_timeout_mclks = self.timeout_microseconds_to_Mclks(self._timeouts["final_range_us"], period_pclks)
+            if self._enables["pre_range"]:
                 new_final_range_timeout_mclks += 1
             self._register(_FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI, self.encode_timeout(new_final_range_timeout_mclks))
         else:
             return False
-        self.set_measurement_timing_budget(self.measurement_timing_budget_us)
+        self.set_measurement_timing_budget(self._measurement_timing_budget_us)
         sequence_config = self._register(_SYSTEM_SEQUENCE_CONFIG)
         self._register(_SYSTEM_SEQUENCE_CONFIG, 0x02)
         self.perform_single_ref_calibration(0x0)
@@ -349,31 +347,31 @@ class VL53L0X():
 
     def get_sequence_step_enables(self):
         sequence_config = self._register(0x01)
-        self.enables["tcc"] = (sequence_config >> 4) & 0x1
-        self.enables["dss"] = (sequence_config >> 3) & 0x1
-        self.enables["msrc"] = (sequence_config >> 2) & 0x1
-        self.enables["pre_range"] = (sequence_config >> 6) & 0x1
-        self.enables["final_range"] = (sequence_config >> 7) & 0x1
+        self._enables["tcc"] = (sequence_config >> 4) & 0x1
+        self._enables["dss"] = (sequence_config >> 3) & 0x1
+        self._enables["msrc"] = (sequence_config >> 2) & 0x1
+        self._enables["pre_range"] = (sequence_config >> 6) & 0x1
+        self._enables["final_range"] = (sequence_config >> 7) & 0x1
 
     def get_vcsel_pulse_period(self, type):
-        if type == self.vcsel_period_type[0]:
+        if type == self._vcsel_period_type[0]:
             return self.decode_Vcsel_period(0x50)
-        elif type == self.vcsel_period_type[1]:
+        elif type == self._vcsel_period_type[1]:
             return self.decode_Vcsel_period(0x70)
         else:
             return 255
 
     def get_sequence_step_timeouts(self):
-        self.timeouts["pre_range_vcsel_period_pclks"] = self.get_vcsel_pulse_period(self.vcsel_period_type[0])
-        self.timeouts["msrc_dss_tcc_mclks"] = int(self._register(_MSRC_CONFIG_TIMEOUT_MACROP)) + 1
-        self.timeouts["msrc_dss_tcc_us"] = self.timeout_Mclks_to_microseconds(self.timeouts["msrc_dss_tcc_mclks"], self.timeouts[ "pre_range_vcsel_period_pclks"])
-        self.timeouts["pre_range_mclks"] = self.decode_timeout(_PRE_RANGE_CONFIG_TIMEOUT_MACROP_HI)
-        self.timeouts["pre_range_us"] = self.timeout_Mclks_to_microseconds(self.timeouts["pre_range_mclks"], self.timeouts[ "pre_range_vcsel_period_pclks"])
-        self.timeouts["final_range_vcsel_period_pclks"] = self.get_vcsel_pulse_period(self.vcsel_period_type[1])
-        self.timeouts["final_range_mclks"] = self.decode_timeout(self._register(_FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI))
-        if self.enables["pre_range"]:
-            self.timeouts["final_range_mclks"] -= self.timeouts["pre_range_mclks"]
-        self.timeouts["final_range_us"] = self.timeout_Mclks_to_microseconds(self.timeouts["final_range_mclks"], self.timeouts[ "final_range_vcsel_period_pclks"])
+        self._timeouts["pre_range_vcsel_period_pclks"] = self.get_vcsel_pulse_period(self._vcsel_period_type[0])
+        self._timeouts["msrc_dss_tcc_mclks"] = int(self._register(_MSRC_CONFIG_TIMEOUT_MACROP)) + 1
+        self._timeouts["msrc_dss_tcc_us"] = self.timeout_Mclks_to_microseconds(self._timeouts["msrc_dss_tcc_mclks"], self._timeouts[ "pre_range_vcsel_period_pclks"])
+        self._timeouts["pre_range_mclks"] = self.decode_timeout(_PRE_RANGE_CONFIG_TIMEOUT_MACROP_HI)
+        self._timeouts["pre_range_us"] = self.timeout_Mclks_to_microseconds(self._timeouts["pre_range_mclks"], self._timeouts[ "pre_range_vcsel_period_pclks"])
+        self._timeouts["final_range_vcsel_period_pclks"] = self.get_vcsel_pulse_period(self._vcsel_period_type[1])
+        self._timeouts["final_range_mclks"] = self.decode_timeout(self._register(_FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI))
+        if self._enables["pre_range"]:
+            self._timeouts["final_range_mclks"] -= self._timeouts["pre_range_mclks"]
+        self._timeouts["final_range_us"] = self.timeout_Mclks_to_microseconds(self._timeouts["final_range_mclks"], self._timeouts[ "final_range_vcsel_period_pclks"])
 
     def timeout_Mclks_to_microseconds(self, timeout_period_mclks, vcsel_period_pclks):
         macro_period_ns = self.calc_macro_period(vcsel_period_pclks)
@@ -405,36 +403,36 @@ class VL53L0X():
 
     def set_measurement_timing_budget(self, budget_us):
         start_overhead = 1320
-        end_overhead = 960
-        msrc_overhead = 660
-        tcc_overhead = 590
-        dss_overhead = 690
-        pre_range_overhead = 660
+        end_overhead   = 960
+        msrc_overhead  = 660
+        tcc_overhead   = 590
+        dss_overhead   = 690
+        pre_range_overhead   = 660
         final_range_overhead = 550
-        min_timing_budget = 20000
+        min_timing_budget    = 20000
         if budget_us < min_timing_budget:
             return False
         used_budget_us = start_overhead + end_overhead
         self.get_sequence_step_enables()
         self.get_sequence_step_timeouts()
-        if self.enables["tcc"]:
-            used_budget_us += self.timeouts["msrc_dss_tcc_us"] + tcc_overhead
-        if self.enables["dss"]:
-            used_budget_us += 2* self.timeouts["msrc_dss_tcc_us"] + dss_overhead
-        if self.enables["msrc"]:
-            used_budget_us += self.timeouts["msrc_dss_tcc_us"] + msrc_overhead
-        if self.enables["pre_range"]:
-            used_budget_us += self.timeouts["pre_range_us"] + pre_range_overhead
-        if self.enables["final_range"]:
+        if self._enables["tcc"]:
+            used_budget_us += self._timeouts["msrc_dss_tcc_us"] + tcc_overhead
+        if self._enables["dss"]:
+            used_budget_us += 2* self._timeouts["msrc_dss_tcc_us"] + dss_overhead
+        if self._enables["msrc"]:
+            used_budget_us += self._timeouts["msrc_dss_tcc_us"] + msrc_overhead
+        if self._enables["pre_range"]:
+            used_budget_us += self._timeouts["pre_range_us"] + pre_range_overhead
+        if self._enables["final_range"]:
             used_budget_us += final_range_overhead
             if used_budget_us > budget_us:
                 return False
             final_range_timeout_us = budget_us - used_budget_us
-            final_range_timeout_mclks = self.timeout_microseconds_to_Mclks(final_range_timeout_us, self.timeouts["final_range_vcsel_period_pclks"])
-            if self.enables["pre_range"]:
-                final_range_timeout_mclks += self.timeouts["pre_range_mclks"]
+            final_range_timeout_mclks = self.timeout_microseconds_to_Mclks(final_range_timeout_us, self._timeouts["final_range_vcsel_period_pclks"])
+            if self._enables["pre_range"]:
+                final_range_timeout_mclks += self._timeouts["pre_range_mclks"]
             self._register(_FINAL_RANGE_CONFIG_TIMEOUT_MACROP_HI, self.encode_timeout(final_range_timeout_mclks))
-            self.measurement_timing_budget_us = budget_us
+            self._measurement_timing_budget_us = budget_us
         return True
 
     def perform_single_ref_calibration(self, vhv_init_byte):
@@ -449,5 +447,16 @@ class VL53L0X():
         self._register(_SYSTEM_INTERRUPT_CLEAR, 0x01)
         self._register(_SYSRANGE_START, 0x00)
         return True
+
+    def set_i2c_address(self, new_address):
+        '''
+        change the I2C address of the sensor.
+        note: address change is not persistent across power cycles.
+        
+        @param new_address: new I2C address (7-bit)
+        '''
+        self._i2c.writeto_mem(self._address, 0x8A, bytes([new_address]))
+        time.sleep_ms(50)
+        self._address = new_address
 
 #EOF

@@ -1,21 +1,30 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2025 by Murray Altheim. All rights reserved. This file is part
+# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
-# author:   Murray Altheim
+# author:   Ichiro Furusato
 # created:  2024-08-14
-# modified: 2026-02-04
+# modified: 2026-02-08
 
 class Color:
     _registry = []
 
     def __init__(self, name, rgb):
         self._name = name
+        # normalize stored name: strip leading "COLOR_" and lowercase
+        self._norm = name.lower().replace("color_", "").replace("_", " ")
         self._rgb = rgb
         Color._registry.append(self)
+
+    @property
+    def name(self):
+        '''
+        Return the normalised, lowercase color name.
+        '''
+        return self._norm
 
     @property
     def rgb(self):
@@ -52,7 +61,6 @@ class Color:
         '''
         key = name.lower().replace("_", " ")
         for c in cls._registry:
-            # normalize stored name: strip leading "COLOR_" and lowercase
             norm = c._name.lower().replace("color_", "").replace("_", " ")
             if norm == key:
                 return c
@@ -82,6 +90,7 @@ COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  11,   0))
 COLOR_FUCHSIA       = Color("COLOR_FUCHSIA",      (158,  16,  99))
 COLOR_APPLE         = Color("COLOR_APPLE",        ( 70, 100,   0))
 COLOR_EMERALD       = Color("COLOR_EMERALD",      (  0,  90,  10))
+COLOR_MEDIUM_CYAN   = Color("COLOR_MEDIUM_CYAN",  (  0, 128, 128))
 COLOR_DEEP_CYAN     = Color("COLOR_DEEP_CYAN",    (  0,  11,  11))
 COLOR_CORNFLOWER    = Color("COLOR_CORNFLOWER",   ( 60,  90, 142))
 COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))

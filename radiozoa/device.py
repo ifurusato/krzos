@@ -7,14 +7,16 @@
 #
 # author:   Murray Altheim
 # created:  2026-01-27
-# modified: 2026-02-01
+# modified: 2026-02-17
 #
 # Instances defined at bottom.
 
 class Device:
     _registry = []
     '''
-    A pseudo-enum for VL53L0X sensor configuration.
+    A pseudo-enum for VL53L0X or VL53L1X sensor configuration.
+
+    The value for impl() will either be 'VL53L0X', 'VL53L1X' or None (if no sensor is available in that slot).
 
     Usage:
 
@@ -33,8 +35,9 @@ class Device:
           d = Device.by_index(3)
           print(d.label)
     '''
-    def __init__(self, index, label, i2c_address, xshut):
+    def __init__(self, index, impl, label, i2c_address, xshut):
         self._index = index
+        self._impl  = impl
         self._label = label
         self._i2c_address = i2c_address
         self._xshut = xshut
@@ -43,6 +46,10 @@ class Device:
     @property
     def index(self):
         return self._index
+
+    @property
+    def impl(self):
+        return self._impl
 
     @property
     def label(self):
@@ -100,15 +107,14 @@ class Device:
                 return d
         return None
 
-# STM32F405 Radiozoa Pinout
-#             XS   DIR   ADDR   PIN    WIRE COLOR
-N0  = Device( 0,  'N0',  0x30,  1) # red/grey
-NE1 = Device( 1,  'NE1', 0x31, 35) # red/white
-E2  = Device( 2,  'E2',  0x32,  2) # green/grey
-SE3 = Device( 3,  'SE3', 0x33, 37) # green/white
-S4  = Device( 4,  'S4',  0x34,  3) # blue/grey
-SW5 = Device( 5,  'SW5', 0x35, 36) # blue/white
-W6  = Device( 6,  'W6',  0x36,  4) # grey
-NW7 = Device( 7,  'NW7', 0x37, 34) # white
+#            IDX  IMPL       DIR   ADDR   PIN    WIRE COLOR
+N0  = Device( 0, 'VL53L1X', 'N0',  0x30,  3) # red/grey
+NE1 = Device( 1, 'VL53L1X', 'NE1', 0x31, 35) # red/white
+E2  = Device( 2, 'VL53L1X', 'E2',  0x32,  2) # green/grey
+SE3 = Device( 3, 'VL53L1X', 'SE3', 0x33, 36) # green/white
+S4  = Device( 4, 'VL53L1X', 'S4',  0x34,  1) # blue/grey
+SW5 = Device( 5, 'VL53L1X', 'SW5', 0x35, 37) # blue/white
+W6  = Device( 6, 'VL53L1X', 'W6',  0x36,  0) # grey
+NW7 = Device( 7, 'VL53L1X', 'NW7', 0x37, 43) # white
 
 #EOF

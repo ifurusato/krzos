@@ -1,6 +1,10 @@
 # boot.py -- run on boot-up
 
-USE_NETWORK = True
+from machine import usb_mode
+
+usb_mode("CDC+MSC")
+
+USE_NETWORK = False
 
 if USE_NETWORK:
     import network
