@@ -108,13 +108,13 @@ class Device:
         return None
 
 #            IDX  IMPL       DIR   ADDR   PIN    WIRE COLOR
-N0  = Device( 0, 'VL53L1X', 'N0',  0x30,  3) # red/grey
-NE1 = Device( 1, 'VL53L1X', 'NE1', 0x31, 35) # red/white
-E2  = Device( 2, 'VL53L1X', 'E2',  0x32,  2) # green/grey
-SE3 = Device( 3, 'VL53L1X', 'SE3', 0x33, 36) # green/white
-S4  = Device( 4, 'VL53L1X', 'S4',  0x34,  1) # blue/grey
-SW5 = Device( 5, 'VL53L1X', 'SW5', 0x35, 37) # blue/white
-W6  = Device( 6, 'VL53L1X', 'W6',  0x36,  0) # grey
-NW7 = Device( 7, 'VL53L1X', 'NW7', 0x37, 43) # white
+N0  = Device( 0, 'VL53L1X', 'N0',  0x30,  4) # red/grey
+NE1 = Device( 1, 'VL53L1X', 'NE1', 0x31, 34) # red/white
+E2  = Device( 2, 'VL53L1X', 'E2',  0x32,  3) # green/grey
+SE3 = Device( 3, 'VL53L1X', 'SE3', 0x33, 35) # green/white
+S4  = Device( 4, 'VL53L1X', 'S4',  0x34,  2) # blue/grey
+SW5 = Device( 5, 'VL53L1X', 'SW5', 0x35, 36) # blue/white
+W6  = Device( 6, 'VL53L1X', 'W6',  0x36,  1) # grey
+NW7 = Device( 7, 'VL53L1X', 'NW7', 0x37, 37) # white
 
 #EOF

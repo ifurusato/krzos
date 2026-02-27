@@ -29,7 +29,7 @@ from tinyfx.message_util import pack_message, unpack_message
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 __I2C_BUS  = 1      # the I2C bus number; on a Raspberry Pi the default is 1
-__I2C_ADDR = 0x43   # the I2C address used to connect to the TinyFX
+__I2C_ADDR = 0x43   # the I2C address used to connect to the Tiny FX
 
 def apply_channel_alias(user_msg):
     channel_aliases = {

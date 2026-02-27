@@ -28,13 +28,17 @@ class Configure:
         self._log = Logger('config', level=level)
         self._scanner = I2CScanner(i2c_id=1)
         self._default_i2c_address = 0x29
-        self._devices = []
-        self._radiozoa_config = None
+        self._devices  = []
+        self._callback = None
+        self._radiozoa_config = RadiozoaConfig(i2c_id=1)
         self._log.info('ready.')
 
     @property
     def radiozoa_config(self):
         return self._radiozoa_config
+
+    def set_callback(self, callback):
+        self._callback = callback
 
     def get_devices(self):
         return self._devices
@@ -68,7 +72,6 @@ class Configure:
                 if _missing:
                     self._log.info(Fore.YELLOW + "missing sensor addresses: {}".format([ "0x{:02X}".format(addr) for addr in _missing ]))
                 try:
-                    self._radiozoa_config = RadiozoaConfig(i2c_id=1)
                     self._radiozoa_config.configure()
 #                   self._radiozoa_config.close()
                 except Exception as e:
@@ -91,9 +94,13 @@ class Configure:
                 else:
                     self._log.info(Fore.GREEN + "radiozoa sensor addresses configured successfully.")
                     self.i2cdetect(Fore.GREEN)
+                    if self._callback:
+                        self._callback()
             else:
                 self._log.info(Fore.GREEN + "radiozoa already configured.")
                 self.i2cdetect(Fore.CYAN)
+                if self._callback:
+                    self._callback()
             self._log.info('complete.')
             return True
         except Exception as e:

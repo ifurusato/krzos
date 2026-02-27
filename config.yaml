@@ -320,11 +320,14 @@ kros:
             amber_threshold:                 10.29         # amber/3 bars on battery
             orange_threshold:                10.15         # orange/2 bars on battery
             red_threshold:                    9.85         # red/1 bar on battery
+        io_expander:
+            i2c_bus_number:                   1            # I²C bus ID
+            i2c_address:                   0x18            # I²C address for the device
         toggle_config:
-            pin1:                             2            # toggle 1 pin
-            pin2:                             4            # toggle 2 pin
-            pin3:                             3            # toggle 3 pin
-            pin4:                             1            # toggle 4 pin
+            pin1:                             1            # toggle 1 pin
+            pin2:                             3            # toggle 2 pin
+            pin3:                             4            # toggle 3 pin
+            pin4:                             2            # toggle 4 pin
             toggle1:                  'radiozoa'           # behaviour assignment(s) to toggle 1
             toggle2:                      'roam'           # behaviour assignment(s) to toggle 2
             toggle3:              'avoid swerve'           # behaviour assignment(s) to toggle 3
@@ -388,7 +391,7 @@ kros:
         avoid_sensor:
             data_logging:                 False            # if True use data logging (requires application-level as well)
         fore_sensor:
-            i2c_address:                   0x22            # I²C address for the IO Expander
+            i2c_address:                   0x18            # I²C address for the IO Expander
             sensor_pin:                      14            # pin on the IO Expander for the analog distance sensor
             trim_cm:                         -2            # ± cm trim to adjust output
             smoothing:                     True            # enable smoothing
@@ -518,7 +521,7 @@ kros:
         radiozoa:
             reassign_and_connect:          True            # set up the sensors if not available
             i2c_bus_number:                   1            # use I2C1 or alternate I2C0
-            ioe_i2c_address:               0x22            # if the IO Expander is available it will be used
+            ioe_i2c_address:               0x6d            # if the IO Expander is available it will be used
             devices:
                 0:
                     label:      'N0'
@@ -576,7 +579,7 @@ kros:
           - address:                       0x16
             name:                "ThunderBorg 2"
             required:                      True
-          - address:                       0x22
+          - address:                       0x18
             name:                  "IO Expander"
             required:                     False
           - address:                       0x1D

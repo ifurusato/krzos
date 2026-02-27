@@ -22,7 +22,7 @@ class TinyFxController(I2CMaster):
     I2C_BUS_ID  = 1
     I2C_ADDRESS = 0x43
     '''
-    Extends I2CMaster to control a Pimoroni TinyFX.
+    Extends I2CMaster to control a Pimoroni Tiny FX.
     '''
     def __init__(self, config=None, i2c_address=None, timeset=True, level=Level.INFO):
         if config:

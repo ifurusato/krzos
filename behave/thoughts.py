@@ -42,7 +42,7 @@ class Thoughts(Behaviour):
     NAME = 'thoughts'
     _LISTENER_LOOP_NAME = '__thoughts_listener_loop'
     '''
-    Monitors robot activity and plays sounds ("random thoughts") via the TinyFX
+    Monitors robot activity and plays sounds ("random thoughts") via the Tiny FX
     at roughly a frequency corresponding to the message traffic and motor speed,
     monitored via the Odometer.
 

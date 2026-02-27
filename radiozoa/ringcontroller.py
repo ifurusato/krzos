@@ -6,11 +6,12 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-02-09
-# modified: 2026-02-17
+# modified: 2026-02-27
 
 import sys
 import time
 import math, random
+from colorama import Fore, Style
 
 from pixel_state import PixelState
 from controller import Controller
@@ -24,15 +25,15 @@ class RingController(Controller):
     '''
     An implementation connected to a 24 pixel NeoPixel ring.
     '''
-    def __init__(self, config, level=Level.INFO):
-        super().__init__(config)
+    def __init__(self, config, pixel=None, strip=None, level=Level.INFO):
         self._log = Logger('ring-ctrl', level=level)
+        super().__init__(config, pixel, strip)
+        # pixel ring
         self._ring_count = config['ring_count']
         if self._ring_count is None:
             raise ValueError('ring count is undefined.')
         elif self._ring_count == 0:
             raise ValueError('ring count is 0.')
-#       self._strip_pin = 'B12'
         # rotation
         self._ring_offset      = 0
         self._rotate_direction = 1 # 1 or -1
@@ -72,9 +73,40 @@ class RingController(Controller):
         self._ring_timer_hz = 24
         self._ring_timer = self._create_ring_timer()
         self._radiozoa_started   = False
-        self._pixel.set_color(0, COLOR_BLACK)
         self._log.info('ready.')
         # ready
+
+    def _start_services(self):
+        '''
+        This method is called upon startup, after a preset delay. It can be overridden
+        as necessary to start any application-level services.
+        '''    
+        self._strip.set_color(0, COLOR_SKY_BLUE)
+        super()._start_services()
+        self._strip.set_color(0, COLOR_BLACK)
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def strip(self):
+        return self._strip
+
+    def _create_strip(self, config):
+        from pixel import Pixel
+
+        _strip_brightness = 0.1  # default: 0.33
+        _strip_pin   = config['strip_pin']
+        _strip_count = config['strip_count']
+        _strip = Pixel(
+            pin=_strip_pin,
+            pixel_count=_strip_count,
+            color_order=config['strip_color_order'],
+            brightness=_strip_brightness)
+        self._log.info('NeoPixel strip with {} pixels configured on pin {}'.format(_strip_count, _strip_pin))
+        _strip.set_color(0, COLOR_CYAN)
+#       time.sleep_ms(100)
+#       _strip.set_color(0, COLOR_BLACK)
+        return _strip
 
     @property
     def ring(self):
@@ -84,7 +116,12 @@ class RingController(Controller):
         from pixel import Pixel
 
         _ring_pin   = self._config['ring_pin']
-        _ring = Pixel(pin=_ring_pin, pixel_count=self._ring_count, color_order=self._config['color_order'], brightness=self._ring_brightness)
+        _ring = Pixel(
+            pin=_ring_pin,
+            pixel_count=self._ring_count,
+            color_order=self._config['ring_color_order'],
+            brightness=self._ring_brightness
+        )
         self._log.info('NeoPixel ring with {} pixels configured on pin {}'.format(self._ring_count, _ring_pin))
         _ring.set_color(0, COLOR_CYAN)
         time.sleep_ms(100)

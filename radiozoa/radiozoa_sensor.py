@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-01-29
-# modified: 2026-02-17
+# modified: 2026-02-26
 
 import time
 from machine import I2C
@@ -16,6 +16,7 @@ from colorama import Fore, Style
 from logger import Logger, Level
 from cardinal import Cardinal
 from device import Device
+from sensor import Sensor
 from vl53l0x import VL53L0X
 from vl53l1x import VL53L1X
 

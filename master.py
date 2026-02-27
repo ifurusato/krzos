@@ -54,7 +54,7 @@ class InterruptButton:
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-I2C_ID            = 0            # I2C bus identifier
+I2C_ID            = 1            # I2C bus identifier
 I2C_ADDRESS       = 0x47         # default I2C device address
 WORKER_DELAY_SEC  = 1.0          # time between automatic polls
 WORKER_REQUEST    = "distances"  # poll command
@@ -62,6 +62,7 @@ BUTTON_DELAY_SEC  = 5            # how many seconds after pushbutton to do scan
 TICK_COMMAND      = 'play tick'
 BEEP_COMMAND      = 'play beep'
 DISTANCES_COMMAND = 'distances'
+USE_BUTTON        = False
 TRIM_OCCUPANCY_MAP_TO_DATA = True
 
 def worker_loop(master, stop_event, lock):
@@ -223,7 +224,8 @@ def main():
                 print("released…")
                 button_pressed = True
 
-        button = InterruptButton(pin=21, debounce_ms=50, callback=button_handler)
+        if USE_BUTTON:
+            button = InterruptButton(pin=21, debounce_ms=50, callback=button_handler)
 
         last_user_msg = None
         print(prompt, end='', flush=True)

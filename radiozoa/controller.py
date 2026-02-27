@@ -6,12 +6,13 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-12
+# modified: 2026-02-27
 
 import sys
 import time
 import math, random
 from machine import RTC
+from colorama import Fore, Style
 
 from colors import*
 from logger import Logger, Level
@@ -19,7 +20,7 @@ from message_util import pack_message
 
 class Controller:
     _AUTOSTART_SERVICES = True           # auto-start services after delay
-    _AUTOSTART_DELAY_MS = 7000           # delay in milliseconds before auto-start
+    _AUTOSTART_DELAY_MS = 3000           # delay in milliseconds before auto-start
     # pre-packed constant responses
     _PACKED_ACK  = pack_message('ACK')   # acknowledge okay
     _PACKED_NACK = pack_message('NACK')  # acknowledge bad command
@@ -31,17 +32,24 @@ class Controller:
 
     Args:
         config: the application configuration
+        pixel:  the optional NeoPixel
+        strip:  the optional NeoPixel strip
     '''
-    def __init__(self, config, level=Level.INFO):
+    def __init__(self, config, pixel=None, strip=None, level=Level.INFO):
         self._log = Logger('controller', level=level)
         self._startup_ms            = time.ticks_ms()
         self._config                = config
         self._name                  = config['name']
         self._family                = config['family']
-#       self._log.info('family set to: {}'.format(self._family))
         self._slave                 = None
-        # neopixel support
-        self._pixel = self._create_pixel()
+        if pixel is None:
+            self._pixel = self._create_pixel()
+        else:
+            self._pixel = pixel
+        if strip is None:
+            self._strip = self._create_strip()
+        else:
+            self._strip = strip
         # heartbeat feature
         self._heartbeat_enabled     = False
         self._heartbeat_on_time_ms  = 50
@@ -62,6 +70,14 @@ class Controller:
     def name(self):
         return self._name
 
+    @property
+    def pixel(self):
+        return self._pixel
+
+    @property
+    def strip(self):
+        return self._strip
+
     def _create_pixel(self):
         from pixel import Pixel
 
@@ -74,7 +90,7 @@ class Controller:
         _pixel = Pixel(pin=_pixel_pin, pixel_count=1, color_order=self._config['color_order'])
         self._log.info('NeoPixel configured on pin {}'.format(_pixel_pin))
         _pixel.set_color(0, COLOR_CYAN)
-        time.sleep_ms(100)
+        time.sleep_ms(250)
         _pixel.set_color(0, COLOR_BLACK)
         return _pixel
 
@@ -86,6 +102,21 @@ class Controller:
             self._pixel_timer.init(freq=self._pixel_timer_freq_hz, callback=self._led_off)
         except Exception as e:
             sys.print_exception(e)
+
+    def _create_strip(self):
+        from pixel import Pixel
+
+        _strip_brightness = 0.1  # default: 0.33
+        _strip_pin   = self._config['strip_pin']
+        _strip_count = self._config['strip_count']
+        _strip = Pixel(
+            pin=_strip_pin,
+            pixel_count=_strip_count,
+            color_order=self._config['strip_color_order'],
+            brightness=_strip_brightness)
+        self._log.info('NeoPixel strip with {} pixels configured on pin {}'.format(_strip_count, _strip_pin))
+        _strip.set_color(0, COLOR_BLACK)
+        return _strip
 
     # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -100,7 +131,7 @@ class Controller:
             if time.ticks_diff(time.ticks_ms(), self._stop_at) >= 0:
                 self._stop_at = None
                 if not self._pixel_persist:
-                    self._pixel.set_color(0, COLOR_BLACK)
+                    self._pixel.set_color(0, COLOR_MIDNIGHT)
         if Controller._AUTOSTART_SERVICES and not self._services_started:
             if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= self._autostart_delay_ms:
         
@@ -327,10 +358,6 @@ Commands:
         '''
         return self.process(cmd)
 
-    def _led_off(self, timer=None):
-        if self._pixel:
-            self._pixel.set_color(0, COLOR_BLACK)
-
     def _start_services(self):
         '''
         This method is called upon startup, after a preset delay. It can be overridden
@@ -346,8 +373,13 @@ Commands:
         if not enabled:
             self._pixel_timer.deinit()
 
+    def _led_off(self, timer=None):
+        if self._pixel:
+            self._pixel.set_color(0, COLOR_BLACK)
+
     def _beat(self):
-        self._pixel.set_color(0, COLOR_DARK_CYAN)
+        if self._pixel:
+            self._pixel.set_color(0, COLOR_DARK_CYAN)
         if self._pixel_timer:
             self._pixel_timer.deinit()
 #           self._pixel_timer.init(freq=self._pixel_timer_freq_hz)
@@ -395,12 +427,12 @@ Commands:
 
     def _set_time(self, timestamp):
         try:
-            self._log.info('time before: {}'.format(self._rtc_to_iso(RTC().datetime())))
+            self._log.info('time before: ' + Fore.GREEN + '{}'.format(self._rtc_to_iso(RTC().datetime())))
             RTC().datetime(self._parse_timestamp(timestamp))
-            self._log.info('time after:  {}'.format(self._rtc_to_iso(RTC().datetime())))
+            self._log.info('time after:  ' + Fore.GREEN + '{}'.format(self._rtc_to_iso(RTC().datetime())))
             return Controller._PACKED_ACK
         except Exception as e:
-            self._log.error("{} raised by tinyfx controller: {}".format(type(e), e))
+            self._log.error("{} raised by controller: {}".format(type(e), e))
             return Controller._PACKED_ERR
 
 #EOF

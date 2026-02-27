@@ -82,7 +82,7 @@ class Player(Component):
     @rate_limited(3000)
     def _play_sound(self, name):
         '''
-        Play the specified sound via TinyFX controller.
+        Play the specified sound via Tiny FX controller.
         Rate-limited to prevent sounds from overlapping.
 
         :param name: the sound name to play

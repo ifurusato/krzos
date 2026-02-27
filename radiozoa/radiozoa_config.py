@@ -17,6 +17,7 @@ from colorama import Fore, Style
 from logger import Logger, Level
 from i2c_scanner import I2CScanner
 from device import Device
+from colors import *
 
 class RadiozoaConfig:
     '''
@@ -28,6 +29,7 @@ class RadiozoaConfig:
         self._log = Logger('config', level=level)
         self._i2c_id = i2c_id
         self._default_i2c_address = 0x29
+        self._configured = False
         self._i2c = None
         self._i2c_baud_rate = 400_000 # default 100,000
         self._xshut_pins = {}
@@ -36,13 +38,21 @@ class RadiozoaConfig:
         self._i2c_scanner = I2CScanner(i2c_id=self._i2c_id)
         self._log.info('ready.')
 
+    @property
+    def configured(self):
+        return self._configured
+
     def configure(self):
         self._shutdown_all_sensors()
         self._configure_sensor_addresses()
         self._log.info('all sensor addresses configured.')
 
+    def set_strip(self, strip):
+        self._strip = strip
+
     def reset(self):
         from device import N0
+
         device = N0
         self._log.info("reset: temporarily shutting down sensor {} at XSHUT pin {}…".format(device.label, device.xshut))
         self._set_xshut(device.index, False)
@@ -90,11 +100,14 @@ class RadiozoaConfig:
         from vl53l0x import VL53L0X
         from vl53l1x import VL53L1X
 
-        _device_delay_ms = 250
+        _device_delay_ms = 333
         _scan_delay_ms   = 750
-        
+        _count = 0
         for device in Device.all():
             if device and device.impl is not None:
+
+                self._strip.set_color(device.index, COLOR_APPLE)
+
                 self._log.info("configuring sensor {} at XSHUT pin {}…".format(device.label, device.xshut))
                 self._set_xshut(device.index, True)
                 found = False
@@ -119,16 +132,27 @@ class RadiozoaConfig:
                     else:
                         self._log.warning("unknown sensor type {} for device {}".format(device.impl, device.label))
                         continue
-                    
                     # change address using sensor's method
                     self._set_i2c_address(device, device.i2c_address)
 #                   temp_sensor.set_i2c_address(device.i2c_address)
                     self._log.info("set address for sensor {} to 0x{:02X}".format(device.label, device.i2c_address))
+                    self._strip.set_color(device.index, COLOR_DARK_GREEN)
+                    _count += 1
                     
                 except Exception as e:
                     self._log.error("{} raised setting address for sensor {}: {}".format(type(e), device.label, e))
                     sys.print_exception(e)
+                    self._strip.set_color(device.index, COLOR_RED)
+                    self._log.info(Fore.GREEN + "configured sensor {}.\n".format(device.label))
                 time.sleep_ms(_device_delay_ms)
+        # done
+        if _count == 8:
+            self._configured = True
+            for index in range(8):
+                self._strip.set_color(index, COLOR_BLACK)
+        else:
+            self._configured = False
+            self._log.warning("configured {} of 8 sensors.\n".format(_count))
 
     def _set_xshut(self, device_index, value):
         '''

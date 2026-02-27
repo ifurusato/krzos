@@ -23,7 +23,7 @@ from wav_util import wav_duration
 
 class TinyFxController(Controller):
     '''
-    A TinyFX controller for command strings received from the I2CSlave.
+    A Tiny FX controller for command strings received from the I2CSlave.
 
     Commands include:
       play [sound-name]     play a sound

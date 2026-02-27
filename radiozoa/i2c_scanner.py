@@ -30,7 +30,7 @@ class I2CScanner:
         else:
             self.i2c = machine.I2C(i2c_id)
         self._devices = []
-        print(Fore.CYAN + 'ready.' + Style.RESET_ALL)
+        # ready.
 
     @property
     def devices(self):

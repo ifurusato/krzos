@@ -33,9 +33,9 @@ def get_response(master, user_msg, expected):
     return False
 
 @pytest.mark.unit
-def test_stm():
+def test_tiny_fx():
     print('')
-    __log.info("testing if TinyFX is available…")
+    __log.info("testing if Tiny FX is available…")
     master = TinyFxController()
     master.set_fail_on_exception(True)
     master.enable()
@@ -50,7 +50,7 @@ def test_stm():
     response = get_response(master, 'run off', ['ACK'])
     assert response is True
 
-    __log.info(Fore.GREEN + "TinyFX is available.")
+    __log.info(Fore.GREEN + "Tiny FX is available.")
 
 def main():
     global __log

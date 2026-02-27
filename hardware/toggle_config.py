@@ -17,7 +17,7 @@ import ioexpander as io
 
 from core.logger import Logger, Level
 from core.component import Component, MissingComponentError
-#from hardware.radiozoa_sensor import RadiozoaSensor
+from hardware.io_expander import IoExpander
 
 class ToggleConfig(Component):
     NAME = 'toggle-config'
@@ -40,47 +40,27 @@ class ToggleConfig(Component):
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._level = level
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-        _cfg = config.get('kros').get('hardware').get('toggle_config')
+        _ioe_cfg = config.get('kros').get('hardware').get('io_expander')
+        _i2c_bus_number = _ioe_cfg.get('i2c_bus_number')
+        _i2c_address    = _ioe_cfg.get('i2c_address')
         self._ioe = None
-        # try to get the existing IOE from RadiozoaSensor, otherwise create our own
+        # try to get the existing IOE from registry, otherwise create our own
         _component_registry = Component.get_registry()
-        # uses the Radiozoa configuration since we're using the same IOExpander
-        _radiozoa_sensor = _component_registry.get('radiozoa-sensor') # hard-coded name
-        if _radiozoa_sensor:
-            self._log.info('obtaining IOExpander from RadiozoaSensor…')
-            self._ioe = _radiozoa_sensor.ioe
+        _ioe = _component_registry.get(IoExpander.NAME)
+        if _ioe:
+            self._log.info('obtaining IOExpander from registry…')
+            self._ioe = _ioe
         else:
             self._log.info('creating IOExpander…')
-            import pkg_resources
-            SMBUS='smbus2'
-            for dist in pkg_resources.working_set:
-                if dist.project_name == 'smbus':
-                    break
-                if dist.project_name == 'smbus2':
-                    SMBUS='smbus2'
-                    break
-            if SMBUS == 'smbus':
-                import smbus
-            elif SMBUS == 'smbus2':
-                import smbus2 as smbus
-            # set up I2C ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-            _cfg_radiozoa    = config.get('kros').get('hardware').get('radiozoa')
-            _ioe_i2c_address = _cfg_radiozoa.get('ioe_i2c_address')
-            self._i2c_bus_number = _cfg_radiozoa.get('i2c_bus_number')
-            if not isinstance(self._i2c_bus_number, int):
-                raise ValueError('expected an int for an I2C bus number, not a {}.'.format(type(self._i2c_bus_number)))
-            self._i2c_bus = smbus.SMBus()
-            self._i2c_bus.open(bus=self._i2c_bus_number)
-            self._log.info('I2C{} open.'.format(self._i2c_bus_number))
-            # set up IO Expander ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
             try:
-                self._log.info('opening IO Expander at {} on I2C{}…'.format(_ioe_i2c_address, self._i2c_bus_number))
-                self._ioe = io.IOE(i2c_addr=_ioe_i2c_address, smbus_id=self._i2c_bus_number)
-                self._log.info('found IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                self._log.info('opening IO Expander at {} on I2C{}…'.format(_i2c_address, _i2c_bus_number))
+                self._ioe = io.IOE(i2c_addr=_i2c_address, smbus_id=_i2c_bus_number)
+                self._log.info('found IO Expander at {} on I2C{}.'.format(_i2c_address, _i2c_bus_number))
             except Exception as e:
                 self._log.error('{} raised setting up IO Expander: {}\n{}'.format(type(e), e, traceback.format_exc()))
-                raise MissingComponentError('could not find IO Expander at {} on I2C{}.'.format(_ioe_i2c_address, self._i2c_bus_number))
+                raise MissingComponentError('could not find IO Expander at {} on I2C{}.'.format(_i2c_address, _i2c_bus_number))
         # configuration by pin
+        _cfg = config.get('kros').get('hardware').get('toggle_config')
         self._pin1 = _cfg.get('pin1')
         self._pin2 = _cfg.get('pin2')
         self._pin3 = _cfg.get('pin3')

@@ -6,31 +6,42 @@
 #
 # author:   Ichiro Furusato 
 # created:  2026-02-17
-# modified: 2026-02-17
+# modified: 2026-02-27
 
 import sys
 import time
+from colorama import Fore, Style
 
-from colors import *
 from logger import Logger, Level
+from colors import *
 from configure import Configure
 from controller import Controller
 from message_util import pack_message
-from ringcontroller import RingController
 from radiozoa_sensor import RadiozoaSensor
-from radiozoa_config import RadiozoaConfig
+from ringcontroller import RingController
 
 class RadiozoaController(RingController):
+    PACKED_CARDINAL = pack_message("N    NE   E    SE   S    SW   W    NW") # order of returned data
 
-    def __init__(self, config):
+    def __init__(self, config, pixel, strip):
         self._log = Logger('ctrl', level=Level.INFO)
-        super().__init__(config)
+        self._is_configured   = False
         self._autostart_delay_ms = 9000
-        self._sensor   = None
-        self._radiozoa = None
-        self._config   = Configure()
-        self._PACKED_CARDINAL = pack_message("N    NE   E    SE   S    SW   W    NW") # order of returned data
+        self._sensor          = None
+        self._radiozoa        = None
+        self._fail_hard       = True # raise exception if unable to start services
+        self._configure       = Configure()
+        self._configure.set_callback(self._set_configured)
+        super().__init__(config, pixel, strip)
+        if self.strip is None:
+            raise Exception('no strip available.')
+        self._radiozoa_config = self._configure.radiozoa_config
+        self._radiozoa_config.set_strip(self.strip)
         self._log.info('ready.')
+
+    def  _set_configured(self):
+        self._log.info(Fore.GREEN + 'configured.')
+        self._is_configured = True
 
     def _start_services(self):
         '''
@@ -39,6 +50,18 @@ class RadiozoaController(RingController):
         '''
         super()._start_services()
         self._radiozoa_start()
+
+    # heartbeat ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    
+    def _led_off(self, timer=None):
+        if self._is_configured:
+            self._strip.set_color(0, COLOR_BLACK)
+        super()._led_off(timer=timer)
+    
+    def _beat(self):
+        if self._is_configured:
+            self._strip.set_color(0, COLOR_CYAN)
+        super()._beat()
 
     @property
     def radiozoa(self):
@@ -49,22 +72,23 @@ class RadiozoaController(RingController):
         Initialise the Radiozoa sensor.
         '''
         try:
-#           if self._config is None:
-#               self._config = Configure()
-            if self._config.configure(force=force):
+            if self._configure.configure(force=force):
                 from sensor import Sensor
     
                 if self._radiozoa is None:
                     self._radiozoa = RadiozoaSensor()
                 if self._sensor is None:
                     self._sensor = Sensor(controller=self)
-            else: 
+            elif self._fail_hard:
                 raise Exception('radiozoa init fail.')
+            else:
+                self._log.warning('radiozoa init fail.')
         except Exception as e:
             self._log.error("{} raised by radiozoa_init: {}".format(type(e), e))
             sys.print_exception(e)
 
     def _radiozoa_reset(self):
+        self.reset_ring()
         if not self._radiozoa:
             self._log.error('no radiozoa available.')
             return Controller._PACKED_ERR, COLOR_RED
@@ -93,7 +117,7 @@ class RadiozoaController(RingController):
             time.sleep_ms(250)
         if self._radiozoa:
             # disable heartbeat
-            self._enable_heartbeat(False)
+#           self._enable_heartbeat(False)
             self._radiozoa.start_ranging()
             if not self._sensor.enabled:
                 self._sensor.enable()
@@ -106,7 +130,7 @@ class RadiozoaController(RingController):
             self._sensor.disable()
             self._radiozoa.stop_ranging()
             # enable heartbeat
-            self._enable_heartbeat(True)
+#           self._enable_heartbeat(True)
         else:
             self._log.error('failed to stop: radiozoa not configured.')
 
@@ -130,8 +154,8 @@ class RadiozoaController(RingController):
             return None, None
 
         elif arg0 == "scan":
-            if self._config:
-                self._config.i2cdetect()
+            if self._configure:
+                self._configure.i2cdetect()
                 return Controller._PACKED_ACK, COLOR_DARK_GREEN
             else:
                 self._log.error("no configure available; use 'radiozoa start' first.")
@@ -161,7 +185,7 @@ class RadiozoaController(RingController):
                 return Controller._PACKED_ERR, COLOR_RED
 
         elif arg0 == "cardinal":
-                return self._PACKED_CARDINAL, COLOR_DARK_GREEN
+                return RadiozoaController.PACKED_CARDINAL, COLOR_DARK_GREEN
 
         elif arg0 == "distances":
             if self._sensor:
