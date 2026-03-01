@@ -56,7 +56,7 @@ class InterruptButton:
 
 I2C_ID            = 1            # I2C bus identifier
 I2C_ADDRESS       = 0x47         # default I2C device address
-WORKER_DELAY_SEC  = 1.0          # time between automatic polls
+WORKER_DELAY_SEC  = 0.5          # time between automatic polls
 WORKER_REQUEST    = "distances"  # poll command
 BUTTON_DELAY_SEC  = 5            # how many seconds after pushbutton to do scan
 TICK_COMMAND      = 'play tick'

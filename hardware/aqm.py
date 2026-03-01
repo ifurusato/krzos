@@ -100,7 +100,7 @@ class AirQualityMonitor(Component):
                 if self._sensor.get_sensor_data() and self._sensor.data.heat_stable:
                     gas = self._sensor.data.gas_resistance
                     burn_in_data.append(gas)
-                    self._log.info('gas: {0}Ω\t'.format(gas)
+                    self._log.info('gas: {:5d}Ω  '.format(gas)
                             + Fore.BLACK
                             + '{:>3}s elapsed; burn-in: {}s'.format(int(curr_time - start_time), burn_in_time))
                     time.sleep(1)

@@ -118,6 +118,9 @@ def _create_strip(config):
     _strip.set_color(0, COLOR_BLACK)
     return _strip
 
+# do this quick to shut down pixels ASAP
+__strip = _create_strip(config)
+
 def _create_pixel(config):
     _family = config['family']
     if _family == 'TINYS3':
@@ -138,13 +141,12 @@ def create_controller(config):
     '''
     Dynamically import and instantiate the controller class based on config.
     '''
-    _strip = _create_strip(config)
     _pixel = _create_pixel(config)
     class_name = config['controller_class']
     module_name = class_name.lower()
     module = __import__(module_name)
     cls = getattr(module, class_name)
-    return cls(config, _pixel, _strip)
+    return cls(config, _pixel, __strip)
 
 async def i2c_loop(controller, slave):
     global enabled
