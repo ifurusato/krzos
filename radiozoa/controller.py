@@ -172,7 +172,7 @@ Commands:
     time get | set <timestamp>              # set/get RTC time
     pixel off | <color> | <n> <color>       # control NeoPixel
     persist on | off                        # persist pixel after setting
-    rgb [<n>] <red> <green> <blue>          # set NeoPixel to RGB
+    rgb <red> <green> <blue>                # set NeoPixel to RGB
     heartbeat on | off                      # control heartbeat flash
     ping                                    # returns "PING"
     data                                    # return sample data
@@ -279,21 +279,14 @@ Commands:
                     return Controller._PACKED_ERR
 
             elif _arg0 == "rgb":
-                # e.g., rgb [3] 130 40 242
+                print('controller.rgb')
+                # e.g., rgb 130 40 242
                 self._enable_heartbeat(False)
-                _show_state = False
-                if _arg4:
-                    index = int(_arg1)
-                    red   = int(_arg2)
-                    green = int(_arg3)
-                    blue  = int(_arg4)
-                else:
-                    index = 1
-                    red   = int(_arg1)
-                    green = int(_arg2)
-                    blue  = int(_arg3)
-                self._log.info("rgb: index: {}; red: '{}'; green: '{}'; blue: '{}'".format(index, red, green, blue))
-                self._pixel.set_color(index, (red, green, blue))
+                red   = int(_arg1)
+                green = int(_arg2)
+                blue  = int(_arg3)
+                self._log.info("rgb: red: '{}'; green: '{}'; blue: '{}'".format(index, red, green, blue))
+                self._pixel.set_color(0, (red, green, blue))
                 return Controller._PACKED_ACK
 
             elif _arg0 == "ping":

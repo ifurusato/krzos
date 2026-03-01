@@ -58,13 +58,17 @@ class RingController(Controller):
                        COLOR_GREY_4, COLOR_GREY_5, COLOR_GREY_6, COLOR_GREY_7 ]
         self._dark = [ COLOR_DARK_RED, COLOR_DARK_GREEN, COLOR_DARK_BLUE, COLOR_DARK_CYAN,
                        COLOR_DARK_MAGENTA, COLOR_DARK_YELLOW, COLOR_PURPLE ]
+        self._forest = [ COLOR_APPLE, COLOR_BANANA, COLOR_BROWN, COLOR_CUCUMBER, COLOR_DARK_CYAN,
+                       COLOR_DARK_GREEN, COLOR_EMERALD, COLOR_GREEN, COLOR_MELON, COLOR_MUSTARD,
+                       COLOR_PEAR, COLOR_ROBIN ]
         self._palettes = {
             'all':  self._all,
             'cool': self._cool,
             'warm': self._warm,
             'wild': self._wild,
             'grey': self._grey,
-            'dark': self._dark
+            'dark': self._dark,
+            'forest': self._forest
         }
         self._ring_brightness = 0.1  # default: 0.33
         self._ring = self._create_ring()
@@ -164,6 +168,12 @@ class RingController(Controller):
 
     def _set_ring_color(self, index, color):
 #       self._log.info('set ring color at {} to {}'.format(index, color))
+        if isinstance(color, Color):
+            pass
+        elif isinstance(color, tuple):
+            color = Color("COLOR_({},{},{})".format(*color), (color[0], color[1], color[2]))
+        else:
+            raise TypeError('expected Color or tuple.')
         actual_index = (index + self._ring_offset) % 24
         self._ring_model[actual_index].base_color = color
         self._ring_model[actual_index].color = color.rgb
@@ -258,6 +268,7 @@ class RingController(Controller):
         super().print_help()
         print('''    ring clear |                            # set all ring pixels off
        | all ( off | clear | <name> )       # set all ring pixels off or to color
+    rgb index red green blue                # set a ring pixel to the RGB color
     rotate on | off | fwd | cw | rev | ccw  # control ring pixel rotation
        | hz <n>                             # set rotation frequency
     theme on | off                          # enable/disable theme pulsation
@@ -271,9 +282,30 @@ class RingController(Controller):
         Pre-process the arguments, returning a response and color if a match occurs.
         Such a match precludes further processing.
         '''
-#       self._log.info("ring: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
+        self._log.info("ring: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
         if arg0 == "__extend_here__":
             return None, None
+
+        elif arg0 == "rgb":
+            # e.g., rgb 3 130 40 242
+            self._enable_heartbeat(False)
+            _show_state = False
+            try:
+                if arg4 is not None:
+                    index = int(arg1)
+                    red   = int(arg2)
+                    green = int(arg3)
+                    blue  = int(arg4)
+                    self._log.info("rgb: index: {}; red: '{}'; green: '{}'; blue: '{}'".format(index, red, green, blue))
+#                   self._ring.set_color(index - 1, (red, green, blue))
+                    self._set_ring_color(index - 1, (red, green, blue))
+                    return Controller._PACKED_ACK, COLOR_DARK_GREEN
+                else:
+                    raise Exception('invalid number of arguments for rgb.')
+            except Exception as e:
+                self._log.error('{} raised by rgb command: {}'.format(type(e), e))
+                sys.print_exception(e)
+                return Controller._PACKED_ERR, COLOR_RED
 
         elif arg0 == "ring":
             try:
@@ -293,6 +325,7 @@ class RingController(Controller):
                         for idx in range(self._ring_count):
                             self._set_ring_color(idx, color)
                         return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
                 else:
 #                   self._log.info("ring command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
                     index = int(arg1) - 1

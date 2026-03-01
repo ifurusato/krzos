@@ -8,11 +8,17 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-02-19
-# modified: 2026-02-20
+# modified: 2026-03-01
 
+#import os
 import sys
 import math
+import traceback
+from colorama import init, Fore, Style
+init()
+
 from core.cardinal import Cardinal
+from core.logger import Logger, Level
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class AdaptiveCell:
@@ -99,6 +105,7 @@ class AdaptiveCell:
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class AdaptiveOccupancyMap:
+    NAME='occupancy-map'
     '''
     Adaptive resolution occupancy map using recursive spatial subdivision.
     High resolution (50mm) where robot has been, coarse resolution elsewhere.
@@ -237,7 +244,7 @@ class AdaptiveOccupancyMap:
 
     def _trace_ray(self, start_x, start_y, cardinal, distance_mm):
         '''
-        trace a ray from start position, marking cells as free or occupied
+        Trace a ray from start position, marking cells as free or occupied.
         '''
         dx, dy = self._direction_vectors[cardinal]
         # normalize direction vector
@@ -269,7 +276,7 @@ class AdaptiveOccupancyMap:
 
     def get_all_cells(self):
         '''
-        return all leaf cells for visualization
+        Return all leaf cells for visualization.
         '''
         return self.root.get_all_leaf_cells()
 
@@ -296,7 +303,7 @@ class AdaptiveOccupancyMap:
 
     def trim_to_data(self, margin_mm=100):
         '''
-        calculate tight bounds around non-unknown cells and apply margin
+        Calculate tight bounds around non-unknown cells and apply margin.
         '''
         cells = self.get_all_cells()
         # find cells with data (not unknown)
@@ -318,20 +325,24 @@ class AdaptiveOccupancyMap:
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 class MapVisualizer:
-    FREE_CELL_COLOR = "#E6F3FF"  # light blue background for free cells
+    FREE_CELL_COLOR = "#E6F3FF"       # light blue background for free cells
     ROBOT_POSITION_COLOR = "#404040"  # dark gray for robot scan positions
     '''
     Generates SVG visualization of the adaptive occupancy map.
     '''
-    def __init__(self, occupancy_map):
+    def __init__(self, occupancy_map, level=Level.INFO):
+        self._log = Logger(AdaptiveOccupancyMap.NAME, level=level)
         self.map = occupancy_map
         # scale factor to keep coordinates reasonable (1mm -> 0.1 SVG units)
         self._scale = 0.1
+        self._log.info('ready.')
 
     def generate_svg(self, filename="occupancy_map.svg"):
         '''
         Generate SVG file showing the occupancy map.
         '''
+#       cwd = os.getcwd()
+#       filename = os.path.join(cwd, filename)
         x_min, y_min, x_max, y_max = self.map.get_bounds()
         # calculate SVG bounds with Y-flip
         min_x = x_min * self._scale
@@ -342,45 +353,55 @@ class MapVisualizer:
         width = max_x - min_x
         height = max_y - min_y
         cells = self.map.get_all_cells()
-        # generate content and write to file
-        with open(filename, "w") as file:
-            file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-            file.write('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="{} {} {} {}">\n'.format(
-                min_x, min_y, width, height))
-            # draw free cells first
-            file.write('<g id="free-cells">\n')
-            for cell in cells:
-                if cell.state == 'free':
-                    self._write_cell_rect(file, cell, self.FREE_CELL_COLOR, "none")
-            file.write('</g>\n')
-            # draw occupied cells and origin
-            file.write('<g id="occupied-cells">\n')
-            for cell in cells:
-                if cell.is_origin:
-                    self._write_cell_rect(file, cell, "red", "red", stroke_width=0.5)
-                elif cell.state == 'occupied':
-                    # use the actual measured distance from the sensor
-                    if cell.measured_distance is not None:
-                        distance_mm = cell.measured_distance
-                    else:
-                        # fallback to distance from map origin
-                        distance_mm = math.sqrt(cell.center_x * cell.center_x + cell.center_y * cell.center_y)
-                    rgb = self._color_for_distance(distance_mm)
-                    fill = self._rgb_to_svg_color(rgb)
-                    self._write_cell_rect(file, cell, fill, "black", stroke_width=0.5)
-            file.write('</g>\n')
-            # draw robot positions
-            file.write('<g id="robot-positions">\n')
-            for cell in cells:
-                if cell.is_robot_position and not cell.is_origin:
-                    self._write_cell_rect(file, cell, self.ROBOT_POSITION_COLOR, "black", stroke_width=0.5)
-            file.write('</g>\n')
-            file.write('</svg>\n')
-        occupied_count = sum(1 for c in cells if c.state == 'occupied')
-        free_count = sum(1 for c in cells if c.state == 'free')
-        robot_positions = sum(1 for c in cells if c.is_robot_position)
-        print("SVG written to {}, occupied: {}, free: {}, robot positions: {}, total cells: {}".format(
-            filename, occupied_count, free_count, robot_positions, len(cells)))
+        try:
+            self._log.info('generating SVG file: {}…'.format(filename))
+            # generate content and write to file
+            with open(filename, "w") as file:
+                file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                file.write('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="{} {} {} {}">\n'.format(
+                    min_x, min_y, width, height))
+                # draw free cells first
+                file.write('<g id="free-cells">\n')
+                for cell in cells:
+                    if cell.state == 'free':
+                        self._write_cell_rect(file, cell, self.FREE_CELL_COLOR, "none")
+                file.write('</g>\n')
+                # draw occupied cells and origin
+                file.write('<g id="occupied-cells">\n')
+                for cell in cells:
+                    if cell.is_origin:
+                        self._write_cell_rect(file, cell, "red", "red", stroke_width=0.5)
+                    elif cell.state == 'occupied':
+                        # use the actual measured distance from the sensor
+                        if cell.measured_distance is not None:
+                            distance_mm = cell.measured_distance
+                        else:
+                            # fallback to distance from map origin
+                            distance_mm = math.sqrt(cell.center_x * cell.center_x + cell.center_y * cell.center_y)
+                        rgb = self._color_for_distance(distance_mm)
+                        fill = self._rgb_to_svg_color(rgb)
+                        self._write_cell_rect(file, cell, fill, "black", stroke_width=0.5)
+                file.write('</g>\n')
+                # draw robot positions
+                file.write('<g id="robot-positions">\n')
+                for cell in cells:
+                    if cell.is_robot_position and not cell.is_origin:
+                        self._write_cell_rect(file, cell, self.ROBOT_POSITION_COLOR, "black", stroke_width=0.5)
+                file.write('</g>\n')
+                file.write('</svg>\n')
+                file.flush()
+#               os.fsync(file.fileno())
+                self._log.info('file flushed.')
+
+            occupied_count = sum(1 for c in cells if c.state == 'occupied')
+            free_count = sum(1 for c in cells if c.state == 'free')
+            robot_positions = sum(1 for c in cells if c.is_robot_position)
+            self._log.info("occupied: {}, free: {}, robot positions: {}, total cells: {}".format(
+                occupied_count, free_count, robot_positions, len(cells)))
+            self._log.info('occupancy map file written to: ' + Fore.GREEN + '{}'.format(filename))
+
+        except Exception as e:
+            self._log.error('{} raised generating SVG from occupancy map: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
     def _write_cell_rect(self, file, cell, fill, stroke, stroke_width=None):
         '''

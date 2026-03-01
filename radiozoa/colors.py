@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2024-08-14
-# modified: 2026-02-08
+# modified: 2026-03-02
 
 class Color:
     _registry = []
@@ -85,21 +85,28 @@ COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 50,  20,   0))
 COLOR_DARK_GREY     = Color("COLOR_DARK_GREY",    ( 10,  10,  10))
 
 COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
-COLOR_ORANGE        = Color("COLOR_ORANGE",       (240,  53,   0))
-COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  11,   0))
-COLOR_FUCHSIA       = Color("COLOR_FUCHSIA",      (158,  16,  99))
-COLOR_APPLE         = Color("COLOR_APPLE",        ( 70, 100,   0))
-COLOR_EMERALD       = Color("COLOR_EMERALD",      (  0,  90,  10))
-COLOR_MEDIUM_CYAN   = Color("COLOR_MEDIUM_CYAN",  (  0, 128, 128))
-COLOR_DEEP_CYAN     = Color("COLOR_DEEP_CYAN",    (  0,  11,  11))
+COLOR_APPLE         = Color("COLOR_APPLE",        ( 80, 240,   0))
+COLOR_BANANA        = Color("COLOR_BANANA",       (190, 230,   0))
+COLOR_BROWN         = Color("COLOR_BROWN",        ( 22,  12,   0))
 COLOR_CORNFLOWER    = Color("COLOR_CORNFLOWER",   ( 60,  90, 142))
-COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
+COLOR_CUCUMBER      = Color("COLOR_CUCUMBER",     ( 22,  70,   0))
+COLOR_DEEP_CYAN     = Color("COLOR_DEEP_CYAN",    (  0,  11,  11))
+COLOR_EMERALD       = Color("COLOR_EMERALD",      (  0,  90,  10))
+COLOR_FUCHSIA       = Color("COLOR_FUCHSIA",      (158,  16,  99))
 COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  16,  50))
-COLOR_MIDNIGHT      = Color("COLOR_MIDNIGHT",     (  0,  11,  18))
 COLOR_LAVENDER      = Color("COLOR_LAVENDER",     ( 24,  11, 130))
-COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
-COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
+COLOR_MEDIUM_CYAN   = Color("COLOR_MEDIUM_CYAN",  (  0, 128, 128))
+COLOR_MELON         = Color("COLOR_MELON",        ( 40, 110,  11))
+COLOR_MIDNIGHT      = Color("COLOR_MIDNIGHT",     (  0,  11,  18))
+COLOR_MUSTARD       = Color("COLOR_MUSTARD",      ( 11,  11,   0))
+COLOR_ORANGE        = Color("COLOR_ORANGE",       (240,  53,   0))
+COLOR_PEAR          = Color("COLOR_PEAR",         ( 70, 100,   0))
 COLOR_PINK          = Color("COLOR_PINK",         (255,  50,  40))
+COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
+COLOR_ROBIN         = Color("COLOR_ROBIN",        (  0,  70,  40))
+COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
+COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  11,   0))
+COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
 
 COLOR_GREY_0        = Color("COLOR_GREY_0",       ( 11,  11,  10))
 COLOR_GREY_1        = Color("COLOR_GREY_1",       ( 15,  15,  10))

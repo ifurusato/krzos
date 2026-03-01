@@ -51,6 +51,12 @@ class I2CMaster(Component):
             self._log.error('{} raised opening smbus: {}'.format(type(e), e))
             raise
 
+    def logger(self):
+        '''
+        Return the logger.
+        '''
+        return self._log
+
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def set_fail_on_exception(self, fail):

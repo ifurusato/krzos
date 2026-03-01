@@ -7,12 +7,13 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-13
+# modified: 2026-03-01
 #
 # I2C master controller, with CLI option to set I2C address. Permits repeat
 # sending of a command using a worker thread loop initiated by "go" and halted
-# by "stop".
+# by "stop". Populates an occupancy map.
 
+import os
 import time
 import sys
 import select
@@ -21,48 +22,17 @@ from threading import Event, Lock, Thread
 from colorama import init, Fore, Style
 init()
 
+from core.adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
 from i2c_master import I2CMaster
-from hardware.tinyfx_controller import TinyFxController
-from adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
-
-# pushbutton support ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
-import RPi.GPIO as GPIO
-
-class InterruptButton:
-    def __init__(self, pin=21, debounce_ms=50, callback=None):
-        self._pin = pin
-        self._callback = callback
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self._pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(
-            self._pin,
-            GPIO.BOTH,
-            callback=self._handle_edge,
-            bouncetime=debounce_ms
-        )
-
-    def _handle_edge(self, channel):
-        state = GPIO.input(self._pin)
-        pressed = (state == GPIO.LOW)
-        if self._callback:
-            self._callback(pressed)
-
-    def cleanup(self):
-        GPIO.remove_event_detect(self._pin)
-        GPIO.cleanup(self._pin)
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 I2C_ID            = 1            # I2C bus identifier
 I2C_ADDRESS       = 0x47         # default I2C device address
-WORKER_DELAY_SEC  = 0.5          # time between automatic polls
+WORKER_DELAY_SEC  = 0.67         # time between automatic polls
 WORKER_REQUEST    = "distances"  # poll command
-BUTTON_DELAY_SEC  = 5            # how many seconds after pushbutton to do scan
-TICK_COMMAND      = 'play tick'
-BEEP_COMMAND      = 'play beep'
 DISTANCES_COMMAND = 'distances'
-USE_BUTTON        = False
+USE_BUTTON        = True
 TRIM_OCCUPANCY_MAP_TO_DATA = True
 
 def worker_loop(master, stop_event, lock):
@@ -76,10 +46,12 @@ def worker_loop(master, stop_event, lock):
         while not stop_event.is_set():
             with lock:
                 response = master.send_request(WORKER_REQUEST)
-            if response == WORKER_REQUEST:
-                print("response: {}".format(response))
+            if response is None:
+                print(Fore.CYAN + Style.DIM + "response: " + Fore.BLACK + 'None' + Style.RESET_ALL)
+            elif response == WORKER_REQUEST:
+                print(Fore.CYAN + Style.DIM + "response: " + Fore.BLACK + '{}'.format(response) + Style.RESET_ALL)
             else:
-                print("response: {}".format(response))
+                print(Fore.CYAN + "response: " + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
             time.sleep(WORKER_DELAY_SEC)
     finally:
         print("worker thread stopping")
@@ -110,7 +82,7 @@ def read_xy():
     except (ValueError, TypeError):
         return None
 
-def load_scan_data(filename):
+def load_scan_data(cwd, filename):
     '''
     Load and process scan data from a text file.
     each line: x y heading distance1 distance2 ... distance8
@@ -118,7 +90,9 @@ def load_scan_data(filename):
     global occupancy_map
     
     try:
-        with open(filename, 'r') as f:
+        path = os.path.join(cwd, filename)
+        print(Fore.MAGENTA + 'loading scan data from {}…'.format(path) + Style.RESET_ALL)
+        with open(path, 'r') as f:
             lines = f.readlines()
         scan_count = 0
         for line in lines:
@@ -151,20 +125,12 @@ def load_scan_data(filename):
         print(Fore.RED + 'ERROR loading scan data: {}'.format(e) + Style.RESET_ALL)
         return False
 
-def perform_scan(master, tfxc, xyz):
+def perform_scan(master, xyz):
     global occupancy_map
     try:
         print(Fore.CYAN + 'xyz: ' + Fore.GREEN + '{}\n'.format(xyz) + Style.RESET_ALL)
         print(Fore.WHITE + 'continuing…' + Style.RESET_ALL)
 
-        for _ in range(BUTTON_DELAY_SEC):
-            response = tfxc.send_request(TICK_COMMAND)
-            print('response: {}'.format(response))
-            time.sleep(1)
-        response = tfxc.send_request(BEEP_COMMAND)
-        print('response: {}'.format(response))
-        time.sleep(1)
-        
         x, y, heading = xyz
         response = master.send_request(DISTANCES_COMMAND)
         while response is None or response == DISTANCES_COMMAND:
@@ -180,16 +146,33 @@ def perform_scan(master, tfxc, xyz):
         # add sensor reading to map
         occupancy_map.process_sensor_reading(response, x, y, heading)
         print(Fore.MAGENTA + 'sensor reading added to map' + Style.RESET_ALL)
+        return response
 
     except Exception as e:
         print(Fore.RED + 'ERROR: {} raised in perform_scan: {}'.format(type(e),e) + Style.RESET_ALL)
+        return None
 
+def write_map_data(map_data):
+    with open(__map_data_path, "w") as file:
+        for row in map_data:
+            first_part = "{} {} {}".format(row[0], row[1], row[2])
+            first_part = "{:<16}".format(first_part) # 16 chars wide, matches your sample
+            second_part = " ".join("{:04d}".format(n) for n in row[3:])
+            file.write(first_part + second_part + "\n")
+            file.flush()
+    print("saved map to file: {}".format(__map_data_path))
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 button = None
 button_pressed = False
 occupancy_map = None
+
+cwd = os.getcwd()
+__occ_map_path = os.path.join(cwd, "occupancy_map.svg")
+print('filename: {}'.format(__occ_map_path))
+__map_data_path = os.path.join(cwd, "map_data.txt")
+print('filename: {}'.format(__map_data_path))
 
 def main():
 
@@ -202,9 +185,6 @@ def main():
 
     try:
 
-        tfxc = TinyFxController()
-        tfxc.enable()
-
         parser = argparse.ArgumentParser(description='I2C master remote control')
         parser.add_argument('--address',
                 type=lambda x: int(x, 0), default=I2C_ADDRESS,
@@ -216,19 +196,23 @@ def main():
         master.enable()
         print('\nEnter command string to send (Ctrl-C or "exit" to exit):')
 
-        def button_handler(pressed):
+        def button_handler():
             global button_pressed
-            if pressed:
-                print("pressed.")
-            else:
-                print("released…")
-                button_pressed = True
+            print("button released…")
+            button_pressed = True
 
         if USE_BUTTON:
-            button = InterruptButton(pin=21, debounce_ms=50, callback=button_handler)
+            from core.logger import Logger, Level
+            from core.config_loader import ConfigLoader
+            from hardware.button import Button
+
+            _config = ConfigLoader(Level.INFO).configure()
+            button = Button(config=_config, callback=button_handler)
 
         last_user_msg = None
         print(prompt, end='', flush=True)
+
+        map_data = []
         
         while True:
             if button_pressed:
@@ -237,7 +221,12 @@ def main():
                 xyz = read_xyz()
                 if xyz is None:
                     xyz = 0, 0, 0
-                perform_scan(master, tfxc, xyz)
+                scan = perform_scan(master, xyz)
+                if scan is not None:
+                    scan = [int(n) for n in scan.split()]
+                    row = (*xyz, *scan)
+                    map_data.append(row)
+                    print("map: '{}'".format(map_data))
                 print(prompt, end='', flush=True)
                 continue
 
@@ -278,6 +267,14 @@ def main():
                 print(prompt, end='', flush=True)
                 continue
 
+            elif user_msg == 'save':
+                if len(map_data) > 0:
+                    write_map_data(map_data)
+                else:
+                    print("empty map.")
+                print(prompt, end='', flush=True)
+                continue
+
             elif user_msg == 'viz':
                 if occupancy_map is None:
                     print("no map data available - press button to scan first")
@@ -285,7 +282,7 @@ def main():
                     if TRIM_OCCUPANCY_MAP_TO_DATA:
                         occupancy_map.trim_to_data(margin_mm=100)
                     visualizer = MapVisualizer(occupancy_map)
-                    visualizer.generate_svg("occupancy_map.svg")
+                    visualizer.generate_svg(__occ_map_path)
                 print(prompt, end='', flush=True)
                 continue
 
@@ -294,7 +291,7 @@ def main():
                 if not filename:
                     print("usage: load <filename>")
                 else:
-                    load_scan_data(filename)
+                    load_scan_data(cwd, filename)
                 print(prompt, end='', flush=True)
                 continue
 

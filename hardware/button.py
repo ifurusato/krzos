@@ -35,7 +35,7 @@ class Button(Component):
     :param name:          the optional button name
     :param level:         the log level
     '''
-    def __init__(self, config, name=None, level=Level.INFO):
+    def __init__(self, config, name=None, callback=None, level=Level.INFO):
         if name is None:
             name = 'button'
         _cfg = config['kros'].get('hardware').get('button')
@@ -63,6 +63,8 @@ class Button(Component):
         except Exception as e:
             self._log.error('failed to initialize button on pin {}: {}'.format(self._pin, e))
             raise
+        if callback:
+            self.add_callback(callback)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -70,13 +72,13 @@ class Button(Component):
     def clear_callbacks(self):
         self._callbacks.clear()
 
-    def add_callback(self, callback_method):
+    def add_callback(self, callback):
         '''
-        Add a callback to be executed when the button is pressed.
+        Add a callback method to be executed when the button is pressed.
         '''
-        if not callable(callback_method):
+        if not callable(callback):
             raise TypeError('provided callback was not callable.')
-        self._callbacks.append(callback_method)
+        self._callbacks.append(callback)
 
     def execute_callbacks(self):
         '''

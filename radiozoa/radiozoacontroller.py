@@ -22,6 +22,8 @@ from ringcontroller import RingController
 
 class RadiozoaController(RingController):
     PACKED_CARDINAL = pack_message("N    NE   E    SE   S    SW   W    NW") # order of returned data
+    PACKED_TRUE  = pack_message("True")
+    PACKED_FALSE = pack_message("False")
 
     def __init__(self, config, pixel, strip):
         self._log = Logger('ctrl', level=Level.INFO)
@@ -110,6 +112,17 @@ class RadiozoaController(RingController):
             self._log.error("{} raised during Radiozoa reset: {}".format(type(e), e))
             return Controller._PACKED_ERR, COLOR_RED
 
+    def _radiozoa_status(self):
+        '''
+        Returns a packed True or False indicating whether the Radiozoa is actively ranging.
+        '''
+        if self._radiozoa and self._radiozoa.is_ranging:
+            self._log.info('radiozoa is ranging.')
+            return RadiozoaController.PACKED_TRUE, COLOR_DARK_GREEN
+        else:
+            self._log.warning('radiozoa is not ranging.')
+            return RadiozoaController.PACKED_FALSE, COLOR_ORANGE
+
     def _radiozoa_start(self):
         self._log.info('starting radiozoa…')
         if not self._radiozoa:
@@ -136,7 +149,7 @@ class RadiozoaController(RingController):
 
     def print_help(self):
         super().print_help()
-        print('''    radiozoa init | start | stop | reset    # radiozoa control
+        print('''    radiozoa init | start | stop | reset | status # radiozoa control
     cardinal                                # return legend of distances
     distances                               # return eight ToF distances
     poll [<n>]                              # set the polling rate in Hz (no value sets to default)
@@ -178,6 +191,10 @@ class RadiozoaController(RingController):
 
             elif arg1 == "reset":
                 _response, _color = self._radiozoa_reset()
+                return _response, _color
+
+            elif arg1 == "status":
+                _response, _color = self._radiozoa_status()
                 return _response, _color
 
             else:
