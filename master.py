@@ -134,7 +134,7 @@ def perform_scan(master, xyz):
         x, y, heading = xyz
         response = master.send_request(DISTANCES_COMMAND)
         while response is None or response == DISTANCES_COMMAND:
-            print(Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
+            print(Fore.CYAN + Style.DIM + 'invalid response: {}'.format(response) + Style.RESET_ALL)
             response = master.send_request(DISTANCES_COMMAND)
         print(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
 
@@ -295,13 +295,18 @@ def main():
                 print(prompt, end='', flush=True)
                 continue
 
-            print('user msg: {}'.format(user_msg))
+            print(Fore.CYAN + 'user msg: ' + Fore.WHITE + "'{}'".format(user_msg))
             with i2c_lock:
                 response = master.send_request(user_msg)
                 if response == user_msg:
                     print(Fore.YELLOW + 'response matches input.' + Style.RESET_ALL)
 
-            print('response: {}'.format(response))
+            if response is None:
+                print(Fore.CYAN + Style.DIM + "response: " + Fore.BLACK + 'None' + Style.RESET_ALL)
+            elif response == user_msg:
+                print(Fore.CYAN + Style.DIM + "response: " + Fore.BLACK + '{}'.format(response) + Style.RESET_ALL)
+            else:
+                print(Fore.CYAN + 'response: ' + Fore.GREEN + '{}'.format(response) + Style.RESET_ALL)
             last_user_msg = user_msg
             print(prompt, end='', flush=True)
 

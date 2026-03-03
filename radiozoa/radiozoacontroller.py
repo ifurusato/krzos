@@ -163,15 +163,17 @@ class RadiozoaController(RingController):
 #       self._log.info("radiozoa: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
         parts = cmd.split()
         
-        if arg0 == "__extend_here__":
-            return None, None
+#       if arg0 == "__extend_here__":
+#           return None, None
 
-        elif arg0 == "scan":
-            if self._configure:
-                self._configure.i2cdetect()
-                return Controller._PACKED_ACK, COLOR_DARK_GREEN
+        if arg0 not in {"distances", "radiozoa", "scan", "poll", "cardinal"}: # pre-emptive exit
+            return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
+
+        elif arg0 == "distances":
+            if self._sensor:
+                return self._sensor.distances_packed, COLOR_FUCHSIA
             else:
-                self._log.error("no configure available; use 'radiozoa start' first.")
+                self._log.error('no sensor.')
                 return Controller._PACKED_ERR, COLOR_RED
 
         elif arg0 == "radiozoa":
@@ -201,14 +203,12 @@ class RadiozoaController(RingController):
                 self._log.error("radiozoa: unrecognised command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
                 return Controller._PACKED_ERR, COLOR_RED
 
-        elif arg0 == "cardinal":
-                return RadiozoaController.PACKED_CARDINAL, COLOR_DARK_GREEN
-
-        elif arg0 == "distances":
-            if self._sensor:
-                return self._sensor.distances_packed, COLOR_FUCHSIA
+        elif arg0 == "scan":
+            if self._configure:
+                self._configure.i2cdetect()
+                return Controller._PACKED_ACK, COLOR_DARK_GREEN
             else:
-                self._log.error('no sensor.')
+                self._log.error("no configure available; use 'radiozoa start' first.")
                 return Controller._PACKED_ERR, COLOR_RED
 
         elif arg0 == "poll":
@@ -223,6 +223,9 @@ class RadiozoaController(RingController):
             else:
                 self._log.error('no sensor.')
                 return Controller._PACKED_ERR, COLOR_RED
+
+        elif arg0 == "cardinal":
+                return RadiozoaController.PACKED_CARDINAL, COLOR_DARK_GREEN
 
         else:
             return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)

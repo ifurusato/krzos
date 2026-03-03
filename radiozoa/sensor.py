@@ -52,19 +52,19 @@ class Sensor:
     @property
     def distances(self):
         if not self._enabled:
-            raise IllegalStateError('sensor not enabled')
+            raise IllegalStateError('distances not available: sensor not enabled.')
         return self._distances
 
     @property
     def distances_fmt(self):
         if not self._enabled:
-            raise IllegalStateError('sensor not enabled')
+            raise IllegalStateError('distances fmt not available: sensor not enabled.')
         return self._distances_fmt
 
     @property
     def distances_packed(self):
         if not self._enabled:
-            raise IllegalStateError('sensor not enabled')
+            raise IllegalStateError('distances packed not available: sensor not enabled.')
         return self._distances_packed
 
     def enable(self):
@@ -93,7 +93,7 @@ class Sensor:
                 self._task.cancel()
 
     async def _poll_loop(self):
-        self._log.info('starting poll loop…')
+        self._log.info(Fore.GREEN + 'starting poll loop…')
         while self._enabled:
             try:
                 if self._radiozoa:

@@ -27,6 +27,7 @@ class RingController(Controller):
     '''
     def __init__(self, config, pixel=None, strip=None, level=Level.INFO):
         self._log = Logger('ring-ctrl', level=level)
+        self._ring = None
         super().__init__(config, pixel, strip)
         # pixel ring
         self._ring_count = config['ring_count']
@@ -34,6 +35,8 @@ class RingController(Controller):
             raise ValueError('ring count is undefined.')
         elif self._ring_count == 0:
             raise ValueError('ring count is 0.')
+        self._status_enabled   = True
+        self._status_pixel     = 1
         # rotation
         self._ring_offset      = 0
         self._rotate_direction = 1 # 1 or -1
@@ -76,7 +79,7 @@ class RingController(Controller):
         self._last_update_ts  = self._get_time()
         self._ring_timer_hz = 24
         self._ring_timer = self._create_ring_timer()
-        self._radiozoa_started   = False
+        self._radiozoa_started = False
         self._log.info('ready.')
         # ready
 
@@ -111,6 +114,11 @@ class RingController(Controller):
 #       time.sleep_ms(100)
 #       _strip.set_color(0, COLOR_BLACK)
         return _strip
+
+    def _led_off(self, timer=None):
+        super()._led_off(timer)
+        if self._strip and self._status_enabled:
+            self._strip.set_color(self._status_pixel, COLOR_BLACK)
 
     @property
     def ring(self):
@@ -166,7 +174,7 @@ class RingController(Controller):
             rotated_index = (index - self._ring_offset) % 24
             self._ring.set_color(index, self._ring_model[rotated_index].color)
 
-    def _set_ring_color(self, index, color):
+    def set_ring_color(self, index, color):
 #       self._log.info('set ring color at {} to {}'.format(index, color))
         if isinstance(color, Color):
             pass
@@ -206,6 +214,12 @@ class RingController(Controller):
             self._theme()
         # then handle pixel off and parent tick
         super().tick(delta_ms)
+
+    def _quiet(self):
+        self._status_enabled = False
+        self._enable_rotate  = False
+        self._enable_theme   = False
+        self._log.info("set quiet.")
 
     # theme processing ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -275,6 +289,7 @@ class RingController(Controller):
        | hz <n>                             # set theme pulse frequency
        | pixels <count>                     # enable randomly-placed pixels in current palette
        | palette <name> <count>             # set palette with count of randomly-placed pixels
+    quiet                                   # turn off all services
 ''')
 
     def pre_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
@@ -282,9 +297,12 @@ class RingController(Controller):
         Pre-process the arguments, returning a response and color if a match occurs.
         Such a match precludes further processing.
         '''
-        self._log.info("ring: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
-        if arg0 == "__extend_here__":
-            return None, None
+#       self._log.info("ring: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
+#       if arg0 == "__extend_here__":
+#           return None, None
+
+        if arg0 not in {"rgb", "ring", "rotate", "theme", "quiet"}: # preemptively check
+            return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
 
         elif arg0 == "rgb":
             # e.g., rgb 3 130 40 242
@@ -298,7 +316,7 @@ class RingController(Controller):
                     blue  = int(arg4)
                     self._log.info("rgb: index: {}; red: '{}'; green: '{}'; blue: '{}'".format(index, red, green, blue))
 #                   self._ring.set_color(index - 1, (red, green, blue))
-                    self._set_ring_color(index - 1, (red, green, blue))
+                    self.set_ring_color(index - 1, (red, green, blue))
                     return Controller._PACKED_ACK, COLOR_DARK_GREEN
                 else:
                     raise Exception('invalid number of arguments for rgb.')
@@ -323,7 +341,7 @@ class RingController(Controller):
                             self._log.error("could not find color: arg2: '{}'; arg3: '{}'".format(arg2, arg3))
                             return Controller._PACKED_ERR, COLOR_RED
                         for idx in range(self._ring_count):
-                            self._set_ring_color(idx, color)
+                            self.set_ring_color(idx, color)
                         return Controller._PACKED_ACK, COLOR_DARK_GREEN
 
                 else:
@@ -332,7 +350,7 @@ class RingController(Controller):
                     if 0 <= index <= 23:
                         color = self._get_color(arg2, arg3)
                         if color:
-                            self._set_ring_color(index, color)
+                            self.set_ring_color(index, color)
                             return Controller._PACKED_ACK, COLOR_DARK_GREEN
                     else:
                         self._log.error("index value {} out of bounds (1-{}).".format(index, self._ring_count))
@@ -439,6 +457,7 @@ class RingController(Controller):
                         self._log.error("could not process input:  '{}'".format(cmd))
                         return Controller._PACKED_ERR, COLOR_RED
                     return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
                 else:
                     return Controller._PACKED_ERR, COLOR_RED
             except Exception as e:
@@ -446,8 +465,20 @@ class RingController(Controller):
                 sys.print_exception(e)
                 raise
 
+        elif arg0 == "quiet":
+            self._quiet()
+            return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
         else:
             return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
+
+    def process(self, cmd):
+        '''
+        Processes the callback from the I2C slave.
+        '''
+        if self._strip and self._status_enabled:
+            self._strip.set_color(self._status_pixel, COLOR_CYAN)
+        super().process(cmd)
 
     def post_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
         '''
