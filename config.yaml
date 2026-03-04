@@ -509,7 +509,7 @@ kros:
             i2c_address:                   0x43
         radiozoa-controller:
             i2c_bus_id:                       1
-            i2c_address:                   0x45
+            i2c_address:                   0x47
         player:                                            # Tiny FX sound player
             verbose:                      False            # verbose messaging
         gamepad:
