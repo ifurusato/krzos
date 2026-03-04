@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-10-10
-# modified: 2025-11-15
+# modified: 2026-03-04
 
 import time
 import numpy as np
@@ -23,7 +23,7 @@ from core.logger import Logger, Level
 from core.cardinal import Cardinal
 from core.event import Event
 from behave.async_behaviour import AsyncBehaviour
-from hardware.radiozoa_sensor import RadiozoaSensor
+from hardware.radiozoa_controller import RadiozoaController
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 
@@ -64,7 +64,7 @@ class Radiozoa(AsyncBehaviour):
         self._deadband          = _cfg.get('deadband', 0.275)
         self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
-        # directienal vectors
+        # directional vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
             (Cardinal.NORTHWEST, Cardinal.SOUTHEAST),
@@ -91,13 +91,12 @@ class Radiozoa(AsyncBehaviour):
         if self._use_dynamic_speed:
             self._default_speed = 0.0
             self._digital_pot = _component_registry.get(DigitalPotentiometer.NAME)
-        self._radiozoa_sensor = _component_registry.get(RadiozoaSensor.NAME)
-        if self._radiozoa_sensor is None:
-            self._log.info(Fore.WHITE + 'creating Radiozoa sensor…')
-            self._radiozoa_sensor = RadiozoaSensor(config, level=Level.INFO)
+        self._radiozoa_controller = _component_registry.get(RadiozoaController.NAME)
+        if self._radiozoa_controller is None:
+            self._log.info(Fore.WHITE + 'creating RadiozoaController…')
+            self._radiozoa_controller = RadiozoaController(config, level=Level.INFO)
         else:
-            self._log.info('using existing Radiozoa sensor.')
-#       self._radiozoa_sensor.enable()
+            self._log.info('using existing RadiozoaController.')
         self._ranging = False
         self._log.info('ready.')
 
@@ -110,10 +109,7 @@ class Radiozoa(AsyncBehaviour):
     def enable(self):
         if not self.enabled:
             self._ranging = True
-            self._radiozoa_sensor.enable()
-            if not self._radiozoa_sensor.check_ranging():
-                self._log.warning('not all sensors are ranging.')
-                return
+            self._radiozoa_controller.enable()
             super().enable()
             self._log.info('enabled.')
         else:
@@ -124,7 +120,7 @@ class Radiozoa(AsyncBehaviour):
             self._log.debug('disabling…')
             self._ranging = False
             time.sleep(0.1)
-            self._radiozoa_sensor.disable()
+            self._radiozoa_controller.disable()
             super().disable()
             self._log.info('disabled.')
         else:
@@ -159,8 +155,8 @@ class Radiozoa(AsyncBehaviour):
                 if self._use_dynamic_speed:
                     if next(self._counter) % 5 == 0:
                         self._dynamic_set_default_speed()
-                distances = self._radiozoa_sensor.get_distances()
-                if not distances or all(d is None or d > RadiozoaSensor.FAR_THRESHOLD for d in distances):
+                distances = self._radiozoa_controller.get_distances()
+                if not distances or all(d is None or d > RadiozoaController.FAR_THRESHOLD for d in distances):
                     # stop when sensors are unavailable or out of range
                     self._smoothed_vector = np.array([0.0, 0.0])
                     self._priority = 0.3
@@ -175,11 +171,9 @@ class Radiozoa(AsyncBehaviour):
                         if self._verbose:
                             self._display_info(vx, vy, message='polled')
                         return (vx, vy, omega)
-#                   return self._update_intent_vector(distances)
             await asyncio.sleep(0.005)
         except Exception as e:
             self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
-            # Set stop event to exit the loop gracefully
             self._stop_event.set()
             return (0.0, 0.0, 0.0)
 
@@ -198,19 +192,19 @@ class Radiozoa(AsyncBehaviour):
             if d is not None and d < 50:
                 self._log.warning('impossibly close reading from {} sensor: {}mm'.format(Cardinal.from_index(i).label, d))
                 return (0.0, 0.0, 0.0)
-        far_threshold = RadiozoaSensor.FAR_THRESHOLD * 0.95
+        far_threshold = RadiozoaController.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
         max_imbalance = 0.0  # track worst imbalance for priority
         min_distance = float('inf')  # track closest obstacle
         for c1, c2 in self._pairs:
-            d1 = self._radiozoa_sensor.get_sensor_by_cardinal(c1).get_distance()
-            d2 = self._radiozoa_sensor.get_sensor_by_cardinal(c2).get_distance()
-            if d1 < 0 or d2 < 0: # DIAGNOSTIC
-                self._log.warning('d1 {} or d2 are less than zero.',format(d1, d2))
+            d1 = distances[c1.id]
+            d2 = distances[c2.id]
+            if d1 is not None and d1 < 0:
+                self._log.warning('d1 {} or d2 {} are less than zero.'.format(d1, d2))
             # treat None, zero, negative, or beyond FAR_THRESHOLD as FAR_THRESHOLD
-            d1 = d1 if d1 is not None and 0 < d1 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
-            d2 = d2 if d2 is not None and 0 < d2 <= RadiozoaSensor.FAR_THRESHOLD else RadiozoaSensor.FAR_THRESHOLD
+            d1 = d1 if d1 is not None and 0 < d1 <= RadiozoaController.FAR_THRESHOLD else RadiozoaController.FAR_THRESHOLD
+            d2 = d2 if d2 is not None and 0 < d2 <= RadiozoaController.FAR_THRESHOLD else RadiozoaController.FAR_THRESHOLD
             # track closest obstacle across all sensors
             min_distance = min(min_distance, d1, d2)
             # both sensors out of range - ignore this pair
@@ -243,12 +237,12 @@ class Radiozoa(AsyncBehaviour):
         # imbalance urgency: normalized from min_sensor_diff to FAR_THRESHOLD
         if max_imbalance > self._min_sensor_diff:
             # scale from 0.0 at min_sensor_diff to 1.0 at FAR_THRESHOLD
-            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / (RadiozoaSensor.FAR_THRESHOLD - self._min_sensor_diff))
+            imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / (RadiozoaController.FAR_THRESHOLD - self._min_sensor_diff))
         else:
             imbalance_urgency = 0.0
         # proximity urgency: normalized from FAR_THRESHOLD (0.0) to 0mm (1.0)
-        if min_distance < RadiozoaSensor.FAR_THRESHOLD:
-            proximity_urgency = 1.0 - (min_distance / RadiozoaSensor.FAR_THRESHOLD)
+        if min_distance < RadiozoaController.FAR_THRESHOLD:
+            proximity_urgency = 1.0 - (min_distance / RadiozoaController.FAR_THRESHOLD)
         else:
             proximity_urgency = 0.0
         # priority formula: scales from 0.4 (gentle guidance) to 1.0 (critical avoidance)

@@ -7,28 +7,229 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-04
+# modified: 2026-03-04
+
+import os
+import time
+from threading import Event, Lock, Thread
+from colorama import init, Fore, Style
+init()
 
 from core.logger import Logger, Level
-from hardware.i2c_master import I2CMaster
+from core.adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
+from i2c_master import I2CMaster
 
 class RadiozoaController(I2CMaster):
-    NAME = 'rctrl'
-    I2C_BUS_ID  = 1
-    I2C_ADDRESS = 0x45
+    NAME              = 'radio-ctrl'
+    FAR_THRESHOLD     = 4000  # mm; maximum range of VL53L1X sensors
+    DISTANCES_COMMAND = 'distances'
     '''
-    Extends I2CMaster to control an STM32F405 or ESP32-S3 connected to a Radiozoa sensor board.
-    ''' 
-    def __init__(self, config=None, i2c_address=None, timeset=True, level=Level.INFO):
-        if config: 
-            _cfg = config.get('kros').get('hardware').get('radiozoa-controller')
-            _i2c_bus_id  = _cfg.get('i2c_bus_id')
-            _i2c_address = _cfg.get('i2c_address')
+    Extends I2CMaster to control an ESP32-S3 connected to a Radiozoa sensor board.
+
+    Manages the I2C command interface, a background polling loop, and an
+    AdaptiveOccupancyMap populated from sensor readings.
+    '''
+    def __init__(self, config=None, level=Level.INFO):
+        self._cwd = os.getcwd()
+        if config is None:
+            raise ValueError('no config provided.')
+        self._log = Logger(RadiozoaController.NAME, level=level)
+        _cfg         = config['kros']['hardware']['radiozoa-controller']
+        _i2c_bus_id  = _cfg.get('i2c_bus_id')
+        _i2c_address = _cfg.get('i2c_address')
+        _timeset     = _cfg.get('timeset', True)
+        _poll_delay  = _cfg.get('poll_delay_sec', 0.67)
+        _map_data_file    = _cfg.get('map_data_file') or None
+        self._max_retries = _cfg.get('max_retries', 5)
+        # superclass
+        I2CMaster.__init__(self, i2c_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=_timeset)
+        self._poll_delay_sec = _poll_delay
+        self._distances      = None  # list of 8 ints, or None if not yet read
+        self._distances_lock = Lock()
+        self._stop_event     = Event()
+        self._poll_thread    = None
+        # occupancy map
+        self._occ_map_path = os.path.join(self._cwd, 'occupancy_map.svg')
+        self._log.info('occ map path: {}'.format(self._occ_map_path))
+        self._occupancy_map = AdaptiveOccupancyMap(min_cell_size=50, initial_size=8000)
+        self._log.info('adaptive occupancy map initialized.')
+        if _map_data_file is not None:
+            self.load_scan_data(_map_data_file)
+        self._log.info('ready.')
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    @property
+    def occupancy_map(self):
+        '''
+        Return the AdaptiveOccupancyMap instance.
+        '''
+        return self._occupancy_map
+
+    def _parse_distances(self, response):
+        '''
+        Parse a space-delimited response string into a list of 8 ints.
+        Returns None if the response is invalid.
+        '''
+        if response is None or response == self.DISTANCES_COMMAND:
+            return None
+        try:
+            values = [int(v) for v in response.split()]
+            if len(values) != 8:
+                self._log.warning('expected 8 distance values, got {}: {}'.format(len(values), response))
+                return None
+            return values
+        except ValueError:
+            self._log.warning('could not parse distances response: {}'.format(response))
+            return None
+
+    def get_distances(self):
+        '''
+        Fetch a fresh set of distances from the sensor, store and return them.
+        Retries up to max_retries times if the response is invalid.
+        Returns a list of 8 ints (mm), or None if retries are exhausted.
+        '''
+        retries = 0
+        response = self.send_request(self.DISTANCES_COMMAND)
+        while response is None or response == self.DISTANCES_COMMAND or response == 'ACK':
+            if retries >= self._max_retries:
+                self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
+                return None
+            self._log.debug('invalid response ({}), retrying…'.format(response))
+            response = self.send_request(self.DISTANCES_COMMAND)
+            retries += 1
+        distances = self._parse_distances(response)
+        if distances is not None:
+            with self._distances_lock:
+                self._distances = distances
+        return distances
+
+    @property
+    def last_distances(self):
+        '''
+        Return the most recently fetched distances without issuing a new request.
+        Returns a list of 8 ints (mm), or None if no reading has been taken.
+        '''
+        with self._distances_lock:
+            return list(self._distances) if self._distances is not None else None
+
+    def perform_scan(self, xyz):
+        '''
+        Request a distances snapshot and add it to the occupancy map.
+        Returns the distances as a list of 8 ints, or None on failure.
+        '''
+        try:
+            x, y, heading = xyz
+            self._log.info('scanning at ({},{},{}°)…'.format(x, y, heading))
+            distances = self.get_distances()
+            while distances is None:
+                self._log.warning('invalid response, retrying…')
+                distances = self.get_distances()
+            response = ' '.join('{:04d}'.format(d) for d in distances)
+            self._log.info(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response))
+            self._occupancy_map.process_sensor_reading(response, x, y, heading)
+            self._log.info('sensor reading added to map.')
+            return distances
+        except Exception as e:
+            self._log.error('{} raised in perform_scan: {}'.format(type(e), e))
+            return None
+
+    def load_scan_data(self, filename):
+        '''
+        Load and process scan data from a text file into the occupancy map.
+        each line: x y heading distance1 distance2 ... distance8
+        '''
+        try:
+            path = os.path.join(self._cwd, filename)
+            self._log.info('loading scan data from {}…'.format(path))
+            with open(path, 'r') as f:
+                lines = f.readlines()
+            scan_count = 0
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split()
+                if len(parts) != 11:
+                    self._log.warning('skipping invalid line: {}'.format(line))
+                    continue
+                x         = int(parts[0])
+                y         = int(parts[1])
+                heading   = int(parts[2])
+                distances = ' '.join(parts[3:11])
+                self._occupancy_map.process_sensor_reading(distances, x, y, heading)
+                scan_count += 1
+                self._log.info(Fore.CYAN + 'loaded scan {}: '.format(scan_count) + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(distances))
+            self._log.info('{} scans loaded from {}'.format(scan_count, filename))
+        except FileNotFoundError:
+            self._log.error('file not found: {}'.format(filename))
+        except Exception as e:
+            self._log.error('{} raised loading scan data: {}'.format(type(e), e))
+
+    def generate_svg(self, trim=True, margin_mm=100):
+        '''
+        Generate an SVG visualisation of the occupancy map.
+        '''
+        if trim:
+            self._occupancy_map.trim_to_data(margin_mm=margin_mm)
+        visualizer = MapVisualizer(self._occupancy_map)
+        visualizer.generate_svg(self._occ_map_path)
+
+    def start_polling(self):
+        '''
+        Start a background thread that repeatedly calls get_distances().
+        Has no effect if polling is already running.
+        '''
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._log.warning('polling already running.')
+            return
+        self._stop_event.clear()
+        self._poll_thread = Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
+        self._log.info('polling started.')
+
+    def stop_polling(self):
+        '''
+        Stop the background polling thread.
+        '''
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._stop_event.set()
+            self._poll_thread.join()
+            self._log.info('polling stopped.')
         else:
-            # use defaults
-            _i2c_bus_id  = RadiozoaController.I2C_BUS_ID
-            _i2c_address = RadiozoaController.I2C_ADDRESS if i2c_address is None else i2c_address
-        I2CMaster.__init__(self, log_or_name=RadiozoaController.NAME, i2c_bus_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=timeset, level=level)
-        # ready
+            self._log.warning('polling not running.')
+        self._poll_thread = None
+
+    def _poll_loop(self):
+        '''
+        Internal polling loop, runs until stop_event is set.
+        '''
+        self._log.info('poll loop started.')
+        try:
+            while not self._stop_event.is_set():
+                distances = self.get_distances()
+                if distances is None:
+                    self._log.debug('poll: no valid response.')
+                else:
+                    self._log.debug('poll: {}'.format(distances))
+                time.sleep(self._poll_delay_sec)
+        finally:
+            self._log.info('poll loop stopped.')
+
+    def disable(self):
+        '''
+        Stop polling (if running) then disable.
+        '''
+        if self._poll_thread and self._poll_thread.is_alive():
+            self.stop_polling()
+        super().disable()
+
+    def close(self):
+        '''
+        Stop polling (if running) then close.
+        '''
+        if self._poll_thread and self._poll_thread.is_alive():
+            self.stop_polling()
+        super().close()
 
 #EOF

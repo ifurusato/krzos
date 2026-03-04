@@ -18,7 +18,7 @@ from .message_util import pack_message, unpack_message
 class I2CMaster:
     I2C_BUS_ID  = 1
     I2C_ADDRESS = 0x47
-    WRITE_READ_DELAY_MS = 11
+    WRITE_READ_DELAY_MS = 13
     '''
     I2C master controller.
 
