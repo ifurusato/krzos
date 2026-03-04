@@ -23,6 +23,7 @@ from colorama import init, Fore, Style
 init()
 
 from core.component import Component
+from core.logger import Logger, Level
 from core.adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
 from i2c_master import I2CMaster
 from hardware.radiozoa_controller import RadiozoaController
