@@ -82,6 +82,9 @@ class RadiozoaController(I2CMaster):
         except ValueError:
             self._log.warning('could not parse distances response: {}'.format(response))
             return None
+        except Exception as e:
+            self._log.error('{} raised parsing distances response: {}'.format(type(e), e))
+            return None
 
     def get_distances(self):
         '''
@@ -89,9 +92,10 @@ class RadiozoaController(I2CMaster):
         Retries up to max_retries times if the response is invalid.
         Returns a list of 8 ints (mm), or None if retries are exhausted.
         '''
-        self._log.info('get distances…')
+#       self._log.info('get distances…')
         retries = 0
         response = self.send_request(self.DISTANCES_COMMAND)
+#       self._log.info('initial response: {!r}'.format(response))
         while response is None \
                 or response == self.DISTANCES_COMMAND \
                 or response == 'ACK' \
@@ -99,7 +103,7 @@ class RadiozoaController(I2CMaster):
             if retries >= self._max_retries:
                 self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
                 return None
-            self._log.info(Style.DIM + 'invalid response ({}), retrying…'.format(response))
+#           self._log.info(Style.DIM + 'invalid response ({}), retrying…'.format(response))
             time.sleep(0.01)
             response = self.send_request(self.DISTANCES_COMMAND)
             retries += 1
@@ -128,7 +132,7 @@ class RadiozoaController(I2CMaster):
             self._log.info('scanning at ({},{},{}°)…'.format(x, y, heading))
             distances = self.get_distances()
             while distances is None:
-                self._log.warning('invalid response, retrying…')
+#               self._log.warning('invalid response, retrying…')
                 distances = self.get_distances()
             response = ' '.join('{:04d}'.format(d) for d in distances)
             self._log.info(Fore.CYAN + 'response: ' + Fore.YELLOW + '({},{},{}°) '.format(x, y, heading) + Fore.GREEN + '{}'.format(response))
@@ -214,9 +218,9 @@ class RadiozoaController(I2CMaster):
             while not self._stop_event.is_set():
                 distances = self.get_distances()
                 if distances is None:
-                    self._log.debug('poll: no valid response.')
+                    self._log.info(Style.DIM + 'poll: no valid response.')
                 else:
-                    self._log.debug('poll: {}'.format(distances))
+                    self._log.info('poll: ' + Fore.GREEN + '{}'.format(distances))
                 time.sleep(self._poll_delay_sec)
         finally:
             self._log.info('poll loop stopped.')
