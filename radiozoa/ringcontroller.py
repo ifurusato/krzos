@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-02-09
-# modified: 2026-02-27
+# modified: 2026-03-05
 
 import sys
 import time
@@ -16,11 +16,9 @@ from colorama import Fore, Style
 from pixel_state import PixelState
 from controller import Controller
 from logger import Logger, Level
-#from stm32controller import STM32Controller
 from colors import *
 from pixel import Pixel
 
-#class RingController(STM32Controller):
 class RingController(Controller):
     '''
     An implementation connected to a 24 pixel NeoPixel ring.
@@ -35,7 +33,7 @@ class RingController(Controller):
             raise ValueError('ring count is undefined.')
         elif self._ring_count == 0:
             raise ValueError('ring count is 0.')
-        self._status_enabled   = True
+        self._status_enabled   = False
         self._status_pixel     = 1
         # rotation
         self._ring_offset      = 0
@@ -76,7 +74,7 @@ class RingController(Controller):
         self._ring_brightness = 0.1  # default: 0.33
         self._ring = self._create_ring()
         self.reset_ring()
-        self._last_update_ts  = self._get_time()
+        self._last_update_ts = self._get_time()
         self._ring_timer_hz = 24
         self._ring_timer = self._create_ring_timer()
         self._radiozoa_started = False
@@ -87,10 +85,11 @@ class RingController(Controller):
         '''
         This method is called upon startup, after a preset delay. It can be overridden
         as necessary to start any application-level services.
-        '''    
+        '''
         self._strip.set_color(0, COLOR_SKY_BLUE)
         super()._start_services()
         self._strip.set_color(0, COLOR_BLACK)
+        self._status_enabled = True
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -111,8 +110,6 @@ class RingController(Controller):
             brightness=_strip_brightness)
         self._log.info('NeoPixel strip with {} pixels configured on pin {}'.format(_strip_count, _strip_pin))
         _strip.set_color(0, COLOR_CYAN)
-#       time.sleep_ms(100)
-#       _strip.set_color(0, COLOR_BLACK)
         return _strip
 
     def _led_off(self, timer=None):
@@ -476,18 +473,8 @@ class RingController(Controller):
         '''
         Processes the callback from the I2C slave.
         '''
-        if self._strip and self._status_enabled:
+        if self._status_enabled:
             self._strip.set_color(self._status_pixel, COLOR_CYAN)
-        super().process(cmd)
-
-    def post_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
-        '''
-        Post-process the arguments, returning a NACK and color if no match on arg0 occurs.
-        '''
-#       self._log.info("post-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
-        if arg0 == "__extend_here__":
-            return None, None
-        else:
-            return super().post_process(cmd, arg0, arg1, arg2, arg3, arg4)
+        return super().process(cmd)
 
 #EOF

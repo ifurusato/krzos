@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-02-27
+# modified: 2026-03-05
 
 import sys
 import time
@@ -134,7 +134,7 @@ class Controller:
                     self._pixel.set_color(0, COLOR_MIDNIGHT)
         if Controller._AUTOSTART_SERVICES and not self._services_started:
             if time.ticks_diff(time.ticks_ms(), self._startup_ms) >= self._autostart_delay_ms:
-        
+
                 self._services_started = True
                 self._start_services()
 
@@ -148,17 +148,6 @@ class Controller:
         Such a match precludes further processing.
         '''
 #       self._log.info("controller: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
-        if arg0 == "__extend_here__":
-            return None, None
-        else:
-            return None, None
-
-    def post_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
-        '''
-        Post-process the arguments, returning a response and color if a match occurs.
-        Absent a match by this point is considered an error condition.
-        '''
-#       self._log.info("post-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
         if arg0 == "__extend_here__":
             return None, None
         else:
@@ -181,7 +170,7 @@ Commands:
     def process(self, cmd):
         '''
         Processes the callback from the I2C slave, returning 'ACK', 'NACK' or 'ERR'.
-        This calls pre_process() and post_process() in turn.
+        This calls pre_process() prior as a way of overriding this method.
 
         See get_help() for list of available commands.
         '''
@@ -307,20 +296,14 @@ Commands:
                 return Controller._PACKED_ACK
 
             else:
-                # post-process
-                _response, _exit_color = self.post_process(cmd, _arg0, _arg1, _arg2, _arg3, _arg4)
-                if _response is not None:
-                    _exit_color = __exit_color
-                    return _response
-                else:
-                    self._log.warning("unrecognised command '{}' as arguments: {}{}{}{}{}".format(
-                            cmd,
-                            "; arg0: '{}'".format(_arg0) if _arg0 else '',
-                            "; arg1: '{}'".format(_arg1) if _arg1 else '',
-                            "; arg2: '{}'".format(_arg2) if _arg2 else '',
-                            "; arg3: '{}'".format(_arg3) if _arg3 else '',
-                            "; arg2: '{}'".format(_arg4) if _arg4 else ''))
-                    return Controller._PACKED_NACK, COLOR_ORANGE
+                self._log.warning("unrecognised command '{}' as arguments: {}{}{}{}{}".format(
+                        cmd,
+                        "; arg0: '{}'".format(_arg0) if _arg0 else '',
+                        "; arg1: '{}'".format(_arg1) if _arg1 else '',
+                        "; arg2: '{}'".format(_arg2) if _arg2 else '',
+                        "; arg3: '{}'".format(_arg3) if _arg3 else '',
+                        "; arg2: '{}'".format(_arg4) if _arg4 else ''))
+                return Controller._PACKED_NACK, COLOR_ORANGE
 
         except Exception as e:
             self._log.error("{} raised by controller: {}".format(type(e), e))

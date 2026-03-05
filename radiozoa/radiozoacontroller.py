@@ -4,7 +4,7 @@
 # Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License.
 #
-# author:   Ichiro Furusato 
+# author:   Ichiro Furusato
 # created:  2026-02-17
 # modified: 2026-02-27
 
@@ -39,6 +39,7 @@ class RadiozoaController(RingController):
             raise Exception('no strip available.')
         self._radiozoa_config = self._configure.radiozoa_config
         self._radiozoa_config.set_strip(self.strip)
+        self._pre_processes = if {"distances", "radiozoa", "scan", "poll", "cardinal"}
         self._log.info('ready.')
 
     def  _set_configured(self):
@@ -54,12 +55,12 @@ class RadiozoaController(RingController):
         self._radiozoa_start()
 
     # heartbeat ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-    
+
     def _led_off(self, timer=None):
         if self._is_configured:
             self._strip.set_color(0, COLOR_BLACK)
         super()._led_off(timer=timer)
-    
+
     def _beat(self):
         if self._is_configured:
             self._strip.set_color(0, COLOR_CYAN)
@@ -76,7 +77,7 @@ class RadiozoaController(RingController):
         try:
             if self._configure.configure(force=force):
                 from sensor import Sensor
-    
+
                 if self._radiozoa is None:
                     self._radiozoa = RadiozoaSensor()
                 if self._sensor is None:
@@ -134,9 +135,9 @@ class RadiozoaController(RingController):
             self._radiozoa.start_ranging()
             if not self._sensor.enabled:
                 self._sensor.enable()
-        else:   
+        else:
             self._log.error('failed to start: radiozoa not configured.')
-            
+
     def _radiozoa_stop(self):
         self._log.info('stopping radiozoa…')
         if self._radiozoa:
@@ -161,12 +162,8 @@ class RadiozoaController(RingController):
         Such a match precludes further processing.
         '''
 #       self._log.info("radiozoa: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
-        parts = cmd.split()
-        
-#       if arg0 == "__extend_here__":
-#           return None, None
 
-        if arg0 not in {"distances", "radiozoa", "scan", "poll", "cardinal"}: # pre-emptive exit
+        if arg0 not in self._pre_processes: # pre-emptive exit
             return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
 
         elif arg0 == "distances":

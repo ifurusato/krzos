@@ -26,7 +26,7 @@ from hardware.radiozoa_controller import RadiozoaController
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-USE_BUTTON = True
+USE_BUTTON = False
 
 def read_xyz():
     try:

@@ -18,7 +18,7 @@ from .message_util import pack_message, unpack_message
 class I2CMaster:
     I2C_BUS_ID  = 1
     I2C_ADDRESS = 0x47
-    WRITE_READ_DELAY_MS = 13
+    WRITE_READ_DELAY_MS = 11
     '''
     I2C master controller.
 
@@ -89,6 +89,7 @@ class I2CMaster:
         if resp_buf and len(resp_buf) >= 2:
             msg_len = resp_buf[0]
             if 1 <= msg_len <= 62:
+#               print('DEBUG raw: msg_len={}, buf={}'.format(msg_len, resp_buf[:msg_len+2]))
                 return bytes(resp_buf[:msg_len+2])
         raise RuntimeError("bad message length or slave not ready.")
 
@@ -147,10 +148,7 @@ class I2CMaster:
         '''
         disable and close the I2CMaster.
         '''
-        if not self.closed:
-            self.disable()
-            self._bus.close()
-        else:
-            print('WARNING: already closed.')
+        self.disable()
+        self._bus.close()
 
 #EOF

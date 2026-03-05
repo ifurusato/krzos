@@ -89,13 +89,18 @@ class RadiozoaController(I2CMaster):
         Retries up to max_retries times if the response is invalid.
         Returns a list of 8 ints (mm), or None if retries are exhausted.
         '''
+        self._log.info('get distances…')
         retries = 0
         response = self.send_request(self.DISTANCES_COMMAND)
-        while response is None or response == self.DISTANCES_COMMAND or response == 'ACK':
+        while response is None \
+                or response == self.DISTANCES_COMMAND \
+                or response == 'ACK' \
+                or response == 'ERR':
             if retries >= self._max_retries:
                 self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
                 return None
-            self._log.debug('invalid response ({}), retrying…'.format(response))
+            self._log.info(Style.DIM + 'invalid response ({}), retrying…'.format(response))
+            time.sleep(0.01)
             response = self.send_request(self.DISTANCES_COMMAND)
             retries += 1
         distances = self._parse_distances(response)
