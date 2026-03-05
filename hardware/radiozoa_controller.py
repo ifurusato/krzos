@@ -11,6 +11,7 @@
 
 import os
 import time
+from collections import deque
 from threading import Event, Lock, Thread
 from colorama import init, Fore, Style
 init()
@@ -48,6 +49,15 @@ class RadiozoaController(I2CMaster):
         self._distances_lock = Lock()
         self._stop_event     = Event()
         self._poll_thread    = None
+        # dynamic write/read delay tuning
+        self._dynamic_tuning   = True
+        self._tune_window      = 10    # calls per evaluation window
+        self._tune_step_down   = 0.5   # ms to decrease on success
+        self._tune_step_up     = 2.0   # ms to increase on failure
+        self._tune_floor_ms    = 4.0
+        self._tune_ceiling_ms  = 16.0
+        self._tune_threshold   = 0.3   # failure rate to trigger increase
+        self._tune_history     = deque(maxlen=self._tune_window) # circular window of bool (True=success)
         # occupancy map
         self._occ_map_path = os.path.join(self._cwd, 'occupancy_map.svg')
         self._log.info('occ map path: {}'.format(self._occ_map_path))
@@ -86,24 +96,44 @@ class RadiozoaController(I2CMaster):
             self._log.error('{} raised parsing distances response: {}'.format(type(e), e))
             return None
 
+    def _tune_record(self, retries):
+        '''
+        Record retry count and adjust write/read delay after each window.
+        zero retries is a clean success; max_retries is a full failure.
+        '''
+        if not self._dynamic_tuning:
+            return
+        self._tune_history.append(retries)
+        if len(self._tune_history) < self._tune_window:
+            self._log.info('🐟 tune record exit.')
+            return
+        avg_retries = sum(self._tune_history) / self._tune_window
+        self._tune_history.clear()
+        current_ms = self.get_write_read_delay_ms()
+        if avg_retries >= self._tune_threshold:
+            new_ms = min(current_ms + self._tune_step_up, self._tune_ceiling_ms)
+        else:
+            new_ms = max(current_ms - self._tune_step_down, self._tune_floor_ms)
+        if new_ms != current_ms:
+            self.set_write_read_delay_ms(new_ms)
+            self._log.info('🐟 write/read delay: {:.1f}ms → {:.1f}ms (avg retries: {:.2f})'.format(current_ms, new_ms, avg_retries))
+
     def get_distances(self):
         '''
         Fetch a fresh set of distances from the sensor, store and return them.
         Retries up to max_retries times if the response is invalid.
         Returns a list of 8 ints (mm), or None if retries are exhausted.
         '''
-#       self._log.info('get distances…')
         retries = 0
         response = self.send_request(self.DISTANCES_COMMAND)
-#       self._log.info('initial response: {!r}'.format(response))
         while response is None \
                 or response == self.DISTANCES_COMMAND \
                 or response == 'ACK' \
                 or response == 'ERR':
             if retries >= self._max_retries:
                 self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
+                self._tune_record(self._max_retries)
                 return None
-#           self._log.info(Style.DIM + 'invalid response ({}), retrying…'.format(response))
             time.sleep(0.01)
             response = self.send_request(self.DISTANCES_COMMAND)
             retries += 1
@@ -111,6 +141,7 @@ class RadiozoaController(I2CMaster):
         if distances is not None:
             with self._distances_lock:
                 self._distances = distances
+        self._tune_record(retries)
         return distances
 
     @property
