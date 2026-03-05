@@ -12,8 +12,11 @@
 import time
 from datetime import datetime as dt, timezone
 import smbus2
+from colorama import init, Fore, Style
+init()
 
 from .message_util import pack_message, unpack_message
+from core.logger import Logger, Level
 
 class I2CMaster:
     I2C_BUS_ID  = 1
@@ -32,7 +35,8 @@ class I2CMaster:
         i2c_id:        the I2C bus identifier (default is 1)
         i2c_address:   the I2C device address (default is 0x47)
     '''
-    def __init__(self, i2c_id=None, i2c_address=None, timeset=True):
+    def __init__(self, i2c_id=None, i2c_address=None, timeset=True, level=Level.INFO):
+        self._log = Logger('i2c-master', level=level)
         self._i2c_bus_id  = i2c_id if i2c_id is not None else self.I2C_BUS_ID
         self._i2c_address = i2c_address if i2c_address is not None else self.I2C_ADDRESS
         self._enabled = False
@@ -40,11 +44,11 @@ class I2CMaster:
         self._fail_on_exception = False
         self._delay_sec = self.WRITE_READ_DELAY_MS / 1000
         try:
-            print('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus_id, self._i2c_address))
+            self._log.info('opening I2C bus {} at address {:#04x}'.format(self._i2c_bus_id, self._i2c_address))
             self._bus = smbus2.SMBus(self._i2c_bus_id)
-            print('ready.')
+            self._log.info('ready.')
         except Exception as e:
-            print('ERROR: {} raised opening smbus: {}'.format(type(e), e))
+            self._log.error('{} raised opening smbus: {}'.format(type(e), e))
             raise
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -74,7 +78,7 @@ class I2CMaster:
         if out_msg is None:
             raise ValueError('null message.')
         elif len(out_msg) == 0:
-            print('WARNING: did not send empty message.')
+            self._log.warning('did not send empty message.')
             return
         # write command to register 0
         msg_with_addr = [0x00] + list(out_msg)
@@ -89,7 +93,7 @@ class I2CMaster:
         if resp_buf and len(resp_buf) >= 2:
             msg_len = resp_buf[0]
             if 1 <= msg_len <= 62:
-#               print('DEBUG raw: msg_len={}, buf={}'.format(msg_len, resp_buf[:msg_len+2]))
+                self._log.debug('raw: msg_len={}, buf={}'.format(msg_len, resp_buf[:msg_len+2]))
                 return bytes(resp_buf[:msg_len+2])
         raise RuntimeError("bad message length or slave not ready.")
 
@@ -101,7 +105,7 @@ class I2CMaster:
             if message.startswith('time set'):
 #               now = dt.now() # as local time
                 now = dt.now(timezone.utc) # as UTC time
-                print('setting time to: {}'.format(now.isoformat()))
+                self._log.info('setting time to: ' + Fore.GREEN + '{}'.format(now.isoformat()))
                 ts = now.strftime("%Y%m%d-%H%M%S")
                 message = message.replace("now", ts)
             out_msg = pack_message(message)
@@ -112,7 +116,7 @@ class I2CMaster:
             except OSError as e:
                 raise
             except Exception as e:
-                print('ERROR: {} raised by send request: {}'.format(type(e), e))
+                self._log.error('{} raised by send request: {}'.format(type(e), e))
                 if self._fail_on_exception:
                     raise
                 return None
@@ -120,7 +124,7 @@ class I2CMaster:
                 # don't repeat too quickly
                 time.sleep(0.05)
         else:
-            print('WARNING: cannot send request: disabled.')
+            self._log.warning('cannot send request: disabled.')
 
     def enable(self):
         '''
@@ -130,10 +134,10 @@ class I2CMaster:
             self._enabled = True
             time.sleep(0.3)
             if self._timeset:
-                print('setting RTC time…')
+                self._log.info('setting RTC time…')
                 self.send_request('time set now')
         else:
-            print('WARNING: already enabled.')
+            self._log.warning('already enabled.')
 
     def disable(self):
         '''
@@ -142,7 +146,7 @@ class I2CMaster:
         if self._enabled:
             self._enabled = False
         else:
-            print('WARNING: already disabled.')
+            self._log.warning('already disabled.')
 
     def close(self):
         '''

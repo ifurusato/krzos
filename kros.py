@@ -259,22 +259,6 @@ class KROS(Component, FiniteStateMachine):
 #           self._vl53_sensor = Vl53l5cxSensor(self._config, skip=('skip' in sys.argv or True in sys.argv), level=self._level)
 #           self._vl53_sensor.enable()
 
-        _radiozoa_cfg = self._config['kros'].get('behaviour').get('radiozoa')
-        _enable_radiozoa = _radiozoa_cfg.get('enable')
-        if _enable_radiozoa:
-            from hardware.radiozoa_sensor import RadiozoaSensor
-
-            self._radiozoa_sensor = RadiozoaSensor(self._config)
-            self._radiozoa_sensor.enable()
-            timeout_seconds = 5
-            start_time = time.monotonic()
-            while not self._radiozoa_sensor.enabled:
-                if time.monotonic() - start_time > timeout_seconds:
-                    raise TimeoutError("radiozoa failed to enable within timeout")
-                time.sleep(0.1)
-            self._radiozoa_sensor.set_visualisation(False)
-            self._radiozoa_sensor.start_ranging()
-
         _enable_radiozoa_controller = _cfg.get('enable_radiozoa_controller')
         if _enable_radiozoa_controller:
             self._log.info('configure radiozoa controller…')
@@ -315,7 +299,7 @@ class KROS(Component, FiniteStateMachine):
             self._icm20948 = Icm20948(self._config, level=Level.INFO)
             self._icm20948.include_accel_gyro(True)
         if _cfg.get('enable_usfs'):
-            self._usfs = Usfs(self._config, matrix11x7=None, level=self._level)
+            self._usfs = Usfs(self._config, level=self._level)
         if _cfg.get('enable_imu') and self._icm20948 and self._usfs:
             self._imu = IMU(self._config, icm20948=self._icm20948, usfs=self._usfs, level=Level.INFO)
 

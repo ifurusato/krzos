@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-02-17
-# modified: 2026-02-27
+# modified: 2026-03-05
 
 import sys
 import time
@@ -39,7 +39,7 @@ class RadiozoaController(RingController):
             raise Exception('no strip available.')
         self._radiozoa_config = self._configure.radiozoa_config
         self._radiozoa_config.set_strip(self.strip)
-        self._pre_processes = if {"distances", "radiozoa", "scan", "poll", "cardinal"}
+        self._pre_processes = {"distances", "radiozoa", "scan", "poll", "cardinal"}
         self._log.info('ready.')
 
     def  _set_configured(self):

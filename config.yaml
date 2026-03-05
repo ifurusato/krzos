@@ -510,7 +510,7 @@ kros:
         radiozoa-controller:
             i2c_bus_id:                       1
             i2c_address:                   0x47
-            poll_delay_sec:                0.67
+            poll_delay_sec:                0.334
             timeset:                       True            # set RTC on slave on startup?
             map_data_file:                   ''            # optional path to preload on startup
             max_retries:                      5            # max retries on distances command

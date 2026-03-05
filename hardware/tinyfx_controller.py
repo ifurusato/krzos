@@ -7,17 +7,18 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-01-03
+# modified: 2026-03-06
 
 import time
 from colorama import init, Fore, Style
 init()
 
+from core.component import Component
 from core.logger import Logger, Level
 from core.orientation import Orientation
-from hardware.i2c_master import I2CMaster
+from i2c_master import I2CMaster
 
-class TinyFxController(I2CMaster):
+class TinyFxController(I2CMaster, Component):
     NAME = 'tinyfx-ctrl'
     I2C_BUS_ID  = 1
     I2C_ADDRESS = 0x43
@@ -25,6 +26,8 @@ class TinyFxController(I2CMaster):
     Extends I2CMaster to control a Pimoroni Tiny FX.
     '''
     def __init__(self, config=None, i2c_address=None, timeset=True, level=Level.INFO):
+        self._log = Logger(TinyFxController.NAME, level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         if config:
             _cfg = config.get('kros').get('hardware').get('tinyfx-controller')
             _i2c_bus_id  = _cfg.get('i2c_bus_id')
@@ -32,10 +35,12 @@ class TinyFxController(I2CMaster):
         else:
             _i2c_bus_id  = TinyFxController.I2C_BUS_ID
             _i2c_address = TinyFxController.I2C_ADDRESS if i2c_address is None else i2c_address
-        I2CMaster.__init__(self, log_or_name=TinyFxController.NAME, i2c_bus_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=timeset, level=level)
-        # ready
+        I2CMaster.__init__(self, i2c_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=timeset)
+        self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def name(self):
+        return self.NAME
 
     def play(self, name):
         '''

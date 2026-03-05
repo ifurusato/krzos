@@ -53,7 +53,7 @@ def write_map_data(map_data, map_data_path):
             second_part = " ".join("{:04d}".format(n) for n in row[3:])
             file.write(first_part + second_part + "\n")
             file.flush()
-    print("saved map to file: {}".format(map_data_path))
+    print(Fore.CYAN + "saved map to file: {}".format(map_data_path) + Style.RESET_ALL)
 
 # main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -66,7 +66,7 @@ def main():
     cwd            = os.getcwd()
     map_data_path  = os.path.join(cwd, "map_data.txt")
     i2c_lock       = Lock()
-    prompt         = "► "
+    prompt         = Fore.WHITE + Style.BRIGHT + "► " + Style.RESET_ALL
     controller     = None
 
     try:
@@ -83,7 +83,7 @@ def main():
 
         def button_handler():
             nonlocal button_pressed
-            print("button released…")
+            print(Fore.GREEN + "button released…" + Style.RESET_ALL)
             button_pressed = True
 
         if USE_BUTTON:
@@ -128,6 +128,7 @@ def main():
                 break
 
             elif user_msg == 'go':
+                print(Fore.WHITE + '\nStarting poll loop (type "stop" to exit)…\n' + Style.RESET_ALL)
                 controller.start_polling()
                 print(prompt, end='', flush=True)
                 continue

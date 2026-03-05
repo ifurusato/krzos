@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-03-04
+# modified: 2026-03-05
 
 import os
 import time
@@ -16,11 +16,13 @@ from threading import Event, Lock, Thread
 from colorama import init, Fore, Style
 init()
 
+from core.component import Component
+from core.illegal_state_error import IllegalStateError
 from core.logger import Logger, Level
 from core.adaptive_occupancy_map import AdaptiveOccupancyMap, MapVisualizer
 from i2c_master import I2CMaster
 
-class RadiozoaController(I2CMaster):
+class RadiozoaController(I2CMaster, Component):
     NAME              = 'radio-ctrl'
     FAR_THRESHOLD     = 4000  # mm; maximum range of VL53L1X sensors
     DISTANCES_COMMAND = 'distances'
@@ -35,6 +37,7 @@ class RadiozoaController(I2CMaster):
         if config is None:
             raise ValueError('no config provided.')
         self._log = Logger(RadiozoaController.NAME, level=level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
         _cfg         = config['kros']['hardware']['radiozoa-controller']
         _i2c_bus_id  = _cfg.get('i2c_bus_id')
         _i2c_address = _cfg.get('i2c_address')
@@ -49,15 +52,16 @@ class RadiozoaController(I2CMaster):
         self._distances_lock = Lock()
         self._stop_event     = Event()
         self._poll_thread    = None
-        # dynamic write/read delay tuning
-        self._dynamic_tuning   = True
-        self._tune_window      = 10    # calls per evaluation window
-        self._tune_step_down   = 0.5   # ms to decrease on success
-        self._tune_step_up     = 2.0   # ms to increase on failure
-        self._tune_floor_ms    = 4.0
-        self._tune_ceiling_ms  = 16.0
-        self._tune_threshold   = 0.3   # failure rate to trigger increase
-        self._tune_history     = deque(maxlen=self._tune_window) # circular window of bool (True=success)
+        # dynamic write/read delay
+        self._dynamic_tuning = True
+        self._tune_window        = 5     # calls per evaluation window
+        self._tune_step_down     = 1.0 
+        self._tune_step_up       = 1.0
+        self._tune_floor_ms      = 4.0
+        self._tune_ceiling_ms    = 16.0
+        self._tune_threshold_lo  = 0.5   # below this, step down
+        self._tune_threshold_hi  = 2.0   # above this, step up
+        self._tune_history       = deque(maxlen=self._tune_window) # circular window of bool (True=success)
         # occupancy map
         self._occ_map_path = os.path.join(self._cwd, 'occupancy_map.svg')
         self._log.info('occ map path: {}'.format(self._occ_map_path))
@@ -67,7 +71,9 @@ class RadiozoaController(I2CMaster):
             self.load_scan_data(_map_data_file)
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def name(self):
+        return self.NAME
 
     @property
     def occupancy_map(self):
@@ -98,25 +104,28 @@ class RadiozoaController(I2CMaster):
 
     def _tune_record(self, retries):
         '''
-        Record retry count and adjust write/read delay after each window.
-        zero retries is a clean success; max_retries is a full failure.
+        record retry count and adjust write/read delay after each window.
+        dead band between thresholds prevents reaction to normal variation.
         '''
-        if not self._dynamic_tuning:
-            return
         self._tune_history.append(retries)
         if len(self._tune_history) < self._tune_window:
-            self._log.info('🐟 tune record exit.')
             return
         avg_retries = sum(self._tune_history) / self._tune_window
         self._tune_history.clear()
         current_ms = self.get_write_read_delay_ms()
-        if avg_retries >= self._tune_threshold:
+        if avg_retries > self._tune_threshold_hi:
             new_ms = min(current_ms + self._tune_step_up, self._tune_ceiling_ms)
-        else:
+        elif avg_retries < self._tune_threshold_lo:
             new_ms = max(current_ms - self._tune_step_down, self._tune_floor_ms)
+        else:
+            new_ms = current_ms
         if new_ms != current_ms:
             self.set_write_read_delay_ms(new_ms)
-            self._log.info('🐟 write/read delay: {:.1f}ms → {:.1f}ms (avg retries: {:.2f})'.format(current_ms, new_ms, avg_retries))
+            self._log.info('write/read delay: {:.1f}ms → '.format(current_ms)
+                    + Fore.GREEN + '{:.1f}ms '.format(new_ms)
+                    + Fore.CYAN + '(avg retries: {:.2f})'.format(avg_retries))
+        else:
+            self._log.info(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
 
     def get_distances(self):
         '''
@@ -132,7 +141,8 @@ class RadiozoaController(I2CMaster):
                 or response == 'ERR':
             if retries >= self._max_retries:
                 self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
-                self._tune_record(self._max_retries)
+                if self._dynamic_tuning:
+                    self._tune_record(self._max_retries)
                 return None
             time.sleep(0.01)
             response = self.send_request(self.DISTANCES_COMMAND)
@@ -141,7 +151,8 @@ class RadiozoaController(I2CMaster):
         if distances is not None:
             with self._distances_lock:
                 self._distances = distances
-        self._tune_record(retries)
+        if self._dynamic_tuning:
+            self._tune_record(retries)
         return distances
 
     @property
@@ -220,6 +231,8 @@ class RadiozoaController(I2CMaster):
         Start a background thread that repeatedly calls get_distances().
         Has no effect if polling is already running.
         '''
+        if not self.enabled:
+            raise IllegalStateError('not enabled.')
         if self._poll_thread and self._poll_thread.is_alive():
             self._log.warning('polling already running.')
             return
@@ -256,20 +269,34 @@ class RadiozoaController(I2CMaster):
         finally:
             self._log.info('poll loop stopped.')
 
+    def enable(self):
+        '''
+        Enable the RadiozoaController.
+        '''
+        if not self.enabled:
+            super().enable()
+            self._log.info('enabled.')
+        else:
+            self._log.warning('already enabled.')
+
     def disable(self):
         '''
-        Stop polling (if running) then disable.
+        Stop polling (if running) then disable the RadiozoaController.
         '''
-        if self._poll_thread and self._poll_thread.is_alive():
-            self.stop_polling()
-        super().disable()
+        if self.enabled:
+            if self._poll_thread and self._poll_thread.is_alive():
+                self.stop_polling()
+            super().disable()
+        else:
+            self._log.debug('already disabled.')
 
     def close(self):
         '''
-        Stop polling (if running) then close.
+        Disable and close the RadiozoaController.
         '''
-        if self._poll_thread and self._poll_thread.is_alive():
-            self.stop_polling()
-        super().close()
+        if not self.closed:
+            super().close()
+        else:
+            self._log.warning('already closed.')
 
 #EOF
