@@ -124,7 +124,7 @@ class BehaviourManager(Subscriber):
                 self._log.info("behaviour '{}' already registered; skipping instantiation.".format(behaviour_key))
                 continue
             try:
-                self._log.info('instantiating behaviour {}…'.format(behaviour_key))
+                self._log.info(Fore.WHITE + Style.BRIGHT + 'instantiating behaviour {}…'.format(behaviour_key))
                 module_name = 'behave.{}'.format(behaviour_key.lower())
                 module = importlib.import_module(module_name)
                 class_name = '{}'.format(behaviour_key.capitalize())
@@ -144,7 +144,7 @@ class BehaviourManager(Subscriber):
                 )
                 # set released-by-toggle lambda
                 self._released_by_toggle[behaviour_key] = lambda _behaviour: self._toggle_config.is_enabled(_behaviour.name)
-                self._log.info("instantiated behaviour '{}' as '{}'.".format(behaviour_key, _behaviour.name))
+                self._log.info(Fore.WHITE + Style.BRIGHT + "instantiated behaviour '{}' as '{}'.".format(behaviour_key, _behaviour.name))
             except ImportError as e:
                 self._log.warning("Could not import module '{}' for behaviour '{}': {}".format(module_name, behaviour_key, e))
             except Exception as e:

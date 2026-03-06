@@ -125,7 +125,7 @@ class RadiozoaController(I2CMaster, Component):
                     + Fore.GREEN + '{:.1f}ms '.format(new_ms)
                     + Fore.CYAN + '(avg retries: {:.2f})'.format(avg_retries))
         else:
-            self._log.info(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
+            self._log.debug(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
 
     def get_distances(self):
         '''

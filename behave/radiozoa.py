@@ -64,6 +64,7 @@ class Radiozoa(AsyncBehaviour):
         self._deadband          = _cfg.get('deadband', 0.275)
         self._verbose           = _cfg.get('verbose', False)
         self._use_color  = True # on console messages
+        self._min_distance_mm   = 20  # likely minimum distance for radiozoa sensor
         # directional vectors
         self._pairs = [
             (Cardinal.NORTH, Cardinal.SOUTH),
@@ -189,7 +190,7 @@ class Radiozoa(AsyncBehaviour):
         Returns (vx, vy, omega) tuple.
         '''
         for i, d in enumerate(distances):
-            if d is not None and d < 50:
+            if d is not None and d < self._min_distance_mm:
                 self._log.warning('impossibly close reading from {} sensor: {}mm'.format(Cardinal.from_index(i).label, d))
                 return (0.0, 0.0, 0.0)
         far_threshold = RadiozoaController.FAR_THRESHOLD * 0.95

@@ -70,6 +70,7 @@ class Thoughts(Behaviour):
         Behaviour.__init__(self, Thoughts.NAME, config, message_bus, message_factory,
                           suppressed=True, enabled=False, level=level)
         # idle configuration
+        print('🍓 THOUGHTS.')
         _idle_cfg = config['kros']['behaviour']['idle']
         self._idle_threshold_sec = _idle_cfg.get('idle_threshold_sec')
         self._loop_freq_hz = _idle_cfg.get('loop_freq_hz', 1)
