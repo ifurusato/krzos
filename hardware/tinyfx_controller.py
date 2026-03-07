@@ -21,7 +21,7 @@ from i2c_master import I2CMaster
 class TinyFxController(I2CMaster, Component):
     NAME = 'tinyfx-ctrl'
     I2C_BUS_ID  = 1
-    I2C_ADDRESS = 0x43
+    I2C_ADDRESS = 0x45
     '''
     Extends I2CMaster to control a Pimoroni Tiny FX.
     '''

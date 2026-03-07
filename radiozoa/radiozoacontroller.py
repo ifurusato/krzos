@@ -39,7 +39,7 @@ class RadiozoaController(RingController):
             raise Exception('no strip available.')
         self._radiozoa_config = self._configure.radiozoa_config
         self._radiozoa_config.set_strip(self.strip)
-        self._pre_processes = {"distances", "radiozoa", "scan", "poll", "cardinal"}
+        self._radiozoa_pre_processes = {"distances", "radiozoa", "scan", "poll", "cardinal"}
         self._log.info('ready.')
 
     def  _set_configured(self):
@@ -163,7 +163,7 @@ class RadiozoaController(RingController):
         '''
 #       self._log.info("radiozoa: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
 
-        if arg0 not in self._pre_processes: # pre-emptive exit
+        if arg0 not in self._radiozoa_pre_processes: # pre-emptive exit
             return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
 
         elif arg0 == "distances":

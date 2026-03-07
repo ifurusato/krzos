@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-09-29
-# modified: 2025-09-29
+# modified: 2026-03-06
 
 import time
 from ltr559 import LTR559
@@ -30,16 +30,16 @@ class LuxSensor(Component):
     '''
     def __init__(self, config=None, level=Level.INFO):
         self._log = Logger(LuxSensor.NAME, level)
-        Component.__init__(self, self._log, suppressed=False, enabled=True)
-        _cfg = config['kros'].get('hardware').get('lux_sensor')
-        self._lux_threshold = _cfg.get('lux_threshold')
-        self._log.info('lux threshold set to: {:.2f}.'.format(self._lux_threshold))
-        self._ltr559 = LTR559()
         self._stop_event          = Event()
         self._monitor_thread      = None
         self._rising_callback     = None
         self._falling_callback    = None
         self._was_above_threshold = None # last known state
+        Component.__init__(self, self._log, suppressed=False, enabled=True)
+        _cfg = config['kros'].get('hardware').get('lux_sensor')
+        self._lux_threshold = _cfg.get('lux_threshold')
+        self._log.info('lux threshold set to: {:.2f}.'.format(self._lux_threshold))
+        self._ltr559 = LTR559()
         self._log.info('ready.')
 
     @property
@@ -72,7 +72,7 @@ class LuxSensor(Component):
         Stops background monitoring.
         '''
         self._stop_event.set()
-        if self._monitor_thread:
+        if self._monitor_thread is not None:
             self._monitor_thread.join()
         self._log.info('stopped monitoring thread.')
 
@@ -97,10 +97,10 @@ class LuxSensor(Component):
             time.sleep(poll_interval)
 
     def disable(self):
-        self.stop_monitoring()
-        return super().disable()
-
-    def close(self):
-        return super().close()
+        if self.enabled:
+            self.stop_monitoring()
+            super().disable()
+        else:
+            self._log.warning('already disabled.')
 
 #EOF

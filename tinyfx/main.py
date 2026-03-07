@@ -7,52 +7,85 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-11-22
+# modified: 2026-03-08
 
 import sys
 import time
+import asyncio
+from machine import Pin, Timer
+from colorama import Fore, Style
+
 from i2c_slave import I2CSlave
+from colors import *
+from tinyfx_controller import TinyFxController
 
-__USE_TINYFX = True # set False to use the generic Controller
+# configuration ┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-# auto-clear: remove cached modules to force reload
-for mod in ['main', 'i2c_slave', 'controller', 'tinyfx_controller']:
-    if mod in sys.modules:
-        del sys.modules[mod]
+RELOAD_MODULES = False
+BOARD = 'TINYFX'
 
-def main():
+BOARD_CONFIGS = {
+    'TINYFX': {
+        'name': 'Pimoroni Tiny FX',
+        'i2c_id': 0,
+        'i2c_address': 0x45,
+        'scl_pin': 17,
+        'sda_pin': 16,
+        'family': 'RP2'
+    },
+}
 
-    time.sleep(3) # temporary safeguard
+# main ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    if __USE_TINYFX:
-        from tinyfx_controller import TinyFxController
+config = BOARD_CONFIGS[BOARD]
+print('configuring for {}…'.format(config['name']))
 
-        blink_channels = [True, False, False, True, False, False] # channel 1 and 4 blinks
-        controller = TinyFxController(blink_channels)
+enabled = True
+slave   = None
 
-    else: # use generic controller
-        from controller import Controller
+if RELOAD_MODULES:
+    import gc
+    for mod in ['main', 'i2c_slave', 'controller']:
+        if mod in sys.modules:
+            del sys.modules[mod]
+    gc.collect()
 
-        controller = Controller()
+async def i2c_loop(controller, slave):
+    global enabled
+    _last_time = time.ticks_ms()
+    while enabled:
+        _current_time = time.ticks_ms()
+        controller.tick(time.ticks_diff(_current_time, _last_time))
+        slave.check_and_process()
+        _last_time = _current_time
+        await asyncio.sleep_ms(1)
 
-    slave = I2CSlave()
-#   slave.add_callback(controller.process)
+try:
+
+    # create controller
+    controller = TinyFxController(config)
+
+    # create I2C slave
+    slave = I2CSlave(
+        i2c_id=config['i2c_id'],
+        scl=config['scl_pin'],
+        sda=config['sda_pin'],
+        i2c_address=config['i2c_address']
+    )
+    slave.add_callback(controller.process)
     controller.set_slave(slave)
     slave.enable()
-    last_time = time.ticks_ms()
 
-    try:
-        while True:
-            current_time = time.ticks_ms()
-            delta_ms = time.ticks_diff(current_time, last_time)
-            last_time = current_time
-            controller.tick(delta_ms)
-            slave.check_and_process()
-            time.sleep_ms(1)
-    except KeyboardInterrupt:
-        print('\nCtrl-C caught; exiting…')
-        slave.disable()
+    # start async control loop
+    asyncio.run(i2c_loop(controller, slave))
 
-main()
+except KeyboardInterrupt:
+    print('\nCtrl-C caught; exiting…')
+except Exception as e:
+    print('ERROR: {} raised in start: {}'.format(type(e), e))
+    sys.print_exception(e)
+finally:
+    enabled = False
+    print('complete.')
 
 #EOF

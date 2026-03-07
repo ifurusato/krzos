@@ -1,87 +1,121 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Ichiro Furusato
 # created:  2024-08-14
-# modified: 2025-11-16
-#
-# color constants ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# modified: 2026-03-02
 
 class Color:
-    def __init__(self, r, g, b, description):
-        self._rgb = (r, g, b)
-        self._description = description
+    _registry = []
 
-    def __iter__(self):
-        return iter(self._rgb) # enables unpacking
+    def __init__(self, name, rgb):
+        self._name = name
+        # normalize stored name: strip leading "COLOR_" and lowercase
+        self._norm = name.lower().replace("color_", "").replace("_", " ")
+        self._rgb = rgb
+        Color._registry.append(self)
+
+    @property
+    def name(self):
+        '''
+        Return the normalised, lowercase color name.
+        '''
+        return self._norm
+
+    @property
+    def rgb(self):
+        return self._rgb
 
     def __getitem__(self, index):
-        return self._rgb[index] # enables tuple-style access
+        return self._rgb[index]
+
+    def __iter__(self):
+        return iter(self._rgb)
 
     def __len__(self):
         return len(self._rgb)
 
+    def __eq__(self, other):
+        if isinstance(other, Color):
+            return self._rgb == other._rgb
+        return self._rgb == other
+
+    def __hash__(self):
+        return hash(self._rgb)
+
     def __repr__(self):
-        return f"Color{self._rgb} - {self._description}"
+        return '{} {}'.format(self._name, self._rgb)
 
-    @property
-    def description(self):
-        return self._description
+    @classmethod
+    def all_colors(cls):
+        return cls._registry
 
-def get_color_by_name(name):
-    '''
-    lookup color by description name (case-insensitive, handles spaces/hyphens).
-    returns Color object or None if not found.
-    '''
-    normalized = name.lower().replace(' ', '-')
-    color_var_name = 'COLOR_{}'.format(normalized.upper().replace('-', '_'))
-    return globals().get(color_var_name)
+    @classmethod
+    def get(cls, name: str):
+        '''
+        Return a Color whose name matches the key.
+        '''
+        key = name.lower().replace("_", " ")
+        for c in cls._registry:
+            norm = c._name.lower().replace("color_", "").replace("_", " ")
+            if norm == key:
+                return c
+        return None
 
-# define colors
-COLOR_BLACK        = Color(  0,   0,   0, "black")
-COLOR_WHITE        = Color(255, 255, 255, "white")
-COLOR_RED          = Color(255,   0,   0, "red")
-COLOR_GREEN        = Color(  0, 255,   0, "green")
-COLOR_BLUE         = Color(  0,   0, 255, "blue")
-COLOR_CYAN         = Color(  0, 255, 255, "cyan")
-COLOR_MAGENTA      = Color(255,   0, 255, "magenta")
-COLOR_YELLOW       = Color(250, 150,   0, "yellow")
+COLOR_BLACK         = Color("COLOR_BLACK",        (  0,   0,   0))
+COLOR_WHITE         = Color("COLOR_WHITE",        (255, 255, 255))
+COLOR_RED           = Color("COLOR_RED",          (255,   0,   0))
+COLOR_GREEN         = Color("COLOR_GREEN",        (  0, 255,   0))
+COLOR_BLUE          = Color("COLOR_BLUE",         (  0,   0, 255))
+COLOR_CYAN          = Color("COLOR_CYAN",         (  0, 255, 255))
+COLOR_MAGENTA       = Color("COLOR_MAGENTA",      (255,   0, 255))
+COLOR_YELLOW        = Color("COLOR_YELLOW",       (250, 150,   0))
+COLOR_GREY          = Color("COLOR_GREY",         ( 40,  40,  40))
 
-COLOR_SKY_BLUE     = Color(  8,  64,  96, "sky-blue")
-COLOR_YELLOW_GREEN = Color( 96, 255,   0, "yellow-green")
-COLOR_DARK_RED     = Color( 32,   0,   0, "dark-red")
-COLOR_DARK_GREEN   = Color(  0,  32,   0, "dark-green")
-COLOR_DARK_BLUE    = Color(  0,   0,  32, "dark-blue")
-COLOR_DARK_CYAN    = Color(  0,  32,  32, "dark-cyan")
-COLOR_DARK_GREY    = Color( 12,  12,  12, "dark-grey")
-COLOR_ORANGE       = Color(220,  64,   0, "orange")
-COLOR_INDIGO       = Color(  0,  75, 130, "indigo")
-COLOR_VIOLET       = Color(138,  43, 226, "violet")
-COLOR_DARK_VIOLET  = Color( 42,  12,  64, "dark-violet")
+COLOR_DARK_RED      = Color("COLOR_DARK_RED",     ( 22,   0,   0))
+COLOR_DARK_GREEN    = Color("COLOR_DARK_GREEN",   (  0,  24,   0))
+COLOR_DARK_BLUE     = Color("COLOR_DARK_BLUE",    (  0,   0,  32))
+COLOR_DARK_CYAN     = Color("COLOR_DARK_CYAN",    (  0,  28,  28))
+COLOR_DARK_MAGENTA  = Color("COLOR_DARK_MAGENTA", ( 28,   0,  28))
+COLOR_DARK_YELLOW   = Color("COLOR_DARK_YELLOW",  ( 50,  20,   0))
+COLOR_DARK_GREY     = Color("COLOR_DARK_GREY",    ( 10,  10,  10))
 
-#                       R    G    B
-# COLOR_BLACK        = (  0,   0,   0)
-# COLOR_RED          = (255,   0,   0)
-# COLOR_GREEN        = (  0, 255,   0)
-# COLOR_BLUE         = (  0,   0, 255)
-# COLOR_CYAN         = (  0, 255, 255)
-# COLOR_MAGENTA      = (255,   0, 255)
-# COLOR_YELLOW       = (250, 150,   0)
-# 
-# COLOR_SKY_BLUE     = (  8,  64,  96)
-# COLOR_YELLOW_GREEN = ( 96, 255,   0)
-# COLOR_DARK_RED     = ( 32,   0,   0)
-# COLOR_DARK_GREEN   = (  0,  32,   0)
-# COLOR_DARK_BLUE    = (  0,   0,  32)
-# COLOR_DARK_CYAN    = (  0,  32,  32)
-# COLOR_DARK_GREY    = ( 12,  12,  12)
-# COLOR_ORANGE       = (220,  96,   0)
-# COLOR_INDIGO       = (  0,  75, 130)
-# COLOR_VIOLET       = ( 138, 43, 226)
-# COLOR_DARK_VIOLET  = ( 42,  12,  64)
+COLOR_AMBER         = Color("COLOR_AMBER",        (255,  90,   0))
+COLOR_APPLE         = Color("COLOR_APPLE",        ( 80, 240,   0))
+COLOR_BANANA        = Color("COLOR_BANANA",       (190, 230,   0))
+COLOR_BROWN         = Color("COLOR_BROWN",        ( 22,  12,   0))
+COLOR_CORNFLOWER    = Color("COLOR_CORNFLOWER",   ( 60,  90, 142))
+COLOR_CUCUMBER      = Color("COLOR_CUCUMBER",     ( 22,  70,   0))
+COLOR_DEEP_CYAN     = Color("COLOR_DEEP_CYAN",    (  0,  11,  11))
+COLOR_EMERALD       = Color("COLOR_EMERALD",      (  0,  90,  10))
+COLOR_FUCHSIA       = Color("COLOR_FUCHSIA",      (158,  16,  99))
+COLOR_INDIGO        = Color("COLOR_INDIGO",       (  0,  16,  50))
+COLOR_LAVENDER      = Color("COLOR_LAVENDER",     ( 24,  11, 130))
+COLOR_MEDIUM_CYAN   = Color("COLOR_MEDIUM_CYAN",  (  0, 128, 128))
+COLOR_MELON         = Color("COLOR_MELON",        ( 40, 110,  11))
+COLOR_MIDNIGHT      = Color("COLOR_MIDNIGHT",     (  0,  11,  18))
+COLOR_MUSTARD       = Color("COLOR_MUSTARD",      ( 11,  11,   0))
+COLOR_ORANGE        = Color("COLOR_ORANGE",       (240,  53,   0))
+COLOR_PEAR          = Color("COLOR_PEAR",         ( 70, 100,   0))
+COLOR_PERSIMMON     = Color("COLOR_PERSIMMON",    ( 90,  11,   0))
+COLOR_PINK          = Color("COLOR_PINK",         (255,  50,  40))
+COLOR_PURPLE        = Color("COLOR_PURPLE",       ( 14,   0,  56))
+COLOR_ROBIN         = Color("COLOR_ROBIN",        (  0,  70,  40))
+COLOR_SKY_BLUE      = Color("COLOR_SKY_BLUE",     (  9,  25, 190))
+COLOR_TANGERINE     = Color("COLOR_TANGERINE",    (100,  20,   0))
+COLOR_VIOLET        = Color("COLOR_VIOLET",       (138,  43, 226))
+
+COLOR_GREY_0        = Color("COLOR_GREY_0",       ( 11,  11,  10))
+COLOR_GREY_1        = Color("COLOR_GREY_1",       ( 15,  15,  10))
+COLOR_GREY_2        = Color("COLOR_GREY_2",       ( 20,  20,  15))
+COLOR_GREY_3        = Color("COLOR_GREY_3",       ( 30,  30,  20))
+COLOR_GREY_4        = Color("COLOR_GREY_4",       ( 40,  40,  30))
+COLOR_GREY_5        = Color("COLOR_GREY_5",       ( 50,  50,  40))
+COLOR_GREY_6        = Color("COLOR_GREY_6",       ( 70,  70,  60))
+COLOR_GREY_7        = Color("COLOR_GREY_7",       (130, 130, 110))
 
 #EOF

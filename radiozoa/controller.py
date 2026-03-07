@@ -6,7 +6,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2026-03-05
+# modified: 2026-03-07
 
 import sys
 import time
@@ -159,7 +159,8 @@ Commands:
 
     name                                    # return the name of the configured board
     time get | set <timestamp>              # set/get RTC time
-    pixel off | <color> | <n> <color>       # control NeoPixel
+    pixel off | clear | | <color>           # control NeoPixel
+    strip <n> off | clear | <color>         # control NeoPixel strip
     persist on | off                        # persist pixel after setting
     rgb <red> <green> <blue>                # set NeoPixel to RGB
     heartbeat on | off                      # control heartbeat flash
@@ -237,6 +238,25 @@ Commands:
                     self._log.warning('no pixel available.')
                 _exit_color = COLOR_RED
                 return Controller._PACKED_ERR
+
+            elif _arg0 == "strip":
+                try:
+                    pixel = int(_arg1)
+                    if _arg2 == 'off' or _arg2 == 'clear':
+                        color = COLOR_BLACK
+                    else:
+                        color = self._get_color(_arg2, _arg3)
+                    if not color:
+                        self._log.warning("could not find color: arg1: '{}'; arg2: '{}'".format(_arg1, _arg2))
+                        _exit_color = COLOR_RED
+                        return Controller._PACKED_ERR
+                    self._strip.set_color(pixel, color)
+                    _exit_color = COLOR_DARK_GREEN
+                    return Controller._PACKED_ACK
+                except ValueError as e:
+                    print('error parsing strip command: {}'.format(e))
+                    _exit_color = COLOR_RED
+                    return Controller._PACKED_ERR
 
             elif _arg0 == "persist":
                 if _arg1 == 'on':

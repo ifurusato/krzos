@@ -34,8 +34,8 @@ from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.lux_sensor import LuxSensor
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
-from hardware.stm32_controller import Stm32Controller
 from hardware.tinyfx_controller import TinyFxController
+from hardware.radiozoa_controller import RadiozoaController
 from hardware.imu import IMU
 
 class Thoughts(Behaviour):
@@ -70,7 +70,6 @@ class Thoughts(Behaviour):
         Behaviour.__init__(self, Thoughts.NAME, config, message_bus, message_factory,
                           suppressed=True, enabled=False, level=level)
         # idle configuration
-        print('🍓 THOUGHTS.')
         _idle_cfg = config['kros']['behaviour']['idle']
         self._idle_threshold_sec = _idle_cfg.get('idle_threshold_sec')
         self._loop_freq_hz = _idle_cfg.get('loop_freq_hz', 1)
@@ -148,8 +147,8 @@ class Thoughts(Behaviour):
         self.add_events([member for member in Group
                         if member not in (Group.NONE, Group.IDLE, Group.OTHER)])
         # external controllers
-        self._tinyfx = None
-        self._stm32  = None
+        self._tinyfx           = None
+        self._radiozoa_ctrl    = None
         # behavioural states
         self._enable_imu_poll  = True
         self._bored            = False
@@ -203,8 +202,8 @@ class Thoughts(Behaviour):
             self._mark_activity()
             self._next_play_time = time.monotonic()
             self._tinyfx = self._component_registry.get(TinyFxController.NAME)
-            self._stm32  = self._component_registry.get(Stm32Controller.NAME)
             self._set_running_lights(True)
+            self._radiozoa_ctrl = self._component_registry.get(RadiozoaController.NAME)
             # create async listener loop task
             if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
                 self._log.warning('loop task already exists.')
@@ -313,6 +312,13 @@ class Thoughts(Behaviour):
         else:
             self._log.warning('did not reset eyeballs from {}'.format(_eyeballs))
 
+    def _display_status(self, pixel, color):
+        '''
+        Set the specified pixel to the color name.
+        '''
+        _command = 'strip {} {}'.format(pixel, color)
+        self._radiozoa_ctrl.send_request(_command)
+
     async def _thoughts_listener_loop(self, f_is_enabled):
         '''
         Main loop: monitors activity and plays sounds organically.
@@ -324,6 +330,7 @@ class Thoughts(Behaviour):
         '''
         self._log.info('loop started (threshold: {:d}s)'.format(self._idle_threshold_sec))
         while f_is_enabled() and not self._stop_event.is_set():
+            self._display_status(2, 'tangerine')
             try:
                 self._count = next(self._counter)
                 if self.has_toggle_assignment():
@@ -445,6 +452,7 @@ class Thoughts(Behaviour):
             except Exception as e:
                 self._log.error('{} raised in loop: {}\n{}'.format(type(e), e, traceback.format_exc()))
                 raise
+            self._display_status(2, 'black')
         self._log.info(Style.DIM + 'exited thoughts listener loop; f_enabled? {}; stop event set? {}'.format(f_is_enabled(), self._stop_event.is_set()))
 
     def _check_light_level(self):
@@ -646,11 +654,11 @@ class Thoughts(Behaviour):
         self._imu.show_info()
         _usfs_is_calibrated, _icm20948_is_calibrated = self._imu.is_calibrated
         _stability = self._imu.heading_stability_score
-        self._stm32.send_request('strip 6 {}'.format('green' if _usfs_is_calibrated else 'red'))
+        self._radiozoa_ctrl.send_request('strip 3 {}'.format('green' if _usfs_is_calibrated else 'red'))
         time.sleep(0.2)
-        self._stm32.send_request('strip 7 {}'.format('green' if _icm20948_is_calibrated  else 'red'))
+        self._radiozoa_ctrl.send_request('strip 4 {}'.format('green' if _icm20948_is_calibrated  else 'red'))
         time.sleep(0.2)
-        self._stm32.send_request('strip 8 {}'.format(self._get_stability_color(_stability)))
+        self._radiozoa_ctrl.send_request('strip 5 {}'.format(self._get_stability_color(_stability)))
 
     def _get_stability_color(self, stability):
         if stability < 0.2:

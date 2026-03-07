@@ -1,7 +1,7 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
@@ -11,7 +11,7 @@
 
 from machine import Pin
 
-class PassiveInfrared:
+class PassiveInfrared(object):
     def __init__(self, pin=26):
         self._pir_pin = Pin(pin, Pin.IN, Pin.PULL_UP)
 

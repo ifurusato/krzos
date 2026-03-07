@@ -1,21 +1,25 @@
-#!/usr/bin/env python3
+#!/micropython
 # -*- coding: utf-8 -*-
 #
 # Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License.
 #
 # author:   Ichiro Furusato
-# created:  2025-11-16
-# modified: 2025-11-25
+# created:  2026-02-09
+# modified: 2026-03-08
 
+import sys
 import time
-from machine import RTC
+import math, random
+from colorama import Fore, Style
 
 from tiny_fx import TinyFX
 from manual_player import ManualPlayer
 from settable import SettableFX
 from settable_blink import SettableBlinkFX
 from pir import PassiveInfrared
+
+from logger import Logger, Level
 from colors import *
 from controller import Controller
 from timestamp import TimeStamp
@@ -23,7 +27,7 @@ from wav_util import wav_duration
 
 class TinyFxController(Controller):
     '''
-    A Tiny FX controller for command strings received from the I2CSlave.
+    A TinyFX controller for command strings received from the I2CSlave.
 
     Commands include:
       play [sound-name]     play a sound
@@ -35,18 +39,16 @@ class TinyFxController(Controller):
     Setting the heartbeat or color will disable the other.
     PIR sensor functionality currently has not been tested.
     '''
-    def __init__(self, blink_channels=None):
-        super().__init__()
+    def __init__(self, config=None, level=Level.INFO):
+        self._log = Logger('tinyfx-ctrl', level=level)
+        super().__init__(config)
 #       self._slave = None
-        if blink_channels is None:
-            blink_channels = [False, False, False, False, False, False]
-        if len(blink_channels) != 6:
-            raise ValueError("blink_channels must have exactly 6 boolean values")
         self._tinyfx  = TinyFX(init_wav=True, wav_root='/sounds')
         self._rgbled  = self._tinyfx.rgb
         self._intra_play_delay_ms = 200 # ms: additional time between plays
         self._playing = False
         # channel definitions
+        blink_channels = [True, False, False, True, False, False] # channel 1 and 4 blinks
         self._channel1_fx = self._get_channel(1, blink_channels[0])
         self._channel2_fx = self._get_channel(2, blink_channels[1])
         self._channel3_fx = self._get_channel(3, blink_channels[2])
@@ -70,7 +72,14 @@ class TinyFxController(Controller):
             'ch3': self._channel3_fx,
             'ch4': self._channel4_fx,
             'ch5': self._channel5_fx,
-            'ch6': self._channel6_fx
+            'ch6': self._channel6_fx,
+            # aliases
+            'back': self._channel1_fx,
+            'head': self._channel2_fx,
+            'dome': self._channel3_fx,
+            'mast': self._channel4_fx,
+            'stbd': self._channel5_fx,
+            'port': self._channel6_fx
         }
         # heartbeat blink feature
         self._heartbeat_enabled     = True
@@ -84,14 +93,28 @@ class TinyFxController(Controller):
         # we'll rely on the heartbeat instead
 #       self._pir_timer = Timer()
 #       self._pir_timer.init(period=1000, mode=Timer.PERIODIC, callback=self._poll_pir)
-        self.play('arming-tone')
-        # ready.
+        self._play('arming-tone')
+        self._log.info('ready.')
+        # ready
 
-#   def _poll_pir(self, timer):
+    def _start_services(self):
+        '''
+        This method is called upon startup, after a preset delay. It can be overridden
+        as necessary to start any application-level services.
+        '''
+        super()._start_services()
+
+    def _led_off(self, timer=None):
+        super()._led_off(timer)
+
+    def tick(self, delta_ms):
+        self._player.update(delta_ms)
+        super().tick(delta_ms)
+
     def _poll_pir(self):
         if self._pir_sensor.triggered:
             self._timestamp.mark()
-            print('🐱 triggered.')
+            print('triggered.')
 
     def _get_channel(self, channel, blinking=False):
         '''
@@ -107,25 +130,6 @@ class TinyFxController(Controller):
         else:
             return SettableFX(brightness=0.8)
 
-    def tick(self, delta_ms):
-        self._player.update(delta_ms)
-        if self._heartbeat_enabled:
-            self._heartbeat(delta_ms)
-
-    def _heartbeat(self, delta_ms):
-        self._heartbeat_timer += delta_ms
-        if self._heartbeat_state:
-            if self._heartbeat_timer >= self._heartbeat_on_time_ms:
-                self._rgbled.set_rgb(0, 0, 0)
-                self._heartbeat_state = False
-                self._heartbeat_timer = 0
-                self._poll_pir()
-        else:
-            if self._heartbeat_timer >= self._heartbeat_off_time_ms:
-                self._rgbled.set_rgb(0, 64, 64)
-                self._heartbeat_state = True
-                self._heartbeat_timer = 0
-
     def _get_pir(self):
         '''
         Returns True if the PIR sensor has been triggered.
@@ -138,11 +142,11 @@ class TinyFxController(Controller):
         else:
             return "-1"
 
-    def parse_repeat(self, value):
-        """
+    def _parse_repeat(self, value):
+        '''
         Parse a third argument of the form '10x'.
         Returns an int if valid, otherwise 1.
-        """
+        '''
         if value and value.endswith('x'):
             try:
                 return int(value[:-1])
@@ -150,112 +154,7 @@ class TinyFxController(Controller):
                 return 1
         return 1
 
-    def process(self, cmd):
-        '''
-        Processes the callback from the I2C slave, returning 'ACK', 'NACK'
-        or 'ERR'. Data requests are for 'pir' and use three transactions, 
-        the first is followed by 'get' and then 'clear', somewhat arbitrary
-        tokens that return the previous response and then clear the buffer.
-        '''
-        try:
-            print("cmd: '{}'".format(cmd))
-            parts = cmd.lower().split()
-            if len(parts) == 0:
-                return 'ERR'
-            _command = parts[0]
-            _action  = parts[1] if len(parts) > 1 else None
-            _value   = parts[2] if len(parts) > 2 else None
-            if _command in ['all', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6'] and len(parts) == 2:
-                print('action: {}'.format(_action))
-                if _command == 'all':
-                    if _action == 'on':
-                        for fx in self._player.effects:
-                            fx.set(True)
-                        self._heartbeat_enabled = True
-                    elif _action == 'off':
-                        for fx in self._player.effects:
-                            fx.set(False)
-                        self._heartbeat_enabled = False
-                        self._show_color('color black')
-                    else:
-                        return 'ERR'
-                else:
-                    fx = self._channel_map[_command]
-                    if _action == 'on':
-                        fx.set(True)
-                    elif _action == 'off':
-                        fx.set(False)
-                    else:
-                        return 'ERR'
-            elif _command == "run":
-                fxs = [ self._channel_map['ch4'], self._channel_map['ch5'], self._channel_map['ch6'] ]
-                for fx in fxs:
-                    if _action == 'on':
-                        fx.set(True)
-                    elif _action == 'off':
-                        fx.set(False)
-                    else:
-                        return 'ERR'
-            elif _command == "heartbeat":
-                if _action == 'on':
-                    self._heartbeat_enabled = True
-                elif _action == 'off':
-                    self._heartbeat_enabled = False
-                else:
-                    return 'ERR'
-            elif _command == "color":
-                self._heartbeat_enabled = False
-                self._show_color(cmd)
-            elif _command == "play":
-                _repeat  = self.parse_repeat(_value)
-                self.play(cmd, _repeat)
-            elif _command == "respond":
-                print('responded')
-                pass # ignored
-            elif _command == "pir":
-                return self._get_pir()
-            elif _command == "time":
-                if _action == 'set':
-                    return self._set_time(_value)
-                elif _action == 'get':
-                    return "2025"
-            elif _command == "get":
-                return 'ACK' # called on 2nd request for data
-            elif _command == "clear":
-                return 'ACK' # called on 3rd request for data
-            else:
-                print("unrecognised command: '{}' (ignored)".format(_command))
-                return 'NACK'
-            return 'ACK'
-        except Exception as e:
-            print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
-            return 'ERR'
-
-    def _parse_timestamp(self, ts):
-        year    = int(ts[0:4])
-        month   = int(ts[4:6])
-        day     = int(ts[6:8])
-        hour    = int(ts[9:11])
-        minute  = int(ts[11:13])
-        second  = int(ts[13:15])
-        weekday = 0
-        subsecs = 0
-        return (year, month, day, weekday, hour, minute, second, subsecs)
-
-    def _rtc_to_iso(self, dt):
-        return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dt[0], dt[1], dt[2], dt[4], dt[5], dt[6])
-
-    def _set_time(self, timestamp):
-        try:
-            print('BEFORE: {}'.format(self._rtc_to_iso(RTC().datetime())))
-            RTC().datetime(self._parse_timestamp(timestamp))
-            print('AFTER:  {}'.format(self._rtc_to_iso(RTC().datetime())))
-            return 'ACK'
-        except Exception as e:
-            print("ERROR: {} raised by tinyfx controller: {}".format(type(e), e))
-            return 'ERR'
-
-    def play(self, cmd, repeat=1):
+    def _play(self, cmd, repeat=1):
         print("playing sound for command: {}".format(cmd))
         try:
             self._playing = True
@@ -266,7 +165,7 @@ class TinyFxController(Controller):
                 sound_name = parts[1]
             file_name = '{}.wav'.format(sound_name)
             # compute duration once per play() invocation
-            duration_ms = int(wav_duration("sounds/{}".format(file_name)) * 1000) 
+            duration_ms = int(wav_duration("sounds/{}".format(file_name)) * 1000)
             print('duration: {}ms'.format(duration_ms))
             for i in range(repeat):
                 if repeat == 1:
@@ -287,11 +186,75 @@ class TinyFxController(Controller):
             print("ERROR: show color command missing color name.")
             return
         color_name = parts[1]
-        color = get_color_by_name(color_name)
+        color = Color.get(color_name)
         if color:
-            print('showing color: {}…'.format(color.description))
+            print('showing color: {}…'.format(color.name))
             self._rgbled.set_rgb(*color)
         else:
             print("ERROR: unknown color name: {}".format(color_name))
+
+    def pre_process(self, cmd, arg0, arg1, arg2, arg3, arg4):
+        '''
+        Pre-process the arguments, returning a response and color if a match occurs.
+        Such a match precludes further processing.
+        '''
+#       self._log.info("ring: pre-process command '{}' with arg0: '{}'; arg1: '{}'; arg2: '{}'; arg3: '{}'; arg4: '{}'".format(cmd, arg0, arg1, arg2, arg3, arg4))
+
+        if arg0 == 'all' or arg0 in self._channel_map and arg1 is not None:
+            print('action: {}'.format(arg1))
+            if arg0 == 'all':
+                if arg1 == 'on':
+                    for fx in self._player.effects:
+                        fx.set(True)
+                    self._heartbeat_enabled = True
+                elif arg1 == 'off':
+                    for fx in self._player.effects:
+                        fx.set(False)
+                    self._heartbeat_enabled = False
+                    self._show_color('color black')
+                else:
+                    return Controller._PACKED_ERR, COLOR_RED
+            else:
+                fx = self._channel_map[arg0]
+                if arg1 == 'on':
+                    fx.set(True)
+                elif arg1 == 'off':
+                    fx.set(False)
+                else:
+                    return Controller._PACKED_ERR, COLOR_RED
+            return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
+        elif arg0 == "run":
+            fxs = [ self._channel_map['ch4'], self._channel_map['ch5'], self._channel_map['ch6'] ]
+            for fx in fxs:
+                if arg1 == 'on':
+                    fx.set(True)
+                elif arg1 == 'off':
+                    fx.set(False)
+                else:
+                    return Controller._PACKED_ERR, COLOR_RED
+            return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
+        elif arg0 == "color":
+            self._heartbeat_enabled = False
+            self._show_color(cmd)
+            return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
+        elif arg0 == "play":
+            _repeat  = self._parse_repeat(arg2)
+            self._play(arg1, _repeat)
+            return Controller._PACKED_ACK, COLOR_DARK_GREEN
+
+        elif arg0 == "pir":
+            return self._get_pir(), COLOR_DARK_GREEN
+
+        else:
+            return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
+
+    def process(self, cmd):
+        '''
+        Processes the callback from the I2C slave.
+        '''
+        return super().process(cmd)
 
 #EOF

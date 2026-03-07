@@ -1,60 +1,62 @@
 #!/micropython
 # -*- coding: utf-8 -*-
 #
-# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# Copyright 2020-2025 by Ichiro Furusato. All rights reserved. This file is part
 # of the Robot Operating System project, released under the MIT License. Please
 # see the LICENSE file included as part of this package.
 #
 # author:   Ichiro Furusato
 # created:  2025-11-16
-# modified: 2025-11-24
+# modified: 2026-02-07
+#
+# I2C slave using single memory buffer for ESP32-S3.
 
 import sys
 import time
-from machine import I2CTarget, Pin
+from machine import Pin, I2CTarget
 
-try:
-    from upy.message_util import pack_message, unpack_message
-except ImportError:
-    from message_util import pack_message, unpack_message
-
-__I2C_ID      = 0
-__I2C_ADDRESS = 0x43
-__BUF_LEN     = 258
+from message_util import pack_message, unpack_message
+from logger import Logger, Level
 
 class I2CSlave:
+    MEM_LENGTH = 64
+    # pre-packed constant responses
+    PACKED_ACK  = pack_message('ACK')
+    PACKED_ERR  = pack_message('ERR')
     '''
-    Constructs an I2C slave at the configured bus (0) and address (0x43).
+    Memory-based I2C slave with proper separation of RX and TX data.
     '''
-    def __init__(self):
+    def __init__(self, i2c_id, scl, sda, i2c_address, level=Level.INFO):
+        self._log = Logger('i2c-slave', level=level)
+        self._i2c_id      = i2c_id
+        self._scl_pin     = Pin(scl) if scl else None
+        self._sda_pin     = Pin(sda) if sda else None
+        self._i2c_address = i2c_address
+        if self._scl_pin is not None:
+            self._log.info('I2C slave configured with SDA on pin {}, SCL on pin {}'.format(sda, scl))
+        else:
+            self._log.info('I2C slave configured using configured values.')
         self._i2c = None
-        self._single_chunk = bytearray(32)
-        self._tx_len = 0
-        self._rx_len = 0
-        self._last_rx_len = 0
-        self._tx_buf = bytearray(__BUF_LEN)
-        self._rx_buf = bytearray(__BUF_LEN)
-        for i in range(__BUF_LEN):
-            self._rx_buf[i] = 0
-        init_msg = pack_message("ACK")
-        self._tx_len = len(init_msg)
-        for i in range(self._tx_len):
-            self._tx_buf[i] = init_msg[i]
-        self._new_cmd = False
+        self._mem_buf = bytearray(I2CSlave.MEM_LENGTH)
+        self._rx_copy = bytearray(I2CSlave.MEM_LENGTH)
         self._callback = None
+        self._new_cmd = False
+        self._processing = False
+        # initialize with ACK
+        init_msg = I2CSlave.PACKED_ACK
+        for i in range(len(init_msg)):
+            self._mem_buf[i] = init_msg[i]
+        self._log.info('I2C slave ready.')
 
     def enable(self):
-        '''
-        Enables the I2C slave and sets up IRQ handling.
-        '''
-        triggers = (I2CTarget.IRQ_WRITE_REQ | I2CTarget.IRQ_END_WRITE |
-                    I2CTarget.IRQ_READ_REQ | I2CTarget.IRQ_END_READ)
-        # STM32: configure for your board; pins are pre-set for each bus
-#       self._i2c = I2CTarget(__I2C_ID, __I2C_ADDRESS)
-        # RP2040:
-        self._i2c = I2CTarget(__I2C_ID, __I2C_ADDRESS, scl=Pin(17), sda=Pin(16))
-        self._i2c.irq(self._irq_handler, trigger=triggers, hard=True)
-        print('I2C slave enabled at address {:#04x}'.format(__I2C_ADDRESS))
+        i2c_id = self._i2c_id
+        if self._scl_pin is not None:
+            self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf, scl=self._scl_pin, sda=self._sda_pin)
+            self._log.info('I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address))
+        else:
+            self._i2c = I2CTarget(i2c_id, self._i2c_address, mem=self._mem_buf)
+            self._log.info('I2C slave enabled on I2C{} address {:#04x}'.format(i2c_id, self._i2c_address))
+        self._i2c.irq(self._irq_handler, trigger=I2CTarget.IRQ_END_WRITE, hard=False)
 
     def disable(self):
         if self._i2c:
@@ -62,79 +64,45 @@ class I2CSlave:
             self._i2c = None
 
     def add_callback(self, callback):
-        '''
-        Registers a callback to process/unpack received commands.
-        The callback accepts a single ASCII string and returns a string response.
-        '''
         self._callback = callback
 
     def _irq_handler(self, i2c):
+        '''
+        The IRQ handler used on the ESP32 and RP2.
+        '''
         flags = i2c.irq().flags()
-        if flags & I2CTarget.IRQ_WRITE_REQ:
-            n = i2c.readinto(self._single_chunk)
-            if n and n > 0:
-                for i in range(n):
-                    self._rx_buf[self._rx_len] = self._single_chunk[i]
-                    self._rx_len += 1
         if flags & I2CTarget.IRQ_END_WRITE:
-            self._last_rx_len = self._rx_len
-            self._new_cmd = True
-        if flags & I2CTarget.IRQ_READ_REQ:
-            i2c.write(self._tx_buf)
+            msg_len = self._mem_buf[0]
+            if msg_len > 0 and msg_len < 60:
+                for i in range(msg_len + 2):
+                    self._rx_copy[i] = self._mem_buf[i]
+                self._new_cmd = True
 
     def check_and_process(self):
-        WAIT = True # wait for the full message before unpacking
-        if self._new_cmd:
-            time.sleep_ms(5)  # Small delay to ensure IRQ completes
+        if self._new_cmd and not self._processing:
             self._new_cmd = False
+            self._processing = True
+            msg_len = self._rx_copy[0]
             try:
-                if WAIT:
-                    raw = self._rx_buf[:self._last_rx_len]
-                    if len(raw) < 2:  # must have at least register + length
-                        return  # incomplete, wait
-                    msg_len = raw[1]
-                    expected_total = 1 + 1 + msg_len + 1  # reg + length + payload + crc
-                    if len(raw) < expected_total:
-                        return  # full message not yet in buffer
-                    rx_bytes = raw[1:1 + 1 + msg_len + 1]
-                else:
-                    raw = self._rx_buf[:self._last_rx_len]
-                    # skip the first byte (register address from I2C master)
-                    if raw and len(raw) > 1:
-                        msg_len = raw[1]  # Length of payload
-                        if msg_len > 0 and len(raw) >= msg_len + 3:
-                            rx_bytes = bytes(raw[1:msg_len + 3])
-                        else:
-                            rx_bytes = bytes(raw[1:])
-                    else:
-                        raise ValueError("message too short")
+                rx_bytes = bytes(self._rx_copy[:msg_len + 2])
                 cmd = unpack_message(rx_bytes)
                 if self._callback:
-                    response = self._callback(cmd)
-                    if not response:
-                        response = "ACK"
+                    resp_bytes = self._callback(cmd)
+                    if not resp_bytes:
+                        resp_bytes = I2CSlave.PACKED_ACK
                 else:
-                    response = "ACK"
-
+                    resp_bytes = I2CSlave.PACKED_ACK
             except Exception as e:
-                print("ERROR: {} raised during unpacking/processing: {}".format(type(e), e))
-                sys.print_exception(e)
-                response = "ERR"
-            # clear buffer state for next message
-            self._rx_len = 0
-            self._last_rx_len = 0
-            # clear the buffer contents
-            for i in range(__BUF_LEN):
-                self._rx_buf[i] = 0
-            try:
-                resp_bytes = pack_message(str(response))
+                self._log.error("{} raised: {} [1]".format(type(e), e))
+                resp_bytes = I2CSlave.PACKED_ERR
+            try: 
+                for i in range(len(resp_bytes)):
+                    self._mem_buf[i] = resp_bytes[i]
+                for i in range(len(resp_bytes), I2CSlave.MEM_LENGTH):
+                    self._mem_buf[i] = 0
             except Exception as e:
-                print("ERROR: {} raised during packing response: {}".format(type(e), e))
-                sys.print_exception(e)
-                resp_bytes = pack_message("ERR")
-            rlen = len(resp_bytes)
-            for i in range(rlen):
-                self._tx_buf[i] = resp_bytes[i]
-            self._tx_len = rlen
+                self._log.error("{} raised: {} [2]".format(type(e), e))
+            finally:
+                self._processing = False
 
 #EOF

@@ -506,7 +506,7 @@ kros:
             i2c_address:                   0x40            # I²C address (default 0x40)
         tinyfx-controller:
             i2c_bus_id:                       1
-            i2c_address:                   0x43
+            i2c_address:                   0x45
         radiozoa-controller:
             i2c_bus_id:                       1
             i2c_address:                   0x47

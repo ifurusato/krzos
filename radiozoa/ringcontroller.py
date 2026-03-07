@@ -34,7 +34,8 @@ class RingController(Controller):
         elif self._ring_count == 0:
             raise ValueError('ring count is 0.')
         self._status_enabled   = False
-        self._status_pixel     = 1
+        self._status_pixel     = 7
+        self._ring_pre_processes = {"rgb", "ring", "rotate", "theme", "quiet"}
         # rotation
         self._ring_offset      = 0
         self._rotate_direction = 1 # 1 or -1
@@ -113,9 +114,9 @@ class RingController(Controller):
         return _strip
 
     def _led_off(self, timer=None):
-        super()._led_off(timer)
         if self._strip and self._status_enabled:
             self._strip.set_color(self._status_pixel, COLOR_BLACK)
+        super()._led_off(timer)
 
     @property
     def ring(self):
@@ -298,7 +299,7 @@ class RingController(Controller):
 #       if arg0 == "__extend_here__":
 #           return None, None
 
-        if arg0 not in {"rgb", "ring", "rotate", "theme", "quiet"}: # preemptively check
+        if arg0 not in self._ring_pre_processes: # preemptively check
             return super().pre_process(cmd, arg0, arg1, arg2, arg3, arg4)
 
         elif arg0 == "rgb":
@@ -474,7 +475,7 @@ class RingController(Controller):
         Processes the callback from the I2C slave.
         '''
         if self._status_enabled:
-            self._strip.set_color(self._status_pixel, COLOR_CYAN)
+            self._strip.set_color(self._status_pixel, COLOR_FUCHSIA)
         return super().process(cmd)
 
 #EOF

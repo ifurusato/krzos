@@ -13,6 +13,7 @@ import os
 import time
 from collections import deque
 from threading import Event, Lock, Thread
+from queue import Queue, Empty
 from colorama import init, Fore, Style
 init()
 
@@ -25,6 +26,8 @@ from i2c_master import I2CMaster
 class RadiozoaController(I2CMaster, Component):
     NAME              = 'radio-ctrl'
     FAR_THRESHOLD     = 4000  # mm; maximum range of VL53L1X sensors
+    RESPONSE_ACK      = 'ACK'
+    RESPONSE_ERR      = 'ERR'
     DISTANCES_COMMAND = 'distances'
     '''
     Extends I2CMaster to control an ESP32-S3 connected to a Radiozoa sensor board.
@@ -47,6 +50,7 @@ class RadiozoaController(I2CMaster, Component):
         self._max_retries = _cfg.get('max_retries', 5)
         # superclass
         I2CMaster.__init__(self, i2c_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=_timeset)
+        self._command_queue  = Queue()
         self._poll_delay_sec = _poll_delay
         self._distances      = None  # list of 8 ints, or None if not yet read
         self._distances_lock = Lock()
@@ -82,12 +86,21 @@ class RadiozoaController(I2CMaster, Component):
         '''
         return self._occupancy_map
 
+    def send_command(self, command):
+        '''
+        Add a command string to the queue for sending in the next poll cycle.
+        '''
+        self._command_queue.put(command)
+
     def _parse_distances(self, response):
         '''
         Parse a space-delimited response string into a list of 8 ints.
-        Returns None if the response is invalid.
+        Returns None if the response is 'ACK', 'ERR' or otherwise invalid.
         '''
-        if response is None or response == self.DISTANCES_COMMAND:
+        if response is None \
+                or response == self.DISTANCES_COMMAND \
+                or response == self.RESPONSE_ACK \
+                or response == self.RESPONSE_ERR:
             return None
         try:
             values = [int(v) for v in response.split()]
@@ -137,8 +150,8 @@ class RadiozoaController(I2CMaster, Component):
         response = self.send_request(self.DISTANCES_COMMAND)
         while response is None \
                 or response == self.DISTANCES_COMMAND \
-                or response == 'ACK' \
-                or response == 'ERR':
+                or response == self.RESPONSE_ACK \
+                or response == self.RESPONSE_ERR:
             if retries >= self._max_retries:
                 self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
                 if self._dynamic_tuning:
@@ -254,6 +267,37 @@ class RadiozoaController(I2CMaster, Component):
         self._poll_thread = None
 
     def _poll_loop(self):
+        '''
+        Internal polling loop, runs until stop_event is set.
+        If the poll queue is non-empty, drains one queued command per
+        cycle before continuing to poll distances.
+        '''
+        self._log.info('poll loop started.')
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    command = self._command_queue.get_nowait()
+                    retries = 0
+                    response = self.send_request(command)
+                    while response != self.RESPONSE_ACK and retries < self._max_retries:
+                        time.sleep(0.01)
+                        response = self.send_request(command)
+                        retries += 1
+                    if response != self.RESPONSE_ACK:
+                        self._log.warning('command \'{}\' failed after {} retries.'.format(command, retries))
+                    else:
+                        self._log.info(Style.DIM + "command '{}' acknowledged ({} retries).".format(command, retries))
+                except Empty:
+                    distances = self.get_distances()
+                    if distances is None:
+                        self._log.info(Style.DIM + 'poll: no valid response.')
+                    else:
+                        self._log.info('poll: ' + Fore.GREEN + '{}'.format(distances))
+                time.sleep(self._poll_delay_sec)
+        finally:
+            self._log.info('poll loop stopped.')
+
+    def x_poll_loop(self):
         '''
         Internal polling loop, runs until stop_event is set.
         '''
