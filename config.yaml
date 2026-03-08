@@ -27,6 +27,7 @@ kros:
         enable_imu:                        True            # enable fused IMU
         enable_motor_controller:           True            # enable Motor 2040
         enable_pushbutton:                 True            # enable pushbutton
+        enable_monitor:                    True            # enable OLED monitor if available
         enable_behaviours:                 True            # enable BehaviourManager (Behaviours are enabled individually)
         # publishers .......................................
         enable_queue_publisher:            True            # publishes from globally-available queue
@@ -61,8 +62,8 @@ kros:
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # polling loop frequency
         nudge:
-            enable:                      True              # enable nudge behaviour
-            release:                     True              # release nudge behaviour on startup
+            enable:                     False              # enable nudge behaviour
+            release:                    False              # release nudge behaviour on startup
             verbose:                    False              # verbose messaging
             priority:                   0.6                # fixed behaviour priority
             lateral_max:                0.5
@@ -96,14 +97,14 @@ kros:
             deadband_threshold:             0.07
             obstacle_easing:     'SQUARE_ROOT'             # easing function for obstacle scaling
         scan:
-            enable:                      True              # enable scan behaviour
-            release:                     True              # release scan behaviour on startup
+            enable:                     False              # enable scan behaviour
+            release:                    False              # release scan behaviour on startup
             verbose:                    False              # verbose messaging
             accel_time:                     1.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                     False              # enable scout behaviour
-            release:                    False              # release scout behaviour on startup
+            enable:                      True              # enable scout behaviour
+            release:                     True              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
             default_priority:               0.6            # default behaviour priority
@@ -125,7 +126,7 @@ kros:
             distance_per_speed:           200              # mm to add per 1.0 normalized speed
             max_lateral_force:            0.4              # maximum vx magnitude
             lateral_easing:      'SQUARE_ROOT'             # easing function for distance->force mapping
-            min_priority:                 0.2              # priority when obstacles far
+            min_priority:                 0.4              # priority when obstacles far
             max_priority:                 0.8              # priority when obstacles very close (bumper)
             deadband_threshold:           0.02             # ignore vx below this value
         geofence:
@@ -491,12 +492,12 @@ kros:
             pin:                             23            # GPIO pin connected to an external clock source
             freq_divider:                    50            # tick divisor for lower frequency callback
         monitor:
-            i2c_port:                         0
+            i2c_port:                         1
             i2c_address:                   0x3C
             contrast:                      0x3F            # 0x-00-0xFF screen brightness
             update_rate_hz:                   1            # update rate in Hz
             use_thread:                   False            # if an external clock is not supplied, use a thread for the update loop
-            rotate:                           1            # values 0: 180°; 1: -90°; 2: 0°; 3: 90°
+            rotate:                           2            # values 0: 180°; 1: -90°; 2: 0°; 3: 90°
             permit_callback:               False           # setting True may introduce message timing issues
             font_size:                       10            # main font size
             font_size_full:                   8            # font size for bar

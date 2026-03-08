@@ -121,8 +121,8 @@ class Monitor(Component):
 #           self._device = ssd1327(i2c(port=0, address=0x3C), rotate=1) # Zio
             self._device = sh1106(i2c(port=_i2c_port, address=_i2c_address), width=128, height=128, rotate=_rotate) # Pimoroni
             self._device.contrast(_contrast)
-        except DeviceNotFoundError:
-            self._log.error('no monitor available: display not found.')
+        except DeviceNotFoundError as e:
+            self._log.error('no monitor available: display not found at address 0x{:02X}: {}'.format(_i2c_address, e))
         # ADS1015
         self._ads1015 = ADS1015()
         chip_type = self._ads1015.detect_chip_type()
@@ -239,6 +239,9 @@ class Monitor(Component):
                     return address
             return ""
 
+    def get_pose(self):
+        return "Pose: 12345, 12345, 360°"
+
     def get_ip(self, network_interface_name):
         '''
         None : find suitable IPv4 address among all network interfaces
@@ -251,10 +254,10 @@ class Monitor(Component):
         return self._ads1015.get_compensated_voltage(channel='in0/ref', reference_voltage=self._reference)
 
     def get_5v_regulator(self):
-        return self._ads1015.get_compensated_voltage(channel='in1/ref', reference_voltage=self._reference)
+        return self._ads1015.get_compensated_voltage(channel='in2/ref', reference_voltage=self._reference)
 
     def get_3v3(self):
-        return self._ads1015.get_compensated_voltage(channel='in2/ref', reference_voltage=self._reference)
+        return self._ads1015.get_compensated_voltage(channel='in1/ref', reference_voltage=self._reference)
 
     def get_current(self):
         return self._ina260.current
@@ -302,68 +305,83 @@ class Monitor(Component):
                 if self._message is not None:
                     self._display_message(draw)
                     return
+
+                SHOW_DISK = False
+                SHOW_3V3  = True
+                SHOW_POSE = True
+
                 # line 0 : temperature ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line = 0
                 _temp = self.get_temp()
-                self._draw_text(draw, 0, 0, "Temp")
-                self._draw_text(draw, self._margin_x_figure, 0, " {:5.1f}C".format(_temp))
+                self._draw_text(draw, 0, line, "Temp")
+                self._draw_text(draw, self._margin_x_figure, line, " {:5.1f}C".format(_temp))
 
                 # line 1 : cpu ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line += 1
                 _cpu = self.get_cpu()
-                self._draw_text(draw, 0, 1, "CPU")
+                self._draw_text(draw, 0, line, "CPU")
                 if _cpu < 100:
                     self._draw_text(draw, self._margin_x_figure, 1, " {:5.2f}%".format(_cpu))
-                    self._draw_bar(draw, 1, _cpu)
+                    self._draw_bar(draw, line, _cpu)
                 else:
-                    self._draw_bar_full(draw, 1)
+                    self._draw_bar_full(draw, line)
 
                 # line 2 : memory ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line += 1
                 _mem = self.get_mem()
-                self._draw_text(draw, 0, 2, "Mem")
+                self._draw_text(draw, 0, line, "Mem")
                 if _mem < 100:
-                    self._draw_text(draw, self._margin_x_figure, 2, " {:5.1f}%".format(_mem))
-                    self._draw_bar(draw, 2, _mem)
+                    self._draw_text(draw, self._margin_x_figure, line, " {:5.1f}%".format(_mem))
+                    self._draw_bar(draw, line, _mem)
                 else:
-                    self._draw_bar_full(draw, 2)
+                    self._draw_bar_full(draw, line)
 
                 # line 3 : disk usage ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                _disk = self.get_disk_usage()
-                self._draw_text(draw, 0, 3, "Disk")
-                if _disk < 100:
-                    self._draw_text(draw, self._margin_x_figure, 3, " {:5.1f}%".format(_disk))
-                    self._draw_bar(draw, 3, _disk)
-                else:
-                    self._draw_bar_full(draw, 3)
+                if SHOW_DISK:
+                    line += 1
+                    _disk = self.get_disk_usage()
+                    self._draw_text(draw, 0, line, "Disk")
+                    if _disk < 100:
+                        self._draw_text(draw, self._margin_x_figure, line, " {:5.1f}%".format(_disk))
+                        self._draw_bar(draw, line, _disk)
+                    else:
+                        self._draw_bar_full(draw, line)
 
                 # line 4 : battery ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line += 1
                 _battery = self.get_battery()
-                self._draw_text(draw, 0, 4, "Batt")
+                self._draw_text(draw, 0, line, "Batt")
                 if _battery < self._batt_max:
-                    self._draw_text(draw, self._margin_x_figure, 4, " {:5.1f}V".format(_battery))
-                    self._draw_bar(draw, 4, ( _battery / self._batt_max * 100.0) )
+                    self._draw_text(draw, self._margin_x_figure, line, " {:5.1f}V".format(_battery))
+                    self._draw_bar(draw, line, ( _battery / self._batt_max * 100.0) )
                 else:
-                    self._draw_bar_full(draw, 4)
+                    self._draw_bar_full(draw, line)
 
                 # line 5 : 5V regulator ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line += 1
                 _5v_reg = self.get_5v_regulator()
-                self._draw_text(draw, 0, 5, "5vRg")
+                self._draw_text(draw, 0, line, "5vRg")
                 if _5v_reg < self._pi_max:
-                    self._draw_text(draw, self._margin_x_figure, 5, " {:5.2f}V".format(_5v_reg))
-                    self._draw_bar(draw, 5, ( _5v_reg / self._pi_max * 100.0) )
+                    self._draw_text(draw, self._margin_x_figure, line, " {:5.2f}V".format(_5v_reg))
+                    self._draw_bar(draw, line, ( _5v_reg / self._pi_max * 100.0) )
                 else:
-                    self._draw_bar_full(draw, 5)
+                    self._draw_bar_full(draw, line)
 
-                # line 6 : 3V3 logic ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                _3v3_reg = self.get_3v3()
-                self._draw_text(draw, 0, 6, "3v3")
-                if _3v3_reg < self._logic_max:
-                    self._draw_text(draw, self._margin_x_figure, 6, " {:5.2f}V".format(_3v3_reg))
-                    self._draw_bar(draw, 6, ( _3v3_reg / self._logic_max * 100.0) )
-                else:
-                    self._draw_bar_full(draw, 6)
+                if SHOW_3V3:
+                    # line 6 : 3V3 logic ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                    line += 1
+                    _3v3_reg = self.get_3v3()
+                    self._draw_text(draw, 0, line, "3v3")
+                    if _3v3_reg < self._logic_max:
+                        self._draw_text(draw, self._margin_x_figure, line, " {:5.2f}V".format(_3v3_reg))
+                        self._draw_bar(draw, line, ( _3v3_reg / self._logic_max * 100.0) )
+                    else:
+                        self._draw_bar_full(draw, line)
 
-                # line 7 : current ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                # line 6 : current ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                line += 1
                 _current = self.get_current()
-                self._draw_text(draw, 0, 7, "Curr")
+                self._draw_text(draw, 0, line, "Curr")
                 if _current < 1.0:
                     _display_current = int(_current * 1000.0)
                     _c_un = " {:5.0f}mA"
@@ -371,22 +389,30 @@ class Monitor(Component):
                     _display_current = _current
                     _c_un = " {:5.2f}A"
                 if _current < self._max_current:
-                    self._draw_text(draw, self._margin_x_figure, 7, _c_un.format(_display_current))
-                    self._draw_bar(draw, 7, ( _current / self._max_current * 100.0) )
+                    self._draw_text(draw, self._margin_x_figure, line, _c_un.format(_display_current))
+                    self._draw_bar(draw, line, ( _current / self._max_current * 100.0) )
                 else:
-                    self._draw_bar_full(draw, 7)
+                    self._draw_bar_full(draw, line)
+
+                # line 7 : pose ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+                if SHOW_POSE:
+                    line += 1
+                    self._draw_text(draw, 0, line, self.get_pose())
 
                 # line 8 : IP address  ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                self._draw_text(draw, 0, 8, self.get_ip(self._network_interface_name))
+                line += 1
+                self._draw_text(draw, 0, line, self.get_ip(self._network_interface_name))
 
                 # line 9 : uptime ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-                self._draw_text(draw, 0, 9, self.get_uptime())
+                line += 1
+                self._draw_text(draw, 0, line, self.get_uptime())
 
 #               # line 9 : timestamp or callback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+#               line += 1
 #               if self._permit_callback and self.__callback is not None:
-#                   self._draw_text(draw, 0, 9, self.get_callback_value())
+#                   self._draw_text(draw, 0, line, self.get_callback_value())
 #               else:
-#                   self._draw_text(draw, 0, 9, self.get_timestamp())
+#                   self._draw_text(draw, 0, line, self.get_timestamp())
 
     def enable(self):
         if not self.enabled:

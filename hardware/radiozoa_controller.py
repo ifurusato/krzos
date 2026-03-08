@@ -48,6 +48,7 @@ class RadiozoaController(I2CMaster, Component):
         _poll_delay  = _cfg.get('poll_delay_sec', 0.67)
         _map_data_file    = _cfg.get('map_data_file') or None
         self._max_retries = _cfg.get('max_retries', 5)
+        self._verbose         = False
         # superclass
         I2CMaster.__init__(self, i2c_id=_i2c_bus_id, i2c_address=_i2c_address, timeset=_timeset)
         self._command_queue  = Queue()
@@ -134,9 +135,10 @@ class RadiozoaController(I2CMaster, Component):
             new_ms = current_ms
         if new_ms != current_ms:
             self.set_write_read_delay_ms(new_ms)
-            self._log.info('write/read delay: {:.1f}ms → '.format(current_ms)
-                    + Fore.GREEN + '{:.1f}ms '.format(new_ms)
-                    + Fore.CYAN + '(avg retries: {:.2f})'.format(avg_retries))
+            if self._verbose:
+                self._log.info('write/read delay: {:.1f}ms → '.format(current_ms)
+                        + Fore.GREEN + '{:.1f}ms '.format(new_ms)
+                        + Fore.CYAN + '(avg retries: {:.2f})'.format(avg_retries))
         else:
             self._log.debug(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
 
@@ -283,32 +285,18 @@ class RadiozoaController(I2CMaster, Component):
                         time.sleep(0.01)
                         response = self.send_request(command)
                         retries += 1
-                    if response != self.RESPONSE_ACK:
-                        self._log.warning('command \'{}\' failed after {} retries.'.format(command, retries))
-                    else:
-                        self._log.info(Style.DIM + "command '{}' acknowledged ({} retries).".format(command, retries))
+                    if self._verbose:
+                        if response != self.RESPONSE_ACK:
+                            self._log.warning('command \'{}\' failed after {} retries.'.format(command, retries))
+                        else:
+                            self._log.info(Style.DIM + "command '{}' acknowledged ({} retries).".format(command, retries))
                 except Empty:
                     distances = self.get_distances()
-                    if distances is None:
-                        self._log.info(Style.DIM + 'poll: no valid response.')
-                    else:
-                        self._log.info('poll: ' + Fore.GREEN + '{}'.format(distances))
-                time.sleep(self._poll_delay_sec)
-        finally:
-            self._log.info('poll loop stopped.')
-
-    def x_poll_loop(self):
-        '''
-        Internal polling loop, runs until stop_event is set.
-        '''
-        self._log.info('poll loop started.')
-        try:
-            while not self._stop_event.is_set():
-                distances = self.get_distances()
-                if distances is None:
-                    self._log.info(Style.DIM + 'poll: no valid response.')
-                else:
-                    self._log.info('poll: ' + Fore.GREEN + '{}'.format(distances))
+                    if self._verbose:
+                        if distances is None:
+                            self._log.info(Style.DIM + 'poll: no valid response.')
+                        else:
+                            self._log.info('poll: ' + Fore.GREEN + '{}'.format(distances))
                 time.sleep(self._poll_delay_sec)
         finally:
             self._log.info('poll loop stopped.')

@@ -78,7 +78,7 @@ class Thoughts(Behaviour):
             self._idle_threshold_sec, self._loop_freq_hz))
         # thoughts configuration
         _cfg = config['kros']['behaviour']['thoughts']
-        self._verbose           = True #_cfg.get('verbose', False)
+        self._verbose           = _cfg.get('verbose', False)
         self._priority          = _cfg.get('priority', 0.2)
         self._max_activity      = _cfg.get('max_activity', 4.0)
         self._activity_scale    = _cfg.get('activity_scale', 1.0)
@@ -221,7 +221,7 @@ class Thoughts(Behaviour):
     def _odometer_callback(self):
         if self._verbose:
             if self._count % 10 == 0: # every 10 seconds
-                self._log.info(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
+                self._log.debug(Fore.BLUE + 'odometer reports movement (10x); idle count: {}'.format(self._idle_count))
             else:
                 self._log.debug(Fore.BLACK + 'odometer reports movement; idle count: {}'.format(self._idle_count))
 
@@ -248,7 +248,7 @@ class Thoughts(Behaviour):
         '''
         Called to mark any activity and keep the robot awake.
         '''
-        self._log.info(Fore.GREEN + 'marked activity.')
+        self._log.debug('marked activity.')
         self._reset_sleepiness()
         self._reset_eyeballs()
 
@@ -352,7 +352,7 @@ class Thoughts(Behaviour):
                 if self._odometer:
                     vx, vy, omega = self._odometer.velocity
                     _raw_activity = abs(vx) + abs(vy) + abs(omega)
-                    self._log.info(Fore.GREEN + '🤢 vx: {:4.2f}; vy: {:4.2f}; omega: {:4.2f}'.format(vx, vy, omega))
+#                   self._log.info(Fore.GREEN + 'vx: {:4.2f}; vy: {:4.2f}; omega: {:4.2f}'.format(vx, vy, omega))
                     if isclose(_raw_activity, 0.0, abs_tol=0.001):
                         _style = Style.DIM
                         _raw_activity = 0.0
@@ -373,7 +373,7 @@ class Thoughts(Behaviour):
                     _normalised = _raw_activity / self._max_activity
                     _activity = _normalised * self._activity_scale
                     self._max_normalised = max(self._max_normalised, _normalised)
-                    self._log.info(Fore.GREEN + '🤢 activity raw: {:4.2f}; normalised: {:4.2f}; max: {:4.2f}'.format(_raw_activity, _normalised, self._max_normalised))
+#                   self._log.info(Fore.GREEN + 'activity raw: {:4.2f}; normalised: {:4.2f}; max: {:4.2f}'.format(_raw_activity, _normalised, self._max_normalised))
                     _activity = min(_activity, 1.0)
                     if self._verbose:
                         _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM

@@ -64,6 +64,7 @@ from hardware.toggle_config import ToggleConfig
 #from hardware.system_publisher import SystemPublisher
 #from hardware.sound import Sound
 #from hardware.system_subscriber import SystemSubscriber
+from hardware.monitor import Monitor
 from hardware.radiozoa_controller import RadiozoaController
 from hardware.tinyfx_controller import TinyFxController
 
@@ -246,6 +247,10 @@ class KROS(Component, FiniteStateMachine):
             else:
                 # even if we don't await the start we still set up kill switch
                 self._button.add_callback(self.shutdown)
+
+        _enable_monitor = _cfg.get('enable_monitor')
+        if _enable_monitor:
+            _monitor = Monitor(self._config, level=Level.INFO)
 
         self._digital_pot = DigitalPotentiometer(self._config, level=self._level)
         self._digital_pot.set_output_range(-1.0, 1.0)

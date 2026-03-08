@@ -80,7 +80,7 @@ class EyeballsMonitor(Component):
         if not temporary:
             self._manual_eyeball = eyeball
         self._display_eyeball(eyeball)
-        self._log.info('manual override set: {}'.format(eyeball.name))
+        self._log.debug('manual override set: {}'.format(eyeball.name))
 
     def clear_eyeballs(self):
         '''

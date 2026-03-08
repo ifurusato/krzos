@@ -58,6 +58,7 @@ class Swerve(AsyncBehaviour):
         _cfg = config['kros'].get('behaviour').get('swerve')
         self._counter = itertools.count()
         self._verbose = _cfg.get('verbose', False)
+        self._use_dynamic_priority = True
         # override poll delay of superclass
         self._poll_delay_ms   = _cfg.get('poll_delay_ms')
         self._poll_delay_sec  = self._poll_delay_ms / 1000.0
