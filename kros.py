@@ -558,14 +558,15 @@ class KROS(Component, FiniteStateMachine):
                     elif not isinstance(_component, Publisher) \
                             and not isinstance(_component, Subscriber) \
                             and not isinstance(_component, TinyFxController) \
+                            and not isinstance(_component, IrqClock) \
                             and not isinstance(_component, Player) \
                             and _component != self \
                             and _component != self._message_bus:
                         if not _component.closed:
                             self._log.debug(Style.DIM + 'closing component \'{}\' ({})…'.format(_component.name, _component.classname))
                             _component.close()
-                if self._irq_clock and not self._irq_clock.closed:
-                    self._irq_clock.close()
+#               if self._irq_clock and not self._irq_clock.closed:
+#                   self._irq_clock.close()
 #               time.sleep(0.1)
                 self._log.info(Fore.MAGENTA + 'closing other components…')
                 # closes any remaining non-message bus or kros…
@@ -576,6 +577,7 @@ class KROS(Component, FiniteStateMachine):
                         self._log.debug('component \'{}\' not found in registry.'.format(_name))
                     elif _component != self \
                             and not isinstance(_component, TinyFxController) \
+                            and not isinstance(_component, IrqClock) \
                             and not isinstance(_component, Player) \
                             and _component != self._message_bus:
                         if not _component.closed:
@@ -652,6 +654,9 @@ class KROS(Component, FiniteStateMachine):
                 c for c in self._component_registry
                 if not isinstance(c, Publisher)
                 and not isinstance(c, Subscriber)
+                and not isinstance(c, TinyFxController)
+                and not isinstance(c, Player)
+                and not isinstance(c, IrqClock)
                 and c != self
                 and c != self._message_bus
                 and not c.closed

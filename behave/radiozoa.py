@@ -173,7 +173,9 @@ class Radiozoa(AsyncBehaviour):
                         if self._verbose:
                             self._display_info(vx, vy, message='polled')
                         return (vx, vy, omega)
-            await asyncio.sleep(0.005)
+            else:
+                await asyncio.sleep(0.005)
+            return (0.0, 0.0, 0.0)
         except Exception as e:
             self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self._stop_event.set()

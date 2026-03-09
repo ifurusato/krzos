@@ -280,7 +280,7 @@ class Thoughts(Behaviour):
     def _set_running_lights(self, enable):
         if self._enable_light_ctrl:
             if enable == self._running_lights_state:
-                self._log.info('running lights already set to: ' + Style.DIM +'{}'.format('on' if enable else 'off'))
+                self._log.debug('running lights already set to: ' + Style.DIM +'{}'.format('on' if enable else 'off'))
                 return
             self._log.info('set running lights: ' + Fore.GREEN +'{}'.format('on' if enable else 'off'))
             _saved = self._suppress_random_sounds

@@ -37,7 +37,6 @@ class RadiozoaController(I2CMaster, Component):
     '''
     def __init__(self, config=None, level=Level.INFO):
         self._cwd = os.getcwd()
-        print('RadiozoaController 🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡')
         if config is None:
             raise ValueError('no config provided.')
         self._log = Logger(RadiozoaController.NAME, level=level)
@@ -111,7 +110,8 @@ class RadiozoaController(I2CMaster, Component):
                 return None
             return values
         except ValueError:
-            self._log.warning('could not parse distances response: {}'.format(response))
+            if self._verbose:
+                self._log.warning('could not parse distances response: {}'.format(response))
             return None
         except Exception as e:
             self._log.error('{} raised parsing distances response: {}'.format(type(e), e))
@@ -140,8 +140,8 @@ class RadiozoaController(I2CMaster, Component):
                 self._log.info('write/read delay: {:.1f}ms → '.format(current_ms)
                         + Fore.GREEN + '{:.1f}ms '.format(new_ms)
                         + Fore.CYAN + '(avg retries: {:.2f})'.format(avg_retries))
-        else:
-            self._log.debug(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
+        elif self._verbose:
+            self._log.info(Style.DIM + 'write/read delay: {:.1f}ms (avg retries: {:.2f})'.format(current_ms, avg_retries))
 
     def get_distances(self):
         '''
@@ -156,7 +156,8 @@ class RadiozoaController(I2CMaster, Component):
                 or response == self.RESPONSE_ACK \
                 or response == self.RESPONSE_ERR:
             if retries >= self._max_retries:
-                self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
+                if self._verbose:
+                    self._log.warning('max retries ({}) exceeded: no valid distances response.'.format(self._max_retries))
                 if self._dynamic_tuning:
                     self._tune_record(self._max_retries)
                 return None

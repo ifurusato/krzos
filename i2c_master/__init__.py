@@ -40,6 +40,7 @@ class I2CMaster:
         self._i2c_bus_id  = i2c_id if i2c_id is not None else self.I2C_BUS_ID
         self._i2c_address = i2c_address if i2c_address is not None else self.I2C_ADDRESS
         self._enabled = False
+        self._verbose = False
         self._timeset = timeset
         self._fail_on_exception = False
         self._delay_sec = self.WRITE_READ_DELAY_MS / 1000
@@ -78,7 +79,8 @@ class I2CMaster:
         if out_msg is None:
             raise ValueError('null message.')
         elif len(out_msg) == 0:
-            self._log.warning('did not send empty message.')
+            if self._verbose:
+                self._log.warning('did not send empty message.')
             return
         # write command to register 0
         msg_with_addr = [0x00] + list(out_msg)
@@ -123,7 +125,7 @@ class I2CMaster:
             finally:
                 # don't repeat too quickly
                 time.sleep(0.05)
-        else:
+        elif self._verbose:
             self._log.warning('cannot send request: disabled.')
 
     def enable(self):

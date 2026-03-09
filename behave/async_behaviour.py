@@ -400,6 +400,7 @@ class AsyncBehaviour(Behaviour):
         if self.enabled:
             self._log.debug("disabling…")
             self.clear_intent_vector()
+            self._remove_intent_vector()
             # stop the loop if it's running
             if self._loop_instance:
                 self._stop_loop()

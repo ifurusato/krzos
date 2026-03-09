@@ -1059,7 +1059,7 @@ class MotorController(Component):
             if self._braking_event.wait(timeout):
                 self._log.info('brake complete.')
             else:
-                self._log.warning('brake timeout after {:4.2f}s'.format(timeout))
+                self._log.warning('🧡 brake timeout after {:4.2f}s'.format(timeout))
         finally:
             if MotorController.BRAKE_LAMBDA_NAME in self._speed_modifiers:
                 self.remove_speed_modifier(MotorController.BRAKE_LAMBDA_NAME)

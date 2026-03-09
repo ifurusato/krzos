@@ -300,7 +300,7 @@ class Scout(AsyncBehaviour):
         # cul de sac: VL53L5CX sees no clear opening; fall back to Radiozoa forward hemisphere
         _in_cul_de_sac = max_open_distance < self._max_distance
         if _in_cul_de_sac and not self._cul_de_sac:
-            self._log.info('😰 in cul de sac')
+            self._log.info(Fore.YELLOW + 'in cul de sac')
             self._cul_de_sac = True
             self.play_sound('buzz') # klang buzz or honk
         elif not _in_cul_de_sac and self._cul_de_sac:
