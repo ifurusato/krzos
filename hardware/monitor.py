@@ -7,31 +7,9 @@
 #
 # author:   Ichiro Furusato
 # created:  2024-07-04
-# modified: 2024-09-04
-#
-# Displays multiple lines of system monitoring data on an OLED display.
-#
-# Derived in part from the sys_info_extended.py example file, part of
-# Luna OLED library, Copyright (c) 2023, Richard Hull and contributors
-#
-# Display detailed system information in graph format, including CPU,
-# memory, disk utilization, temperature, IP address, system Uptime,
-# battery, regulator and Pi 3V3 voltages.
-#
-# Note: there is a check to see if an existing instance of this class
-#       is already running, which actually functions but you will see
-#       horizontal phasing of the image as each driver writes to the
-#       display.
-#
-# Dependencies: psutil:
-#
-#   $ sudo apt-get install python-dev
-#   $ sudo -H pip install psutil
-#
+# modified: 2026-03-09
 
 import os
-#from os import getpid
-#from os.path import exists
 from pathlib import Path
 from datetime import datetime
 from threading import Thread
@@ -45,8 +23,7 @@ init()
 
 from luma.core.render import canvas
 from luma.core.interface.serial import i2c
-#from luma.oled.device import ssd1327 # Zio
-from luma.oled.device import sh1106 # Pimoroni
+from luma.oled.device import sh1106
 from luma.core.error import DeviceNotFoundError
 from PIL import ImageFont
 from ads1015 import ADS1015
@@ -55,25 +32,21 @@ from core.rate import Rate
 from core.util import Util
 from core.logger import Logger, Level
 from core.component import Component
-from hardware.irq_clock import IrqClock
 from hardware.ina260_sensor import Ina260
 
 class Monitor(Component):
     '''
     Displays multiple lines of system monitoring data on an OLED display.
 
-    This sets up its own IRQ "slow clock" for more independence and less
-    potential for interference with the rest of the system.
+    Always uses a daemon thread for updates, keeping it off the IRQ clock
+    to avoid blocking motor control timing.
 
     The Monitor is disabled by default. If the device cannot be found the
-    class will log an error but not otherwise function differently, i.e.,
-    the callback on the IRQ clock won't be set and update() will therefore
-    not be called.
+    class will log an error but not otherwise function differently.
 
     :param: config            the application configuration
-    :param: external_clock    optional external clock for callbacks to update()
-    :param: use_thread        if True, override configuration and use a thread,
-                              overridden if an external clock is supplied.
+    :param: external_clock    ignored; retained for call-site compatibility
+    :param: use_thread        ignored; always uses a thread
     :param: level             the logging level
     '''
     def __init__(self, config, external_clock=None, use_thread=False, level=Level.INFO):
@@ -90,12 +63,11 @@ class Monitor(Component):
         _i2c_address    = _cfg.get('i2c_address')
         _rotate         = _cfg.get('rotate')
         _update_rate_hz = _cfg.get('update_rate_hz')
-        _use_thread     = _cfg.get('use_thread')
-        self._permit_callback = _cfg.get('permit_callback') # setting True introduces message timing issues
-        self._batt_max  = 21.5 # theoretical 18v LiOn battery max
-        self._pi_max    = 5.25 # Pi operating range: 4.75 to 5.25V
-        self._logic_max = 3.5 # 3v3 logic max
-        self._max_current = 5.0 # theoretical maximum current (15A fused)
+        self._permit_callback = _cfg.get('permit_callback')
+        self._batt_max  = 21.5
+        self._pi_max    = 5.25
+        self._logic_max = 3.5
+        self._max_current = 5.0
         self._network_interface_name = None
         self._bar_width       = 52
         self._bar_width_full  = 95
@@ -104,7 +76,7 @@ class Monitor(Component):
         self._margin_x_bar    = 31
         self._margin_x_figure = 83
         self._margin_y_line   = [0, 12, 24, 36, 48, 60, 72, 84, 96, 108]
-        self._margin_y_line_m = [0, 12, 24, 40, 56, 72, 88, 104, 108, 108] # messages start on line 3
+        self._margin_y_line_m = [0, 12, 24, 40, 56, 72, 88, 104, 108, 108]
         _font_size            = _cfg.get('font_size')
         _font_size_full       = _cfg.get('font_size_full')
         _font_size_message    = _cfg.get('font_size_message')
@@ -118,8 +90,7 @@ class Monitor(Component):
         # get device
         self._device = None
         try:
-#           self._device = ssd1327(i2c(port=0, address=0x3C), rotate=1) # Zio
-            self._device = sh1106(i2c(port=_i2c_port, address=_i2c_address), width=128, height=128, rotate=_rotate) # Pimoroni
+            self._device = sh1106(i2c(port=_i2c_port, address=_i2c_address), width=128, height=128, rotate=_rotate)
             self._device.contrast(_contrast)
         except DeviceNotFoundError as e:
             self._log.error('no monitor available: display not found at address 0x{:02X}: {}'.format(_i2c_address, e))
@@ -139,38 +110,21 @@ class Monitor(Component):
         self._ina260 = _component_registry.get('ina260')
         if self._ina260 is None:
             self._ina260 = Ina260(config, level=level)
-
-        self._counter = None
-        self._irq_clock = None
-        if external_clock is not None:
-            # external clock
-            self._log.info('using supplied external clock for update loop.')
-            self.enable()
-            self._counter = itertools.count()
-            external_clock.add_callback(self.update)
-        elif use_thread or _use_thread:
-            # update thread
-            self._log.info('using thread for update loop operating at {:d}Hz.'.format(_update_rate_hz))
-            self._update_loop_thread = Thread(name='update_loop_thread', target=Monitor._update_loop, args=[self], daemon=True)
-            self.enable()
-            self._update_loop_thread.start()
-            self._rate = Rate(_update_rate_hz, level=Level.INFO)
-        else:
-            # IRQ clock
-            self._irq_clock = _component_registry.get('irq-clock')
-            if self._irq_clock is None:
-                self._log.info('using local external clock for update loop.')
-                self._irq_clock = IrqClock(config, level=Level.INFO)
-            else:
-                self._log.info('using external clock from registry for update loop.')
-            self.enable()
-            self._counter = itertools.count()
-            self._irq_clock.add_callback(self.update)
+        # always use a thread; never block the IRQ clock
+        self._log.info('using thread for update loop at {:d}Hz.'.format(_update_rate_hz))
+        self._update_loop_thread = Thread(name='monitor-update', target=Monitor._update_loop, args=[self], daemon=True)
+        self._rate = Rate(_update_rate_hz, level=Level.INFO)
+        self.enable()
+        self._update_loop_thread.start()
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _update_loop(self):
+        try:
+            os.nice(10)
+        except Exception:
+            pass
         while self.enabled:
             self.update()
             self._rate.wait()
@@ -213,26 +167,20 @@ class Monitor(Component):
 
     def find_single_ipv4_address(self, addrs):
         for addr in addrs:
-            if addr.family == socket.AddressFamily.AF_INET:  # IPv4
+            if addr.family == socket.AddressFamily.AF_INET:
                 return addr.address
 
     def get_ipv4_address(self, interface_name=None):
         if_addrs = net_if_addrs()
-
         if isinstance(interface_name, str) and interface_name in if_addrs:
             addrs = if_addrs.get(interface_name)
             address = self.find_single_ipv4_address(addrs)
             return address if isinstance(address, str) else ""
         else:
             if_stats = net_if_stats()
-            # remove loopback
             if_stats_filtered = {key: if_stats[key] for key, stat in if_stats.items() if "loopback" not in stat.flags}
-            # sort interfaces by
-            # 1. Up/Down
-            # 2. Duplex mode (full: 2, half: 1, unknown: 0)
             if_names_sorted = [stat[0] for stat in sorted(if_stats_filtered.items(), key=lambda x: (x[1].isup, x[1].duplex), reverse=True)]
             if_addrs_sorted = OrderedDict((key, if_addrs[key]) for key in if_names_sorted if key in if_addrs)
-
             for _, addrs in if_addrs_sorted.items():
                 address = self.find_single_ipv4_address(addrs)
                 if isinstance(address, str):
@@ -297,10 +245,6 @@ class Monitor(Component):
 
     def update(self):
         if self._device and self.enabled:
-            if self._counter:
-                _count = next(self._counter)
-                if _count % 5 != 0: # clock is 5Hz, we want 1Hz updates
-                    return
             with canvas(self._device) as draw:
                 if self._message is not None:
                     self._display_message(draw)
@@ -406,13 +350,6 @@ class Monitor(Component):
                 # line 9 : uptime ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 line += 1
                 self._draw_text(draw, 0, line, self.get_uptime())
-
-#               # line 9 : timestamp or callback ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-#               line += 1
-#               if self._permit_callback and self.__callback is not None:
-#                   self._draw_text(draw, 0, line, self.get_callback_value())
-#               else:
-#                   self._draw_text(draw, 0, line, self.get_timestamp())
 
     def enable(self):
         if not self.enabled:

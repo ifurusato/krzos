@@ -29,6 +29,7 @@ from hardware.motor_controller import MotorController
 from hardware.usfs import Usfs
 from core.orientation import Orientation
 from hardware.scout_sensor import ScoutSensor
+from hardware.radiozoa_controller import RadiozoaController
 
 class HeadingMode(Enum):
     '''
@@ -114,6 +115,25 @@ class Scout(AsyncBehaviour):
         else:
             self._log.info('using existing Scout sensor.')
         self._max_distance = self._scout_sensor.distance_threshold
+        # radiozoa fallback for cul de sac
+        _rz_cfg = config['kros'].get('behaviour').get('scout')
+        self._radiozoa_weight = _rz_cfg.get('radiozoa_weight', 0.6)
+        self._radiozoa_controller = _component_registry.get(RadiozoaController.NAME)
+        if self._radiozoa_controller is None:
+            self._log.warning('RadiozoaController not available; radiozoa fallback disabled.')
+        else:
+            self._log.info('radiozoa fallback enabled (weight={:.2f}).'.format(self._radiozoa_weight))
+        self._cul_de_sac             = False  # robot it trapped in cul de sac
+        # forward-hemisphere sensors and their angular offsets from north (robot-relative degrees)
+        # weights decrease with angular distance from forward (north)
+        self._rz_forward_sensors = [
+            (Cardinal.NORTHWEST, -45.0, 0.5),
+            (Cardinal.NORTH,       0.0, 1.0),
+            (Cardinal.NORTHEAST,  45.0, 0.5),
+            (Cardinal.WEST,       -90.0, 0.25),
+            (Cardinal.EAST,        90.0, 0.25),
+        ]
+        # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         self._imu = None # only needed for ABSOLUTE mode
         if self._heading_mode == HeadingMode.ABSOLUTE:
             self._imu = _component_registry.get(Usfs.NAME)
@@ -233,7 +253,93 @@ class Scout(AsyncBehaviour):
             case _:
                 raise NotImplementedError("unhandled heading mode: {}".format(self._heading_mode))
 
+    def _get_radiozoa_offset(self):
+        '''
+        Derive a heading offset in degrees from the forward-hemisphere Radiozoa
+        sensors (N, NE, NW, E, W). Sensors are weighted by proximity to the
+        forward axis; the most open direction produces a positive (starboard)
+        or negative (port) offset. Returns 0.0 if distances are unavailable.
+        '''
+        if self._radiozoa_controller is None:
+            return 0.0
+        distances = self._radiozoa_controller.last_distances
+        if distances is None:
+            return 0.0
+        far = RadiozoaController.FAR_THRESHOLD
+        weighted_angle = 0.0
+        total_weight   = 0.0
+        for cardinal, angle_deg, axis_weight in self._rz_forward_sensors:
+            d = distances[cardinal.id]
+            if d is None or d <= 0:
+                d = far
+            d = min(d, far)
+            # openness: 0.0 at range=0, 1.0 at FAR_THRESHOLD
+            openness = d / far
+            w = openness * axis_weight
+            weighted_angle += angle_deg * w
+            total_weight   += axis_weight  # normalise by axis weight, not openness
+        if total_weight == 0.0:
+            return 0.0
+        return weighted_angle / total_weight
+
     def _update_intent_vector_relative(self):
+        '''
+        RELATIVE mode: sensor-reactive rotation toward most open direction.
+        Uses odometry to track actual heading, steers based on ScoutSensor offset.
+
+        Returns (vx, vy, omega) tuple.
+        '''
+        # track heading before update
+        previous_heading = self._heading_degrees
+        # update actual heading from motor encoders (odometry)
+        self._update_heading_from_encoders()
+        # calculate how much we actually rotated
+        actual_rotation = (self._heading_degrees - previous_heading + 180.0) % 360.0 - 180.0
+        # get exploration guidance from ScoutSensor (get this early so it's available)
+        scout_offset, max_open_distance = self._scout_sensor.get_heading_offset()
+        # cul de sac: VL53L5CX sees no clear opening; fall back to Radiozoa forward hemisphere
+        _in_cul_de_sac = max_open_distance < self._max_distance
+        if _in_cul_de_sac and not self._cul_de_sac:
+            self._log.info('😰 in cul de sac')
+            self._cul_de_sac = True
+            self.play_sound('buzz') # klang buzz or honk
+        elif not _in_cul_de_sac and self._cul_de_sac:
+            self._cul_de_sac = False
+        if _in_cul_de_sac and self._radiozoa_controller is not None:
+            _rz_offset = self._get_radiozoa_offset()
+            _sensor_offset = _rz_offset * self._radiozoa_weight
+        else:
+            _sensor_offset = scout_offset
+        # consume rotation from target offset only if there was a meaningful target to consume
+        if abs(self._target_relative_offset) > 2.0:  # threshold above noise
+            self._target_relative_offset -= actual_rotation
+            # normalize
+            if self._target_relative_offset > 180:
+                self._target_relative_offset -= 360
+            elif self._target_relative_offset < -180:
+                self._target_relative_offset += 360
+        else:
+            # near zero - clamp to exactly zero to prevent accumulation from sensor offset affecting it
+            self._target_relative_offset = 0.0
+        # error is simply the sum of both inputs
+        error = self._target_relative_offset + _sensor_offset
+        # normalize
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+        # calculate omega
+        omega = self._calculate_omega(error, max_open_distance)
+        vx = 0.0
+        vy = 0.0
+        if self._verbose:
+            self._log.info("RELATIVE[{}]: target_offset={:+.2f}°; sensor_offset={:+.2f}°; error={:+.2f}°; actual_rot={:+.2f}°; max_open={:.0f}mm; priority={:.2f}; omega={:.3f}".format(
+                'RZ' if _in_cul_de_sac and self._radiozoa_controller is not None else 'SC',
+                self._target_relative_offset, _sensor_offset, error, actual_rotation, max_open_distance, self.priority, omega))
+            self._display_info('RELATIVE', vx, vy, omega)
+        return (vx, vy, omega)
+
+    def x_update_intent_vector_relative(self):
         '''
         RELATIVE mode: sensor-reactive rotation toward most open direction.
         Uses odometry to track actual heading, steers based on ScoutSensor offset.

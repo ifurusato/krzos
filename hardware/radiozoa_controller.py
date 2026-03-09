@@ -37,6 +37,7 @@ class RadiozoaController(I2CMaster, Component):
     '''
     def __init__(self, config=None, level=Level.INFO):
         self._cwd = os.getcwd()
+        print('RadiozoaController 🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡🧡')
         if config is None:
             raise ValueError('no config provided.')
         self._log = Logger(RadiozoaController.NAME, level=level)

@@ -78,6 +78,7 @@ class Avoid(AsyncBehaviour):
         self._priority             = self._default_priority
         self._verbose              = _cfg.get('verbose', False)
         self._squeezed = False
+        self._roam = None
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -262,6 +263,12 @@ class Avoid(AsyncBehaviour):
 
     def enable(self):
         if not self.enabled:
+            for _behaviour in self._behaviour_manager.get_behaviours():
+                if _behaviour.name == 'roam':
+                    self._roam = _behaviour
+                    break
+            if self._roam is None:
+                self._log.warning('roam behaviour not found.')
             self._port_sensor.enable()
             self._stbd_sensor.enable()
             if self._fore_sensor:

@@ -94,7 +94,7 @@ class Behaviour(ABC, Subscriber):
         if self._enable_sound_fx:
             Player.play(name)
         else:
-            self._log.info(Style>DIM + 'play: {} (suppressed)'.format(name))
+            self._log.info(Style.DIM + 'play: {} (suppressed)'.format(name))
 
     @abstractmethod
     def execute(self, message):

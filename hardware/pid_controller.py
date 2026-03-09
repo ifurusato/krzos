@@ -50,6 +50,8 @@ class PIDController(Component):
         self._log = Logger('pid-ctrl:{}'.format(self._orientation.label), level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
         self._counter = itertools.count() # TEMP
+        _motor_cfg = config['kros'].get('motor')
+        self._scale_factor_closed = _motor_cfg.get('scale_factor_closed')
         # PID configuration
         _cfg = config['kros'].get('motor').get('pid_controller')
         _kp         = _cfg.get('kp') # proportional gain
@@ -203,8 +205,12 @@ class PIDController(Component):
                 self._last_velocity = 0.0
         self._pid.target = self._velocity
         _error = self._pid.setpoint - self._pid.target
+
+        _feed_forward = target_speed / self._scale_factor_closed
         _pid_output = self._pid()
-        _motor_power = _pid_output
+#       _motor_power = _pid_output
+        _motor_power = _feed_forward + _pid_output
+
         # clamp to configured limits (redundant with PID's own limits, but safe)
         _motor_power = max(-1.0, min(1.0, _motor_power))
         self._motor.set_motor_power(_motor_power)

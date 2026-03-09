@@ -63,6 +63,7 @@ class Radiozoa(AsyncBehaviour):
         self._priority          = _cfg.get('default_priority', 0.4)
         self._deadband          = _cfg.get('deadband', 0.275)
         self._verbose           = _cfg.get('verbose', False)
+        self._active_range_mm   =_cfg.get('active_range_mm', 800)
         self._use_color  = True # on console messages
         self._min_distance_mm   = 20  # likely minimum distance for radiozoa sensor
         # directional vectors
@@ -193,7 +194,6 @@ class Radiozoa(AsyncBehaviour):
             if d is not None and d < self._min_distance_mm:
                 self._log.warning('impossibly close reading from {} sensor: {}mm'.format(Cardinal.from_index(i).label, d))
                 return (0.0, 0.0, 0.0)
-        far_threshold = RadiozoaController.FAR_THRESHOLD * 0.95
         force_vec = np.zeros(2)
         pair_active = False
         max_imbalance = 0.0  # track worst imbalance for priority
@@ -209,7 +209,7 @@ class Radiozoa(AsyncBehaviour):
             # track closest obstacle across all sensors
             min_distance = min(min_distance, d1, d2)
             # both sensors out of range - ignore this pair
-            if d1 >= far_threshold and d2 >= far_threshold:
+            if d1 >= self._active_range_mm and d2 >= self._active_range_mm:
                 continue
             diff = abs(d1 - d2)
             # track maximum imbalance for priority calculation
@@ -241,9 +241,15 @@ class Radiozoa(AsyncBehaviour):
             imbalance_urgency = min(1.0, (max_imbalance - self._min_sensor_diff) / (RadiozoaController.FAR_THRESHOLD - self._min_sensor_diff))
         else:
             imbalance_urgency = 0.0
-        # proximity urgency: normalized from FAR_THRESHOLD (0.0) to 0mm (1.0)
-        if min_distance < RadiozoaController.FAR_THRESHOLD:
-            proximity_urgency = 1.0 - (min_distance / RadiozoaController.FAR_THRESHOLD)
+#       # proximity urgency: normalized from FAR_THRESHOLD (0.0) to 0mm (1.0)
+#       if min_distance < RadiozoaController.FAR_THRESHOLD:
+#           proximity_urgency = 1.0 - (min_distance / RadiozoaController.FAR_THRESHOLD)
+#       else:
+#           proximity_urgency = 0.0
+        # proximity urgency: normalized from close_threshold (0.0) to 0mm (1.0)
+        _proximity_threshold = 800.0  # mm; beyond this distance proximity has no urgency
+        if min_distance < _proximity_threshold:
+            proximity_urgency = 1.0 - (min_distance / _proximity_threshold)
         else:
             proximity_urgency = 0.0
         # priority formula: scales from 0.4 (gentle guidance) to 1.0 (critical avoidance)
@@ -253,7 +259,7 @@ class Radiozoa(AsyncBehaviour):
         # apply output scaling to prevent overwhelming other behaviors
         vx_scaled = vx * amplitude * self._output_scale
         vy_scaled = vy * amplitude * self._output_scale
-        if abs(vx_scaled) > 0.4 or abs(vy_scaled) > 0.4:
+        if abs(vx_scaled) > (self._default_speed * self._output_scale) or abs(vy_scaled) > (self._default_speed * self._output_scale):
             self._log.warning('large intent vector: vx={:.3f}, vy={:.3f}, priority={:.3f}, max_imbal={:.1f}mm, min_dist={:.1f}mm'.format(
                 vx_scaled, vy_scaled, self._priority, max_imbalance, min_distance))
         if self._verbose:
