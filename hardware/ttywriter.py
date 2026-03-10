@@ -57,7 +57,7 @@ class TtyWriter(Component):
         Write text to the console. Interprets literal '\\n' as newlines.
         Optionally colorise keywords.
         '''
-        self._log.info("write: '{}'".format(text))
+        self._log.debug("write: '{}'".format(text))
         if not isinstance(text, str):
             text = str(text)
         text = text.replace('\\n', '\n')

@@ -292,24 +292,25 @@ class Odometer(Component):
             if (_dx * _dx + _dy * _dy) >= (self._pose_delta_mm * self._pose_delta_mm):
                 self._last_printed_x = self._x
                 self._last_printed_y = self._y
-                self._print_pose_to_tty()
+                self._print_pose_to_tty(_dx, _dy)
 
-    def _print_pose_to_tty(self):
+    def _print_pose_to_tty(self, dx, dy):
         '''
-        prints the current pose to the tty console via TtyWriter.
+        Prints the current pose to the tty console via TtyWriter.
         '''
-        if self._ttywriter is None:
+        if not self.enabled or self._ttywriter is None:
             return
         _deg = degrees(self._theta)
         _rad_pi = self._theta / π
-        # heading direction from current theta
         _heading_cardinal = Cardinal.get_heading_from_degrees(_deg % 360.0)
-        # travel direction from last printed pose to current
-        _dx = self._x - self._last_printed_x
-        _dy = self._y - self._last_printed_y
-        _travel_angle_deg = degrees(atan2(_dy, _dx))   # east=0, north=90
-        _compass_deg = (90.0 - _travel_angle_deg) % 360.0  # north=0, clockwise
+        _travel_angle_deg = degrees(atan2(dy, dx))
+        _compass_deg = (90.0 - _travel_angle_deg) % 360.0
         _travel_cardinal = Cardinal.get_heading_from_degrees(_compass_deg)
+        self._log.info('pose: ' + Fore.GREEN + '{} '.format(_travel_cardinal.abbrev)
+                + Fore.CYAN + '; x: ' + Fore.YELLOW + '{:7.2f}mm '.format(self._x)
+                + Fore.CYAN + 'y: ' + Fore.YELLOW + '{:7.2f}mm '.format(self._y)
+                + Fore.CYAN + 'theta: ' + Fore.YELLOW + '{:.3f}π ({:.1f}°) '.format(_rad_pi, _deg)
+                + Fore.GREEN + '{}'.format(_heading_cardinal.abbrev))
         self._ttywriter.write(
             'CYAN pose: GREEN {}\nCYAN   x:YELLOW      {:7.2f}mm\nCYAN   y:YELLOW      {:7.2f}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°) GREEN {}'.format(
                 _travel_cardinal.abbrev, self._x, self._y, _rad_pi, _deg, _heading_cardinal.abbrev),

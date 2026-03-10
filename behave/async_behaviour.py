@@ -52,6 +52,7 @@ class AsyncBehaviour(Behaviour):
         _ramp_down_duration_sec = _cfg.get('ramp_down_duration_sec', 1.0)
         self._ramp_down_step = 1.0 / (_ramp_down_duration_sec / self._poll_delay_sec) if _ramp_down_duration_sec > 0 else 1.0
         self._log.info("blind mode ramp down step: {:.4f}".format(self._ramp_down_step))
+        self._balanced_braking = True # if True, attempt to brake in a straight line
         # state flags
         self._intent_vector     = (0.0, 0.0, 0.0)
         self._use_dynamic_priority = False
@@ -400,7 +401,8 @@ class AsyncBehaviour(Behaviour):
         if self.enabled:
             self._log.debug("disabling…")
             self.clear_intent_vector()
-            self._remove_intent_vector()
+            if not self._balanced_braking:
+                self._remove_intent_vector()
             # stop the loop if it's running
             if self._loop_instance:
                 self._stop_loop()
@@ -416,6 +418,8 @@ class AsyncBehaviour(Behaviour):
         if not self.closed:
             if self._data_log:
                 self._data_log.data("END")
+            if self._balanced_braking:
+                self._remove_intent_vector()
                 # note: it's not up to us to close the shared data logger
             super().close()
             self._log.debug('closed.')

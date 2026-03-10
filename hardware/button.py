@@ -106,15 +106,17 @@ class Button(Component):
         if self._button is None:
             return False
         self._log.info("performing gpiozero cleanup…")
-        # clear callbacks first to prevent new events
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=CallbackSetToNone)
-            if self._button.when_pressed is not None:
-                self._button.when_pressed = None
-            if self._button.when_released is not None:
-                self._button.when_released = None
+            try:
+                if self._button.when_pressed is not None:
+                    self._button.when_pressed = None
+                if self._button.when_released is not None:
+                    self._button.when_released = None
+            except Exception as e:
+                self._log.debug('{} raised clearing button callbacks: {}'.format(type(e), e))
         # delay to let pending callbacks complete
-        time.sleep(0.05)
+        time.sleep(0.2)
         try:
             self._button.close()
             if self._button.closed:
