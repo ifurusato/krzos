@@ -52,6 +52,9 @@ from core.component import Component
 
 class Odometer(Component):
     NAME = 'odometer'
+    ARROWS   = '🡩🡭🡪🡫🡯🡨🡬'  # order: N NE E SE S SW W NW
+    M_ARROWS = '🡱🡵🡲🡶🡳🡷🡰🡴'
+    H_ARROWS = '🡹🡽🡺🡾🡻🡿🡸🡼'
     '''
     Computes robot velocity and pose (odometry) from the step counts of all
     four drive motors on a Mecanum robot.
