@@ -214,7 +214,7 @@ class DistanceSensor(Component):
                     for warning in w:
                         msg = Util.ellipsis('{}'.format(warning.message), 33)
                         self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
-                    GPIO.cleanup()
+#                   GPIO.cleanup()
                 super().disable()
             except Exception as e:
                 self._log.error('{} raised disabling distance sensor: {}\n{}'.format(type(e), e, traceback.format_exc()))

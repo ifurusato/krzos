@@ -19,6 +19,7 @@ init()
 
 from core.component import Component
 from core.logger import Logger, Level
+from hardware.backlight import Backlight
 
 class TtyWriter(Component):
     NAME = 'tty-writer'
@@ -45,7 +46,10 @@ class TtyWriter(Component):
         self._log = Logger(TtyWriter.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._tty = tty
+        self._backlight = Backlight()
         self._mode = 'a' if append else 'w'
+        self.clear()
+        self._backlight.on()
         self._log.info('ready.')
 
     def write(self, text, colorise=False):
@@ -82,6 +86,10 @@ class TtyWriter(Component):
 
     def clear(self):
         self.exec('clear')
+
+    def close(self):
+        self._backlight.off()
+        super().close()
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 

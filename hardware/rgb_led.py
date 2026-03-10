@@ -122,7 +122,10 @@ class RGBLED:
         self.led_r_pwm.stop()
         self.led_g_pwm.stop()
         self.led_b_pwm.stop()
-        GPIO.cleanup()
+#       GPIO.cleanup()
+        GPIO.cleanup(self.LED_R)
+        GPIO.cleanup(self.LED_G)
+        GPIO.cleanup(self.LED_B)
 
     def close(self):
         self.cleanup()

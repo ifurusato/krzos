@@ -103,6 +103,7 @@ class KROS(Component, FiniteStateMachine):
         # components…
         self._config              = None
         self._component_registry  = None
+        self._ttywriter           = None
         self._system              = None
         self._message_bus         = None
         self._message_factory     = None
