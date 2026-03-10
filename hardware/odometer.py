@@ -100,9 +100,10 @@ class Odometer(Component):
             self._ttywriter = TtyWriter(append=True)
         # obtain geometry from config (use 'kros.geometry')
         _odo_cfg = config['kros'].get('hardware').get('odometer')
-        _initial_x       = _odo_cfg.get('initial_x')       # starting x position (mm), e.g., 100mm east of west edge
-        _initial_y       = _odo_cfg.get('initial_y')       # starting y position (mm), e.g., 200mm north of south edge
-        _initial_heading = _odo_cfg.get('initial_heading') # starting heading in degrees (where 0° is north)
+        _initial_x            = _odo_cfg.get('initial_x')       # starting x position (mm), e.g., 100mm east of west edge
+        _initial_y            = _odo_cfg.get('initial_y')       # starting y position (mm), e.g., 200mm north of south edge
+        _initial_heading      = _odo_cfg.get('initial_heading') # starting heading in degrees (where 0° is north)
+        self._pose_delta_mm   = _odo_cfg.get('pose_delta_mm')   # how far to travel before posting pose to the console
         self.set_pose(_initial_x, _initial_y, _initial_heading, use_radians=False)
         # derived geometry in mm
         self._wheel_radius_mm = self._wheel_diameter_mm / 2.0

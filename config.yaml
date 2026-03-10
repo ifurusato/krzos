@@ -341,6 +341,7 @@ kros:
             initial_x:                     2685            # starting x position (mm), e.g., 100mm east of west edge
             initial_y:                     6635            # starting y position (mm), e.g., 200mm north of south edge
             initial_heading:                 90            # starting heading in degrees (where 0° is north)
+            pose_delta_mm:                  100            # how far to travel before posting a pose to the console?
         depth_camera:
             preset_mode:              'ROBOTICS'           # preset depth camera mode
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)
