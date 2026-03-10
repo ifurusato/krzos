@@ -7,12 +7,13 @@
 #
 # author:   Ichiro Furusato
 # created:  2024-05-22
-# modified: 2025-11-23
+# modified: 2026-03-10
 
-import traceback
-import time
-import warnings
 import sys
+import time
+import traceback
+import warnings
+from threading import Thread
 from gpiozero import Button as GpioZeroButton
 from gpiozero.exc import CallbackSetToNone
 from colorama import init, Fore, Style
@@ -86,7 +87,7 @@ class Button(Component):
         '''
         for callback in self._callbacks:
             try:
-                callback()
+                Thread(target=callback, daemon=True).start()
             except Exception as e:
                 self._log.error('error in button callback: {}'.format(e))
 

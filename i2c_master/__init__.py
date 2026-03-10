@@ -118,7 +118,8 @@ class I2CMaster:
             except OSError as e:
                 raise
             except Exception as e:
-                self._log.error('{} raised by send request: {}'.format(type(e), e))
+                if self._verbose:
+                    self._log.error('{} raised by send request: {}'.format(type(e), e))
                 if self._fail_on_exception:
                     raise
                 return None

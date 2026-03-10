@@ -102,6 +102,7 @@ class Odometer(Component):
         _initial_y            = _odo_cfg.get('initial_y')       # starting y position (mm), e.g., 200mm north of south edge
         _initial_heading      = _odo_cfg.get('initial_heading') # starting heading in degrees (where 0° is north)
         self._pose_delta_mm   = _odo_cfg.get('pose_delta_mm')   # how far to travel before posting pose to the console
+        self._invert_omega    = _odo_cfg.get('invert_omega', False) # if True, invert the omega sign
         self._last_printed_x  = 0.0
         self._last_printed_y  = 0.0
         self.set_pose(_initial_x, _initial_y, _initial_heading, use_radians=False)
@@ -263,6 +264,8 @@ class Odometer(Component):
             vx = (d_pfwd - d_sfwd - d_paft + d_saft) / 4.0 / dt   # lateral (starboard+)
             vy = (d_pfwd + d_sfwd + d_paft + d_saft) / 4.0 / dt   # longitudinal (forward+)
             omega = (d_pfwd - d_sfwd + d_paft - d_saft) / (4.0 * ((self._wheel_base_mm + self._wheel_track_mm) / 2.0)) / dt
+            if self._invert_omega:
+                omega = -omega
             # store body frame velocities
             self._vx = vx
             self._vy = vy

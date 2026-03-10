@@ -395,7 +395,8 @@ class Thoughts(Behaviour):
 
                     elif self._sleeping: # sleeping ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                         if self._count % self._snore_rate == 0: # every n seconds, snore
-                            self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(self._count))
+                            if self._verbose:
+                                self._log.info(Fore.BLUE + Style.DIM + 'still sleeping… [{}]'.format(self._count))
                             self._snore_count += 1
                             if self._snore_count < self._snore_limit:
                                 self.play_sound('snore')

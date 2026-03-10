@@ -7,8 +7,9 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-10-09
-# modified: 2025-09-14
+# modified: 2026-03-10
 
+import time
 import itertools
 from datetime import datetime as dt
 from colorama import init, Fore, Style
@@ -137,13 +138,20 @@ class IrqClock(Component):
         try:
             self._log.info('closing IRQ clock…')
             if self._input:
+                # clear callback first to prevent collision with in-flight lgpio events
+                try:
+                    if self._use_leading_edge:
+                        self._input.when_activated = None
+                    else:
+                        self._input.when_deactivated = None
+                except Exception as e:
+                    self._log.debug('{} raised clearing IRQ clock callback: {}'.format(type(e), e))
+                time.sleep(0.2)
                 self._input.close()
             self._log.info('IRQ clock closed.')
         except Exception as e:
             if self._log.level == Level.DEBUG:
-                # log but don't raise - we're shutting down anyway
-                self._log.debug('error closing gpiozero Button: {}'.format(e))
-                self._log.debug(traceback.format_exc())
+                self._log.debug('error closing IRQ clock: {}'.format(e))
         Component.close(self)
         self._log.info('closed.')
 

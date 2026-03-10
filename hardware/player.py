@@ -87,7 +87,8 @@ class Player(Component):
 
         :param name: the sound name to play
         '''
-        self._log.info('play: ' + Fore.GREEN + '{}'.format(name))
+        if self._verbose:
+            self._log.info('play: ' + Fore.GREEN + '{}'.format(name))
         response = self._tinyfx_controller.play(name)
         if self._verbose:
             if response == 'OK':
