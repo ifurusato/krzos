@@ -174,18 +174,19 @@ class Odometer(Component):
             for callback in self.__callbacks:
                 callback()
 
-    def set_pose(self, x, y, theta):
+    def set_pose(self, x, y, theta, use_radians=True):
         '''
         Set the robot's pose to a specific position and heading.
         Used for initialisation or correcting odometry from an external fix.
 
-        :param x:     lateral position in mm
-        :param y:     longitudinal position in mm
-        :param theta: heading in radians
+        :param x:            lateral position in mm
+        :param y:            longitudinal position in mm
+        :param theta:        heading in radians (default)
+        :param use_radians:  if False use degrees; default True
         '''
         self._x = x
         self._y = y
-        self._theta = theta
+        self._theta = theta if use_radians else math.radians(theta)
         self._log.info('pose set to: x={:.2f}mm, y={:.2f}mm, theta={:.2f}rad ({:.1f}°)'.format(
             x, y, theta, degrees(theta)))
 

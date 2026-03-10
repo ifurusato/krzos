@@ -41,7 +41,7 @@ class RadiozoaController(I2CMaster, Component):
             raise ValueError('no config provided.')
         self._log = Logger(RadiozoaController.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-        _cfg         = config['kros']['hardware']['radiozoa-controller']
+        _cfg         = config['kros']['hardware']['radiozoa_controller']
         _i2c_bus_id  = _cfg.get('i2c_bus_id')
         _i2c_address = _cfg.get('i2c_address')
         _timeset     = _cfg.get('timeset', True)

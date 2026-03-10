@@ -23,6 +23,8 @@ import traceback
 import argparse
 import itertools
 import atexit
+import datetime as dt
+from threading import Thread
 from pathlib import Path
 from colorama import init, Fore, Style
 init()
@@ -54,6 +56,7 @@ from hardware.compass_encoder import CompassEncoder
 from hardware.digital_pot import DigitalPotentiometer
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController, RotationPhase
+from hardware.ttywriter import TtyWriter
 from hardware.player import Player
 from hardware.system import System
 from hardware.usfs import Usfs
@@ -215,6 +218,10 @@ class KROS(Component, FiniteStateMachine):
 
         # create components
 
+        self._ttywriter = TtyWriter(append=True)
+        self._ttywriter.clear()
+        self._ttywriter.write('CYAN starting…', colorise=True)
+
         self._component_registry = Component.get_registry()
         if self._component_registry is None:
             raise ValueError('no component registry available.')
@@ -344,6 +351,7 @@ class KROS(Component, FiniteStateMachine):
         arbitrator, controller, enables the set of components such as the motor
         controller, rotation controller, IMUs, then starts the main OS loop.
         '''
+        self._start_time = dt.datetime.now()
         if self._started:
             self._log.warning('already started.')
             # could toggle callback on pushbutton?
@@ -402,6 +410,7 @@ class KROS(Component, FiniteStateMachine):
         # now in main application loop until quit or Ctrl-C…
         self._message_bus.add_callback_on_start(self.started)
         self._started = True
+        self._ttywriter.write('CYAN started.', colorise=True)
         self._log.info('enabling message bus…')
         self._message_bus.enable()
         # that blocks so we never get here until the end…
@@ -467,15 +476,14 @@ class KROS(Component, FiniteStateMachine):
         This halts any motor activity, demands a sudden halt of all tasks,
         then shuts down the OS.
         '''
+        self._ttywriter.write('CYAN shutting down…', colorise=True)
         try:
-            Player.play('woow')
             if self._button:
                 self._button.close()
                 self._button = None
             self._log.info(Fore.WHITE + Style.BRIGHT + 'shutting down…')
-            if self._data_log:
-                self._data_log.data('SHUTDOWN')
-            self.close()
+#           self.close()
+            Thread(target=self.close, daemon=True, name='shutdown-thread').start()
             self._fake_logger_info('shutdown complete.', color=Fore.WHITE+Style.BRIGHT)
         except Exception as e:
             self._fake_logger_info('ERROR: {} raised shutting down: {}'.format(type(e), e), color=Fore.RED)
@@ -506,7 +514,7 @@ class KROS(Component, FiniteStateMachine):
         '''
         if self._tinyfx: # turn off all lights
             if self._tinyfx.enabled:
-                self._log.info(Fore.YELLOW + 'tinyfx signing off…')
+                self._log.info('disconnecting tinyfx…')
                 self._tinyfx.play('cricket')
                 time.sleep(0.334)
             else:
@@ -535,9 +543,13 @@ class KROS(Component, FiniteStateMachine):
         elif self.closing:
             self._log.warning('already closing.')
         else:
+            self._ttywriter.write('CYAN closing…', colorise=True)
+            Player.play('woow')
             try:
                 self._closing = True
                 self._log.info('closing…')
+                if self._data_log:
+                    self._data_log.data('SHUTDOWN')
                 if self._behaviour_manager:
                     self._behaviour_manager.close()
                 if self._gamepad_enabled:
@@ -600,7 +612,10 @@ class KROS(Component, FiniteStateMachine):
                 super().close() # will call disable()
                 FiniteStateMachine.close(self)
                 self._log.info('1/3. kros close.')
+                self._ttywriter.write('CYAN closing message bus…', colorise=True)
                 self._log.info('closing the message bus…')
+                _elapsed = int((dt.datetime.now() - self._start_time).total_seconds())
+                self._ttywriter.write("CYAN closed: YELLOW {:02d}:{:02d}:{:02d} CYAN elapsed".format(_elapsed//3600, (_elapsed%3600)//60, _elapsed%60), colorise=True)
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
                     self._message_bus.close()
@@ -608,9 +623,11 @@ class KROS(Component, FiniteStateMachine):
                 else:
                     self._log.warning('message bus not closed.')
                 self._log.info('2/3. kros close.')
+
             except Exception as e:
                 print(Fore.RED + 'error closing application: {}\n{}'.format(e, traceback.format_exc()) + Style.RESET_ALL)
             finally:
+#               self._ttywriter.clear()
                 self._fake_logger_info('3/3. kros close.')
                 self._closing = False
 

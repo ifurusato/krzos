@@ -15,8 +15,13 @@ import subprocess
 import argparse
 import time
 from colorama import init, Fore, Style
+init()
 
-class TtyWriter:
+from core.component import Component
+from core.logger import Logger, Level
+
+class TtyWriter(Component):
+    NAME = 'tty-writer'
     # mapping of keywords to colorama Fore colors
     COLOR_MAP = {
         "BLACK":   Fore.BLACK,
@@ -32,23 +37,23 @@ class TtyWriter:
         "BRIGHT":  Style.BRIGHT,
         "RESET":   Style.RESET_ALL
     }
-    _colorama_initialized = False
 
-    def __init__(self, tty='/dev/tty1', append=False):
+    def __init__(self, tty='/dev/tty1', append=False, level=Level.INFO):
         '''
         Initialize the TtyWriter with the console device.
         '''
-        self.tty = tty
-        self.append = append
-        if not TtyWriter._colorama_initialized:
-            init() # initialize colorama
-            TtyWriter._colorama_initialized = True
+        self._log = Logger(TtyWriter.NAME, level=level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
+        self._tty = tty
+        self._mode = 'a' if append else 'w'
+        self._log.info('ready.')
 
     def write(self, text, colorise=False):
         '''
         Write text to the console. Interprets literal '\\n' as newlines.
         Optionally colorise keywords.
         '''
+        self._log.info("write: '{}'".format(text))
         if not isinstance(text, str):
             text = str(text)
         text = text.replace('\\n', '\n')
@@ -61,24 +66,27 @@ class TtyWriter:
             text = re.sub(pattern, repl, text)
             # each line must end with a reset
             text = '\n'.join(line + Style.RESET_ALL for line in text.splitlines())
-        mode = 'a' if self.append else 'w'
-        with open(self.tty, mode) as f:
+        with open(self._tty, self._mode) as f:
             f.write(text + '\n')
 
     def exec(self, cmd):
         '''
         Execute a shell command and send its output to the console.
         '''
-        mode = 'a' if self.append else 'w'
-        with open(self.tty, mode) as f:
+        self._log.info("exec: '{}'".format(cmd))
+        with open(self._tty, self._mode) as f:
             try:
                 subprocess.run(cmd, shell=True, stdout=f, stderr=f, check=True)
             except subprocess.CalledProcessError as e:
                 f.write("command failed with exit code {}\n".format(e.returncode))
 
+    def clear(self):
+        self.exec('clear')
+
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 def main():
+
     parser = argparse.ArgumentParser(
         description="write text or execute commands on a console (/dev/tty1)."
     )
@@ -117,7 +125,7 @@ def main():
         ttywriter = TtyWriter(append=args.append)
         # clear console if requested
         if args.clear:
-            ttywriter.exec('clear')
+            ttywriter.clear()
         if args.ip:
             cmd = "ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'"
             ttywriter.exec(cmd)

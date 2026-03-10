@@ -28,6 +28,7 @@ from behave.async_behaviour import AsyncBehaviour
 from behave.idle import Idle
 from behave.behaviour import Behaviour
 from hardware.toggle_config import ToggleConfig
+from hardware.ttywriter import TtyWriter
 
 class BehaviourManager(Subscriber):
     NAME='behave-mgr'
@@ -71,12 +72,21 @@ class BehaviourManager(Subscriber):
         self._configured_behaviour_names = list(self._config['kros']['behaviour'].keys())
         # toggle configuration
         self._released_by_toggle = {}
-        _component_registry = Component.get_registry()
-        self._toggle_config = _component_registry.get(ToggleConfig.NAME)
-        self._find_behaviours(_component_registry)
+        _registry = Component.get_registry()
+        self._ttywriter = _registry.get(TtyWriter.NAME)
+        if self._ttywriter is None:
+            self._ttywriter = TtyWriter(append=True)
+        self._toggle_config = _registry.get(ToggleConfig.NAME)
+        self._find_behaviours(_registry)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def console(self, message):
+        '''
+        Write the message to the tty1 console.
+        '''
+        self._ttywriter.write(message, colorise=True)
 
     def is_released_by_toggle(self, name):
         '''
@@ -153,8 +163,10 @@ class BehaviourManager(Subscriber):
         behaviours = self.get_behaviours()
         if len(behaviours) > 0:
             self._log.info("registered {} behaviour{}:".format(len(behaviours), '' if len(behaviours) == 1 else 's'))
+            self.console("CYAN registered {} behaviour{}:".format(len(behaviours), '' if len(behaviours) == 1 else 's'))
             for _behaviour in behaviours:
                 self._log.info('   behaviour: ' + Fore.GREEN + '{}'.format(_behaviour.name))
+                self.console('CYAN   behaviour: YELLOW {}'.format(_behaviour.name))
 
     def start(self):
         '''

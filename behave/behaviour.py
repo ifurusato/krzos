@@ -21,6 +21,7 @@ from core.message_bus import MessageBus
 from core.message_factory import MessageFactory
 from core.subscriber import Subscriber
 from hardware.player import Player
+from hardware.ttywriter import TtyWriter
 
 class Behaviour(ABC, Subscriber):
     NAME = 'behaviour'
@@ -42,9 +43,13 @@ class Behaviour(ABC, Subscriber):
         if not isinstance(message_factory, MessageFactory):
             raise ValueError('expected MessageFactory, not {}.'.format(type(message_factory)))
         self._message_factory = message_factory
-        # get instance of BehaviourManager
-        self._behaviour_manager = Component.get_registry().get('behave-mgr') # hard-coded to avoid circular ref
-        self._enable_sound_fx    = False
+        # get instance of BehaviourManager and TtyWriter
+        _registry = Component.get_registry()
+        self._behaviour_manager = _registry.get('behave-mgr') # hard-coded to avoid circular ref
+        self._enable_sound_fx   = False
+        self._ttywriter = _registry.get(TtyWriter.NAME)
+        if self._ttywriter is None:
+            self._ttywriter = TtyWriter(append=True)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -56,6 +61,12 @@ class Behaviour(ABC, Subscriber):
     @property
     def message_factory(self):
         return self._message_factory
+
+    def console(self, message):
+        '''
+        Write the message to the tty1 console.
+        '''
+        self._ttywriter.write(message, colorise=True)
 
     def is_released_by_toggle(self):
         '''
