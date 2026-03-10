@@ -7,28 +7,29 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-03-09
-# modified: 2026-03-11
-# 
+# modified: 2026-03-10
+#
 # Interactive CLI for querying the Floorplan model.
-# 
+#
 # Usage:
-#     python floorplan_test.py <svg_file> <yaml_file>
-# 
+#     python floorplan_cli.py <svg_file> <yaml_file>
+#
 # Example:
-#     python floorplan_test.py floorplan-v7.svg floorplan.yaml
+#     python floorplan_cli.py floorplan.svg floorplan.yaml
 #
 
 import sys
-from floorplan import Floorplan, RoomResult, DoorResult, LandmarkResult
+from floorplan import Floorplan, RoomResult, DoorResult, LandmarkResult, SVGParser
 
 def format_result(result) -> str:
     if isinstance(result, RoomResult):
-        b = result.bounds
+        bb = result.bbox
         lines = [
             "Room:    {}".format(result.id),
-            "Bounds:  x {}..{}  y {}..{}".format(b.xmin, b.xmax, b.ymin, b.ymax),
-            "Centre:  {}, {}".format(b.centre.x, b.centre.y),
-            "Size:    {} x {} mm".format(b.width, b.height),
+            "Bounds:  x {}..{}  y {}..{}".format(bb.xmin, bb.xmax, bb.ymin, bb.ymax),
+            "Centre:  {}, {}".format(bb.centre.x, bb.centre.y),
+            "Size:    {} x {} mm".format(bb.width, bb.height),
+            "Parts:   {}".format(len(result.bounds)),
             "Doors:   {}".format(", ".join(result.doors) if result.doors else "none"),
         ]
     elif isinstance(result, DoorResult):
@@ -80,6 +81,7 @@ def print_help():
     print("    walls             show wall count (deduplicated)")
     print("    at <x> <y>        find room containing point (x, y)")
     print("    near <x> <y>      closest landmark to point (x, y)")
+    print("    export            export SVG to timestamped YAML file")
     print("    help              show this message")
     print("    quit              exit")
 
@@ -119,6 +121,16 @@ def main():
 
         elif cmd == "help":
             print_help()
+
+        elif cmd == "export":
+            import datetime
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            out_path = 'floorplan_{}.yaml'.format(timestamp)
+            try:
+                SVGParser.export_yaml(svg_path, out_path)
+                print('  exported to: {}'.format(out_path))
+            except Exception as e:
+                print('  export failed: {}'.format(e))
 
         elif cmd == "pose":
             try:

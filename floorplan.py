@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-03-09
-# modified: 2026-03-11
+# modified: 2026-03-10
 #
 # Ground-truth floorplan model for robotic navigation.
 #
@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import yaml
 
-# result types ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# result types ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 @dataclass(frozen=True)
 class Point:
@@ -135,15 +135,27 @@ class Segment:
 class RoomResult:
     type: str = field(default="room", init=False)
     id: str
-    bounds: Bounds
+    bounds: list       # list of Bounds; single-rect rooms have one entry
     doors: list
 
     @property
+    def bbox(self) -> Bounds:
+        '''
+        overall bounding box of all constituent bounds
+        '''
+        return Bounds(
+            min(b.xmin for b in self.bounds),
+            max(b.xmax for b in self.bounds),
+            min(b.ymin for b in self.bounds),
+            max(b.ymax for b in self.bounds),
+        )
+
+    @property
     def centre(self) -> Point:
-        return self.bounds.centre
+        return self.bbox.centre
 
     def contains(self, x: float, y: float) -> bool:
-        return self.bounds.contains(x, y)
+        return any(b.contains(x, y) for b in self.bounds)
 
     def __repr__(self):
         return "RoomResult(id={!r}, bounds={}, doors={})".format(
@@ -206,7 +218,7 @@ class Waypoint:
             self.label, self.position.x, self.position.y, self.kind)
 
 
-# route iterator ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# route iterator ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 class RouteIterator:
     '''
@@ -285,7 +297,7 @@ class RouteIterator:
             self._index + 1, len(self._waypoints), self.current)
 
 
-# SVG parser ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+# SVG parser ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # static utility class for SVG coordinate extraction
 
 class SVGParser:
@@ -293,6 +305,8 @@ class SVGParser:
     Static utility methods for parsing SVG files and extracting
     text object positions in floorplan coordinates.
     '''
+
+    _DOOR_RE = re.compile(r'^D\d+$', re.IGNORECASE)
 
     @staticmethod
     def parse_mm(value: str) -> float:
@@ -380,6 +394,9 @@ class SVGParser:
         for elem in root.iter():
             if elem.tag.split("}")[-1] != "text":
                 continue
+            # only top-level <text> elements (direct children of root)
+            if elem not in root:
+                continue
             name = "".join(elem.itertext()).strip()
             if not name:
                 continue
@@ -399,6 +416,405 @@ class SVGParser:
                 round((vb_h - y) / uu_per_mm)
             )
         return landmarks
+
+    @staticmethod
+    def _apply_group_matrix(x, y, w, h, transform):
+        '''
+        apply a matrix(a,b,c,d,e,f) group transform to a rect defined by
+        (x, y, w, h) in local coords, returning (xmin, ymin, xmax, ymax)
+        in document coords. transforms all four corners and takes min/max
+        to handle rotated rects correctly.
+        '''
+        m = re.match(
+            r'matrix\(\s*([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)[\s,]+'
+            r'([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)\s*\)',
+            transform.strip())
+        if not m:
+            return None
+        a, b, c, d, e, f = (float(v) for v in m.groups())
+        corners = [
+            (x,     y),
+            (x + w, y),
+            (x,     y + h),
+            (x + w, y + h),
+        ]
+        xs = [a * cx + c * cy + e for cx, cy in corners]
+        ys = [b * cx + d * cy + f for cx, cy in corners]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    @staticmethod
+    def _extract_groups(svg_path):
+        '''
+        parse all named <g> elements and unlabelled top-level <rect> elements.
+        returns:
+          groups   : list of {'label': str, 'rects': [(xmin, ymin, xmax, ymax)]}
+                     in floorplan mm coords (Y increasing northward)
+          obstacles: list of (xmin, ymin, xmax, ymax) in floorplan mm coords
+        '''
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+
+        vb = root.get('viewBox', '')
+        w_attr = root.get('width', '')
+        _, _, vb_w, vb_h = (float(p) for p in vb.strip().replace(',', ' ').split())
+        uu_per_mm = vb_w / SVGParser.parse_mm(w_attr) if w_attr else 1.0
+        doc_h = vb_h / uu_per_mm  # document height in mm
+
+        def flip_y(ymin_svg, ymax_svg):
+            return doc_h - ymax_svg, doc_h - ymin_svg
+
+        def r2(v):
+            return round(v)
+
+        def resolve_rect(rx, ry, rw, rh, inner_t, group_t):
+            '''
+            apply inner rect transform then group transform,
+            returning (xmin, ymin, xmax, ymax) in SVG doc units
+            '''
+            if inner_t:
+                result = SVGParser._apply_group_matrix(rx, ry, rw, rh, inner_t)
+                if result is None:
+                    return None
+                lx0, ly0, lx1, ly1 = result
+            else:
+                lx0, ly0, lx1, ly1 = rx, ry, rx + rw, ry + rh
+            if group_t:
+                result = SVGParser._apply_group_matrix(
+                    lx0, ly0, lx1 - lx0, ly1 - ly0, group_t)
+                if result is None:
+                    return None
+                return result
+            return lx0, ly0, lx1, ly1
+
+        groups = []
+        obstacles = []
+
+        for elem in root:
+            local = elem.tag.split('}')[-1]
+
+            if local == 'defs':
+                continue
+
+            if local == 'g':
+                group_t = elem.get('transform', '')
+                label = None
+
+                # text label from direct <text> children
+                for child in elem:
+                    if child.tag.split('}')[-1] == 'text':
+                        text = ''.join(child.itertext()).strip()
+                        if text:
+                            label = text.upper()
+                            break
+
+                # aria-label fallback for path-rendered text (e.g. MASTER)
+                if label is None:
+                    for child in elem:
+                        al = child.get('aria-label')
+                        if al:
+                            label = al.strip().upper()
+                            break
+
+                if label is None:
+                    continue
+
+                rects = []
+                for child in elem:
+                    if child.tag.split('}')[-1] != 'rect':
+                        continue
+                    rx = float(child.get('x', 0))
+                    ry = float(child.get('y', 0))
+                    rw = float(child.get('width', 0))
+                    rh = float(child.get('height', 0))
+                    inner_t = child.get('transform', '')
+                    coords = resolve_rect(rx, ry, rw, rh, inner_t, group_t)
+                    if coords is None:
+                        continue
+                    sx0, sy0, sx1, sy1 = coords
+                    sx0 /= uu_per_mm
+                    sy0 /= uu_per_mm
+                    sx1 /= uu_per_mm
+                    sy1 /= uu_per_mm
+                    ymin_fp, ymax_fp = flip_y(sy0, sy1)
+                    rects.append((
+                        r2(min(sx0, sx1)), r2(ymin_fp),
+                        r2(max(sx0, sx1)), r2(ymax_fp),
+                    ))
+
+                if rects:
+                    groups.append({'label': label, 'rects': rects})
+
+            elif local == 'rect':
+                # top-level unlabelled rect → obstacle
+                rx = float(elem.get('x', 0))
+                ry = float(elem.get('y', 0))
+                rw = float(elem.get('width', 0))
+                rh = float(elem.get('height', 0))
+                inner_t = elem.get('transform', '')
+                coords = resolve_rect(rx, ry, rw, rh, inner_t, '')
+                if coords is None:
+                    continue
+                sx0, sy0, sx1, sy1 = coords
+                sx0 /= uu_per_mm
+                sy0 /= uu_per_mm
+                sx1 /= uu_per_mm
+                sy1 /= uu_per_mm
+                ymin_fp, ymax_fp = flip_y(sy0, sy1)
+                obstacles.append((
+                    r2(min(sx0, sx1)), r2(ymin_fp),
+                    r2(max(sx0, sx1)), r2(ymax_fp),
+                ))
+
+        return groups, obstacles
+
+    @staticmethod
+    def export_yaml(svg_path, output_path):
+        '''
+        generate a YAML file from the SVG, extracting rooms, doors,
+        obstacles, and landmarks. door connects and orientation fields
+        are derived where possible and marked TODO for manual verification.
+        '''
+        import datetime
+
+        groups, obstacles = SVGParser._extract_groups(svg_path)
+        landmarks = SVGParser.extract_landmarks(svg_path)
+
+        rooms = [g for g in groups if not SVGParser._DOOR_RE.match(g['label'])]
+        doors = [g for g in groups if SVGParser._DOOR_RE.match(g['label'])]
+
+        # build room bounds lookup for spatial door-connectivity queries
+        room_bounds = {}
+        for r in rooms:
+            room_bounds[r['label']] = [
+                Bounds(x0, x1, y0, y1) for x0, y0, x1, y1 in r['rects']
+            ]
+
+        def rooms_adjacent_to_door(door_rects):
+            x0, y0, x1, y1 = door_rects[0]
+            cx = (x0 + x1) / 2
+            cy = (y0 + y1) / 2
+            margin = 150
+            adjacent = []
+            for rname, rects in room_bounds.items():
+                for b in rects:
+                    if (b.xmin - margin <= cx <= b.xmax + margin and
+                            b.ymin - margin <= cy <= b.ymax + margin):
+                        adjacent.append(rname.capitalize())
+                        break
+            return adjacent
+
+        def door_orientation(door_rects):
+            x0, y0, x1, y1 = door_rects[0]
+            if abs(y1 - y0) >= abs(x1 - x0):
+                return 'east'   # long axis N-S → door on E-W wall
+            else:
+                return 'north'  # long axis E-W → door on N-S wall
+
+        # build room -> door membership by inverting adjacency
+        room_doors = {r['label']: [] for r in rooms}
+        for d in doors:
+            adjacent = rooms_adjacent_to_door(d['rects'])
+            for room_label in adjacent:
+                key = room_label.upper()
+                if key in room_doors and d['label'] not in room_doors[key]:
+                    room_doors[key].append(d['label'])
+
+        lines = []
+        lines.append('# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈')
+        lines.append('#              House floorplan model for robotic navigation')
+        lines.append('#')
+        lines.append('# generated: {}'.format(
+            datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        lines.append('# source:    {}'.format(svg_path))
+        lines.append('# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈')
+        lines.append('')
+        lines.append('origin:')
+        lines.append('  x: 0')
+        lines.append('  y: 0')
+        lines.append('')
+        lines.append('axes:')
+        lines.append('  X: {range: "East-West", positive: "East"}')
+        lines.append('  Y: {range: "North-South", positive: "North"}')
+        lines.append('')
+        lines.append('rooms:')
+        for r in rooms:
+            lines.append('  - id: {}'.format(r['label'].capitalize()))
+            if len(r['rects']) == 1:
+                x0, y0, x1, y1 = r['rects'][0]
+                lines.append('    bounds:')
+                lines.append('      xmin: {}'.format(x0))
+                lines.append('      xmax: {}'.format(x1))
+                lines.append('      ymin: {}'.format(y0))
+                lines.append('      ymax: {}'.format(y1))
+            else:
+                lines.append('    bounds:')
+                for x0, y0, x1, y1 in r['rects']:
+                    lines.append('      - {{xmin: {}, xmax: {}, ymin: {}, ymax: {}}}'.format(
+                        x0, x1, y0, y1))
+            door_ids = room_doors.get(r['label'], [])
+            if door_ids:
+                lines.append('    doors:')
+                for did in door_ids:
+                    lines.append('      - {}'.format(did))
+            else:
+                lines.append('    doors: []')
+            lines.append('')
+        lines.append('doors:')
+        for d in doors:
+            x0, y0, x1, y1 = d['rects'][0]
+            door_width = round(max(abs(x1 - x0), abs(y1 - y0)))
+            cx = round((x0 + x1) / 2)
+            cy = round((y0 + y1) / 2)
+            orientation = door_orientation(d['rects'])
+            adjacent = rooms_adjacent_to_door(d['rects'])
+            connects_str = '[{}]  # TODO: verify'.format(
+                ', '.join(adjacent) if adjacent else 'null, null')
+            lines.append('  - id: {}'.format(d['label']))
+            lines.append('    connects: {}'.format(connects_str))
+            lines.append('    traversable: true')
+            lines.append('    position: {{x: {}, y: {}}}'.format(cx, cy))
+            lines.append('    width: {}'.format(door_width))
+            lines.append('    orientation: {}  # TODO: verify'.format(orientation))
+            lines.append('')
+        if obstacles:
+            lines.append('obstacles:')
+            for i, (x0, y0, x1, y1) in enumerate(obstacles):
+                lines.append('  - id: OBS_{}'.format(i + 1))
+                lines.append('    bounds:')
+                lines.append('      xmin: {}'.format(x0))
+                lines.append('      xmax: {}'.format(x1))
+                lines.append('      ymin: {}'.format(y0))
+                lines.append('      ymax: {}'.format(y1))
+                lines.append('')
+        if landmarks:
+            lines.append('landmarks:')
+            for name, point in sorted(landmarks.items()):
+                lines.append('  - id: {}'.format(name))
+                lines.append('    position: {{x: {}, y: {}}}'.format(
+                    point.x, point.y))
+                lines.append('    room: null  # TODO: verify')
+                lines.append('')
+
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+
+    @staticmethod
+    def x_export_yaml(svg_path, output_path):
+        '''
+        generate a YAML file from the SVG, extracting rooms, doors,
+        obstacles, and landmarks. door connects and orientation fields
+        are derived where possible and marked TODO for manual verification.
+        '''
+        import datetime
+
+        groups, obstacles = SVGParser._extract_groups(svg_path)
+        landmarks = SVGParser.extract_landmarks(svg_path)
+
+        rooms = [g for g in groups if not SVGParser._DOOR_RE.match(g['label'])]
+        doors = [g for g in groups if SVGParser._DOOR_RE.match(g['label'])]
+
+        # build room bounds lookup for spatial door-connectivity queries
+        room_bounds = {}
+        for r in rooms:
+            room_bounds[r['label']] = [
+                Bounds(x0, x1, y0, y1) for x0, y0, x1, y1 in r['rects']
+            ]
+
+        def rooms_adjacent_to_door(door_rects):
+            x0, y0, x1, y1 = door_rects[0]
+            margin = 200
+            # expand the door rect by margin on all sides to ensure it
+            # overlaps both rooms it separates
+            dx0, dy0, dx1, dy1 = x0 - margin, y0 - margin, x1 + margin, y1 + margin
+            adjacent = []
+            for rname, rects in room_bounds.items():
+                for b in rects:
+                    if (dx0 < b.xmax and dx1 > b.xmin and
+                            dy0 < b.ymax and dy1 > b.ymin):
+                        adjacent.append(rname.capitalize())
+                        break
+            return adjacent
+
+        def door_orientation(door_rects):
+            x0, y0, x1, y1 = door_rects[0]
+            if abs(y1 - y0) >= abs(x1 - x0):
+                return 'east'   # long axis N-S → door on E-W wall
+            else:
+                return 'north'  # long axis E-W → door on N-S wall
+
+        lines = []
+        lines.append('# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈')
+        lines.append('#              House floorplan model for robotic navigation')
+        lines.append('#')
+        lines.append('# generated: {}'.format(
+            datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        lines.append('# source:    {}'.format(svg_path))
+        lines.append('# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈')
+        lines.append('')
+        lines.append('origin:')
+        lines.append('  x: 0')
+        lines.append('  y: 0')
+        lines.append('')
+        lines.append('axes:')
+        lines.append('  X: {range: "East-West", positive: "East"}')
+        lines.append('  Y: {range: "North-South", positive: "North"}')
+        lines.append('')
+        lines.append('rooms:')
+        for r in rooms:
+            lines.append('  - id: {}'.format(r['label'].capitalize()))
+            if len(r['rects']) == 1:
+                x0, y0, x1, y1 = r['rects'][0]
+                lines.append('    bounds:')
+                lines.append('      xmin: {}'.format(x0))
+                lines.append('      xmax: {}'.format(x1))
+                lines.append('      ymin: {}'.format(y0))
+                lines.append('      ymax: {}'.format(y1))
+            else:
+                lines.append('    bounds:')
+                for x0, y0, x1, y1 in r['rects']:
+                    lines.append('      - {{xmin: {}, xmax: {}, ymin: {}, ymax: {}}}'.format(
+                        x0, x1, y0, y1))
+            lines.append('    doors: []  # TODO: add door ids')
+            lines.append('')
+        lines.append('doors:')
+        for d in doors:
+            x0, y0, x1, y1 = d['rects'][0]
+            door_width = round(max(abs(x1 - x0), abs(y1 - y0)))
+            cx = round((x0 + x1) / 2)
+            cy = round((y0 + y1) / 2)
+            orientation = door_orientation(d['rects'])
+            adjacent = rooms_adjacent_to_door(d['rects'])
+            connects_str = '[{}]  # TODO: verify'.format(
+                ', '.join(adjacent) if adjacent else 'null, null')
+            lines.append('  - id: {}'.format(d['label']))
+            lines.append('    connects: {}'.format(connects_str))
+            lines.append('    traversable: true')
+            lines.append('    position: {{x: {}, y: {}}}'.format(cx, cy))
+            lines.append('    width: {}'.format(door_width))
+            lines.append('    orientation: {}  # TODO: verify'.format(orientation))
+            lines.append('')
+        if obstacles:
+            lines.append('obstacles:')
+            for i, (x0, y0, x1, y1) in enumerate(obstacles):
+                lines.append('  - id: OBS_{}'.format(i + 1))
+                lines.append('    bounds:')
+                lines.append('      xmin: {}'.format(x0))
+                lines.append('      xmax: {}'.format(x1))
+                lines.append('      ymin: {}'.format(y0))
+                lines.append('      ymax: {}'.format(y1))
+                lines.append('')
+        if landmarks:
+            lines.append('landmarks:')
+            for name, point in sorted(landmarks.items()):
+                lines.append('  - id: {}'.format(name))
+                lines.append('    position: {{x: {}, y: {}}}'.format(
+                    point.x, point.y))
+                lines.append('    room: null  # TODO: verify')
+                lines.append('')
+
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(lines) + '\n')
+
 
 # door geometry ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 # static utility class for door segment computation
@@ -439,7 +855,7 @@ class FloorplanValidator:
     def validate(rooms: dict, doors: dict, landmarks: dict):
         errors = []
 
-        # Every traversable door's connected rooms must exist
+        # every traversable door's connected rooms must exist
         # (non-traversable doors are treated as walls; their connects is documentation only)
         for door in doors.values():
             if not door.traversable:
@@ -450,7 +866,7 @@ class FloorplanValidator:
                         "Door {!r} connects to unknown room {!r}".format(
                             door.id, room_name))
 
-        # Every door id referenced by a room must exist
+        # every door id referenced by a room must exist
         for room in rooms.values():
             for door_id in room.doors:
                 if door_id.upper() not in doors:
@@ -458,7 +874,7 @@ class FloorplanValidator:
                         "Room {!r} references unknown door {!r}".format(
                             room.id, door_id))
 
-        # Every YAML landmark claiming a room must fall within its bounds
+        # every YAML landmark claiming a room must fall within its bounds
         for lm in landmarks.values():
             if lm.room is None:
                 continue
@@ -476,16 +892,15 @@ class FloorplanValidator:
                             lm.id, lm.position.x, lm.position.y,
                             lm.room, room.bounds))
 
-        # Every traversable door must lie on the boundary between its rooms
+        # every traversable door must lie on the boundary between its rooms
         for door in doors.values():
             if not door.traversable or len(door.connects) != 2:
                 continue
             a_key, b_key = door.connects[0].upper(), door.connects[1].upper()
             if a_key not in rooms or b_key not in rooms:
                 continue  # already reported above
-            ba, bb = rooms[a_key].bounds, rooms[b_key].bounds
+            ba, bb = rooms[a_key].bbox, rooms[b_key].bbox
             mid = door.segment.midpoint
-            # Midpoint should be within the combined bounding box of both rooms
             combined = Bounds(
                 min(ba.xmin, bb.xmin), max(ba.xmax, bb.xmax),
                 min(ba.ymin, bb.ymin), max(ba.ymax, bb.ymax),
@@ -548,7 +963,7 @@ class Floorplan:
             cfg['initial_pose'] = initial_pose
         return cls(cfg)
 
-    # YAML loading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # YAML loading ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     def _load_yaml(self):
         y = self._yaml
@@ -559,9 +974,16 @@ class Floorplan:
 
         for r in room_entries:
             b = r["bounds"]
+            # bounds may be a single dict or a list of dicts
+            if isinstance(b, list):
+                bounds_list = [
+                    Bounds(e["xmin"], e["xmax"], e["ymin"], e["ymax"]) for e in b
+                ]
+            else:
+                bounds_list = [Bounds(b["xmin"], b["xmax"], b["ymin"], b["ymax"])]
             room = RoomResult(
                 id=r["id"],
-                bounds=Bounds(b["xmin"], b["xmax"], b["ymin"], b["ymax"]),
+                bounds=bounds_list,
                 doors=r.get("doors", []),
             )
             self._rooms[r["id"].upper()] = room
@@ -699,7 +1121,7 @@ class Floorplan:
 
         if key in self._rooms:
             room = self._rooms[key]
-            return room.id, room.bounds.centre
+            return room.id, room.centre
 
         if key in self._doors:
             door = self._doors[key]
@@ -796,7 +1218,7 @@ class Floorplan:
                 room = self._rooms[next_room.upper()]
                 waypoints.append(Waypoint(
                     label=next_room,
-                    position=room.bounds.centre,
+                    position=room.centre,
                     kind="room",
                 ))
 
@@ -828,9 +1250,10 @@ class Floorplan:
 
     def rooms_as_rectangles(self) -> list:
         '''
-        Return [(room_id, Bounds), ...] for all rooms.
+        Return [(room_id, Bounds), ...] for all rooms, using bbox for
+        multi-rect rooms.
         '''
-        return [(r.id, r.bounds) for r in self._rooms.values()]
+        return [(r.id, r.bbox) for r in self._rooms.values()]
 
     def walls(self) -> list:
         '''
@@ -841,7 +1264,7 @@ class Floorplan:
         seen = set()
         segments = []
         for room in self._rooms.values():
-            b = room.bounds
+            b = room.bbox
             candidates = [
                 Segment(Point(b.xmin, b.ymin), Point(b.xmax, b.ymin)),  # south
                 Segment(Point(b.xmax, b.ymin), Point(b.xmax, b.ymax)),  # east
@@ -849,7 +1272,6 @@ class Floorplan:
                 Segment(Point(b.xmin, b.ymax), Point(b.xmin, b.ymin)),  # west
             ]
             for seg in candidates:
-                # Normalise key so (p1,p2) and (p2,p1) are the same wall
                 key = tuple(sorted([(seg.p1.x, seg.p1.y), (seg.p2.x, seg.p2.y)]))
                 if key not in seen:
                     seen.add(key)
