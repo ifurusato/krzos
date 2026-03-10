@@ -70,6 +70,8 @@ def format_route(iterator) -> str:
 
 
 def print_help():
+    print("  Usage: floorplan_cli.py [--svg FILE] [--yaml FILE]")
+    print("")
     print("  Commands:")
     print("    <name>            query a room, door, or landmark")
     print("    route <a> <b>     waypoint route between any two named entities")
@@ -87,11 +89,19 @@ def print_help():
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: {} <svg_file> <yaml_file>".format(sys.argv[0]))
-        sys.exit(1)
 
-    svg_path, yaml_path = sys.argv[1], sys.argv[2]
+#   if len(sys.argv) != 3:
+#       print("Usage: {} <svg_file> <yaml_file>".format(sys.argv[0]))
+#       sys.exit(1)
+#   svg_path, yaml_path = sys.argv[1], sys.argv[2]
+
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Floorplan query CLI')
+    parser.add_argument('--svg',  default='floorplan.svg',  help='SVG file path')
+    parser.add_argument('--yaml', default='floorplan.yaml', help='YAML file path')
+    args = parser.parse_args()
+    svg_path, yaml_path = args.svg, args.yaml
 
     print("Loading {} + {} ...".format(svg_path, yaml_path), end=" ", flush=True)
     try:

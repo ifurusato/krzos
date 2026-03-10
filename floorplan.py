@@ -420,6 +420,51 @@ class SVGParser:
     @staticmethod
     def _apply_group_matrix(x, y, w, h, transform):
         '''
+        apply an SVG transform to a rect defined by (x, y, w, h),
+        returning (xmin, ymin, xmax, ymax) in the parent coordinate space.
+        handles matrix(), scale(), and rotate() forms used in this SVG.
+        transforms all four corners and takes min/max to handle rotations.
+        '''
+        import math
+
+        t = transform.strip()
+
+        # matrix(a,b,c,d,e,f)
+        m = re.match(
+            r'matrix\(\s*([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)[\s,]+'
+            r'([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)\s*\)', t)
+        if m:
+            a, b, c, d, e, f = (float(v) for v in m.groups())
+            corners = [(x, y), (x+w, y), (x, y+h), (x+w, y+h)]
+            xs = [a*cx + c*cy + e for cx, cy in corners]
+            ys = [b*cx + d*cy + f for cx, cy in corners]
+            return min(xs), min(ys), max(xs), max(ys)
+
+        # scale(sx) or scale(sx,sy)
+        m = re.match(r'scale\(\s*([^\s,)]+)(?:[\s,]+([^\s,)]+))?\s*\)', t)
+        if m:
+            sx = float(m.group(1))
+            sy = float(m.group(2)) if m.group(2) else sx
+            corners = [(x, y), (x+w, y), (x, y+h), (x+w, y+h)]
+            xs = [sx * cx for cx, cy in corners]
+            ys = [sy * cy for cx, cy in corners]
+            return min(xs), min(ys), max(xs), max(ys)
+
+        # rotate(angle) — origin rotation, degrees
+        m = re.match(r'rotate\(\s*([^\s,)]+)\s*\)', t)
+        if m:
+            angle = math.radians(float(m.group(1)))
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            corners = [(x, y), (x+w, y), (x, y+h), (x+w, y+h)]
+            xs = [cos_a*cx - sin_a*cy for cx, cy in corners]
+            ys = [sin_a*cx + cos_a*cy for cx, cy in corners]
+            return min(xs), min(ys), max(xs), max(ys)
+
+        return None
+
+    @staticmethod
+    def x_apply_group_matrix(x, y, w, h, transform):
+        '''
         apply a matrix(a,b,c,d,e,f) group transform to a rect defined by
         (x, y, w, h) in local coords, returning (xmin, ymin, xmax, ymax)
         in document coords. transforms all four corners and takes min/max
@@ -463,8 +508,16 @@ class SVGParser:
         def flip_y(ymin_svg, ymax_svg):
             return doc_h - ymax_svg, doc_h - ymin_svg
 
-        def r2(v):
+        def r2_v0(v):
             return round(v)
+
+        def r2(v):
+            '''round to nearest 50, then snap to nearest 100 if within 2'''
+            r = round(v)
+            nearest_100 = round(r / 100) * 100
+            if abs(r - nearest_100) <= 2:
+                return nearest_100
+            return r
 
         def resolve_rect(rx, ry, rw, rh, inner_t, group_t):
             '''
@@ -504,7 +557,7 @@ class SVGParser:
                     if child.tag.split('}')[-1] == 'text':
                         text = ''.join(child.itertext()).strip()
                         if text:
-                            label = text.upper()
+                            label = ' '.join(text.split()).upper()
                             break
 
                 # aria-label fallback for path-rendered text (e.g. MASTER)
@@ -591,14 +644,15 @@ class SVGParser:
 
         def rooms_adjacent_to_door(door_rects):
             x0, y0, x1, y1 = door_rects[0]
-            cx = (x0 + x1) / 2
-            cy = (y0 + y1) / 2
-            margin = 150
+            margin = 200
+            # expand the door rect by margin on all sides to ensure it
+            # overlaps both rooms it separates
+            dx0, dy0, dx1, dy1 = x0 - margin, y0 - margin, x1 + margin, y1 + margin
             adjacent = []
             for rname, rects in room_bounds.items():
                 for b in rects:
-                    if (b.xmin - margin <= cx <= b.xmax + margin and
-                            b.ymin - margin <= cy <= b.ymax + margin):
+                    if (dx0 < b.xmax and dx1 > b.xmin and
+                            dy0 < b.ymax and dy1 > b.ymin):
                         adjacent.append(rname.capitalize())
                         break
             return adjacent
