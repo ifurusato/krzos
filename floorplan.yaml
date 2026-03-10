@@ -1,0 +1,180 @@
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+#              House floorplan model for robotic navigation
+#
+# Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Ichiro Furusato
+# created:  2026-03-09
+# modified: 2026-03-11
+#
+# all coordinates in millimeters, rounded to nearest 100mm.
+# origin: SW corner of Master Bedroom (SW corner of house)
+# axes: X positive East, Y positive North
+#
+# ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+origin:
+  x: 0
+  y: 0
+  reference: "SW corner of Master Bedroom"
+
+axes:
+  X: {range: "East-West", positive: "East"}
+  Y: {range: "North-South", positive: "North"}
+
+rooms:
+  - id: Master
+    bounds:
+      xmin: 0
+      xmax: 4700
+      ymin: 0
+      ymax: 3900
+    doors:
+      - D1
+
+  - id: Study
+    bounds:
+      xmin: 1500
+      xmax: 4700
+      ymin: 3900
+      ymax: 6600
+    doors:
+      - D2
+
+  - id: Lounge
+    bounds:
+      xmin: 1500
+      xmax: 5200
+      ymin: 6600
+      ymax: 12550
+    doors:
+      - D3
+
+  - id: Kitchen
+    bounds:
+      xmin: 5200
+      xmax: 8700
+      ymin: 7950
+      ymax: 12550
+    doors:
+      - D4
+
+  - id: Bath
+    bounds:
+      xmin: 4700
+      xmax: 6500
+      ymin: 4200
+      ymax: 6200
+    doors:
+      - D6
+
+  - id: Spare
+    bounds:
+      xmin: 5400
+      xmax: 8700
+      ymin: 0
+      ymax: 2800
+    doors:
+      - D7
+
+corridor:
+  id: Corridor
+  bounds:
+    xmin: 4700
+    xmax: 8000
+    ymin: 2800
+    ymax: 7950
+  # The AUX notch (6200-8000 x 6900-7950) is an obstacle within
+  # this bounding box, not traversable space.
+  obstacles:
+    - id: AUX_notch
+      xmin: 6200
+      xmax: 8000
+      ymin: 6900
+      ymax: 7950
+  doors: [D1, D2, D4, D6, D7]
+  notes: >
+    D5 (Stair) is permanently closed and treated as a wall.
+    The back-door entryway beyond the north corridor wall is
+    always blocked and outside the robot's operational area.
+
+doors:
+  - id: D1
+    connects: [Master, Corridor]
+    traversable: true
+    wall: {x: 4700, axis: x}
+    position: {x: 4700, y: 3300}
+    width: 1000
+    orientation: east
+
+  - id: D2
+    connects: [Study, Corridor]
+    traversable: true
+    wall: {x: 4700, axis: x}
+    position: {x: 4700, y: 4300}
+    width: 1000
+    orientation: east
+
+  - id: D3
+    connects: [Lounge, Corridor]
+    traversable: true
+    wall: {x: 5200, axis: x}
+    position: {x: 5200, y: 6600}
+    width: 1000
+    orientation: east
+
+  - id: D4
+    connects: [Kitchen, Corridor]
+    traversable: true
+    wall: {x: 6200, axis: x}
+    position: {x: 6200, y: 9000}
+    width: 1000
+    orientation: west
+
+  - id: D5
+    connects: [Stair, Corridor]
+    traversable: false
+    notes: "Permanently closed - stairway. Treated as wall."
+    wall: {x: 6200, axis: x}
+    position: {x: 6200, y: 3500}
+    width: 900
+    orientation: west
+
+  - id: D6
+    connects: [Bath, Corridor]
+    traversable: true
+    wall: {x: 6200, axis: x}
+    position: {x: 6200, y: 5200}
+    width: 900
+    orientation: west
+
+  - id: D7
+    connects: [Spare, Corridor]
+    traversable: true
+    wall: {x: 6200, axis: x}
+    position: {x: 6200, y: 2100}
+    width: 1000
+    orientation: west
+
+landmarks:
+  - id: BUNNY
+    position: {x: 270, y: 72}
+    room: Master
+    notes: "Stuffed toy near SW corner"
+
+  - id: CABINET
+    position: {x: 8446, y: 12361}
+    room: Kitchen
+    notes: "Near NW corner of Kitchen"
+
+  - id: ORIGIN
+    position: {x: 2685, y: 5535}
+    room: Study
+
+  - id: CARPORT
+    position: {x: 161, y: 12355}
+    room: null
+    notes: "External - NW area, outside robot operational area"
+

@@ -1,0 +1,640 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+     Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
+     of the Robot Operating System project, released under the MIT License. Please
+     see the LICENSE file included as part of this package.
+
+     author:   Ichiro Furusato
+     created:  2026-03-09
+     modified: 2026-03-11
+     source:   floorplan-plain-v8.svg
+-->
+<svg
+   width="8700mm"
+   height="12550mm"
+   viewBox="0 0 8700.0004 12550.001"
+   version="1.1"
+   id="svg5"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2">
+    <rect
+       x="13476.005"
+       y="35173.793"
+       width="1059.9099"
+       height="510.76233"
+       id="rect9337" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-3" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-7" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="1325.8442"
+       height="346.24677"
+       id="rect5777-35" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-9" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-2" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-0" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="720.43756"
+       height="323.45181"
+       id="rect5777-2-6" />
+    <rect
+       x="-1325.4872"
+       y="2428.2974"
+       width="674.0459"
+       height="307.64594"
+       id="rect5777-0-8" />
+  </defs>
+  <g
+     id="g1696"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#e1e3ff;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-9"
+       width="34999.645"
+       height="45999.645"
+       x="10165.134"
+       y="-64175.688"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,55286.639,-107861.47)"
+       id="text5775-62"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-35);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44928"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44926">KITCHEN</tspan></tspan></text>
+  </g>
+  <g
+     id="g1672"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#e1e3ff;fill-opacity:0.996766;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3"
+       width="32999.645"
+       height="27999.641"
+       x="12161.619"
+       y="33301.695"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,58092.897,-19375.849)"
+       id="text5775-6"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-3);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44932"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44930">SPARE</tspan></tspan></text>
+  </g>
+  <g
+     id="g1659"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#dbffb7;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-5"
+       width="31999.643"
+       height="26999.643"
+       x="-26832.646"
+       y="-4695.6943"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,18566.333,-53165.77)"
+       id="text5775-1"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-9);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44936"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44934">STUDY</tspan></tspan></text>
+  </g>
+  <g
+     id="g1666"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ffe58e;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-6-7"
+       width="14999.642"
+       height="37999.645"
+       x="5164.9512"
+       y="-4695.6943"
+       ry="0" />
+    <rect
+       style="fill:#ffe58e;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-6-7-7"
+       width="9996.7812"
+       height="13496.758"
+       x="10165.134"
+       y="-18178.088"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0,-26.459018,26.459317,0,-53996.497,-20696.133)"
+       id="text5775-7-1"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-2-6);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44940"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44938">HALL</tspan></tspan></text>
+  </g>
+  <g
+     id="g1690"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#cbeaff;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-0"
+       width="17999.643"
+       height="10499.642"
+       x="20161.916"
+       y="-18178.088"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,60696.958,-79601.627)"
+       id="text5775-9-7"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-0-8);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44944"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44942">AUX</tspan></tspan></text>
+  </g>
+  <g
+     id="g1684"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#c4e0f2;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-2"
+       width="22999.643"
+       height="15999.643"
+       x="20161.916"
+       y="-7681.4092"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,61848.689,-66359.11)"
+       id="text5775-9"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-0);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44948"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44946">STAIR</tspan></tspan></text>
+  </g>
+  <g
+     id="g1678"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#cbeaff;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3"
+       width="22999.643"
+       height="24999.643"
+       x="20161.916"
+       y="8304.6426"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,62174.665,-45856.009)"
+       id="text5775-7"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-2);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44952"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44950">BATH</tspan></tspan></text>
+  </g>
+  <rect
+     style="fill:#b0b5ff;fill-opacity:1;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-9-3"
+     width="841.14294"
+     height="999.66681"
+     x="4788.3252"
+     y="1801.1777"
+     ry="0" />
+  <g
+     id="g940">
+    <rect
+       style="fill:#e1e3ff;fill-opacity:1;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846"
+       width="4699.9644"
+       height="3899.9644"
+       x="0.017987501"
+       y="8647.7275"
+       ry="0" />
+    <g
+       aria-label="MASTER"
+       transform="matrix(2.6460155,0,0,2.6460528,4999.9498,3881.1999)"
+       id="text5775"
+       style="font-weight:500;font-size:192px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777);fill:#000055;stroke-width:0.0999924">
+      <path
+         d="m -1302.6383,2608.2969 q -3.84,0 -7.104,-1.728 -3.072,-1.728 -3.072,-4.992 v -123.456 q 0,-5.76 3.072,-7.872 3.264,-2.304 7.104,-2.304 3.648,0 6.336,1.152 2.688,0.96 4.992,3.456 2.304,2.496 4.8,6.912 l 26.88,50.88 27.264,-50.88 q 2.496,-4.416 4.608,-6.912 2.304,-2.496 4.992,-3.456 2.688,-1.152 6.336,-1.152 4.032,0 7.104,2.304 3.072,2.112 3.072,7.872 v 123.456 q 0,3.264 -3.264,4.992 -3.072,1.728 -6.912,1.728 -3.84,0 -7.104,-1.728 -3.072,-1.728 -3.072,-4.992 v -92.16 l -25.728,47.616 q -1.536,2.496 -3.456,3.648 -1.92,0.96 -4.032,0.96 -1.728,0 -3.648,-0.96 -1.92,-0.96 -3.264,-3.648 l -25.728,-48.768 v 93.312 q 0,3.264 -3.264,4.992 -3.072,1.728 -6.912,1.728 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53133" />
+      <path
+         d="m -1178.4146,2608.2969 q -2.688,0 -5.76,-1.152 -3.072,-1.152 -4.992,-2.88 -1.92,-1.92 -1.92,-4.416 0,-0.576 0.192,-1.728 l 38.208,-124.416 q 1.152,-3.456 4.8,-5.184 3.84,-1.728 8.064,-1.728 4.416,0 8.064,1.728 3.84,1.728 4.992,5.184 l 38.016,124.416 q 0.384,1.152 0.384,1.728 0,2.304 -2.112,4.224 -1.92,1.92 -4.992,3.072 -2.88,1.152 -5.76,1.152 -2.496,0 -4.416,-0.96 -1.728,-0.96 -2.496,-3.264 l -7.872,-27.264 h -47.616 l -7.68,27.264 q -0.576,2.304 -2.688,3.264 -1.92,0.96 -4.416,0.96 z m 19.392,-47.808 h 38.4 l -19.2,-65.856 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53135" />
+      <path
+         d="m -1037.8708,2609.8329 q -12.48,0 -22.08,-3.648 -9.6,-3.648 -14.976,-8.832 -5.376,-5.376 -5.376,-10.176 0,-2.304 1.152,-4.8 1.344,-2.496 3.264,-4.224 2.112,-1.92 4.416,-1.92 2.688,0 4.992,2.304 2.496,2.112 5.952,5.184 3.456,3.072 8.64,5.376 5.184,2.304 13.248,2.304 6.912,0 12.288,-2.112 5.568,-2.304 8.64,-6.72 3.264,-4.608 3.264,-11.52 0,-7.296 -3.456,-12.096 -3.264,-4.8 -9.024,-8.064 -5.568,-3.264 -12.096,-5.952 -6.528,-2.688 -13.248,-5.76 -6.72,-3.072 -12.288,-7.296 -5.568,-4.416 -9.024,-10.944 -3.264,-6.72 -3.264,-16.704 0,-10.56 3.84,-17.664 4.032,-7.104 10.56,-11.328 6.528,-4.224 14.4,-5.952 7.872,-1.92 15.552,-1.92 4.8,0 10.56,0.768 5.952,0.576 11.52,2.304 5.568,1.536 9.216,4.224 3.64795,2.688 3.64795,6.528 0,1.92 -0.96,4.608 -0.96,2.496 -2.87995,4.416 -1.728,1.92 -4.608,1.92 -2.496,0 -5.568,-1.728 -3.072,-1.92 -8.064,-3.648 -4.8,-1.92 -12.864,-1.92 -6.912,0 -12.48,1.92 -5.376,1.92 -8.448,5.76 -3.072,3.648 -3.072,9.792 0,6.144 3.264,10.176 3.456,3.84 9.024,6.72 5.568,2.688 12.096,5.184 6.72,2.496 13.248,5.952 6.72,3.264 12.288,8.064 5.76,4.8 9.02395,12.288 3.456,7.296 3.456,18.24 0,13.824 -5.76,23.04 -5.56795,9.024 -15.55195,13.44 -9.792,4.416 -22.464,4.416 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53137" />
+      <path
+         d="m -939.75896,2608.2969 q -3.84,0 -7.104,-1.728 -3.072,-1.728 -3.072,-4.992 v -115.008 h -29.76 q -3.072,0 -4.8,-2.88 -1.728,-2.88 -1.728,-6.528 0,-3.456 1.536,-6.336 1.536,-2.88 4.992,-2.88 h 79.68 q 3.648,0 5.184,2.88 1.536,2.88 1.536,6.144 0,3.84 -1.728,6.72 -1.536,2.88 -4.992,2.88 h -29.568 v 115.008 q 0,3.264 -3.264,4.992 -3.072,1.728 -6.912,1.728 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53139" />
+      <path
+         d="m -869.48723,2608.2969 q -3.264,0 -6.144,-1.728 -2.88,-1.728 -2.88,-4.992 v -126.912 q 0,-3.264 2.88,-4.992 2.88,-1.728 6.144,-1.728 h 68.352 q 3.648,0 5.184,2.88 1.536,2.88 1.536,5.952 0,3.648 -1.728,6.528 -1.728,2.688 -4.992,2.688 h -57.024 v 43.968 h 29.568 q 3.264,0 4.992,2.496 1.728,2.496 1.728,5.76 0,2.688 -1.536,5.376 -1.536,2.496 -5.184,2.496 h -29.568 v 44.16 h 57.024 q 3.264,0 4.992,2.688 1.728,2.688 1.728,6.528 0,3.072 -1.536,5.952 -1.536,2.88 -5.184,2.88 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53141" />
+      <path
+         d="m -702.63935,2608.8729 q -2.496,0 -4.608,-1.728 -1.92,-1.728 -3.264,-4.224 l -28.224,-54.912 h -19.2 v 53.568 q 0,3.264 -3.264,4.992 -3.072,1.728 -6.912,1.728 -3.84,0 -7.104,-1.728 -3.072,-1.728 -3.072,-4.992 v -127.104 q 0,-2.688 1.728,-4.608 1.92,-1.92 5.184,-1.92 h 36.48 q 12.096,0 22.08,3.648 9.984,3.456 15.936,12.096 5.952,8.448 5.952,23.424 0,11.52 -3.648,19.2 -3.456,7.68 -9.6,12.288 -5.952,4.416 -13.632,6.528 l 26.88,50.496 q 0.384,0.576 0.576,1.536 0.192,0.768 0.192,1.344 0,2.496 -1.92,4.992 -1.92,2.304 -4.8,3.84 -2.688,1.536 -5.76,1.536 z m -55.296,-77.184 h 23.04 q 10.752,0 17.088,-5.184 6.528,-5.184 6.528,-17.664 0,-12.48 -6.528,-17.664 -6.336,-5.184 -17.088,-5.184 h -23.04 z"
+         style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold';fill:#000055;stroke-width:0.0999924"
+         id="path53143" />
+    </g>
+  </g>
+  <rect
+     style="fill:#b7bbff;fill-opacity:1;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-6"
+     width="699.66693"
+     height="2799.7134"
+     x="4699.8335"
+     y="9747.7559"
+     ry="0" />
+  <g
+     id="g96384"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-3"
+       width="996.43567"
+       height="7496.6885"
+       x="33301.695"
+       y="-20161.916"
+       ry="0"
+       transform="rotate(90)" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="16272.729"
+       y="33892.371"
+       id="text28701-0-2-2-9"><tspan
+         id="tspan28699-6-6-0-2"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="16272.729"
+         y="33892.371">D7</tspan></text>
+  </g>
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6"
+     width="99.644699"
+     height="899.66418"
+     x="6199.5298"
+     y="8848.0918"
+     ry="0" />
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6-2"
+     width="99.644699"
+     height="1199.672"
+     x="6199.5298"
+     y="6998.7627"
+     ry="0" />
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6-2-1"
+     width="99.644699"
+     height="749.66034"
+     x="6199.5298"
+     y="5649.4458"
+     ry="0" />
+  <g
+     id="g96389"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5"
+       width="996.44696"
+       height="6496.5776"
+       x="20161.916"
+       y="17808.479"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="20515.613"
+       y="21148.842"
+       id="text28701-0-2-2-7"><tspan
+         id="tspan28699-6-6-0-5"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="20515.613"
+         y="21148.842">D6</tspan></text>
+  </g>
+  <rect
+     style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-3-6-3-2"
+     width="99.644699"
+     height="1801.5662"
+     x="-5199.8516"
+     y="-1801.5847"
+     ry="0"
+     transform="scale(-1)" />
+  <g
+     id="g67265"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-3-6-3-6"
+       width="996.43567"
+       height="7496.6885"
+       x="18178.088"
+       y="12161.619"
+       ry="0"
+       transform="rotate(-90)" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="15768.485"
+       y="-18583.469"
+       id="text28701-0-2-2-2"><tspan
+         id="tspan28699-6-6-0-3"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="15768.485"
+         y="-18583.469">D4</tspan></text>
+  </g>
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6-2-1-7"
+     width="99.644699"
+     height="49.642281"
+     x="4699.8335"
+     y="9698.1143"
+     ry="0" />
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6-2-1-7-5"
+     width="99.644699"
+     height="199.64616"
+     x="4600.1885"
+     y="5948.0171"
+     ry="0" />
+  <rect
+     style="fill:#a2a2a2;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.0359002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
+     id="rect846-3-3-5-6-2-1-7-5-5"
+     width="99.64357"
+     height="199.64842"
+     x="4500.1343"
+     y="-5399.5"
+     ry="0"
+     transform="rotate(90)" />
+  <g
+     id="g1702"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#c4c8ff;fill-opacity:1;stroke:#1864ff;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-6"
+       width="36999.641"
+       height="59499.645"
+       x="-26832.65"
+       y="-64175.688"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       transform="matrix(26.459317,0,0,26.459018,19699.541,-100864.87)"
+       id="text5775-5"
+       style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-7);fill:#000055;stroke-width:0.0999969"><tspan
+         x="-1325.4863"
+         y="2578.2969"
+         id="tspan44956"><tspan
+           style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
+           id="tspan44954">LOUNGE</tspan></tspan></text>
+  </g>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="3287.9648"
+     y="4044.8203"
+     id="text28701-0-28-36-3"><tspan
+       id="tspan28699-6-9-7-6"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="3287.9648"
+       y="4044.8203">LOUNGE_RUG</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="3659.6187"
+     y="9878.9033"
+     id="text28701-0-28-36-7"><tspan
+       id="tspan28699-6-9-7-5"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="3659.6187"
+       y="9878.9033">MASTER_TARGET</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="6267.252"
+     y="10873.027"
+     id="text28701-0-28-36-7-3"><tspan
+       id="tspan28699-6-9-7-5-5"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="6267.252"
+       y="10873.027">SPARE_TARGET</tspan></text>
+  <text
+     xml:space="preserve"
+     transform="scale(0.26458335)"
+     id="text9335"
+     style="font-weight:500;font-size:40px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect9337)" />
+  <g
+     id="g46115"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-3-6"
+       width="996.44696"
+       height="7496.604"
+       x="-5164.9512"
+       y="-32805.273"
+       ry="0"
+       transform="scale(-1)" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="4559.4126"
+       y="29149.936"
+       id="text28701"><tspan
+         id="tspan28699"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="4559.4126"
+         y="29149.936">D1</tspan></text>
+  </g>
+  <g
+     id="g103169"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-3-6-3"
+       width="999.64105"
+       height="7499.6416"
+       x="-5166.4399"
+       y="-4803.957"
+       ry="0"
+       transform="scale(-1)" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="4526.1572"
+       y="1146.9733"
+       id="text28701-0"><tspan
+         id="tspan28699-6"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="4526.1572"
+         y="1146.9733">D2</tspan></text>
+  </g>
+  <g
+     id="g67227"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.358999;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-3-6-3-6-7"
+       width="996.43567"
+       height="18015.668"
+       x="-10165.134"
+       y="46160.02"
+       ry="0"
+       transform="scale(-1)" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="9525.8193"
+       y="-55075.777"
+       id="text28701-0-2"><tspan
+         id="tspan28699-6-6"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="9525.8193"
+         y="-55075.777">D3</tspan></text>
+  </g>
+  <g
+     id="g102667"
+     transform="matrix(0.1,0,0,0.1,4183.3383,6417.5867)">
+    <rect
+       style="fill:#ff45b1;fill-opacity:0.344946;stroke:#1864ff;stroke-width:0.359001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.077, 1.077;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect846-3-3-5-9"
+       width="996.44696"
+       height="5996.5645"
+       x="20171.938"
+       y="-184.80637"
+       ry="0" />
+    <text
+       xml:space="preserve"
+       style="font-weight:500;font-size:254px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:2.64583"
+       x="20515.613"
+       y="2905.5508"
+       id="text28701-0-2-2"><tspan
+         id="tspan28699-6-6-0"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:254px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:2.64583"
+         x="20515.613"
+         y="2905.5508">D5</tspan></text>
+  </g>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="7087.6211"
+     y="3349.2495"
+     id="text28701-0-28-36"><tspan
+       id="tspan28699-6-9-7"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="7087.6211"
+       y="3349.2495">KITCHEN_RUG</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="160.78557"
+     y="195.07654"
+     id="text28701-0-28-3"><tspan
+       id="tspan28699-6-9-6"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="160.78557"
+       y="195.07654">CARPORT</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="269.7598"
+     y="12478.365"
+     id="text28701-0-28-3-3"><tspan
+       id="tspan28699-6-9-6-6"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+       x="269.7598"
+       y="12478.365">BUNNY</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="8446.0771"
+     y="189.25232"
+     id="text28701-0-28-3-3-3"><tspan
+       id="tspan28699-6-9-6-6-6"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+       x="8446.0771"
+       y="189.25232">CABINET</tspan></text>
+  <rect
+     style="fill:#6dda00;fill-opacity:0.27069584;stroke-width:0.359;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1.077, 1.077"
+     id="rect44673"
+     width="1000"
+     height="500"
+     x="2726.3091"
+     y="6501.5513" />
+  <ellipse
+     style="fill:#6dda00;fill-opacity:0.795868;stroke-width:0.358775;stroke-linecap:round;stroke-linejoin:round"
+     id="path958"
+     cx="3723.6267"
+     cy="6504.7939"
+     rx="200.2271"
+     ry="200.93973" />
+  <text
+     xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="3688.8796"
+     y="6514.0015"
+     id="text28701-0-28"><tspan
+       id="tspan28699-6-9"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="3688.8796"
+       y="6514.0015">ORIGIN</tspan></text>
+</svg>
