@@ -42,13 +42,14 @@
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
 from math import pi as π
-from math import isclose, degrees, cos, sin
+from math import isclose, degrees, radians, cos, sin
 from colorama import init, Fore, Style
 init()
 
 from core.logger import Logger, Level
 from core.util import Util
 from core.component import Component
+from hardware.ttywriter import TtyWriter
 
 class Odometer(Component):
     NAME = 'odometer'
@@ -77,7 +78,6 @@ class Odometer(Component):
         self._config = config
         self._log = Logger(Odometer.NAME, level)
         Component.__init__(self, self._log, suppressed=suppressed, enabled=enabled)
-        # obtain geometry from config (use 'kros.geometry')
         _cfg = config['kros'].get('geometry')
         self._wheel_diameter_mm      = _cfg.get('wheel_diameter')
         self._steps_per_rotation     = _cfg.get('steps_per_rotation')
@@ -93,10 +93,21 @@ class Odometer(Component):
         self._log.info('conversion constant:    ' + Fore.GREEN + ' {:7.4f} steps/mm'.format(self._steps_per_mm))
         _test_velocity = self.steps_to_mm(self._steps_per_rotation)
         self._log.info('example conversion:     ' + Fore.GREEN + ' {:7.4f}mm/rotation'.format(_test_velocity))
+        # get instance of TtyWriter
+        _registry = Component.get_registry()
+        self._ttywriter = _registry.get(TtyWriter.NAME)
+        if self._ttywriter is None:
+            self._ttywriter = TtyWriter(append=True)
+        # obtain geometry from config (use 'kros.geometry')
+        _odo_cfg = config['kros'].get('hardware').get('odometer')
+        _initial_x       = _odo_cfg.get('initial_x')       # starting x position (mm), e.g., 100mm east of west edge
+        _initial_y       = _odo_cfg.get('initial_y')       # starting y position (mm), e.g., 200mm north of south edge
+        _initial_heading = _odo_cfg.get('initial_heading') # starting heading in degrees (where 0° is north)
+        self.set_pose(_initial_x, _initial_y, _initial_heading, use_radians=False)
         # derived geometry in mm
-        self._wheel_radius_mm    = self._wheel_diameter_mm / 2.0
-        self._steps_per_rev      = float(self._steps_per_rotation) / 4.0
-        self._step_mm            = π * self._wheel_diameter_mm / self._steps_per_rev
+        self._wheel_radius_mm = self._wheel_diameter_mm / 2.0
+        self._steps_per_rev   = float(self._steps_per_rotation) / 4.0
+        self._step_mm         = π * self._wheel_diameter_mm / self._steps_per_rev
         self._log.info(
             "wheel diameter: {:.2f}mm, wheelbase: {:.2f}mm, track: {:.2f}mm, steps/rev: {:.2f}".format(
                 self._wheel_diameter_mm, self._wheel_base_mm, self._wheel_track_mm, self._steps_per_rev
@@ -106,12 +117,12 @@ class Odometer(Component):
         # internal state
         self._last_steps = None  # dict of last {motor: step_count}
         self._last_time  = None  # float (seconds)
-        self._x     = 0.0   # lateral position (mm)
-        self._y     = 0.0   # longitudinal position (mm)
-        self._theta = 0.0   # heading (radians)
-        self._vx    = 0.0   # lateral velocity (mm/s)
-        self._vy    = 0.0   # longitudinal velocity (mm/s)
-        self._omega = 0.0   # yaw rate (rad/s)
+        self._x          = 0.0   # lateral position (mm)
+        self._y          = 0.0   # longitudinal position (mm)
+        self._theta      = 0.0   # heading (radians)
+        self._vx         = 0.0   # lateral velocity (mm/s)
+        self._vy         = 0.0   # longitudinal velocity (mm/s)
+        self._omega      = 0.0   # yaw rate (rad/s)
         self._log.info('ready.')
 
     @property
@@ -143,6 +154,12 @@ class Odometer(Component):
         return self._vx, self._vy, self._omega
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def console(self, message):
+        '''
+        Write the message to the tty1 console.
+        '''
+        self._ttywriter.write(message, colorise=True)
 
     def add_callback(self, callback):
         '''
@@ -189,9 +206,12 @@ class Odometer(Component):
         '''
         self._x = x
         self._y = y
-        self._theta = theta if use_radians else math.radians(theta)
-        self._log.info('pose set to: x={:.2f}mm, y={:.2f}mm, theta={:.2f}rad ({:.1f}°)'.format(
-            x, y, theta, degrees(theta)))
+        self._theta = theta if use_radians else radians(theta)
+        _degrees = degrees(self._theta)
+        _rad_pi  = self._theta / π
+        self._log.info('initial pose: ' + Fore.GREEN + 'x={:.2f}mm, y={:.2f}mm, theta={:.2f}π ({:.1f}°)'.format(x, y, _rad_pi, _degrees))
+        self.console('CYAN initial pose:\nCYAN   x:YELLOW          {:.2f}mm\nCYAN   y:YELLOW          {:.2f}mm\nCYAN   theta:YELLOW      {:.3f}π ({:.1f}°)'.format(
+                x, y, _rad_pi, _degrees))
 
     def steps_to_mm(self, steps):
         return steps / self._steps_per_mm

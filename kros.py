@@ -615,7 +615,7 @@ class KROS(Component, FiniteStateMachine):
                 self._ttywriter.write('CYAN closing message bus…', colorise=True)
                 self._log.info('closing the message bus…')
                 _elapsed = int((dt.datetime.now() - self._start_time).total_seconds())
-                self._ttywriter.write("CYAN closed: YELLOW {:02d}:{:02d}:{:02d} CYAN elapsed".format(_elapsed//3600, (_elapsed%3600)//60, _elapsed%60), colorise=True)
+                self._ttywriter.write("CYAN closed: YELLOW {:02d}:{:02d}:{:02d} elapsed".format(_elapsed//3600, (_elapsed%3600)//60, _elapsed%60), colorise=True)
                 if self._message_bus and not self._message_bus.closed:
                     self._log.info(Fore.MAGENTA + 'closing message bus from kros…')
                     self._message_bus.close()
