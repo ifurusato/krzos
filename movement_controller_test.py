@@ -45,22 +45,24 @@ def wait_for_movement_complete(movement_ctrl, poll_rate_hz=20):
     _enable_wait_loop = True
     def wait_enable():
         nonlocal _enable_wait_loop
-        print(Fore.MAGENTA + 'WAIT ENABLED CALLED.' + Style.RESET_ALL)
+#       print(Fore.MAGENTA + 'WAIT ENABLED CALLED.' + Style.RESET_ALL)
         _enable_wait_loop = False
     
     while movement_ctrl.movement_phase in (MovementPhase.ACCEL, MovementPhase.MOVE, MovementPhase.DECEL):
         current_time, elapsed, accumulated = movement_ctrl.poll()
         phase = movement_ctrl.movement_phase
         if phase == MovementPhase.ACCEL:
-            print(Fore.GREEN + 'ACCEL' + Style.RESET_ALL)
+#           print(Fore.GREEN + 'ACCEL' + Style.RESET_ALL)
             movement_ctrl.handle_accel_phase(elapsed, accumulated, current_time)
             _motor_controller.add_state_change_callback(lambda: wait_enable())
         elif phase == MovementPhase.MOVE:
-            print(Fore.YELLOW + 'MOVE' + Style.RESET_ALL)
+#           print(Fore.YELLOW + 'MOVE' + Style.RESET_ALL)
             movement_ctrl.handle_move_phase(accumulated, current_time)
         elif phase == MovementPhase.DECEL:
-            print(Fore.RED + 'DECEL' + Style.RESET_ALL)
+#           print(Fore.RED + 'DECEL' + Style.RESET_ALL)
             movement_ctrl.handle_decel_phase(elapsed, accumulated)
+#       current_time, elapsed, accumulated = movement_ctrl.poll()
+#       print('acc={:.1f}mm phase={}'.format(accumulated, movement_ctrl.movement_phase.name))
         time.sleep(poll_delay)
     while _enable_wait_loop:
         print('waiting to stop... ')

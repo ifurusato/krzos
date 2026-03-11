@@ -108,8 +108,10 @@ class Odometer(Component):
         self.set_pose(_initial_x, _initial_y, _initial_heading, use_radians=False)
         # derived geometry in mm
         self._wheel_radius_mm = self._wheel_diameter_mm / 2.0
+#       self._step_mm         = π * self._wheel_diameter_mm / self._steps_per_rev
+#       self._steps_per_rev = float(self._steps_per_rotation)
         self._steps_per_rev   = float(self._steps_per_rotation) / 4.0
-        self._step_mm         = π * self._wheel_diameter_mm / self._steps_per_rev
+        self._step_mm         = self._wheel_circumference_mm / self._steps_per_rev
         self._log.info(
             "wheel diameter: {:.2f}mm, wheelbase: {:.2f}mm, track: {:.2f}mm, steps/rev: {:.2f}".format(
                 self._wheel_diameter_mm, self._wheel_base_mm, self._wheel_track_mm, self._steps_per_rev
