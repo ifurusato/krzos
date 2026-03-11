@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-20
-# modified: 2025-11-20
+# modified: 2026-03-12
 
 import time
 from enum import Enum
@@ -81,20 +81,21 @@ class MovementController(Component):
             self._log.info('rotation controller available for combined movements')
         # configuration
         _cfg = config['kros'].get('movement_controller')
-        self._movement_speed = _cfg.get('default_speed', 20.0)  # cm/sec
+
+        self._movement_speed    = _cfg.get('default_speed', 200.0)   # mm/sec
         # maximum acceleration rate (protects motor gearboxes)
-        self._max_acceleration = _cfg.get('max_acceleration', 15.0)  # cm/s²
+        self._max_acceleration  = _cfg.get('max_acceleration', 150.0) # mm/s²
         # distance-based accel/decel distances
-        self._accel_distance_cm = _cfg.get('accel_distance_cm', 20.0)  # cm
-        self._decel_distance_cm = _cfg.get('decel_distance_cm', 20.0)  # cm
+        self._accel_distance_mm = _cfg.get('accel_distance_mm', 200.0) # mm
+        self._decel_distance_mm = _cfg.get('decel_distance_mm', 200.0) # mm
         # calculate time required to reach v_max with constant acceleration
         # v_max = a * t  →  t = v_max / a
         self._accel_time = self._movement_speed / self._max_acceleration
         self._decel_time = self._movement_speed / self._max_acceleration
-        self._log.info('movement speed: {:.1f}cm/sec'.format(self._movement_speed))
-        self._log.info('max acceleration: {:.1f}cm/s²'.format(self._max_acceleration))
-        self._log.info('accel: {:.1f}cm in {:.2f}s'.format(self._accel_distance_cm, self._accel_time))
-        self._log.info('decel: {:.1f}cm in {:.2f}s'.format(self._decel_distance_cm, self._decel_time))
+        self._log.info('movement speed: {:.1f}mm/sec'.format(self._movement_speed))
+        self._log.info('max acceleration: {:.1f}mm/s²'.format(self._max_acceleration))
+        self._log.info('accel: {:.1f}mm in {:.2f}s'.format(self._accel_distance_mm, self._accel_time))
+        self._log.info('decel: {:.1f}mm in {:.2f}s'.format(self._decel_distance_mm, self._decel_time))
         # movement state
         self._movement_phase = MovementPhase.INACTIVE
         self._movement_direction = Direction.STOPPED
@@ -145,18 +146,18 @@ class MovementController(Component):
         return self._intent_vector
 
     @property
-    def accel_distance_cm(self):
+    def accel_distance_mm(self):
         '''
-        Returns the configured acceleration distance in cm.
+        Returns the configured acceleration distance in mm.
         '''
-        return self._accel_distance_cm
+        return self._accel_distance_mm
 
     @property
-    def decel_distance_cm(self):
+    def decel_distance_mm(self):
         '''
-        Returns the configured deceleration distance in cm.
+        Returns the configured deceleration distance in mm.
         '''
-        return self._decel_distance_cm
+        return self._decel_distance_mm
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -188,23 +189,23 @@ class MovementController(Component):
             except Exception as e:
                 self._log.error('error in phase change callback: {}'.format(e))
 
-    def move(self, distance_cm, direction=Direction.AHEAD):
+    def move(self, distance_mm, direction=Direction.AHEAD):
         '''
         Move exactly the specified total distance in the given direction.
-        Total movement (including accel/decel) = distance_cm.
+        Total movement (including accel/decel) = distance_mm.
         
         Args:
-            distance_cm: Total movement distance in cm (including accel and decel phases)
+            distance_mm: Total movement distance in cm (including accel and decel phases)
             direction: Direction enum value (AHEAD, ASTERN, PORT, STARBOARD)
         '''
-        if distance_cm <= (self._accel_distance_cm + self._decel_distance_cm):
-            raise ValueError('distance {:.1f}cm too small for accel ({:.1f}cm) + decel ({:.1f}cm)'.format(
-                distance_cm, self._accel_distance_cm, self._decel_distance_cm))
-        self._total_target_distance = distance_cm
-        self._move_target = distance_cm - self._accel_distance_cm - self._decel_distance_cm
+        if distance_mm <= (self._accel_distance_mm + self._decel_distance_mm):
+            raise ValueError('distance {:.1f}mm too small for accel ({:.1f}mm) + decel ({:.1f}mm)'.format(
+                distance_mm, self._accel_distance_mm, self._decel_distance_mm))
+        self._total_target_distance = distance_mm
+        self._move_target = distance_mm - self._accel_distance_mm - self._decel_distance_mm
         self._movement_direction = direction
-        self._log.info(Fore.GREEN + 'initiating {:.1f}cm movement {} (accel={:.1f}cm, move={:.1f}cm, decel={:.1f}cm)'.format(
-            distance_cm, direction.label, self._accel_distance_cm, self._move_target, self._decel_distance_cm))
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {} (accel={:.1f}mm, move={:.1f}mm, decel={:.1f}mm)'.format(
+            distance_mm, direction.label, self._accel_distance_mm, self._move_target, self._decel_distance_mm))
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ACCEL
         self._start_time = time.time()
@@ -294,20 +295,8 @@ class MovementController(Component):
 
     def _get_accumulated_distance(self):
         '''
-        Calculate accumulated distance in cm from odometer pose changes.
-        Uses Euclidean distance which works regardless of robot heading.
-        '''
-        x, y, theta = self._odometer.pose
-        dx = x - self._baseline_x
-        dy = y - self._baseline_y
-        # Euclidean distance from baseline
-        distance = (dx**2 + dy**2)**0.5
-        return distance
-
-    def x_get_accumulated_distance(self):
-        '''
-        Calculate accumulated distance in cm from odometer pose changes.
-        Distance is calculated relative to baseline pose in the direction of movement.
+        Calculate accumulated distance in mm from odometer pose changes.
+        Distance is projected onto the movement direction axis.
         '''
         x, y, theta = self._odometer.pose
         dx = x - self._baseline_x
@@ -363,7 +352,7 @@ class MovementController(Component):
         vy = self._movement_direction.vy_direction * normalized_velocity
         self._intent_vector = (vx, vy, 0.0)
         # distance-based transition detection
-        if accumulated_distance >= self._accel_distance_cm:
+        if accumulated_distance >= self._accel_distance_mm:
             # transition to MOVE
             prev_phase = self._movement_phase
             self._movement_phase = MovementPhase.MOVE
@@ -423,7 +412,7 @@ class MovementController(Component):
         vy = self._movement_direction.vy_direction * normalized_velocity
         self._intent_vector = (vx, vy, 0.0)
         # complete when velocity reaches zero OR distance target reached
-        if velocity == 0.0 or accumulated_distance >= self._decel_distance_cm:
+        if velocity == 0.0 or accumulated_distance >= self._decel_distance_mm:
             # stop - zero intent vector
             self._intent_vector = (0.0, 0.0, 0.0)
             # remove from MotorController immediately

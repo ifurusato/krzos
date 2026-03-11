@@ -19,6 +19,7 @@ init()
 from core.logger import Level, Logger
 from core.config_loader import ConfigLoader
 from core.direction import Direction
+from core.orientation import Orientation
 from core.rotation import Rotation
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
@@ -93,7 +94,7 @@ def wait_for_rotation_complete(movement_ctrl, rotation_ctrl, poll_rate_hz=20):
         time.sleep(poll_delay)
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-def drive_2m_forward(movement_ctrl, distance=200.0):
+def drive_2m_forward(movement_ctrl, distance=2000.0):
 
     print('move ahead 2m...')
     # STEP 1: Move ahead 2m
@@ -154,12 +155,20 @@ def main():
         
         _movement_controller.add_phase_change_callback(phase_changed)
 
-        drive_2m_forward(_movement_controller, distance=200.0)
+        drive_2m_forward(_movement_controller, distance=2000.0)
 
         print_pose()
         
         _odometer.print_pose(force=True, title='CYAN final pose')
         print(Fore.CYAN + '🔹 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈' + Style.RESET_ALL)
+
+        mc = _motor_controller
+        print('🔹 final step counts: pfwd={}, sfwd={}, paft={}, saft={}'.format(
+            mc.get_motor(Orientation.PFWD).steps,
+            mc.get_motor(Orientation.SFWD).steps,
+            mc.get_motor(Orientation.PAFT).steps,
+            mc.get_motor(Orientation.SAFT).steps))
+
 
         _odometer.console('CYAN complete.')
         # wait before shutdown

@@ -253,10 +253,10 @@ kros:
             max_vy_rate:                      0.2          # max forward velocity change per second
             max_omega_rate:                   0.3          # max rotation velocity change per second
     movement_controller:
-            default_speed:                   20.0          # cm/sec
-            max_acceleration:                15.0          # cm/sec_2
-            accel_distance_cm:               20.0          # cm
-            decel_distance_cm:               20.0          # cm
+            default_speed:                  200.0          # mm/sec
+            max_acceleration:               150.0          # mm/sec_2
+            accel_distance_mm:              200.0          # mm
+            decel_distance_mm:              200.0          # mm
     rotation_controller:
         verbose:                            False
         max_acceleration_deg_per_sec_sq:     15.0          # safe acceleration limit
@@ -269,6 +269,7 @@ kros:
         wheel_base:                         148            # wheel base (mm), distance between front and rear axles
         wheel_track:                        186            # wheel base (mm), distance between left and right wheel centerlines
         steps_per_rotation:                2774.64         # encoder steps per wheel rotation
+        quadrature_scale:                     4            # gpiozero counts 1x; multiply to get full quadrature count
     motor:
         thunderborg_port_address:          0x15            # I²C address for port thunderborg motor controller
         thunderborg_stbd_address:          0x16            # I²C address for starboard thunderborg motor controller

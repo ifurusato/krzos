@@ -12,7 +12,7 @@
 # A class containing some static IMU-related conversion methods.
 
 import numpy, math
-from math import pi as PI
+from math import pi as π
 
 __X = 0
 __Y = 1
@@ -57,7 +57,7 @@ class Convert:
         '''
         Add two angles (provided in radians), returning the result.
         '''
-        return (angle + offset) % (2.0 * PI)
+        return (angle + offset) % (2.0 * π)
 
     @staticmethod
     def quaternion_to_euler_angle(w, x, y, z):
