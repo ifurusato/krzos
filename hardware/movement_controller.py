@@ -400,6 +400,50 @@ class MovementController(Component):
         '''
         Handle deceleration phase: ramp down to stop.
         Uses time-based ramping with configured max acceleration rate.
+        Completes based on distance traveled during decel phase.
+        Returns: True if deceleration complete, False otherwise
+        '''
+        # time-based deceleration with max rate limit
+        # v = v_max - a * t, floored at 0
+        velocity = max(self._movement_speed - self._max_acceleration * elapsed, 0.0)
+        # convert to normalized intent vector components
+        normalized_velocity = velocity / self._movement_speed
+        vx = self._movement_direction.vx_direction * normalized_velocity
+        vy = self._movement_direction.vy_direction * normalized_velocity
+        self._intent_vector = (vx, vy, 0.0)
+
+        print('decel: elapsed={:.3f}s vel={:.1f} acc={:.1f}mm target={:.1f}mm'.format(
+            elapsed, velocity, accumulated_distance, self._decel_distance_mm))
+
+        # complete when distance target reached
+        if accumulated_distance >= self._decel_distance_mm:
+
+            print('decel COMPLETE at acc={:.1f}mm'.format(accumulated_distance))
+
+            # stop - zero intent vector
+            self._intent_vector = (0.0, 0.0, 0.0)
+            # remove from MotorController immediately
+            if self._intent_vector_registered:
+                self._motor_controller.remove_intent_vector(MovementController.NAME)
+                self._intent_vector_registered = False
+                self._log.info('intent vector removed (movement complete)')
+            # calculate total distance: accel + move + decel
+            total_distance = self._accel_distance + self._move_distance + accumulated_distance
+            self._log.info('movement complete: accel={:.1f}mm, move={:.1f}mm, decel={:.1f}mm, total={:.1f}mm (target={:.1f}mm, error={:.1f}mm)'.format(
+                self._accel_distance, self._move_distance, accumulated_distance,
+                total_distance, self._total_target_distance, total_distance - self._total_target_distance))
+            # transition to idle
+            prev_phase = self._movement_phase
+            self._movement_phase = MovementPhase.IDLE
+            # notify phase change
+            self._notify_phase_change(prev_phase, self._movement_phase)
+            return True
+        return False
+
+    def x_handle_decel_phase(self, elapsed, accumulated_distance):
+        '''
+        Handle deceleration phase: ramp down to stop.
+        Uses time-based ramping with configured max acceleration rate.
         Completes based on distance or when velocity reaches zero.
         Returns: True if deceleration complete, False otherwise
         '''

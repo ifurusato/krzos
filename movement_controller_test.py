@@ -41,6 +41,25 @@ def wait_for_movement_complete(movement_ctrl, poll_rate_hz=20):
     Does NOT handle rotation phase.
     '''
     poll_delay = 1.0 / poll_rate_hz
+    while movement_ctrl.movement_phase in (MovementPhase.ACCEL, MovementPhase.MOVE, MovementPhase.DECEL):
+        current_time, elapsed, accumulated = movement_ctrl.poll()
+        phase = movement_ctrl.movement_phase
+        if phase == MovementPhase.ACCEL:
+            movement_ctrl.handle_accel_phase(elapsed, accumulated, current_time)
+        elif phase == MovementPhase.MOVE:
+            movement_ctrl.handle_move_phase(accumulated, current_time)
+        elif phase == MovementPhase.DECEL:
+            movement_ctrl.handle_decel_phase(elapsed, accumulated)
+        time.sleep(poll_delay)
+    while not _motor_controller.all_motors_are_stopped:
+        time.sleep(0.05)
+
+def x_wait_for_movement_complete(movement_ctrl, poll_rate_hz=20):
+    '''
+    Poll movement controller until linear movement completes and returns to IDLE.
+    Does NOT handle rotation phase.
+    '''
+    poll_delay = 1.0 / poll_rate_hz
 
     _enable_wait_loop = True
     def wait_enable():
