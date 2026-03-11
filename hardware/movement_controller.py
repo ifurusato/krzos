@@ -67,7 +67,7 @@ class MovementController(Component):
             raise ValueError('motor_controller cannot be None')
         self._motor_controller = motor_controller
         # get odometer for distance tracking
-        self._odometer = self._motor_controller.get_odometer()
+        self._odometer = self._motor_controller.odometer
         if self._odometer is None:
             raise ValueError('odometer not available from motor controller')
         # get motor references

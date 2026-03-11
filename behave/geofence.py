@@ -81,7 +81,7 @@ class Geofence(AsyncBehaviour):
         self._target_escape_heading = None
 
         # get odometer and set initial pose
-        self._odometer = self._motor_controller.get_odometer()
+        self._odometer = self._motor_controller.odometer
         if self._odometer is None:
             raise MissingComponentError('odometer not available from motor controller.')
 

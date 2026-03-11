@@ -105,7 +105,14 @@ class TinyFxController(Controller):
         super()._start_services()
 
     def _led_off(self, timer=None):
+        print('tfx._led_off')
+        self._show_color('color black')
         super()._led_off(timer)
+
+    def _beat(self):
+        print('tfx._beat')
+        super()._beat()
+        self._show_color('color cyan')
 
     def tick(self, delta_ms):
         self._player.update(delta_ms)

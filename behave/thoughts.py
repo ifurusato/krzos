@@ -153,12 +153,12 @@ class Thoughts(Behaviour):
         self._enable_imu_poll  = True
         self._bored            = False
         self._sleeping         = False
+        self._deep_sleeping    = False
         self._idle_count       = 0
         self._snore_count      = 0
         self._sleep_count      = 0
         self._bored_limit      = 0 # how long before we get bored?
         self._sleep_limit      = 0 # how many cycles before falling asleep?
-        self._deep_sleep_limit = 0 # how many cycles asleep before falling into deep sleep?
         self._snore_limit      = 0 # how many snores?
         self._snore_rate       = 0 # how fast to snore?
         self._reset_sleepiness()   # set to initial values
@@ -232,6 +232,7 @@ class Thoughts(Behaviour):
         self._last_activity_time = dt.now()
         self._last_idle_publish_time = None
         self._sleeping    = False
+        self._deep_sleeping = False
         self._bored       = False
         self._idle_count  = 0
         self._snore_count = 0
@@ -240,7 +241,6 @@ class Thoughts(Behaviour):
         self._snore_count = 0
         self._bored_limit = randint(self._bored_limit_min, self._bored_limit_min + 6)
         self._sleep_limit = randint(self._sleep_limit_min, self._sleep_limit_min + 6)
-        self._deep_sleep_limit = randint(self._deep_sleep_limit_min, self._deep_sleep_limit_min + 3)
         self._snore_limit = randint(self._snore_limit_min, self._snore_limit_min + 3)
         self._snore_rate  = randint(self._snore_rate_min, self._snore_rate_min + 3)
 
@@ -379,14 +379,12 @@ class Thoughts(Behaviour):
                         _idle_style     = Style.NORMAL if ( not self._bored and not self._sleeping ) else Style.DIM
                         _bored_style    = Style.NORMAL if ( self._bored and not self._sleeping ) else Style.DIM
                         _sleeping_style = Style.NORMAL if self._sleeping else Style.DIM
-                        _deep_sleep_style = Style.NORMAL if self._sleep_count > self._deep_sleep_limit else Style.DIM
                         self._log.info(Fore.BLUE + _style + '[{:05d}] activity: {:4.2f} (raw: {:4.2f});'.format(
                                self._count, _activity, _raw_activity)
                                + Style.NORMAL
                                + Fore.WHITE   + _idle_style       + ' idle: {:4d};'.format(self._idle_count)
                                + Fore.YELLOW  + _bored_style      + ' bored: {};'.format(self._bored_limit)
                                + Fore.BLUE    + _sleeping_style   + ' sleep: {};'.format(self._sleep_limit)
-                               + Fore.MAGENTA + _deep_sleep_style + ' deep sleep: {};'.format(self._deep_sleep_limit)
                                + Fore.BLACK   + Style.DIM         + ' snore: {}'.format(self._snore_rate)
                         )
                     if self._idle_count == 0: # activity ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -404,11 +402,11 @@ class Thoughts(Behaviour):
                             else:
                                 if self._poll_pir: # check for human/cat activity
                                     self.pir()
-                                elif self._sleep_count > self._deep_sleep_limit:
-                                    self._eyeballs_monitor.set_eyeballs(Eyeball.DEEP_SLEEP)
-                                    self.play_sound('quiet-breathing')
                                 else:
                                     self._sleep_count += 1
+                                    if self._sleep_count > 10 and not self._deep_sleeping: # enter deep sleep
+                                        self._eyeballs_monitor.set_eyeballs(Eyeball.DEEP_SLEEP)
+                                        self._deep_sleeping = True
                                     self._set_running_lights(False)
                                     time.sleep(0.1)
                                     self.play_sound('breathing')

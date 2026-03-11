@@ -69,6 +69,8 @@ class MotorController(Component):
         Component.__init__(self, self._log, suppressed, enabled)
         if config is None:
             raise ValueError('no configuration provided.')
+        # odometer
+        self._odometer = Odometer(config)
         _cfg = config['kros'].get('motor_controller')
         _i2c_scanner = I2CScanner(config=config, i2c_bus_number=1, i2c_bus=None, level=level)
         # configuration
@@ -97,8 +99,6 @@ class MotorController(Component):
             self._saft_data_log = Logger('saft'.format(self.NAME), log_to_file=True, data_logger=True, level=Level.INFO)
         # optional vector post processor
         self._post_processor = None
-        # odometer
-        self._odometer = Odometer(config)
         # eyeballs monitor
         self._use_eyeballs = _cfg.get('use_eyeballs', False)
         self._eyeballs_monitor = None
@@ -188,22 +188,10 @@ class MotorController(Component):
         # finish up…
         self._log.info(Fore.GREEN + 'ready with {} motors.'.format(len(self._all_motors)))
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def set_post_processor(self, post_processor):
-        '''
-        Sets the intent vector post-processor to the argument, removing it if
-        the argument is None.
-        '''
-        self._post_processor = post_processor
-
-    def set_show_battery(self, enable):
-        '''
-        Enable/disable the show battery feature on both ThunderBorg motor controllers.
-        '''
-        self._motor_configurer.set_thunderborg_leds(enable)
-
-    def get_odometer(self):
+    @property
+    def odometer(self):
         '''
         Return the Odometer used by this MotorController.
         '''
@@ -244,13 +232,6 @@ class MotorController(Component):
         '''
         return self._is_braked
 
-    def clear_intent_vectors(self):
-        '''
-        Clear the existing intent vectors.
-        '''
-        self._intent_vectors.clear()
-        self._blended_intent_vector = (0.0, 0.0, 0.0)
-
     @property
     def forward_velocity(self):
         '''
@@ -258,6 +239,68 @@ class MotorController(Component):
         last blended intent vector.
         '''
         return self._blended_intent_vector[1]
+
+    @property
+    def loop_is_running(self):
+        '''
+        Returns true if using an external clock or if the loop thread is alive.
+        '''
+        return self._loop_enabled and self._loop_thread != None and self._loop_thread.is_alive()
+
+    @property
+    def is_stopped(self):
+        '''
+        Returns True if the speed (current power) of all motors is zero, False
+        if any are moving, i.e., if the motor power of any motor is greater than
+        zero.
+        '''
+        for _motor in self._all_motors:
+            if not _motor.is_stopped:
+                return False
+        return True
+
+    @property
+    def is_stopped_target(self):
+        '''
+        Returns True if the target speed of all motors is (close to) zero,
+        False if any have a non-zero target speed.
+        '''
+        for _motor in self._all_motors:
+            if not _motor.is_stopped_target_speed:
+                return False
+        return True
+
+    @property
+    def all_motors_are_stopped(self):
+        '''
+        Returns True when all motors are stopped.
+        '''
+        for _motor in self._all_motors:
+            if not _motor.is_stopped:
+                return False
+        return True
+
+    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def clear_intent_vectors(self):
+        '''
+        Clear the existing intent vectors.
+        '''
+        self._intent_vectors.clear()
+        self._blended_intent_vector = (0.0, 0.0, 0.0)
+
+    def set_post_processor(self, post_processor):
+        '''
+        Sets the intent vector post-processor to the argument, removing it if
+        the argument is None.
+        '''
+        self._post_processor = post_processor
+
+    def set_show_battery(self, enable):
+        '''
+        Enable/disable the show battery feature on both ThunderBorg motor controllers.
+        '''
+        self._motor_configurer.set_thunderborg_leds(enable)
 
     def set_base_intent_vector(self, enable):
         '''
@@ -575,13 +618,6 @@ class MotorController(Component):
         else:
             self._log.warning('motor control loop already disabled.')
 
-    @property
-    def loop_is_running(self):
-        '''
-        Returns true if using an external clock or if the loop thread is alive.
-        '''
-        return self._loop_enabled and self._loop_thread != None and self._loop_thread.is_alive()
-
     def add_speed_modifier(self, name, modifier_fn, exclusive=True):
         '''
         Register a controller-level speed modifier.
@@ -800,29 +836,6 @@ class MotorController(Component):
             _lambda_count += _motor.speed_multiplier_count
         return _lambda_count > 0
 
-    @property
-    def is_stopped(self):
-        '''
-        Returns True if the speed (current power) of all motors is zero, False
-        if any are moving, i.e., if the motor power of any motor is greater than
-        zero.
-        '''
-        for _motor in self._all_motors:
-            if not _motor.is_stopped:
-                return False
-        return True
-
-    @property
-    def is_stopped_target(self):
-        '''
-        Returns True if the target speed of all motors is (close to) zero,
-        False if any have a non-zero target speed.
-        '''
-        for _motor in self._all_motors:
-            if not _motor.is_stopped_target_speed:
-                return False
-        return True
-
     def set_speeds(self, pfwd_speed, sfwd_speed, paft_speed, saft_speed):
         '''
         Set all four motors speeds.
@@ -919,16 +932,6 @@ class MotorController(Component):
         Return the clamp lambda function.
         '''
         return self._clamp(value)
-
-    @property
-    def all_motors_are_stopped(self):
-        '''
-        Returns True when all motors are stopped.
-        '''
-        for _motor in self._all_motors:
-            if not _motor.is_stopped:
-                return False
-        return True
 
     def clear_speed_multipliers(self):
         '''

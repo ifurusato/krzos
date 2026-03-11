@@ -67,6 +67,7 @@ class Controller:
             self._pixel_timer = Timer(0)
             self._pixel_timer.init(freq=self._pixel_timer_freq_hz, callback=self._led_off)
         except Exception as e:
+            print('{} raised creating pixel timer: {}'.format(type(e), e))
             sys.print_exception(e)
 
     # public API ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
@@ -246,20 +247,26 @@ Commands:
         pass # whatever services to be started after a delay
 
     def _enable_heartbeat(self, enabled):
+        print('controller._enable_heartbeat: {}'.format(enabled))
         self._heartbeat_enabled = enabled
         if not enabled:
             self._pixel_timer.deinit()
 
     def _led_off(self, timer=None):
+        print('controller._led_off')
         pass
 
     def _beat(self):
+        print('controller._beat')
 #       if self._pixel:
 #           self._pixel.set_color(0, COLOR_DARK_CYAN)
         if self._pixel_timer:
+            print('controller._beat has pixel timer.')
             self._pixel_timer.deinit()
 #           self._pixel_timer.init(freq=self._pixel_timer_freq_hz)
             self._pixel_timer.init(freq=self._pixel_timer_freq_hz, callback=self._led_off)
+        else:
+            print('controller._beat has NO pixel timer.')
 
     def _heartbeat(self, delta_ms):
         self._heartbeat_timer += delta_ms
