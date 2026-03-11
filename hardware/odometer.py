@@ -211,9 +211,18 @@ class Odometer(Component):
         self._theta = theta if use_radians else radians(theta)
         _degrees = degrees(self._theta)
         _rad_pi  = self._theta / π
-        self._log.info('initial pose: ' + Fore.GREEN + 'x={:.2f}mm, y={:.2f}mm, theta={:.2f}π ({:.1f}°)'.format(x, y, _rad_pi, _degrees))
-        self.console('CYAN initial pose:\nCYAN   x:YELLOW          {:.2f}mm\nCYAN   y:YELLOW          {:.2f}mm\nCYAN   theta:YELLOW      {:.3f}π ({:.1f}°)'.format(
-                x, y, _rad_pi, _degrees))
+        self._log.info('initial pose: ' + Fore.GREEN + 'x={:d}mm, y={:d}mm, theta={:.2f}π ({:.1f}°)'.format(
+                round(x),
+                round(y),
+                _rad_pi,
+                _degrees)
+        )
+        self.console('CYAN initial pose:\nCYAN   x:YELLOW          {:d}mm\nCYAN   y:YELLOW          {:d}mm\nCYAN   theta:YELLOW      {:.3f}π ({:.1f}°)'.format(
+                round(x),
+                round(y),
+                _rad_pi,
+                _degrees)
+        )
 
     def steps_to_mm(self, steps):
         return steps / self._steps_per_mm
@@ -290,71 +299,49 @@ class Odometer(Component):
         self._last_time = timestamp
         if self.is_moving():
             self._callback_method()
-            _dx = self._x - self._last_printed_x
-            _dy = self._y - self._last_printed_y
-            if (_dx * _dx + _dy * _dy) >= (self._pose_delta_mm * self._pose_delta_mm):
-                self._last_printed_x = self._x
-                self._last_printed_y = self._y
-                self._print_pose_to_tty(_dx, _dy)
+            self.print_pose()
 
-    def _print_pose_to_tty(self, dx, dy):
+    def print_pose(self, force=False, title='CYAN pose'):
         '''
         Prints the current pose to the tty console via TtyWriter.
         '''
-        if not self.enabled or self._ttywriter is None:
+        _dx = self._x - self._last_printed_x
+        _dy = self._y - self._last_printed_y
+        if force or (_dx * _dx + _dy * _dy) >= (self._pose_delta_mm * self._pose_delta_mm):
+            self._last_printed_x = self._x
+            self._last_printed_y = self._y
+            self._print_pose(_dx, _dy, title)
+
+    def _print_pose(self, dx, dy, title=None):
+        '''
+        Prints the current pose to the tty console via TtyWriter.
+        '''
+        if not self.enabled:
             return
+        if title is None:
+            title = 'CYAN pose'
         _deg = degrees(self._theta)
         _rad_pi = self._theta / π
         _heading_cardinal = Cardinal.get_heading_from_degrees(_deg % 360.0)
         _travel_angle_deg = degrees(atan2(dy, dx))
         _compass_deg = (90.0 - _travel_angle_deg) % 360.0
         _travel_cardinal = Cardinal.get_heading_from_degrees(_compass_deg)
-        self._log.info('pose: ' + Fore.GREEN + '{} '.format(_travel_cardinal.abbrev)
-                + Fore.CYAN + '; x: ' + Fore.YELLOW + '{:7.2f}mm '.format(self._x)
-                + Fore.CYAN + 'y: ' + Fore.YELLOW + '{:7.2f}mm '.format(self._y)
+        self._log.info('pose: ' + Fore.GREEN + '{}; '.format(_travel_cardinal.abbrev)
+                + Fore.CYAN + 'x: ' + Fore.YELLOW + '{:7.2f}mm; '.format(self._x)
+                + Fore.CYAN + 'y: ' + Fore.YELLOW + '{:7.2f}mm; '.format(self._y)
                 + Fore.CYAN + 'theta: ' + Fore.YELLOW + '{:.3f}π ({:.1f}°) '.format(_rad_pi, _deg)
                 + Fore.GREEN + '{}'.format(_heading_cardinal.abbrev))
-        self._ttywriter.write(
-            'CYAN pose: GREEN {}\nCYAN   x:YELLOW      {:7.2f}mm\nCYAN   y:YELLOW      {:7.2f}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°) GREEN {}'.format(
-                _travel_cardinal.abbrev, self._x, self._y, _rad_pi, _deg, _heading_cardinal.abbrev),
-            colorise=True)
-
-    def z_print_pose_to_tty(self):
-        '''
-        Prints the current pose to the tty console via TtyWriter.
-        '''
-        if self._ttywriter is None:
-            return
-        _deg = degrees(self._theta)
-        _rad_pi = self._theta / π
-        # heading arrow: theta=0 is north (forward), clockwise positive
-        _heading_idx = round(_deg / 45.0) % 8
-        _heading_arrow = Odometer.M_ARROWS[_heading_idx]
-        # travel direction arrow: from last printed pose to current
-        _dx = self._x - self._last_printed_x
-        _dy = self._y - self._last_printed_y
-        # atan2 gives angle from east, ccw positive; convert to compass idx
-        _travel_angle_deg = degrees(atan2(_dy, _dx))  # east=0, north=90
-        _compass_deg = (90.0 - _travel_angle_deg) % 360.0  # north=0, clockwise
-        _travel_idx = round(_compass_deg / 45.0) % 8
-        _travel_arrow = Odometer.M_ARROWS[_travel_idx]
-        self._ttywriter.write(
-            'CYAN pose: {}\nCYAN   x:YELLOW      {:7.2f}mm\nCYAN   y:YELLOW      {:7.2f}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°) {}'.format(
-                _travel_arrow, self._x, self._y, _rad_pi, _deg, _heading_arrow),
-            colorise=True)
-
-    def x_print_pose_to_tty(self):
-        '''
-        Prints the current pose to the tty console via TtyWriter.
-        '''
-        if self._ttywriter is None:
-            return
-        _deg = degrees(self._theta)
-        _rad_pi = self._theta / π
-        self._ttywriter.write(
-            'CYAN pose:\nCYAN   x:YELLOW      {:7.2f}mm\nCYAN   y:YELLOW      {:7.2f}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°)'.format(
-                self._x, self._y, _rad_pi, _deg),
-            colorise=True)
+        if self._ttywriter:
+            self._ttywriter.write(
+                '{}: GREEN {}\nCYAN   x:YELLOW      {:d}mm\nCYAN   y:YELLOW      {:d}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°) GREEN {}'.format(
+                    title,
+                    _travel_cardinal.abbrev,
+                    round(self._x),
+                    round(self._y),
+                    _rad_pi,
+                    _deg,
+                    _heading_cardinal.abbrev),
+                    colorise=True)
 
     def print_info(self):
         '''

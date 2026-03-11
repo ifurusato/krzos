@@ -156,9 +156,12 @@ def main():
 
         drive_2m_forward(_movement_controller, distance=200.0)
 
-        print(Fore.CYAN + '🔹 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈' + Style.RESET_ALL)
         print_pose()
+        
+        _odometer.print_pose(force=True, title='CYAN final pose')
+        print(Fore.CYAN + '🔹 ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈' + Style.RESET_ALL)
 
+        _odometer.console('CYAN complete.')
         # wait before shutdown
         _log.info('\nWaiting 1 second before shutdown…')
         time.sleep(1.0)
