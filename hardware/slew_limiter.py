@@ -31,20 +31,31 @@ class SlewLimiter(Component):
     def __init__(self, config, level=Level.INFO):
         self._log = Logger('slew-limiter', level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
-
         # read configuration - rates are per second
-        _cfg = config['kros'].get('motor_controller').get('slew_limiter')
-        self._max_vx_rate    = _cfg.get('max_vx_rate')      # lateral motion rate limit (per second)
-        self._max_vy_rate    = _cfg.get('max_vy_rate')      # forward motion rate limit (per second)
-        self._max_omega_rate = _cfg.get('max_omega_rate')   # rotation rate limit (per second)
-        self._log.info('rate limits (per second): vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(
-            self._max_vx_rate, self._max_vy_rate, self._max_omega_rate))
+        self._cfg = config['kros'].get('motor_controller').get('slew_limiter')
+        self._max_vx_rate    = None # lateral motion rate limit (per second)
+        self._max_vy_rate    = None # forward motion rate limit (per second)
+        self._max_omega_rate = None # rotation rate limit (per second)
         # state tracking
-        self._last_intent = (0.0, 0.0, 0.0)
-        self._last_time   = time.perf_counter()
+        self._last_intent = None
+        self._last_time   = None
         self._fixed_rate  = True
         self._verbose     = False
+        self.reset()
         self._log.info('ready.')
+
+    def reset(self):
+        '''
+        Set internal state to its default values.
+        '''
+        self._max_vx_rate    = self._cfg.get('max_vx_rate')      # lateral motion rate limit (per second)
+        self._max_vy_rate    = self._cfg.get('max_vy_rate')      # forward motion rate limit (per second)
+        self._max_omega_rate = self._cfg.get('max_omega_rate')   # rotation rate limit (per second)
+        self._log.info('rate limits (per second): vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(
+            self._max_vx_rate, self._max_vy_rate, self._max_omega_rate))
+        self._last_intent    = (0.0, 0.0, 0.0)
+        self._last_time      = time.perf_counter()
+        self._log.debug('reset to zero state.')
 
     @property
     def max_vx_rate(self):
@@ -53,6 +64,13 @@ class SlewLimiter(Component):
         '''
         return self._max_vx_rate
 
+    @max_vx_rate.setter
+    def max_vx_rate(self, max_vx_rate):
+        '''
+        Set the lateral motion rate limit (per second) to the argument.
+        '''
+        self._max_vx_rate = max_vx_rate
+
     @property
     def max_vy_rate(self):
         '''
@@ -60,12 +78,26 @@ class SlewLimiter(Component):
         '''
         return self._max_vy_rate
 
+    @max_vy_rate.setter
+    def max_vy_rate(self, max_vy_rate):
+        '''
+        Set the forward motion rate limit (per second) to the argument.
+        '''
+        self._max_vy_rate = max_vy_rate
+
     @property
     def max_omega_rate(self):
         '''
         Return the rotation rate limit (per second).
         '''
         return self._max_omega_rate
+
+    @max_omega_rate.setter
+    def max_omega_rate(self, max_omega_rate):
+        '''
+        Set the rotation rate limit (per second) to the argument.
+        '''
+        self._max_omega_rate = max_omega_rate
 
     def limit(self, target_intent):
         if self._fixed_rate:
@@ -159,14 +191,6 @@ class SlewLimiter(Component):
             return current + max_change
         else:
             return current - max_change
-
-    def reset(self):
-        '''
-        Reset internal state to zero. Useful when stopping or changing modes.
-        '''
-        self._last_intent = (0.0, 0.0, 0.0)
-        self._last_time = time.perf_counter()
-        self._log.debug('reset to zero state.')
 
     def enable(self):
         if not self.enabled:

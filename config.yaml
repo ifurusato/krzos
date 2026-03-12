@@ -229,7 +229,7 @@ kros:
         closed_loop:                       True            # open or closed loop control
         create_external_clock:             True            # create external clock if not provided
         motor_power_smoothing:
-            enabled:                       True            # enable post-kinematic blending smoothing
+            enabled:                      False            # enable post-kinematic blending smoothing
             alpha:                            0.5          # smoothing factor: 0.0=no smoothing, 1.0=no response
                                                            # recommended: 0.4-0.6 for timing jitter absorption
         use_eyeballs:                      True            # enable eyeballs monitor for direction display

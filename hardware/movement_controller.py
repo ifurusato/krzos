@@ -11,7 +11,7 @@
 
 import time
 from enum import Enum
-from math import sqrt
+from math import isclose, sqrt
 from colorama import init, Fore, Style
 init()
 
@@ -242,24 +242,13 @@ class MovementController(Component):
     def move(self, distance_mm, direction=Direction.AHEAD):
         '''
         Initiate movement of exactly distance_mm in the given direction.
-        All phase distances are computed from the SlewLimiter rate and movement speed.
+        Phase transitions are determined dynamically from odometer and slew state.
         '''
-        _slew = self._motor_controller.slew_limiter
-        if _slew:
-            _phase_mm = 0.5 * self._movement_speed / _slew.max_vy_rate
-        else:
-            _phase_mm = (self._movement_speed ** 2) / (2.0 * self._max_acceleration)
-        if distance_mm <= (2.0 * _phase_mm):
-            raise ValueError('distance {:.1f}mm too small for phase distance {:.1f}mm'.format(
-                distance_mm, _phase_mm))
-        self._accel_distance_mm     = _phase_mm
-        self._decel_start_mm        = distance_mm - _phase_mm  # absolute distance from start at which to begin decel
         self._total_target_distance = distance_mm
         self._movement_direction    = direction
         self._accel_distance        = 0.0
         self._move_distance         = 0.0
-        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {} (accel={:.1f}mm, move={:.1f}mm, decel_start={:.1f}mm)'.format(
-            distance_mm, direction.label, _phase_mm, distance_mm - 2.0 * _phase_mm, self._decel_start_mm))
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {}'.format(distance_mm, direction.label))
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ACCEL
         self._start_time = time.time()
@@ -283,7 +272,7 @@ class MovementController(Component):
             accumulated  = self._get_accumulated_distance()
             phase = self._movement_phase
             if phase == MovementPhase.ACCEL:
-                self.handle_accel_phase(elapsed, accumulated, current_time)
+                self.handle_accel_phase(accumulated, current_time)
             elif phase == MovementPhase.MOVE:
                 self.handle_move_phase(accumulated, current_time)
             elif phase == MovementPhase.DECEL:
@@ -403,17 +392,15 @@ class MovementController(Component):
         accumulated  = self._get_accumulated_distance()
         return (current_time, elapsed, accumulated)
 
-    def handle_accel_phase(self, elapsed, accumulated_distance, current_time):
+    def handle_accel_phase(self, accumulated_distance, current_time):
         '''
         Handle acceleration phase.
-        Uses time-based ramp: v = a * t, capped at movement speed.
-        Transitions to MOVE when accel_distance_mm is reached.
+        Sets intent to 1.0 and lets the SlewLimiter ramp up naturally.
+        Transitions to MOVE when forward_velocity reaches 1.0.
         '''
-        velocity = min(self._max_acceleration * elapsed, self._movement_speed)
-        self._set_intent(velocity / self._movement_speed)
-        if accumulated_distance >= self._accel_distance_mm:
+        self._set_intent(1.0)
+        if isclose(self._motor_controller.forward_velocity, 1.0, abs_tol=0.02):
             self._accel_distance = accumulated_distance
-            self._reset_baseline()
             prev_phase = self._movement_phase
             self._movement_phase = MovementPhase.MOVE
             self._start_time = current_time
@@ -424,21 +411,59 @@ class MovementController(Component):
     def handle_move_phase(self, accumulated_distance, current_time):
         '''
         Handle constant velocity move phase.
-        Transitions to DECEL when accumulated distance reaches decel_start_mm.
+        Dynamically determines when to trigger DECEL based on remaining distance
+        and the distance required for the SlewLimiter to ramp down from current vy.
+        Uses actual measured speed from odometer rather than configured speed.
         Returns: True if transitioning to decel, False otherwise
         '''
         self._set_intent(1.0)
-        if accumulated_distance >= self._decel_start_mm:
+        _current_vy        = self._motor_controller.forward_velocity
+        _slew              = self._motor_controller.slew_limiter
+        _, _actual_vy, _   = self._odometer.velocity
+        _stopping_distance = 0.5 * _current_vy * abs(_actual_vy) / _slew.max_vy_rate
+        _remaining         = self._total_target_distance - accumulated_distance
+        if _remaining <= _stopping_distance:
             self._move_distance = accumulated_distance
             prev_phase = self._movement_phase
             self._movement_phase = MovementPhase.DECEL
-            self._log.info('starting deceleration at {:.1f}mm (target decel start: {:.1f}mm)'.format(
-                accumulated_distance, self._decel_start_mm))
+            self._log.info('starting deceleration at {:.1f}mm: remaining={:.1f}mm, stopping_distance={:.1f}mm, vy={:.3f}, actual_vy={:.1f}mm/s'.format(
+                accumulated_distance, _remaining, _stopping_distance, _current_vy, _actual_vy))
             self._notify_phase_change(prev_phase, self._movement_phase)
             return True
         return False
 
     def handle_decel_phase(self, accumulated_distance):
+        '''
+        Handle deceleration phase.
+        On each tick, computes the exact SlewLimiter rate required to stop at
+        the target distance, sets it, then sets intent to zero. The SlewLimiter
+        ramps vy down at precisely the rate needed to consume the remaining distance.
+        Phase completes when the odometer reports the robot has stopped.
+        Returns: True if deceleration complete, False otherwise
+        '''
+        _slew     = self._motor_controller.slew_limiter
+        _, _vy, _ = self._odometer.velocity
+        _remaining = self._total_target_distance - accumulated_distance
+        if _remaining > 0.0 and abs(_vy) > 0.0:
+            # rate required to stop in exactly remaining distance:
+            # remaining = 0.5 * vy_norm * actual_speed / rate  =>  rate = 0.5 * vy_norm * actual_speed / remaining
+            _vy_norm = self._motor_controller.forward_velocity
+            _required_rate = (0.5 * _vy_norm * abs(_vy)) / _remaining
+            _slew.max_vy_rate = _required_rate
+        self._set_intent(0.0)
+        if not self._odometer.is_moving():
+            _slew.reset()
+            self._remove_intent_vector()
+            self._log.info('movement complete: accel={:.1f}mm, move={:.1f}mm, total={:.1f}mm (target={:.1f}mm, error={:.1f}mm)'.format(
+                self._accel_distance, self._move_distance, accumulated_distance,
+                self._total_target_distance, accumulated_distance - self._total_target_distance))
+            prev_phase = self._movement_phase
+            self._movement_phase = MovementPhase.IDLE
+            self._notify_phase_change(prev_phase, self._movement_phase)
+            return True
+        return False
+
+    def x_handle_decel_phase(self, accumulated_distance):
         '''
         Handle deceleration phase.
         Sets intent to zero; the SlewLimiter ramps vy down to zero naturally.
