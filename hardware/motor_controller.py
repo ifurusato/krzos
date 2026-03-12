@@ -741,13 +741,6 @@ class MotorController(Component):
         # new motor power smoothing
         if self._motor_power_smoothing_enabled:
             speeds = self._smooth_motor_powers(speeds)
-
-
-
-        if self._side_trim:
-            speeds = [s * t for s, t in zip(speeds, self._side_trim)]
-
-
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))

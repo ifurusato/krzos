@@ -53,6 +53,9 @@ def main():
     global _odometer, _motor_controller, _rotation_controller, _movement_controller
 
     try:
+
+        time.sleep(3)
+
         _log.info('loading configuration…')
         _loader = ConfigLoader(Level.INFO)
         _config = _loader.configure()

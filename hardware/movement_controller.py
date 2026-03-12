@@ -110,6 +110,13 @@ class MovementController(Component):
         self._log.info('ready.')
 
     @property
+    def motor_controller(self):
+        '''
+        Returns the backing MotorController.
+        '''
+        return self._motor_controller
+
+    @property
     def is_moving(self):
         '''
         Returns True if currently executing a movement.

@@ -61,6 +61,10 @@ kros:
             release:                    False              # release idle behaviour on startup
             idle_threshold_sec:            20              # how many seconds before we trigger an idle behaviour
             loop_freq_hz:                   1              # polling loop frequency
+        navigator:
+            enable:                      True              # enable navigator behaviour
+            release:                     True              # release navigator behaviour on startup
+            verbose:                    False              # verbose messaging
         nudge:
             enable:                     False              # enable nudge behaviour
             release:                    False              # release nudge behaviour on startup
@@ -249,7 +253,7 @@ kros:
         stopping_steps:                      10            # determines stopping deceleration (unused)
         side_trim:
             enabled:                         True          # enable per-side motor trim
-            port_trim:                        2.4          # percentage trim for port motors (pfwd, paft); positive = faster
+            port_trim:                        3.6          # was 2.4; percentage trim for port motors (pfwd, paft); positive = faster
             stbd_trim:                        0.0          # percentage trim for starboard motors (sfwd, saft); positive = faster
         slew_limiter:
             enabled:                         True

@@ -19,7 +19,7 @@
 #
 
 import sys
-from floorplan import Floorplan, RoomResult, DoorResult, LandmarkResult, SVGParser
+from navigate.floorplan import Floorplan, RoomResult, DoorResult, LandmarkResult, SVGParser
 
 def format_result(result) -> str:
     if isinstance(result, RoomResult):
@@ -98,8 +98,8 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Floorplan query CLI')
-    parser.add_argument('--svg',  default='floorplan.svg',  help='SVG file path')
-    parser.add_argument('--yaml', default='floorplan.yaml', help='YAML file path')
+    parser.add_argument('--svg',  default='navigate/floorplan.svg',  help='SVG file path')
+    parser.add_argument('--yaml', default='navigate/floorplan.yaml', help='YAML file path')
     args = parser.parse_args()
     svg_path, yaml_path = args.svg, args.yaml
 
