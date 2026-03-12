@@ -58,7 +58,7 @@ class SlewLimiter(Component):
         '''
         Return the forward motion rate limit (per second).
         '''
-        self._max_vy_rate
+        return self._max_vy_rate
 
     @property
     def max_omega_rate(self):
