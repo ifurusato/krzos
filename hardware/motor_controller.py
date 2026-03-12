@@ -92,6 +92,8 @@ class MotorController(Component):
         self._side_trim_enabled   = _trim_cfg.get('enabled', False)
         self._port_trim           = 1.0 + (_trim_cfg.get('port_trim', 0.0) / 100.0)
         self._stbd_trim           = 1.0 + (_trim_cfg.get('stbd_trim', 0.0) / 100.0)
+        self._side_trim = [self._port_trim, self._stbd_trim, self._port_trim, self._stbd_trim] \
+                if self._side_trim_enabled else None
         if self._side_trim_enabled:
             self._log.info('side trim enabled: port={:.1f}%, stbd={:.1f}%'.format(
                 _trim_cfg.get('port_trim', 0.0), _trim_cfg.get('stbd_trim', 0.0)))
@@ -739,9 +741,13 @@ class MotorController(Component):
         # new motor power smoothing
         if self._motor_power_smoothing_enabled:
             speeds = self._smooth_motor_powers(speeds)
-        # per-side motor trim
-        self._side_trim = [self._port_trim, self._stbd_trim, self._port_trim, self._stbd_trim] \
-                if self._side_trim_enabled else None
+
+
+
+        if self._side_trim:
+            speeds = [s * t for s, t in zip(speeds, self._side_trim)]
+
+
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))
