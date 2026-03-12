@@ -10,6 +10,7 @@
 # modified: 2026-03-12
 
 import traceback
+import math
 from colorama import init, Fore, Style
 init()
 
@@ -44,11 +45,42 @@ class Navigator(AsyncBehaviour):
 #       self.add_event(Event.AVOID) # TBD
         # configuration
         _cfg = config['kros'].get('behaviour').get('navigator')
-        self._verbose   = _cfg.get('verbose', False)
-        self._priority  = _cfg.get('default_priority', 0.3)
+        self._verbose        = _cfg.get('verbose', False)
+        self._priority       = _cfg.get('default_priority', 0.3)
+        self._default_speed  = _cfg.get('default_speed', 0.5)
         self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+
+    def set_route(self, waypoints, is_first_route = False):
+        '''
+        Set the route to navigate. If is_first_route is True, sets the odometer
+        pose from waypoint 0 and begins from waypoint 1. Otherwise compares
+        current pose to waypoint 0 and inserts a pre-navigation leg if needed.
+        '''
+        if not waypoints:
+            self._log.warning('set_route: empty waypoint list.')
+            return
+        self._log.info('🐮 set route to waypoints: {}'.format(waypoints))
+        self._route       = waypoints
+        self._route_index = 0
+        _wp0      = self._route[0]
+        _odometer = self._motor_controller.odometer
+        if is_first_route:
+            _heading_deg = _wp0.heading if _wp0.heading is not None else 0.0
+            _odometer.set_pose(_wp0.position.x, _wp0.position.y,
+                    math.radians(_heading_deg), use_radians=True)
+            self._log.info('odometer pose set to waypoint 0: {}'.format(_wp0))
+            self._route_index = 1
+        else:
+            _x, _y, _theta = _odometer.pose
+            if _wp0.reached(_x, _y):
+                self._route_index = 1
+                self._log.info('already at waypoint 0, starting from waypoint 1.')
+            else:
+                self._log.info('not at waypoint 0, will navigate there first.')
+        self._log.info('route set: {} waypoints, starting from index {}.'.format(
+                len(self._route), self._route_index))
 
     @property
     def is_ballistic(self):

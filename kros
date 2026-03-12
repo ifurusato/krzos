@@ -13,6 +13,7 @@
 #      --motors, -m          enable motors
 #      --json, -j            dump YAML configuration as JSON file
 #      --gamepad, -g         enable bluetooth gamepad control
+#      --route, -r           set initial route file for navigator
 #      --tests, -t           execute diagnostic tests prior to starting
 #      --pubs PUBS, -P PUBS  enable publishers as identified by first character
 #      --subs SUBS, -S SUBS  enable subscribers as identified by first character
@@ -30,5 +31,9 @@
 #kros.py -s -m
 #kros.py -s -g -t
 #kros.py -s -g
-kros.py -s -m
 
+if [ -n "$1" ]; then
+    kros.py -s -m --route "$1"
+else
+    kros.py -s -m
+fi

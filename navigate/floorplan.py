@@ -198,12 +198,14 @@ class LandmarkResult:
             self.id, self.position, self.room)
 
 
+#@dataclass
 @dataclass(frozen=True)
 class Waypoint:
     label: str
     position: Point
-    kind: str           # "landmark", "door", or "room"
+    kind: str                       # "landmark", "door", or "room"
     arrival_radius: float = 200.0   # mm
+    heading: float = None           # optional target heading in degrees; None means don't care
 
     def reached(self, x: float, y: float) -> bool:
         '''
@@ -282,6 +284,24 @@ class RouteIterator:
         '''
         if not self.completed:
             self._index += 1
+
+    def save(self, path: str):
+        '''
+        Save this route to a YAML file.
+        '''
+        import yaml
+        _data = {
+            'route': [
+                {
+                    'label':          wp.label,
+                    'kind':           wp.kind,
+                    'position':       {'x': wp.position.x, 'y': wp.position.y},
+                    'arrival_radius': wp.arrival_radius,
+                } for wp in self._waypoints
+            ]
+        }
+        with open(path, 'w') as f:
+            yaml.dump(_data, f, default_flow_style=False)
 
     def reset(self):
         '''

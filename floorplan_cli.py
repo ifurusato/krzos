@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-03-09
-# modified: 2026-03-10
+# modified: 2026-03-12
 #
 # Interactive CLI for querying the Floorplan model.
 #
@@ -55,7 +55,6 @@ def format_result(result) -> str:
         lines = [str(result)]
     return "\n".join("  {}".format(line) for line in lines)
 
-
 def format_route(iterator) -> str:
     waypoints = iterator.all_waypoints
     lines = ["  {:<3}  {:<12}  {:<10}  {:<20}  {}".format(
@@ -67,7 +66,6 @@ def format_route(iterator) -> str:
         lines.append("  {:<3}  {:<12}  {:<10}  {:<20}  {:.0f} mm".format(
             i, wp.label, wp.kind, pos, wp.arrival_radius))
     return "\n".join(lines)
-
 
 def print_help():
     print("  Usage: floorplan_cli.py [--svg FILE] [--yaml FILE]")
@@ -83,6 +81,7 @@ def print_help():
     print("    walls             show wall count (deduplicated)")
     print("    at <x> <y>        find room containing point (x, y)")
     print("    near <x> <y>      closest landmark to point (x, y)")
+    print("    save [filename]   save last route to YAML file")
     print("    export            export SVG to timestamped YAML file")
     print("    help              show this message")
     print("    quit              exit")
@@ -114,6 +113,7 @@ def main():
         len(fp.room_names()), len(fp.door_names()), len(fp.landmark_names())))
     print("Type 'help' for commands, 'quit' to exit.\n")
 
+    _last_iterator = None
     while True:
         try:
             raw = input("query> ").strip()
@@ -202,10 +202,32 @@ def main():
                 try:
                     iterator = fp.route(parts[1], parts[2])
                     print(format_route(iterator))
+                    _last_iterator = iterator
                 except KeyError as e:
                     print("  Unknown name: {}".format(e))
                 except ValueError as e:
                     print("  No path found: {}".format(e))
+
+        elif cmd.startswith("save"):
+            parts = raw.split()
+            if len(parts) >= 2:
+                _filename = parts[1]
+            else:
+                try:
+                    _filename = input("  filename: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    _filename = None
+            if not _filename:
+                print("  save cancelled.")
+            elif _last_iterator is None:
+                print("  no route to save; use 'route <a> <b>' first.")
+            else:
+                try:
+                    _last_iterator.save(_filename)
+                    print("  route saved to: {}".format(_filename))
+                except Exception as e:
+                    print("  save failed: {}".format(e))
 
         else:
             try:

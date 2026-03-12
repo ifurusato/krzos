@@ -188,6 +188,9 @@ class KROS(Component, FiniteStateMachine):
         _args['json_dump_enabled'] = arguments.json
         self._log.info('json enabled:         {}'.format(_args['json_dump_enabled']))
 
+        _args['route_file'] = arguments.route
+        self._log.info('route file:           {}'.format(_args['route_file']))
+
 #       self._log.info('argument gamepad:     {}'.format(arguments.gamepad))
         _args['gamepad_enabled'] = arguments.gamepad and self._is_raspberry_pi
         self._gamepad_enabled = _args['gamepad_enabled']
@@ -425,6 +428,19 @@ class KROS(Component, FiniteStateMachine):
         self._log.info(Fore.MAGENTA + 'kros started.')
         if self._queue_publisher and not self._queue_publisher.enabled:
             self._queue_publisher.enable()
+
+        # set initial navigation route if specified
+        _route_file = self._config['kros'].get('arguments', {}).get('route_file')
+        if _route_file:
+            from navigate.route_loader import RouteLoader
+            from behave.navigator import Navigator
+            _navigator = Component.get_registry().get(Navigator.NAME)
+            if _navigator is not None:
+                _waypoints = RouteLoader.load(_route_file)
+                _navigator.set_route(_waypoints, is_first_route=True)
+                self._log.info('initial route loaded from: {}'.format(_route_file))
+            else:
+                self._log.warning('route file specified but navigator not available.')
 
         # OLD LOCATION OF MOTOR CONTROLLER / ROTATION CONTROLLER / ICM20948
 
@@ -765,6 +781,7 @@ def parse_args(passed_args=None):
     parser.add_argument('--pubs',         '-P', help='enable publishers as identified by first character')
     parser.add_argument('--subs',         '-S', help='enable subscribers as identified by first character')
     parser.add_argument('--behave',       '-b', help='override behaviour configuration (1, y, yes or true, otherwise false)')
+    parser.add_argument('--route',        '-r', help='load initial route from YAML file')
     parser.add_argument('--config-file',  '-f', help='use alternative configuration file')
     parser.add_argument('--log',          '-L', action='store_true', help='write log to timestamped file')
     parser.add_argument('--level',        '-l', help='specify logging level \'DEBUG\'|\'INFO\'|\'WARN\'|\'ERROR\' (default: \'INFO\')')

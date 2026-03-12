@@ -54,7 +54,7 @@ class Roam(AsyncBehaviour):
         self._counter = itertools.count()
         self._verbose = _cfg.get('verbose', False)
         self._use_color = True
-        self._default_speed       = _cfg.get('default_speed', 0.8)
+        self._default_speed       = _cfg.get('default_speed', 0.4)
         self._priority            = _cfg.get('default_priority', 0.3)
         self._use_dynamic_speed   = _cfg.get('use_dynamic_speed', True)
         self._deadband_threshold  = _cfg.get('deadband_threshold', 0.07)
