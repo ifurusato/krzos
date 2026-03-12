@@ -247,6 +247,10 @@ kros:
         stop_step:                            0.09         # determines stop deceleration
         emergency_stop_step:                  0.25         # determines emergency stop deceleration
         stopping_steps:                      10            # determines stopping deceleration (unused)
+        side_trim:
+            enabled:                         True          # enable per-side motor trim
+            port_trim:                        2.4          # percentage trim for port motors (pfwd, paft); positive = faster
+            stbd_trim:                        0.0          # percentage trim for starboard motors (sfwd, saft); positive = faster
         slew_limiter:
             enabled:                         True
             max_vx_rate:                      0.2          # max lateral velocity change per second

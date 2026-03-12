@@ -87,6 +87,16 @@ class MotorController(Component):
         self._stop_step           = _cfg.get('stop_step', 0.09)    # rate for stopping (abrupt)
         self._emergency_stop_step = _cfg.get('emergency_stop_step', 0.25)  # rate for emergency stopping (very abrupt)
         self._show_battery        = _cfg.get('show_battery', False) # enable/disable show battery level
+        # per-side motor trim
+        _trim_cfg = _cfg.get('side_trim')
+        self._side_trim_enabled   = _trim_cfg.get('enabled', False)
+        self._port_trim           = 1.0 + (_trim_cfg.get('port_trim', 0.0) / 100.0)
+        self._stbd_trim           = 1.0 + (_trim_cfg.get('stbd_trim', 0.0) / 100.0)
+        if self._side_trim_enabled:
+            self._log.info('side trim enabled: port={:.1f}%, stbd={:.1f}%'.format(
+                _trim_cfg.get('port_trim', 0.0), _trim_cfg.get('stbd_trim', 0.0)))
+        else:
+            self._log.info('side trim disabled.')
         # data logging
         self._data_log = None
         _data_logging = config['kros'].get('application').get('data_logging')
@@ -729,6 +739,9 @@ class MotorController(Component):
         # new motor power smoothing
         if self._motor_power_smoothing_enabled:
             speeds = self._smooth_motor_powers(speeds)
+        # per-side motor trim
+        self._side_trim = [self._port_trim, self._stbd_trim, self._port_trim, self._stbd_trim] \
+                if self._side_trim_enabled else None
         # apply controller-level modifiers in registration order
         for name, fn in list(self._speed_modifiers.items()):
             result = fn(list(speeds))
@@ -748,6 +761,8 @@ class MotorController(Component):
         max_abs = max(abs(s) for s in speeds)
         if max_abs > 1.0:
             speeds = [s / max_abs for s in speeds]
+        if self._side_trim:
+            speeds = [s * t for s, t in zip(speeds, self._side_trim)]
         # coerce to native floats and apply final speeds
         speeds = [float(s) for s in speeds]
 #       self._log.info('B. intent: vx={:.3f}, vy={:.3f}, omega={:.3f} -> speeds: {}'.format(vx, vy, omega, ['{:.3f}'.format(s) for s in speeds]))
