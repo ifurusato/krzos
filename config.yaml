@@ -65,7 +65,8 @@ kros:
             enable:                      True              # enable navigator behaviour
             release:                     True              # release navigator behaviour on startup
             verbose:                    False              # verbose messaging
-            default_speed:                  0.5            # navigation speed
+            default_speed:                  0.6            # navigation speed
+            default_priority:               0.5            # default behaviour priority
         nudge:
             enable:                     False              # enable nudge behaviour
             release:                    False              # release nudge behaviour on startup

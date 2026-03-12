@@ -101,8 +101,8 @@ class Behaviour(ABC, Subscriber):
         '''
         self._enable_sound_fx = enable
 
-    def play_sound(self, name):
-        if self._enable_sound_fx:
+    def play_sound(self, name, force=False):
+        if self._enable_sound_fx or force:
             Player.play(name)
         else:
             self._log.info(Style.DIM + 'play: {} (suppressed)'.format(name))

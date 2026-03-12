@@ -204,6 +204,17 @@ class Thoughts(Behaviour):
             self._tinyfx = self._component_registry.get(TinyFxController.NAME)
             self._set_running_lights(True)
             self._radiozoa_ctrl = self._component_registry.get(RadiozoaController.NAME)
+            # attach doorway callback to play doorbell when changing rooms
+            from behave.navigator import Navigator
+
+            self._navigator = self._component_registry.get(Navigator.NAME)
+            if self._navigator and self._navigator.enabled:
+                self._navigator.set_door_callback(self._door_callback)
+                self._navigator.set_route_complete_callback(self._route_complete_callback)
+                self._navigator.set_en_route_callback(self._en_route_callback)
+                self.enable_sound_fx(False)
+            else:
+                self.enable_sound_fx(True)
             # create async listener loop task
             if self._message_bus.get_task_by_name(Thoughts._LISTENER_LOOP_NAME):
                 self._log.warning('loop task already exists.')
@@ -217,6 +228,22 @@ class Thoughts(Behaviour):
             self._log.info('enabled.')
         else:
             self._log.warning('already enabled.')
+
+    def _en_route_callback(self, en_route):
+        if en_route:
+            self._log.info(Fore.WHITE + 'navigator is en route: {} ({}) 🍀 🍀 🍀 🍀 🍀'.format(en_route, type(en_route)))
+            self.play_sound('borah', force=True)
+        else:
+            self._log.info(Fore.BLUE + 'navigator is no longer en route: {} ({}) 🍁 🍁 🍁 🍁 🍁'.format(en_route, type(en_route)))
+            self.play_sound('cheep', force=True)
+
+    def _door_callback(self, waypoint):
+        self._log.info(Fore.WHITE + 'passed doorway: {} 🌺 🌺 🌺 🌺 🌺'.format(waypoint))
+        self.play_sound('doorbell', force=True)
+
+    def _route_complete_callback(self, waypoint):
+        self._log.info(Fore.WHITE + 'route is complete: {} 🌼 🌼 🌼 🌼 🌼  '.format(waypoint))
+        self.play_sound('hzah', force=True)
 
     def _odometer_callback(self):
         if self._verbose:
