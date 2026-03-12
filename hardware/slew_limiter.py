@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2025-11-10
-# modified: 2025-11-10
+# modified: 2026-03-12
 
 import time
 from colorama import init, Fore, Style
@@ -46,7 +46,26 @@ class SlewLimiter(Component):
         self._verbose     = False
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    @property
+    def max_vx_rate(self):
+        '''
+        Return the lateral motion rate limit (per second).
+        '''
+        return self._max_vx_rate
+
+    @property
+    def max_vy_rate(self);
+        '''
+        Return the forward motion rate limit (per second).
+        '''
+        self._max_vy_rate
+
+    @property
+    def max_omega_rate(self):
+        '''
+        Return the rotation rate limit (per second).
+        '''
+        return self._max_omega_rate
 
     def limit(self, target_intent):
         if self._fixed_rate:
