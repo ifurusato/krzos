@@ -191,6 +191,13 @@ class MotorController(Component):
     # properties ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
     @property
+    def slew_limiter(self):
+        '''
+        Return the SlewLimtier used by this MotorController.
+        '''
+        return self._slew_limiter
+
+    @property
     def odometer(self):
         '''
         Return the Odometer used by this MotorController.
