@@ -253,12 +253,28 @@ class MotorController(Component):
         return self._is_braked
 
     @property
-    def forward_velocity(self):
+    def longitudinal_velocity(self):
         '''
-        Returns the current normalized forward velocity (vy component) from the
+        Returns the current normalized longitudinal velocity (vy component) from the
         last blended intent vector.
         '''
         return self._blended_intent_vector[1]
+
+    @property
+    def lateral_velocity(self):
+        '''
+        Returns the current normalized lateral velocity (vx component) from the
+        last blended intent vector.
+        '''
+        return self._blended_intent_vector[2]
+
+    @property
+    def rotational_velocity(self):
+        '''
+        Returns the current normalized rotational velocity (vx component) from the
+        last blended intent vector.
+        '''
+        return self._blended_intent_vector[3]
 
     @property
     def loop_is_running(self):

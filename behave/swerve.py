@@ -140,16 +140,16 @@ class Swerve(AsyncBehaviour):
 
     def _calculate_reaction_distance(self):
         '''
-        Calculate dynamic reaction distance based on current forward speed.
+        Calculate dynamic reaction distance based on current longitudinal speed.
         Faster forward motion = need to react to obstacles further away.
 
         Returns:
             float: Reaction distance in mm
         '''
-        forward_velocity = abs(self._motor_controller.forward_velocity)  # 0.0 to 1.0
+        longitudinal_velocity = abs(self._motor_controller.longitudinal_velocity)  # 0.0 to 1.0
 
         # linear scaling: add distance proportional to speed
-        dynamic_distance = self._min_reaction_distance + (forward_velocity * self._distance_per_speed)
+        dynamic_distance = self._min_reaction_distance + (longitudinal_velocity * self._distance_per_speed)
 
         # clamp to max
         reaction_distance = min(dynamic_distance, self._max_reaction_distance)

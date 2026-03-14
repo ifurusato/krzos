@@ -403,10 +403,10 @@ class MovementController(Component):
         '''
         Handle acceleration phase.
         Sets intent to 1.0 and lets the SlewLimiter ramp up naturally.
-        Transitions to MOVE when forward_velocity reaches 1.0.
+        Transitions to MOVE when longitudinal_velocity reaches 1.0.
         '''
         self._set_intent(1.0)
-        if isclose(self._motor_controller.forward_velocity, 1.0, abs_tol=0.02):
+        if isclose(self._motor_controller.longitudinal_velocity, 1.0, abs_tol=0.02):
             self._accel_distance = accumulated_distance
             prev_phase = self._movement_phase
             self._movement_phase = MovementPhase.MOVE
@@ -424,7 +424,7 @@ class MovementController(Component):
         Returns: True if transitioning to decel, False otherwise
         '''
         self._set_intent(1.0)
-        _current_vy        = self._motor_controller.forward_velocity
+        _current_vy        = self._motor_controller.longitudinal_velocity
         _slew              = self._motor_controller.slew_limiter
         _, _actual_vy, _   = self._odometer.velocity
         _stopping_distance = 0.5 * _current_vy * abs(_actual_vy) / _slew.max_vy_rate
@@ -454,7 +454,7 @@ class MovementController(Component):
         if _remaining > 0.0 and abs(_vy) > 0.0:
             # rate required to stop in exactly remaining distance:
             # remaining = 0.5 * vy_norm * actual_speed / rate  =>  rate = 0.5 * vy_norm * actual_speed / remaining
-            _vy_norm = self._motor_controller.forward_velocity
+            _vy_norm = self._motor_controller.longitudinal_velocity
             _required_rate = (0.5 * _vy_norm * abs(_vy)) / _remaining
             _slew.max_vy_rate = _required_rate
         self._set_intent(0.0)
