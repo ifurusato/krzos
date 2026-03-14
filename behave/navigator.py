@@ -11,7 +11,7 @@
 # modified: 2026-03-14
 
 import traceback
-from math import degrees, radians, sqrt, atan2
+from math import degrees, radians, sqrt, atan2, cos, sin
 from math import pi as π
 from colorama import init, Fore, Style
 init()
@@ -228,8 +228,12 @@ class Navigator(AsyncBehaviour):
         _dist = sqrt(_dx * _dx + _dy * _dy)
         if _dist < 1e-6:
             return
-        _vx        = _dx / _dist
-        _vy        = _dy / _dist
+#       _vx        = _dx / _dist
+#       _vy        = _dy / _dist
+        _cos_t = cos(_theta)
+        _sin_t = sin(_theta)
+        _vx    = (_dx * _cos_t - _dy * _sin_t) / _dist
+        _vy    = (_dx * _sin_t + _dy * _cos_t) / _dist
         # omega: bearing change needed to face the next waypoint at end of this leg
         if self._route_index + 1 < len(self._route):
             _next_wp     = self._route[self._route_index + 1]

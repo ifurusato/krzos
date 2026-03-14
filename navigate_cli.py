@@ -19,6 +19,7 @@
 #
 
 import sys
+import traceback
 from navigate.floorplan import Floorplan, RoomResult, DoorResult, LandmarkResult, SVGParser
 
 def format_result(result) -> str:
@@ -107,6 +108,7 @@ def main():
         fp = Floorplan.from_files(svg_path, yaml_path)
     except Exception as e:
         print("\nError loading floorplan: {}".format(e))
+        traceback.print_exc()
         sys.exit(1)
     print("done.")
     print("  {} rooms, {} doors, {} landmarks".format(

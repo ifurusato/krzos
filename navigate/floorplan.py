@@ -443,12 +443,6 @@ class SVGParser:
 
     @staticmethod
     def _apply_group_matrix(x, y, w, h, transform):
-        '''
-        apply an SVG transform to a rect defined by (x, y, w, h),
-        returning (xmin, ymin, xmax, ymax) in the parent coordinate space.
-        handles matrix(), scale(), and rotate() forms used in this SVG.
-        transforms all four corners and takes min/max to handle rotations.
-        '''
         import math
 
         t = transform.strip()
@@ -484,32 +478,17 @@ class SVGParser:
             ys = [sin_a*cx + cos_a*cy for cx, cy in corners]
             return min(xs), min(ys), max(xs), max(ys)
 
-        return None
+        # translate(tx) or translate(tx,ty)
+        m = re.match(r'translate\(\s*([^\s,)]+)(?:[\s,]+([^\s,)]+))?\s*\)', t)
+        if m:
+            tx = float(m.group(1))
+            ty = float(m.group(2)) if m.group(2) else 0.0
+            corners = [(x, y), (x+w, y), (x, y+h), (x+w, y+h)]
+            xs = [cx + tx for cx, cy in corners]
+            ys = [cy + ty for cx, cy in corners]
+            return min(xs), min(ys), max(xs), max(ys)
 
-    @staticmethod
-    def x_apply_group_matrix(x, y, w, h, transform):
-        '''
-        apply a matrix(a,b,c,d,e,f) group transform to a rect defined by
-        (x, y, w, h) in local coords, returning (xmin, ymin, xmax, ymax)
-        in document coords. transforms all four corners and takes min/max
-        to handle rotated rects correctly.
-        '''
-        m = re.match(
-            r'matrix\(\s*([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)[\s,]+'
-            r'([^\s,]+)[\s,]+([^\s,]+)[\s,]+([^\s,]+)\s*\)',
-            transform.strip())
-        if not m:
-            return None
-        a, b, c, d, e, f = (float(v) for v in m.groups())
-        corners = [
-            (x,     y),
-            (x + w, y),
-            (x,     y + h),
-            (x + w, y + h),
-        ]
-        xs = [a * cx + c * cy + e for cx, cy in corners]
-        ys = [b * cx + d * cy + f for cx, cy in corners]
-        return min(xs), min(ys), max(xs), max(ys)
+        return None
 
     @staticmethod
     def _extract_groups(svg_path):
@@ -522,11 +501,6 @@ class SVGParser:
         '''
         tree = ET.parse(svg_path)
         root = tree.getroot()
-
-        for elem in root:
-            print('DEBUG top-level: tag={!r} id={!r}'.format(
-                elem.tag.split('}')[-1], elem.get('id')))
-
         vb = root.get('viewBox', '')
         w_attr = root.get('width', '')
         _, _, vb_w, vb_h = (float(p) for p in vb.strip().replace(',', ' ').split())
@@ -938,13 +912,14 @@ class FloorplanValidator:
     @staticmethod
     def validate(rooms: dict, doors: dict, landmarks: dict):
         errors = []
-
         # every traversable door's connected rooms must exist
         # (non-traversable doors are treated as walls; their connects is documentation only)
         for door in doors.values():
             if not door.traversable:
                 continue
             for room_name in door.connects:
+                if room_name is None:
+                    continue
                 if room_name.upper() not in rooms:
                     errors.append(
                         "Door {!r} connects to unknown room {!r}".format(
@@ -979,6 +954,8 @@ class FloorplanValidator:
         # every traversable door must lie on the boundary between its rooms
         for door in doors.values():
             if not door.traversable or len(door.connects) != 2:
+                continue
+            if door.connects[0] is None or door.connects[1] is None:
                 continue
             a_key, b_key = door.connects[0].upper(), door.connects[1].upper()
             if a_key not in rooms or b_key not in rooms:
@@ -1325,7 +1302,11 @@ class Floorplan:
         for door in self._doors.values():
             if not door.traversable:
                 continue
+            if len(door.connects) < 2:
+                continue
             a, b = door.connects[0], door.connects[1]
+            if a is None or b is None:
+                continue
             if a in graph and b not in graph[a]:
                 graph[a].append(b)
             if b in graph and a not in graph[b]:

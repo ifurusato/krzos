@@ -1,7 +1,7 @@
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #              House floorplan model for robotic navigation
 #
-# generated: 2026-03-15 00:44:59
+# generated: 2026-03-15 01:33:47
 # source:    navigate/floorplan.svg
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -18,9 +18,11 @@ rooms:
     bounds:
       xmin: 5200
       xmax: 8700
-      ymin: 8184
-      ymax: 12724
-    doors: []
+      ymin: 8181
+      ymax: 12721
+    doors:
+      - D4
+      - D3
 
   - id: Spare
     bounds:
@@ -28,7 +30,8 @@ rooms:
       xmax: 8700
       ymin: 0
       ymax: 2800
-    doors: []
+    doors:
+      - D7
 
   - id: Study
     bounds:
@@ -36,22 +39,24 @@ rooms:
       xmax: 4700
       ymin: 3900
       ymax: 6600
-    doors: []
+    doors:
+      - D2
 
   - id: Aux
     bounds:
       xmin: 6200
       xmax: 8000
-      ymin: 7134
-      ymax: 8184
-    doors: []
+      ymin: 7131
+      ymax: 8181
+    doors:
+      - D4
 
   - id: Stair
     bounds:
       xmin: 6200
       xmax: 8500
       ymin: 5300
-      ymax: 7134
+      ymax: 7131
     doors:
       - D5
 
@@ -63,6 +68,7 @@ rooms:
       ymax: 5300
     doors:
       - D6
+      - D7
 
   - id: Master
     bounds:
@@ -70,65 +76,78 @@ rooms:
       xmax: 4700
       ymin: 0
       ymax: 3900
-    doors: []
+    doors:
+      - D1
 
   - id: Lounge
     bounds:
       xmin: 1500
       xmax: 5200
       ymin: 6600
-      ymax: 12725
-    doors: []
+      ymax: 12722
+    doors:
+      - D3
 
   - id: Hall
     bounds:
       - {xmin: 4700, xmax: 6200, ymin: 2800, ymax: 6600}
-      - {xmin: 5200, xmax: 6200, ymin: 6600, ymax: 8184}
+      - {xmin: 5200, xmax: 6200, ymin: 6600, ymax: 8181}
     doors:
-      - D6
+      - D1
+      - D2
       - D5
+      - D6
+      - D7
+      - D4
 
 doors:
-  - id: D3
-    connects: [null, null]  # TODO: verify
+  - id: D1
+    connects: [Master, Hall]  # TODO: verify
     traversable: true
-    position: {x: -5199, y: 13452}
-    width: 1802
+    position: {x: 4699, y: 3225}
+    width: 750
     orientation: east  # TODO: verify
 
-  - id: D6
-    connects: [Bath, Hall]  # TODO: verify
+  - id: D2
+    connects: [Study, Hall]  # TODO: verify
     traversable: true
-    position: {x: 6194, y: 4025}
-    width: 650
+    position: {x: 4702, y: 6025}
+    width: 750
     orientation: east  # TODO: verify
 
   - id: D5
     connects: [Stair, Hall]  # TODO: verify
     traversable: true
-    position: {x: 6200, y: 5852}
+    position: {x: 6198, y: 5846}
     width: 600
     orientation: east  # TODO: verify
 
+  - id: D6
+    connects: [Bath, Hall]  # TODO: verify
+    traversable: true
+    position: {x: 6194, y: 4024}
+    width: 648
+    orientation: east  # TODO: verify
+
   - id: D7
-    connects: [null, null]  # TODO: verify
+    connects: [Spare, Hall]  # TODO: verify
     traversable: true
-    position: {x: 9753, y: 18375}
-    width: 750
-    orientation: east  # TODO: verify
+    position: {x: 5824, y: 2796}
+    width: 751
+    orientation: north  # TODO: verify
 
-  - id: D1
-    connects: [null, null]  # TODO: verify
+  - id: D4
+    connects: [Kitchen, Hall]  # TODO: verify
     traversable: true
-    position: {x: -4702, y: 21874}
-    width: 747
-    orientation: east  # TODO: verify
+    position: {x: 5774, y: 8131}
+    width: 749
+    orientation: north  # TODO: verify
 
-  - id: D2
-    connects: [null, null]  # TODO: verify
+  - id: D3
+    connects: [Kitchen, Lounge]  # TODO: verify
     traversable: true
-    position: {x: -4700, y: 19072}
-    width: 750
+    position: {x: 5200, y: 11247}
+    width: 1000
     orientation: east  # TODO: verify
 
 obstacles:
@@ -136,88 +155,88 @@ obstacles:
     bounds:
       xmin: 4700
       xmax: 5400
-      ymin: 3
+      ymin: 0
       ymax: 2800
 
   - id: OBS_2
     bounds:
       xmin: 4788
       xmax: 5629
-      ymin: 9749
-      ymax: 10749
+      ymin: 9747
+      ymax: 10747
 
   - id: OBS_3
-    bounds:
-      xmin: 5200
-      xmax: 5400
-      ymin: 8084
-      ymax: 8184
-
-  - id: OBS_4
     bounds:
       xmin: 6200
       xmax: 6300
       ymin: 2800
       ymax: 3700
 
+  - id: OBS_4
+    bounds:
+      xmin: 6200
+      xmax: 6300
+      ymin: 4349
+      ymax: 5549
+
   - id: OBS_5
     bounds:
       xmin: 6200
       xmax: 6300
-      ymin: 4352
-      ymax: 5551
+      ymin: 6146
+      ymax: 7131
 
   - id: OBS_6
-    bounds:
-      xmin: 6200
-      xmax: 6300
-      ymin: 6149
-      ymax: 7134
-
-  - id: OBS_7
     bounds:
       xmin: 4700
       xmax: 4800
       ymin: 2800
-      ymax: 2852
+      ymax: 2850
 
-  - id: OBS_8
+  - id: OBS_7
     bounds:
       xmin: 4600
       xmax: 4700
       ymin: 6400
       ymax: 6600
 
+  - id: OBS_8
+    bounds:
+      xmin: 5200
+      xmax: 5400
+      ymin: 8082
+      ymax: 8181
+
 landmarks:
   - id: BEGIN
-    position: {x: 5855, y: 3184}
+    position: {x: 5855, y: 3181}
     room: null  # TODO: verify
 
   - id: BUNNY
-    position: {x: 270, y: 72}
+    position: {x: 270, y: 69}
     room: null  # TODO: verify
 
   - id: CABINET
-    position: {x: 8446, y: 12361}
+    position: {x: 8446, y: 12358}
     room: null  # TODO: verify
 
   - id: CARPORT
-    position: {x: 161, y: 12355}
+    position: {x: 161, y: 12353}
     room: null  # TODO: verify
 
   - id: KITCHEN_RUG
-    position: {x: 6879, y: 9765}
+    position: {x: 6879, y: 9763}
     room: null  # TODO: verify
 
   - id: ORIGIN
-    position: {x: 3693, y: 6018}
+    position: {x: 3693, y: 6016}
     room: null  # TODO: verify
 
   - id: PERSIAN_RUG
-    position: {x: 3323, y: 8640}
+    position: {x: 3323, y: 8637}
     room: null  # TODO: verify
 
   - id: RUBBISH
-    position: {x: 5654, y: 7184}
+    position: {x: 5654, y: 7182}
     room: null  # TODO: verify
 
