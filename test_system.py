@@ -42,7 +42,7 @@ def test_power():
         _temperature_error   = _cfg.get('temperature_error')
 
         __log.info("testing power supplies…")
-        _system.get_battery_info()
+        _system.print_battery_info()
 
         _battery_12v = _system.get_battery_12v()
         _reg_5v = _system.get_reg_5v()

@@ -425,7 +425,6 @@ class KROS(Component, FiniteStateMachine):
         '''
         A callback executed upon starting the MessageBus.
         '''
-        self._log.info(Fore.MAGENTA + 'kros started.')
         if self._queue_publisher and not self._queue_publisher.enabled:
             self._queue_publisher.enable()
 

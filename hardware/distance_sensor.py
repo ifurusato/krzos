@@ -206,7 +206,7 @@ class DistanceSensor(Component):
                 if self._external_clock:
                     self._log.info('removing callback from external clock…')
                     self._external_clock.remove_callback(self._external_callback_method)
-                # we know of this warning so make it pretty
+                    time.sleep(0.05)  # allow any in-flight callback to complete
                 with warnings.catch_warnings(record=True) as w:
                     warnings.simplefilter("always", RuntimeWarning)
                     GPIO.setmode(GPIO.BCM)
@@ -214,15 +214,17 @@ class DistanceSensor(Component):
                     for warning in w:
                         msg = Util.ellipsis('{}'.format(warning.message), 33)
                         self._log.info(Style.DIM + 'warning on GPIO cleanup: {}'.format(msg))
-#                   GPIO.cleanup()
                 super().disable()
             except Exception as e:
                 self._log.error('{} raised disabling distance sensor: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
     def close(self):
         '''
-        Stop the loop if running, then close the sensor.
+        Disable the sensor before closing to ensure GPIO cleanup occurs.
         '''
-        super().close()
+        if not self.closed:
+            if self.enabled:
+                self.disable()
+            super().close()
 
 #EOF

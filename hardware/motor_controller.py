@@ -13,7 +13,7 @@ import sys, traceback
 import time
 import statistics
 import itertools
-from threading import Event
+from threading import Event, Lock
 from math import isclose
 from colorama import init, Fore, Style
 init()
@@ -174,6 +174,7 @@ class MotorController(Component):
         self._braking_event      = Event()
         self._current_brake_step = None
         # speed and changes to speed
+        self._intent_vectors_lock = Lock()
         self._intent_vectors = {}  # {name: lambda}, intent vector registry
         self._blended_intent_vector = (0.0, 0.0, 0.0) # cached blended intent vector from last motor tick
         self.__callback      = None
@@ -305,7 +306,8 @@ class MotorController(Component):
         '''
         Clear the existing intent vectors.
         '''
-        self._intent_vectors.clear()
+        with self._intent_vectors_lock:
+            self._intent_vectors.clear()
         self._blended_intent_vector = (0.0, 0.0, 0.0)
 
     def set_post_processor(self, post_processor):
@@ -371,12 +373,12 @@ class MotorController(Component):
             raise TypeError('expected lambda function for vector, not {}'.format(type(vector_lambda)))
         if priority_lambda is not None and priority_lambda.__name__ != "<lambda>":
             raise TypeError('expected lambda function for priority, not {}'.format(type(priority_lambda)))
-
         self._log.debug('adding intent vector: {}'.format(name))
-        self._intent_vectors[name] = {
-            'vector': vector_lambda,
-            'priority': priority_lambda if priority_lambda else lambda: 0.3
-        }
+        with self._intent_vectors_lock:
+            self._intent_vectors[name] = {
+                'vector': vector_lambda,
+                'priority': priority_lambda if priority_lambda else lambda: 0.3
+            }
         self._log.info('added intent vector: {}'.format(name))
 
     def remove_intent_vector(self, name):
@@ -385,7 +387,8 @@ class MotorController(Component):
         '''
         if name in self._intent_vectors:
             self._log.info('removing intent vector: {}'.format(name))
-            del self._intent_vectors[name]
+            with self._intent_vectors_lock:
+                del self._intent_vectors[name]
             self._log.info('removed intent vector: {}'.format(name))
 
     def set_behavior_speed_multiplier(self, behavior_name, multiplier):
@@ -448,7 +451,9 @@ class MotorController(Component):
 #           return (0.0, 0.0, 0.0)
         weighted_sum = [0.0, 0.0, 0.0]
         total_weight = 0.0
-        for name, entry in self._intent_vectors.items():
+        with self._intent_vectors_lock:
+            snapshot = list(self._intent_vectors.items())
+        for name, entry in snapshot:
             if ENABLE_BEHAVIOUR_SPEED_MULTIPLIER:
                 vector = entry['vector']()
                 priority = entry['priority']()
@@ -801,8 +806,6 @@ class MotorController(Component):
         _count = next(self._event_counter)
         if self._verbose:
             self.print_info(_count, vx, vy, omega)
-            if _count % 20 == 0:
-                self._odometer.print_info()
         self._state_change_check()
         if self._motor_loop_callback is not None:
             self._motor_loop_callback()

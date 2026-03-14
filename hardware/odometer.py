@@ -96,6 +96,14 @@ class Odometer(Component):
         self._ttywriter = _registry.get(TtyWriter.NAME)
         if self._ttywriter is None:
             self._ttywriter = TtyWriter(append=True)
+        self._pose_fmt = (
+            '{}: GREEN {}\n'
+            'CYAN   x:YELLOW      {:d}mm\n'
+            'CYAN   y:YELLOW      {:d}mm\n'
+            'CYAN   vx:YELLOW     {:.2f}mm/s\n'
+            'CYAN   vy:YELLOW     {:.2f}mm/s\n'
+            'CYAN   theta:YELLOW  {:.3f}π ({:.1f}°) GREEN {}'
+        )
         # obtain geometry from config (use 'kros.geometry')
         _odo_cfg = config['kros'].get('hardware').get('odometer')
         _initial_x            = _odo_cfg.get('initial_x')       # starting x position (mm), e.g., 100mm east of west edge
@@ -211,9 +219,12 @@ class Odometer(Component):
         self._x = x
         self._y = y
         self._theta = theta if use_radians else radians(theta)
+        self._last_steps = None
+        self._last_time  = None
         _degrees = degrees(self._theta)
         _rad_pi  = self._theta / π
-        self._log.info('initial pose: ' + Fore.GREEN + 'x={:d}mm, y={:d}mm, theta={:.2f}π ({:.1f}°)'.format(
+        self._log.info(Style.BRIGHT + '🍓 initial pose: ' + Style.NORMAL
+            + Fore.GREEN + 'x={:d}mm; y={:d}mm; theta={:.2f}π ({:.1f}°)'.format(
                 round(x),
                 round(y),
                 _rad_pi,
@@ -328,23 +339,26 @@ class Odometer(Component):
         _travel_angle_deg = degrees(atan2(dy, dx))
         _compass_deg = (90.0 - _travel_angle_deg) % 360.0
         _travel_cardinal = Cardinal.get_heading_from_degrees(_compass_deg)
+        self._log.info('velocity: '
+                + Fore.CYAN + 'vx: ' + Fore.YELLOW + '{:7.2f}mm/s; '.format(self._vx)
+                + Fore.CYAN + 'vy: ' + Fore.YELLOW + '{:7.2f}mm/s; '.format(self._vy))
         self._log.info('pose: ' + Fore.GREEN + '{}; '.format(_travel_cardinal.abbrev)
                 + Fore.CYAN + 'x: ' + Fore.YELLOW + '{:7.2f}mm; '.format(self._x)
                 + Fore.CYAN + 'y: ' + Fore.YELLOW + '{:7.2f}mm; '.format(self._y)
                 + Fore.CYAN + 'theta: ' + Fore.YELLOW + '{:.3f}π ({:.1f}°) '.format(_rad_pi, _deg)
                 + Fore.GREEN + '{}'.format(_heading_cardinal.abbrev))
         if self._ttywriter:
-            self._ttywriter.write(
-                '{}: GREEN {}\nCYAN   x:YELLOW      {:d}mm\nCYAN   y:YELLOW      {:d}mm\nCYAN   theta:YELLOW  {:.3f}π ({:.1f}°) GREEN {}'.format(
+            self._ttywriter.write(self._pose_fmt.format(
                     title,
                     _travel_cardinal.abbrev,
                     round(self._x),
                     round(self._y),
+                    self._vx,
+                    self._vy,
                     _rad_pi,
                     _deg,
                     _heading_cardinal.abbrev),
-                    colorise=True)
-
+                colorise=True)
     def print_info(self):
         '''
         Prints the current velocity and pose.

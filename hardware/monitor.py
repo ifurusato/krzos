@@ -250,9 +250,9 @@ class Monitor(Component):
                     self._display_message(draw)
                     return
 
-                SHOW_DISK = False
+                SHOW_DISK = True
                 SHOW_3V3  = True
-                SHOW_POSE = True
+                SHOW_POSE = False
 
                 # line 0 : temperature ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
                 line = 0

@@ -53,6 +53,7 @@ class AsyncBehaviour(Behaviour):
         self._ramp_down_step = 1.0 / (_ramp_down_duration_sec / self._poll_delay_sec) if _ramp_down_duration_sec > 0 else 1.0
         self._log.info("blind mode ramp down step: {:.4f}".format(self._ramp_down_step))
         self._balanced_braking = True # if True, attempt to brake in a straight line
+        self._suppressed_by_toggle = False
         # state flags
         self._intent_vector     = (0.0, 0.0, 0.0)
         self._use_dynamic_priority = False
@@ -286,10 +287,12 @@ class AsyncBehaviour(Behaviour):
                     break
                 if not self._behaviour_manager.is_ballistic() and self.has_toggle_assignment():
                     # we only alter suppressed states if nobody has gone ballistic
-                    if self.suppressed and self.is_released_by_toggle():
+                    if self.suppressed and self.is_released_by_toggle() and self._suppressed_by_toggle:
+                        self._suppressed_by_toggle = False
                         self._log.info('releasing…')
                         self.release()
                     elif self.released and not self.is_released_by_toggle():
+                        self._suppressed_by_toggle = True
                         self._log.info('suppressing…')
                         self.suppress()
                 if self.suppressed:

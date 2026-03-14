@@ -11,16 +11,19 @@
 
 import sys, platform
 import os, psutil
+import traceback
 from pathlib import Path
 from colorama import init, Fore, Style
 init()
 
 from core.component import Component
+from core.power import Power
 from core.logger import Level, Logger
 from hardware.ina260_sensor import Ina260
 from ads1015 import ADS1015
 
 class System(Component):
+    NAME = 'system'
     '''
     A collection of system control/info/statistical methods.
     Args:
@@ -30,7 +33,7 @@ class System(Component):
     level:      the log level
     '''
     def __init__(self, config=None, kros=None, level=Level.INFO):
-        self._log = Logger('system', level)
+        self._log = Logger(System.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._kros = kros
         _cfg = config['kros'].get('hardware').get('system')
@@ -206,36 +209,37 @@ class System(Component):
             self._log.error('error getting platform information:  {}'.format(e))
             return None
 
-    def _get_battery_bars(self, voltage):
+    def get_power_level(self):
         '''
-        Return a characterisation of the battery state, including the number
+        Return an enumeration of the battery state, including the number
         of bars that would be displayed if we could view that indicator.
         '''
-        if voltage > self._external_threshold: # anything higher than this indicates an external supply
-            return Fore.BLUE + "external supply"
+        voltage = self.battery_12v
+        if voltage > self._external_threshold: # blue/5 bars; anything higher than this indicates an external supply
+            return Power.POWER_EXTERNAL
         elif voltage > self._green_threshold:  # green/4 bars on battery
-            return Fore.GREEN + "4 bars"
+            return Power.POWER_4_BARS_GREEN
         elif voltage > self._yellow_threshold: # yellow/4 bars on battery
-            return Fore.YELLOW + "4 bars"
+            return Power.POWER_4_BARS_YELLOW
         elif voltage > self._amber_threshold:  # amber/3 bars on battery
-            return Fore.YELLOW + "3 bars"
+            return Power.POWER_3_BARS_AMBER
         elif voltage > self._orange_threshold: # orange/2 bars on battery
-            return Fore.YELLOW + Style.BRIGHT + "2 bars"
+            return Power.POWER_2_BARS_ORANGE
         elif voltage > self._red_threshold:    # red/1 bar on battery
-            return Fore.RED + "1 bar"
+            return Power.POWER_1_BAR_RED
         else:
-            return Fore.WHITE + Style.BRIGHT + "unknown state"
+            return Power.POWER_UNKNOWN
 
-    def get_battery_info(self):
+    def print_battery_info(self):
         try:
             _battery_12v, _reg_5v, _reg_3v3 = self.get_voltages()
-            _battery_state = self._get_battery_bars(_battery_12v)
-            self._log.info("battery (in0):   " + Fore.GREEN + "{:6.3f}V {}".format(_battery_12v, _battery_state))
+            _power_level = self.get_power_level()
+            self._log.info("battery (in0):   " + Fore.GREEN + "{:6.3f}V {}".format(_battery_12v, _power_level.message))
             self._log.info("5V ref (in2):    " + Fore.GREEN + "{:6.3f}V".format(_reg_5v))
             self._log.info("3V3 reg (in1):   " + Fore.GREEN + "{:6.3f}V".format(_reg_3v3))
             self._log.info(Fore.GREEN + "power supplies are functional.")
         except Exception as e:
-            self._log.error('{} raised in power supply test: {}'.format(type(e), e))
+            self._log.error('{} raised in power supply test: {}\n{}'.format(type(e), e, traceback.format_exc()))
 
     def print_sys_info(self):
         if self._kros:

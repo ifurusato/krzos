@@ -32,6 +32,7 @@ from hardware.odometer import Odometer
 from hardware.eyeball import Eyeball
 from hardware.eyeballs_monitor import EyeballsMonitor
 from hardware.lux_sensor import LuxSensor
+from hardware.system import System
 from hardware.motor_controller import MotorController
 from hardware.rotation_controller import RotationController
 from hardware.tinyfx_controller import TinyFxController
@@ -113,6 +114,7 @@ class Thoughts(Behaviour):
         self._imu = self._component_registry.get(IMU.NAME)
         if not self._imu:
             self._log.warning('IMU not available.' )
+        self._system = self._component_registry.get(System.NAME)
         self._eyeballs_monitor = self._component_registry.get(EyeballsMonitor.NAME)
         if self._eyeballs_monitor is None:
             self._log.warning('eyeballs monitor not available.')
@@ -466,6 +468,8 @@ class Thoughts(Behaviour):
                     if self._verbose:
                         self._log.info(Fore.BLUE + '[{:05d}] active ({:.1f}s since last activity)'.format(self._count, elapsed_sec))
                 self._check_light_level()
+                if self._count >= 60 and self._count % 60 == 0:
+                    self._check_power_level()
                 if self._sleep_count > 0:
                     # randomly longer
                     await asyncio.sleep(self._loop_delay_sec * uniform(1.2, 2.0))
@@ -504,6 +508,18 @@ class Thoughts(Behaviour):
                 finally:
                     self._suppress_random_sounds = _saved
                     self._darkness_state = _is_dark
+
+    def _check_power_level(self):
+        _power_level = self._system.get_power_level()
+        _bars  = _power_level.bars
+        _battery_12v = self._system.battery_12v
+        if _bars < 3:
+            self._log.warning('BATTERY LOW ({:6.3f}V)'.format(_battery_12v))
+            self.console('RED WARNING: BATTERY LOW')
+            self.play_sound('buzz', force=True)
+        else:
+#           self._log.info("battery: " + Fore.GREEN + "{:6.3f}V {}".format(_battery_12v, _power_level.message))
+            self._system.print_battery_info()
 
     def _publish_message(self, message):
         '''
@@ -569,7 +585,7 @@ class Thoughts(Behaviour):
             if frequency > 0:
                 if now >= self._next_play_time:
                     name = choice([n for n in self._active_sounds if n != self._last_name])
-                    self._log.info(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
+#                   self._log.debug(Style.DIM + 'calling play: ' + Fore.WHITE + Style.BRIGHT + "'{}'".format(name) + Style.RESET_ALL)
                     self.play_sound(name)
                     self._last_name = name
                     interval = expovariate(frequency / self._jitter_factor)

@@ -40,8 +40,8 @@ kros:
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds (was 200)
             ramp_down_duration_sec:         1.0            # duration to ramp down intent vector in BLIND mode
         avoid:
-            enable:                      True              # enable avoid behaviour
-            release:                     True              # release avoid behaviour on startup
+            enable:                     False              # enable avoid behaviour
+            release:                    False              # release avoid behaviour on startup
             verbose:                    False              # verbose messaging
             boost_when_squeezed:        False              # if True, boost priority when squeezed
             default_priority:               0.52           # default behaviour priority
@@ -66,7 +66,7 @@ kros:
             release:                     True              # release navigator behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # navigation speed
-            default_priority:               0.5            # default behaviour priority
+            default_priority:               0.6            # default behaviour priority
         nudge:
             enable:                     False              # enable nudge behaviour
             release:                    False              # release nudge behaviour on startup
@@ -82,8 +82,8 @@ kros:
             ramp_up_ms:                 1500
             ramp_down_ms:               1500
         radiozoa:
-            enable:                      True              # enable radiozoa behaviour
-            release:                     True              # release radiozoa behaviour on startup
+            enable:                     False              # enable radiozoa behaviour
+            release:                    False              # release radiozoa behaviour on startup
             verbose:                    False              # verbose messaging
             default_priority:               0.42           # default behaviour priority
             default_speed:                  0.4            # was 0.4; cruising speed
@@ -95,8 +95,8 @@ kros:
             settling_threshold_mm:         15              # 30; all pairs within this is considered settled
             deadband:                       0.15           # was 0.275; vx/vy needs to exceed this to be active
         roam:
-            enable:                      True              # enable roam behaviour
-            release:                     True              # release roam behaviour on startup
+            enable:                     False              # enable roam behaviour
+            release:                    False              # release roam behaviour on startup
             verbose:                    False              # verbose messaging
             default_speed:                  0.6            # cruising speed
             default_priority:               0.4            # default behaviour priority
@@ -110,11 +110,11 @@ kros:
             accel_time:                     1.0            # seconds to ramp up rotational speed
             angular_resolution:             5.0            # degrees per slice
         scout:
-            enable:                      True              # enable scout behaviour
-            release:                     True              # release scout behaviour on startup
+            enable:                     False              # enable scout behaviour
+            release:                    False              # release scout behaviour on startup
             verbose:                    False              # verbose messaging
             use_dynamic_priority:        True              # if True, alter priority based on distance
-            default_priority:               0.6            # default behaviour priority
+            default_priority:               0.5            # default behaviour priority
             use_dynamic_heading:        False              # if True use RGB encoder for setting heading
             rotation_speed:                 0.5            # motor speed when rotating in place
             rotation_tolerance:             1.0            # used to calculate omega
@@ -125,8 +125,8 @@ kros:
             smoothing_factor:               0.3            # low pass filter on transition towards target
             radiozoa_weight:                0.6            # how much does the radiozoa influence scout in a cul de sac?
         swerve:
-            enable:                      True              # enable swerve behaviour
-            release:                     True              # release swerve behaviour on startup
+            enable:                     False              # enable swerve behaviour
+            release:                    False              # release swerve behaviour on startup
             verbose:                    False              # verbose messaging
             poll_delay_ms:                 50              # asyncio poll delay in milliseconds
             min_reaction_distance:        350              # mm - start reacting at zero speed
@@ -346,10 +346,10 @@ kros:
             pin2:                             3            # toggle 2 pin
             pin3:                             4            # toggle 3 pin
             pin4:                             2            # toggle 4 pin
-            toggle1:                  'radiozoa'           # behaviour assignment(s) to toggle 1
-            toggle2:                      'roam'           # behaviour assignment(s) to toggle 2
-            toggle3:              'avoid swerve'           # behaviour assignment(s) to toggle 3
-            toggle4:                'scan scout'           # behaviour assignment(s) to toggle 4
+            toggle1:                      'roam'           # behaviour assignment(s) to toggle 1
+            toggle2:                  'radiozoa'           # behaviour assignment(s) to toggle 2
+            toggle3:   'avoid swerve scan scout'           # behaviour assignment(s) to toggle 3
+            toggle4:                 'navigator'           # behaviour assignment(s) to toggle 4
         nofs_odometer:
             i2c_address:                   0x41            # I²C address for the device
         odometer:
@@ -357,7 +357,7 @@ kros:
             initial_y:                     6635            # starting y position (mm), e.g., 200mm north of south edge
             initial_heading:                 90            # starting heading in degrees (where 0° is north)
             pose_delta_mm:                  100            # how far to travel before posting a pose to the console?
-            invert_omega:                  True            # if True, invert the omega value
+            invert_omega:                 False            # if True, invert the omega value
         depth_camera:
             preset_mode:              'ROBOTICS'           # preset depth camera mode
             extended_disparity:           False            # closer-in minimum depth, disparity range is doubled (from 95 to 190)
