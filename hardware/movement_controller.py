@@ -81,8 +81,6 @@ class MovementController(Component):
         self._default_vx       = _cfg.get('default_vx',    1.0)
         self._default_vy       = _cfg.get('default_vy',    1.0)
         self._default_omega    = _cfg.get('default_omega', 1.0)
-        self._default_translational_speed = sqrt(self._default_vx ** 2 + self._default_vy ** 2)
-        self._log.info('default translational speed: {:.3f}'.format(self._default_translational_speed))
         # phase distance is computed as this ratio of total distance, subject to minimum
         self._phase_ratio      = _cfg.get('phase_ratio',   0.10)      # 10% each for accel and decel
         self._min_phase_mm     = _cfg.get('min_phase_mm',  100.0)     # minimum phase distance in mm
@@ -257,15 +255,11 @@ class MovementController(Component):
         self._intent_vector = (0.0, 0.0, 0.0)
 
     def move(self, distance_mm, direction=Direction.AHEAD):
-        '''
-        Initiate movement of exactly distance_mm in the given direction.
-        Phase transitions are determined dynamically from odometer and slew state.
-        '''
         self._total_target_distance = distance_mm
         self._movement_direction    = direction
         self._accel_distance        = 0.0
         self._move_distance         = 0.0
-        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {}'.format(distance_mm, direction.label))
+        self._target_speed          = 0.0 
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ACCEL
         self._start_time = time.time()
@@ -347,7 +341,7 @@ class MovementController(Component):
             vy    = self._movement_direction.vy_direction,
             omega = 0.0
         )
-        if isclose(self._get_primary_velocity(), self._default_translational_speed, abs_tol=0.02):
+        if isclose(self._get_primary_velocity(), self._target_speed, abs_tol=0.02):
             self._accel_distance = accumulated_distance
             prev_phase = self._movement_phase
             self._movement_phase = MovementPhase.MOVE
