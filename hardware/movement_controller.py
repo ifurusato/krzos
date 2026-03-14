@@ -95,6 +95,7 @@ class MovementController(Component):
         self._intent_vector      = (0.0, 0.0, 0.0)
         self._priority           = 0.0
         self._intent_vector_registered = False
+        self._target_speed       = 0.0
         # phase change callbacks
         self._phase_change_callbacks = []
         # baseline pose for movement tracking
@@ -259,7 +260,10 @@ class MovementController(Component):
         self._movement_direction    = direction
         self._accel_distance        = 0.0
         self._move_distance         = 0.0
-        self._target_speed          = 0.0 
+        self._target_speed = sqrt(
+            (direction.vx_direction * self._default_vx) ** 2 +
+            (direction.vy_direction * self._default_vy) ** 2
+        )
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ACCEL
         self._start_time = time.time()
@@ -289,26 +293,6 @@ class MovementController(Component):
                 self.handle_decel_phase(accumulated)
             time.sleep(_poll_delay)
         self._log.info(Fore.GREEN + 'run complete.')
-
-    def z_rotate(self, degrees, direction=Rotation.CLOCKWISE):
-        '''
-        Delegate rotation to RotationController if available.
-        Only callable when movement controller is IDLE.
-
-        :param degrees:   rotation angle in degrees
-        :param direction: Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
-        '''
-        if self._rotation_controller is None:
-            raise ValueError('rotation_controller not available')
-        if self._movement_phase != MovementPhase.IDLE:
-            raise ValueError('cannot rotate - movement controller not idle (phase: {})'.format(
-                self._movement_phase.name))
-        self._log.info('starting rotation: {:.1f}° {}'.format(degrees, direction.label))
-        prev_phase = self._movement_phase
-        self._movement_phase = MovementPhase.ROTATING
-        self._notify_phase_change(prev_phase, self._movement_phase)
-        self._rotation_controller.rotate(degrees, direction)
-        self._log.info('rotation delegated to RotationController.')
 
     def poll(self):
         '''
