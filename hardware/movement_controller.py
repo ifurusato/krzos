@@ -95,6 +95,7 @@ class MovementController(Component):
         self._movement_vector    = (0.0, 0.0, 0.0)   # raw vector for move_vector/run_vector
         self._accel_vx_rate      = 0.0
         self._accel_vy_rate      = 0.0
+        self._accel_om_rate      = 0.0
         self._intent_vector      = (0.0, 0.0, 0.0)
         self._priority           = 0.0
         self._intent_vector_registered = False
@@ -322,6 +323,40 @@ class MovementController(Component):
             (vector[0] * self._default_vx) ** 2 +
             (vector[1] * self._default_vy) ** 2
         )
+        # reset slew to config defaults before computing proportional rates
+        _slew         = self._motor_controller.slew_limiter
+        _slew.reset()
+        _vx_component    = abs(vector[0])
+        _vy_component    = abs(vector[1])
+        _omega_component = abs(vector[2])
+        _total           = max(_vx_component + _vy_component + _omega_component, 1e-6)
+        self._accel_vx_rate  = _slew.max_vx_rate    * (_vx_component    / _total)
+        self._accel_vy_rate  = _slew.max_vy_rate    * (_vy_component    / _total)
+        self._accel_om_rate  = _slew.max_omega_rate * (_omega_component / _total)
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement via vector {} (target speed: {:.3f})'.format(
+                distance_mm, vector, self._target_speed))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ACCEL
+        self._start_time = time.time()
+        self._reset_baseline()
+        self._register_intent_vector()
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
+
+    def x_move_vector(self, distance_mm, vector):
+        '''
+        Initiate movement of exactly distance_mm using a raw (vx, vy, omega) tuple.
+        Phase transitions are determined dynamically from odometer and slew state.
+        '''
+        self._total_target_distance = distance_mm
+        self._movement_direction    = None
+        self._movement_vector       = vector
+        self._accel_distance        = 0.0
+        self._move_distance         = 0.0
+        self._target_speed = sqrt(
+            (vector[0] * self._default_vx) ** 2 +
+            (vector[1] * self._default_vy) ** 2
+        )
         # compute proportional slew rates once from config defaults
         _slew         = self._motor_controller.slew_limiter
         _slew.reset()
@@ -340,7 +375,7 @@ class MovementController(Component):
         self._notify_phase_change(prev_phase, self._movement_phase)
         self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
 
-    def x_move_vector(self, distance_mm, vector):
+    def z_move_vector(self, distance_mm, vector):
         '''
         Initiate movement of exactly distance_mm using a raw (vx, vy, omega) tuple.
         Phase transitions are determined dynamically from odometer and slew state.
@@ -465,6 +500,7 @@ class MovementController(Component):
             _slew             = self._motor_controller.slew_limiter
             _slew.max_vx_rate = self._accel_vx_rate
             _slew.max_vy_rate = self._accel_vy_rate
+            _slew.max_omega_rate = self._accel_om_rate
             self._set_intent(
                 vx    = self._movement_vector[0],
                 vy    = self._movement_vector[1],
@@ -537,9 +573,9 @@ class MovementController(Component):
         else:
             _vx_component      = abs(self._movement_vector[0])
             _vy_component      = abs(self._movement_vector[1])
-            _total             = max(_vx_component + _vy_component, 1e-6)
+            _trans_total       = max(_vx_component + _vy_component, 1e-6)
             _effective_rate    = (_vx_component * _slew.max_vx_rate \
-                                + _vy_component * _slew.max_vy_rate) / _total
+                                + _vy_component * _slew.max_vy_rate) / _trans_total
         _stopping_distance     = 0.5 * _current_v * _actual_speed / _effective_rate
         _remaining             = self._total_target_distance - accumulated_distance
         if _remaining <= _stopping_distance:
@@ -571,15 +607,19 @@ class MovementController(Component):
         if _remaining > 0.0 and _actual_speed > 0.0:
             _v_norm        = self._get_primary_velocity()
             _required_rate = (0.5 * _v_norm * _actual_speed) / _remaining
+
             if self._movement_direction is not None:
                 _slew.max_vy_rate = _required_rate
             else:
                 # weight decel rates by vector components so both axes stop together
                 _vx_component     = abs(self._movement_vector[0])
                 _vy_component     = abs(self._movement_vector[1])
-                _total            = max(_vx_component + _vy_component, 1e-6)
-                _slew.max_vx_rate = _required_rate * (_vx_component / _total)
-                _slew.max_vy_rate = _required_rate * (_vy_component / _total)
+                _omega_component  = abs(self._movement_vector[2])
+                _trans_total      = max(_vx_component + _vy_component, 1e-6)
+                _full_total       = max(_trans_total + _omega_component, 1e-6)
+                _slew.max_vx_rate    = _required_rate * (_vx_component    / _full_total)
+                _slew.max_vy_rate    = _required_rate * (_vy_component    / _full_total)
+                _slew.max_omega_rate = _required_rate * (_omega_component / _full_total)
         self._set_intent(0.0, 0.0, 0.0)
         if not self._odometer.is_moving():
             _slew.reset()

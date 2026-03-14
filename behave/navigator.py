@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
@@ -7,10 +8,10 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-03-12
-# modified: 2026-03-13
+# modified: 2026-03-14
 
 import traceback
-from math import degrees, radians, sqrt, cos, sin, atan2
+from math import degrees, radians, sqrt, atan2
 from math import pi as π
 from colorama import init, Fore, Style
 init()
@@ -26,7 +27,11 @@ from hardware.rotation_controller import RotationController
 class Navigator(AsyncBehaviour):
     NAME = 'navigator'
     '''
-    Description TBD.
+    Navigates a route defined as a list of waypoints. Each leg is executed
+    by delegating to MovementController.run_vector(), which handles accel,
+    constant-speed movement, and decel with slew-limited stopping. Navigator
+    is solely responsible for route management; MovementController owns the
+    intent vector for the duration of each leg.
     '''
     def __init__(self, config=None, message_bus=None, message_factory=None, level=Level.INFO):
         self._log = Logger(Navigator.NAME, level)
@@ -36,15 +41,12 @@ class Navigator(AsyncBehaviour):
             raise MissingComponentError('motor controller not available.')
         self._odometer = _motor_controller.odometer
         self._movement_controller = _component_registry.get(MovementController.NAME)
-        # create movement controller if it doesnt' already exist
         if self._movement_controller is None:
             self._log.info('creating rotation controller…')
-            _rotation_controller = None # RotationController(_config, _motor_controller, level=Level.INFO)
+            _rotation_controller = None
             self._log.info('creating movement controller…')
             self._movement_controller = MovementController(config, _motor_controller, _rotation_controller, level=level)
-#           raise MissingComponentError('movement controller not available.')
         AsyncBehaviour.__init__(self, self._log, config, message_bus, message_factory, _motor_controller, level=level)
-#       self.add_event(Event.AVOID) # TBD
         self._roam           = None # the Roam behaviour
         self._scout          = None # the Scout behaviour
         self._route          = None
@@ -59,15 +61,12 @@ class Navigator(AsyncBehaviour):
         self._default_speed  = _cfg.get('default_speed', 0.5)
         self._log.info('ready.')
 
-    # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
-
     def _get_roam(self):
         '''
         Lazily fetch the Roam behaviour from the component registry.
         '''
         if self._roam is None:
             from behave.roam import Roam
-
             self._roam = Component.get_registry().get(Roam.NAME)
         return self._roam
 
@@ -77,9 +76,8 @@ class Navigator(AsyncBehaviour):
         '''
         if self._scout is None:
             from behave.scout import Scout
-
             self._scout = Component.get_registry().get(Scout.NAME)
-        return self._roam
+        return self._scout
 
     def set_door_callback(self, callback):
         '''
@@ -102,7 +100,7 @@ class Navigator(AsyncBehaviour):
         '''
         self._en_route_callback = callback
 
-    def set_route(self, waypoints, is_first_route = False):
+    def set_route(self, waypoints, is_first_route=False):
         '''
         Set the route to navigate. If is_first_route is True, sets the odometer
         pose from waypoint 0 and begins from waypoint 1. Otherwise compares
@@ -142,7 +140,7 @@ class Navigator(AsyncBehaviour):
         else:
             self._log.warning('scout not available to suppress.')
         if self._en_route_callback is not None:
-                self._en_route_callback(True)
+            self._en_route_callback(True)
         self._log.info('route set: {} waypoints, starting from index {}.'.format(
                 len(self._route), self._route_index))
 
@@ -162,52 +160,38 @@ class Navigator(AsyncBehaviour):
     def stop_loop_action(self):
         pass
 
-    def _dynamic_set_default_speed(self):
-        '''
-        Updates default speed from digital potentiometer if available.
-        '''
-        # TBD
-        pass
-
     async def _poll(self):
         '''
-        The asynchronous poll, returns the intent vector.
+        The asynchronous poll, drives navigation by executing one waypoint leg
+        at a time via MovementController.
         '''
         if self.suppressed or self.disabled:
             return (0.0, 0.0, 0.0)
         try:
-#           if next(self._counter) % 5 == 0:
-#               self._dynamic_set_default_speed()
-            return self._update_intent_vector()
+            await self._navigate_to_waypoint()
         except Exception as e:
             self._log.error("{} thrown while polling: {}\n{}".format(type(e), e, traceback.format_exc()))
             self.disable()
-            return (0.0, 0.0, 0.0)
+        return (0.0, 0.0, 0.0)
 
-    def _update_intent_vector(self):
+    async def _navigate_to_waypoint(self):
         '''
-        Computes and returns (vx, vy, omega) toward the current waypoint.
+        Computes the displacement from the current pose to the current waypoint
+        and delegates movement to MovementController via run_vector(). Advances
+        the route index when the waypoint is reached. Returns immediately if no
+        route or route is complete.
 
-        Logic of the update:
-
-        1. If no route or route complete, return (0.0, 0.0, 0.0).
-        2. Get current pose (x, y, theta) from odometer.
-        3. Check if current waypoint is reached — if so, advance index.
-           If that was the last waypoint, clear route and return zero.
-        4. Compute map-frame error vector to current waypoint target.
-        5. Rotate that error into robot body frame using theta.
-        6. Derive vx, vy proportionally from the body-frame error, capped at _default_speed.
-        7. Compute omega from the heading error to the waypoint, capped at _default_speed.
+        For multi-leg routes, omega is computed as the bearing change required
+        to face the next waypoint at the end of the current leg, giving a smooth
+        heading transition into the next leg. For the final leg omega is zero.
         '''
         if not self._route or self._route_index >= len(self._route):
-            return (0.0, 0.0, 0.0)
+            return
         _x, _y, _theta = self._odometer.pose
-        # check if current waypoint is reached
         _wp = self._route[self._route_index]
         if _wp.reached(_x, _y):
             self._log.info('waypoint {} reached: {}'.format(self._route_index, _wp.label))
             if _wp.kind == 'door' and self._door_callback is not None:
-                # console message while passing through doorway
                 _degrees = degrees(_theta)
                 _rad_pi  = _theta / π
                 self.console('CYAN pose at doorway {}:\nCYAN   x:YELLOW          {:d}mm\nCYAN   y:YELLOW          {:d}mm\nCYAN   theta:YELLOW      {:.3f}π ({:.1f}°)'.format(
@@ -229,56 +213,116 @@ class Navigator(AsyncBehaviour):
                 if _roam is not None:
                     _roam.release()
                     self._log.info('roam released: route complete.')
-                _scout = self._get_roam()
+                _scout = self._get_scout()
                 if _scout is not None:
                     _scout.release()
                     self._log.info('scout released: route complete.')
-                return (0.0, 0.0, 0.0)
+                return
             _wp = self._route[self._route_index]
             self._log.info('advancing to waypoint {}: {}'.format(self._route_index, _wp.label))
-        # map-frame error vector to waypoint
-        _dx = _wp.position.x - _x
-        _dy = _wp.position.y - _y
+        # compute displacement from current pose to waypoint
+        _dx   = _wp.position.x - _x
+        _dy   = _wp.position.y - _y
         _dist = sqrt(_dx * _dx + _dy * _dy)
-        # rotate map-frame error into robot body frame
-        # theta=0 is north (+y), positive theta is clockwise
-        _cos_t = cos(_theta)
-        _sin_t = sin(_theta)
-        _body_x =  _dx * _cos_t + _dy * _sin_t
-        _body_y = -_dx * _sin_t + _dy * _cos_t
-        # scale proportionally to distance, capped at default speed
-        _scale = min(1.0, _dist / 1000.0)  # full speed beyond 1000mm
-        _vx = (_body_x / _dist) * _scale * self._default_speed
-        _vy = (_body_y / _dist) * _scale * self._default_speed
-        # omega: heading error toward waypoint
-        _bearing = atan2(_dx, _dy)  # bearing to waypoint in map frame (north=0)
+        if _dist < 1e-6:
+            return
+        _vx        = _dx / _dist
+        _vy        = _dy / _dist
+        # omega: bearing change needed to face the next waypoint at end of this leg
+        if self._route_index + 1 < len(self._route):
+            _next_wp     = self._route[self._route_index + 1]
+            _next_bear   = atan2(_next_wp.position.x - _wp.position.x,
+                                 _next_wp.position.y - _wp.position.y)
+            _this_bear   = atan2(_dx, _dy)
+            _heading_err = _next_bear - _this_bear
+            while _heading_err > π:
+                _heading_err -= 2.0 * π
+            while _heading_err < -π:
+                _heading_err += 2.0 * π
+            _omega = _heading_err / π
+        else:
+            _omega = 0.0
+        self._log.info('navigating to waypoint {}: dist={:.1f}mm, vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(
+                self._route_index, _dist, _vx, _vy, _omega))
+        await self._movement_controller.run_vector(_dist, (_vx, _vy, _omega))
+
+    async def x_navigate_to_waypoint(self):
+        '''
+        Computes the displacement from the current pose to the current waypoint
+        and delegates movement to MovementController via run_vector(). Advances
+        the route index when the waypoint is reached. Returns immediately if no
+        route or route is complete.
+        '''
+        if not self._route or self._route_index >= len(self._route):
+            return
+        _x, _y, _theta = self._odometer.pose
+        _wp = self._route[self._route_index]
+        if _wp.reached(_x, _y):
+            self._log.info('waypoint {} reached: {}'.format(self._route_index, _wp.label))
+            if _wp.kind == 'door' and self._door_callback is not None:
+                _degrees = degrees(_theta)
+                _rad_pi  = _theta / π
+                self.console('CYAN pose at doorway {}:\nCYAN   x:YELLOW          {:d}mm\nCYAN   y:YELLOW          {:d}mm\nCYAN   theta:YELLOW      {:.3f}π ({:.1f}°)'.format(
+                        _wp,
+                        round(_x),
+                        round(_y),
+                        _rad_pi,
+                        _degrees))
+                self._door_callback(_wp)
+            self._route_index += 1
+            if self._route_index >= len(self._route):
+                self._log.info('route complete.')
+                if self._route_complete_callback is not None:
+                    self._route_complete_callback(_wp)
+                if self._en_route_callback is not None:
+                    self._en_route_callback(False)
+                self._route = None
+                _roam = self._get_roam()
+                if _roam is not None:
+                    _roam.release()
+                    self._log.info('roam released: route complete.')
+                _scout = self._get_scout()
+                if _scout is not None:
+                    _scout.release()
+                    self._log.info('scout released: route complete.')
+                return
+            _wp = self._route[self._route_index]
+            self._log.info('advancing to waypoint {}: {}'.format(self._route_index, _wp.label))
+        # compute displacement from current pose to waypoint
+        _dx   = _wp.position.x - _x
+        _dy   = _wp.position.y - _y
+        _dist = sqrt(_dx * _dx + _dy * _dy)
+        if _dist < 1e-6:
+            return
+        # normalise translational components
+        _vx = _dx / _dist
+        _vy = _dy / _dist
+        # heading error as normalised omega
+        _bearing     = atan2(_dx, _dy)  # bearing to waypoint in map frame (north=0)
         _heading_err = _bearing - _theta
-        # normalise to -pi..pi
         while _heading_err > π:
             _heading_err -= 2.0 * π
         while _heading_err < -π:
             _heading_err += 2.0 * π
-        _omega = (_heading_err / π) * self._default_speed
-#       _omega = 0.0
-#       self._log.info(Fore.MAGENTA + 'bearing: {:.4f}; theta: {:.4f}; heading_err: {:.4f}; omega: {:.4f}'.format(_bearing, _theta, _heading_err, _omega))
-#       self._log.info('x: {:.4f}; y: {:.4f}; theta: {:.4f}; dx: {:.4f}; dy: {:.4f}; body_x: {:.4f}; body_y: {:.4f}; vy: {:.4f}; vy: {:.4f};'.format(
-#               _x, _y, _theta, _dx, _dy, _body_x, _body_y, _vx, _vy))
-        return (_vx, _vy, _omega)
+        _omega = _heading_err / π
+        self._log.info('navigating to waypoint {}: dist={:.1f}mm, vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(
+                self._route_index, _dist, _vx, _vy, _omega))
+        await self._movement_controller.run_vector(_dist, (_vx, _vy, _omega))
 
     def enable(self):
         if not self.enabled:
-            self._log.debug("enabling navigator…")
+            self._log.debug('enabling navigator…')
             super().enable()
-            self._log.info("navigator enabled.")
+            self._log.info('navigator enabled.')
         else:
-            self._log.warning("already enabled.")
+            self._log.warning('already enabled.')
 
     def disable(self):
         if self.enabled:
-            self._log.debug("disabling navigator…")
+            self._log.debug('disabling navigator…')
             super().disable()
             self._log.info('disabled.')
         else:
-            self._log.warning("already disabled.")
+            self._log.warning('already disabled.')
 
 #EOF

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- v15 -->
 <svg
    width="8700mm"
    height="12550mm"
@@ -89,9 +90,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-35);fill:#000055;stroke-width:0.100656"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1545"><tspan
+         id="tspan5849"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1543">KITCHEN</tspan></tspan></text>
+           id="tspan5847">KITCHEN</tspan></tspan></text>
   </g>
   <g
      id="g1672"
@@ -111,9 +112,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-3);fill:#000055;stroke-width:0.0999969"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1549"><tspan
+         id="tspan5853"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1547">SPARE</tspan></tspan></text>
+           id="tspan5851">SPARE</tspan></tspan></text>
   </g>
   <g
      id="g1659"
@@ -133,9 +134,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-9);fill:#000055;stroke-width:0.0999969"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1553"><tspan
+         id="tspan5857"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1551">STUDY</tspan></tspan></text>
+           id="tspan5855">STUDY</tspan></tspan></text>
   </g>
   <rect
      style="fill:#ffe58e;fill-opacity:1;stroke:#1864ff;stroke-width:0.0359;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:0.1077, 0.1077;stroke-dashoffset:0;stroke-opacity:1"
@@ -155,14 +156,24 @@
      ry="0" />
   <text
      xml:space="preserve"
+     style="font-weight:500;font-size:25.4px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';stroke-width:0.264583"
+     x="5654.1865"
+     y="5366.2192"
+     id="text28701-0-28-367"><tspan
+       id="tspan28699-6-9-5"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:25.4px;font-family:Dosis;-inkscape-font-specification:'Dosis Semi-Bold';stroke-width:0.264583"
+       x="5654.1865"
+       y="5366.2192">RUBBISH</tspan></text>
+  <text
+     xml:space="preserve"
      transform="matrix(0,-2.6459018,2.6459317,0,-1216.3114,4347.9734)"
      id="text5775-7-1"
      style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-2-6);fill:#000055;stroke-width:0.0999969"><tspan
        x="-1325.4863"
        y="2578.2969"
-       id="tspan1557"><tspan
+       id="tspan5861"><tspan
          style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-         id="tspan1555">HALL</tspan></tspan></text>
+         id="tspan5859">HALL</tspan></tspan></text>
   <g
      id="g1690"
      transform="matrix(0.1,0,0,0.1,4183.3383,6184.2849)">
@@ -181,9 +192,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-0-8);fill:#000055;stroke-width:0.0999969"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1561"><tspan
+         id="tspan5865"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1559">AUX</tspan></tspan></text>
+           id="tspan5863">AUX</tspan></tspan></text>
   </g>
   <g
      id="g1684"
@@ -204,9 +215,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-0);fill:#000055;stroke-width:0.0934252"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1565"><tspan
+         id="tspan5869"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1563">STAIR</tspan></tspan></text>
+           id="tspan5867">STAIR</tspan></tspan></text>
   </g>
   <g
      id="g1678"
@@ -226,9 +237,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-2);fill:#000055;stroke-width:0.0999969"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1569"><tspan
+         id="tspan5873"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1567">BATH</tspan></tspan></text>
+           id="tspan5871">BATH</tspan></tspan></text>
   </g>
   <g
      id="g940">
@@ -338,9 +349,9 @@
        style="font-weight:500;font-size:160px;line-height:1.25;font-family:Dosis;-inkscape-font-specification:'Dosis, Medium';white-space:pre;shape-inside:url(#rect5777-7);fill:#000055;stroke-width:0.0985609"><tspan
          x="-1325.4863"
          y="2578.2969"
-         id="tspan1573"><tspan
+         id="tspan5877"><tspan
            style="font-weight:600;-inkscape-font-specification:'Dosis Semi-Bold'"
-           id="tspan1571">LOUNGE</tspan></tspan></text>
+           id="tspan5875">LOUNGE</tspan></tspan></text>
   </g>
   <text
      xml:space="preserve"

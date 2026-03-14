@@ -85,7 +85,9 @@ def main():
 #       _movement_controller.run(2000.0, Direction.STBD)
 #       _movement_controller.run(360.0,  Direction.CLOCKWISE)
 
-        _movement_controller.run_displacement(500.0, 1470.0, degrees=0.0)
+        _movement_controller.run_displacement(1030.0, 1460.0, degrees=0.0)
+#       _movement_controller.run_displacement(1030.0, 0.0, degrees=0.0)
+#       _movement_controller.run_displacement(0.0, 1460.0, degrees=0.0)
 
         _log.info(Fore.GREEN + 'movement complete.')
 
