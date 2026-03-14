@@ -115,6 +115,8 @@ class Navigator(AsyncBehaviour):
         _wp0              = self._route[0]
         if is_first_route:
             _heading_deg = _wp0.heading if _wp0.heading is not None else 0.0
+            if _wp0.heading is None:
+                self._log.warning('no heading set for waypoint 0: defaulting to 0.0° (north).')
             self._odometer.set_pose(_wp0.position.x, _wp0.position.y,
                     radians(_heading_deg), use_radians=True)
             self._log.info('odometer pose set to waypoint 0: {}'.format(_wp0))

@@ -287,19 +287,23 @@ class RouteIterator:
 
     def save(self, path: str):
         '''
-        Save this route to a YAML file.
+        Save this route to a YAML file. Waypoint 0 always includes a heading
+        field (degrees, 0=north) for use by the odometer initialisation in
+        Navigator. Edit manually if the starting orientation is not north.
         '''
         import yaml
-        _data = {
-            'route': [
-                {
-                    'label':          wp.label,
-                    'kind':           wp.kind,
-                    'position':       {'x': wp.position.x, 'y': wp.position.y},
-                    'arrival_radius': wp.arrival_radius,
-                } for wp in self._waypoints
-            ]
-        }
+        _entries = []
+        for i, wp in enumerate(self._waypoints):
+            _entry = {
+                'label':          wp.label,
+                'kind':           wp.kind,
+                'position':       {'x': wp.position.x, 'y': wp.position.y},
+                'arrival_radius': wp.arrival_radius,
+            }
+            if i == 0:
+                _entry['heading'] = wp.heading if wp.heading is not None else 0.0
+            _entries.append(_entry)
+        _data = {'route': _entries}
         with open(path, 'w') as f:
             yaml.dump(_data, f, default_flow_style=False)
 

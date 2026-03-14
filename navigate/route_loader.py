@@ -38,6 +38,7 @@ class RouteLoader:
                 position       = Point(_pos['x'], _pos['y']),
                 kind           = _entry['kind'],
                 arrival_radius = _entry.get('arrival_radius', 200.0),
+                heading        = _entry.get('heading', None),
             )
             _waypoints.append(_wp)
         return _waypoints
