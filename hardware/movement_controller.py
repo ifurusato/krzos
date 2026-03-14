@@ -9,7 +9,7 @@
 # created:  2025-11-20
 # modified: 2026-03-14
 
-import time
+import asyncio, time
 from enum import Enum
 from math import isclose, sqrt
 from colorama import init, Fore, Style
@@ -91,7 +91,11 @@ class MovementController(Component):
         self._log.info('phase ratio: {:.2f}; min phase: {:.1f}mm'.format(self._phase_ratio, self._min_phase_mm))
         # movement state
         self._movement_phase     = MovementPhase.INACTIVE
-        self._movement_direction = Direction.STOPPED
+        self._movement_direction = Direction.STOPPED  # None when using raw vector
+        self._movement_vector    = (0.0, 0.0, 0.0)   # raw vector for move_vector/run_vector
+        self._movement_vector    = (0.0, 0.0, 0.0)
+        self._accel_vx_rate      = 0.0
+        self._accel_vy_rate      = 0.0
         self._intent_vector      = (0.0, 0.0, 0.0)
         self._priority           = 0.0
         self._intent_vector_registered = False
@@ -132,7 +136,7 @@ class MovementController(Component):
     @property
     def movement_direction(self):
         '''
-        Returns the current movement direction.
+        Returns the current movement direction, or None if using a raw vector.
         '''
         return self._movement_direction
 
@@ -182,7 +186,8 @@ class MovementController(Component):
     def _get_accumulated_distance(self):
         '''
         Calculate accumulated translational distance in mm from odometer pose
-        changes, projected onto the movement direction axis.
+        changes, projected onto the movement direction axis. When using a raw
+        vector, returns the Euclidean distance from baseline.
         '''
         x, y, theta = self._odometer.pose
         dx = x - self._baseline_x
@@ -256,14 +261,76 @@ class MovementController(Component):
         self._intent_vector = (0.0, 0.0, 0.0)
 
     def move(self, distance_mm, direction=Direction.AHEAD):
+        '''
+        Initiate movement of exactly distance_mm in the given Direction.
+        Phase transitions are determined dynamically from odometer and slew state.
+        '''
         self._total_target_distance = distance_mm
         self._movement_direction    = direction
+        self._movement_vector       = (0.0, 0.0, 0.0)
         self._accel_distance        = 0.0
         self._move_distance         = 0.0
         self._target_speed = sqrt(
             (direction.vx_direction * self._default_vx) ** 2 +
             (direction.vy_direction * self._default_vy) ** 2
         )
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {} (target speed: {:.3f})'.format(
+                distance_mm, direction.label, self._target_speed))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ACCEL
+        self._start_time = time.time()
+        self._reset_baseline()
+        self._register_intent_vector()
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
+
+    def move_vector(self, distance_mm, vector):
+        '''
+        Initiate movement of exactly distance_mm using a raw (vx, vy, omega) tuple.
+        Phase transitions are determined dynamically from odometer and slew state.
+        '''
+        self._total_target_distance = distance_mm
+        self._movement_direction    = None
+        self._movement_vector       = vector
+        self._accel_distance        = 0.0
+        self._move_distance         = 0.0
+        self._target_speed = sqrt(
+            (vector[0] * self._default_vx) ** 2 +
+            (vector[1] * self._default_vy) ** 2
+        )
+        # compute proportional slew rates once from config defaults
+        _slew         = self._motor_controller.slew_limiter
+        _vx_component = abs(vector[0])
+        _vy_component = abs(vector[1])
+        _total        = max(_vx_component + _vy_component, 1e-6)
+        self._accel_vx_rate = _slew.max_vx_rate * (_vx_component / _total)
+        self._accel_vy_rate = _slew.max_vy_rate * (_vy_component / _total)
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement via vector {} (target speed: {:.3f})'.format(
+                distance_mm, vector, self._target_speed))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ACCEL
+        self._start_time = time.time()
+        self._reset_baseline()
+        self._register_intent_vector()
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
+
+    def x_move_vector(self, distance_mm, vector):
+        '''
+        Initiate movement of exactly distance_mm using a raw (vx, vy, omega) tuple.
+        Phase transitions are determined dynamically from odometer and slew state.
+        '''
+        self._total_target_distance = distance_mm
+        self._movement_direction    = None
+        self._movement_vector       = vector
+        self._accel_distance        = 0.0
+        self._move_distance         = 0.0
+        self._target_speed = sqrt(
+            (vector[0] * self._default_vx) ** 2 +
+            (vector[1] * self._default_vy) ** 2
+        )
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement via vector {} (target speed: {:.3f})'.format(
+                distance_mm, vector, self._target_speed))
         prev_phase = self._movement_phase
         self._movement_phase = MovementPhase.ACCEL
         self._start_time = time.time()
@@ -274,7 +341,7 @@ class MovementController(Component):
 
     def run(self, distance_mm, direction=Direction.AHEAD, poll_rate_hz=None):
         '''
-        Synchronously execute a complete movement: accel, move, decel.
+        Synchronously execute a complete movement using a Direction: accel, move, decel.
         Blocks until the movement is complete and motors are stopped.
         '''
         if poll_rate_hz is None:
@@ -292,6 +359,34 @@ class MovementController(Component):
             elif phase == MovementPhase.DECEL:
                 self.handle_decel_phase(accumulated)
             time.sleep(_poll_delay)
+        self._log.info(Fore.GREEN + 'run complete.')
+
+    def run_vector_sync(self, distance_mm, vector, poll_rate_hz=None):
+        '''
+        Synchronous wrapper around run_vector() for use outside an async context.
+        '''
+        asyncio.run(self.run_vector(distance_mm, vector, poll_rate_hz))
+
+    async def run_vector(self, distance_mm, vector, poll_rate_hz=None):
+        '''
+        Asynchronously execute a complete movement using a raw (vx, vy, omega) tuple:
+        accel, move, decel. Returns when the movement is complete and motors are stopped.
+        '''
+        if poll_rate_hz is None:
+            poll_rate_hz = self._poll_rate_hz
+        _poll_delay = 1.0 / poll_rate_hz
+        self.move_vector(distance_mm, vector)
+        while self._movement_phase in (MovementPhase.ACCEL, MovementPhase.MOVE, MovementPhase.DECEL):
+            current_time = time.time()
+            accumulated  = self._get_accumulated_distance()
+            phase = self._movement_phase
+            if phase == MovementPhase.ACCEL:
+                self.handle_accel_phase(accumulated, current_time)
+            elif phase == MovementPhase.MOVE:
+                self.handle_move_phase(accumulated, current_time)
+            elif phase == MovementPhase.DECEL:
+                self.handle_decel_phase(accumulated)
+            await asyncio.sleep(_poll_delay)
         self._log.info(Fore.GREEN + 'run complete.')
 
     def poll(self):
@@ -317,14 +412,54 @@ class MovementController(Component):
         '''
         Handle acceleration phase.
         Sets intent to configured default magnitudes and lets the SlewLimiter
-        ramp up naturally. Transitions to MOVE when the translational velocity
-        magnitude reaches the configured default magnitude.
+        ramp up naturally. For diagonal movements both vx and vy rates are set
+        proportionally so both axes reach full speed simultaneously, preserving
+        the movement direction. Transitions to MOVE when the translational
+        velocity magnitude reaches the target speed.
         '''
-        self._set_intent(
-            vx    = self._movement_direction.vx_direction,
-            vy    = self._movement_direction.vy_direction,
-            omega = 0.0
-        )
+        if self._movement_direction is not None:
+            self._set_intent(
+                vx    = self._movement_direction.vx_direction,
+                vy    = self._movement_direction.vy_direction,
+                omega = self._movement_direction.omega_direction
+            )
+        else:
+            _slew             = self._motor_controller.slew_limiter
+            _slew.max_vx_rate = self._accel_vx_rate
+            _slew.max_vy_rate = self._accel_vy_rate
+            self._set_intent(
+                vx    = self._movement_vector[0],
+                vy    = self._movement_vector[1],
+                omega = self._movement_vector[2]
+            )
+        if isclose(self._get_primary_velocity(), self._target_speed, abs_tol=0.02):
+            self._accel_distance = accumulated_distance
+            prev_phase = self._movement_phase
+            self._movement_phase = MovementPhase.MOVE
+            self._start_time = current_time
+            self._log.info('acceleration complete at {:.1f}mm, starting constant movement'.format(
+                self._accel_distance))
+            self._notify_phase_change(prev_phase, self._movement_phase)
+
+    def x_handle_accel_phase(self, accumulated_distance, current_time):
+        '''
+        Handle acceleration phase.
+        Sets intent to configured default magnitudes and lets the SlewLimiter
+        ramp up naturally. Transitions to MOVE when the translational velocity
+        magnitude reaches the target speed.
+        '''
+        if self._movement_direction is not None:
+            self._set_intent(
+                vx    = self._movement_direction.vx_direction,
+                vy    = self._movement_direction.vy_direction,
+                omega = self._movement_direction.omega_direction
+            )
+        else:
+            self._set_intent(
+                vx    = self._movement_vector[0],
+                vy    = self._movement_vector[1],
+                omega = self._movement_vector[2]
+            )
         if isclose(self._get_primary_velocity(), self._target_speed, abs_tol=0.02):
             self._accel_distance = accumulated_distance
             prev_phase = self._movement_phase
@@ -342,11 +477,104 @@ class MovementController(Component):
         translational velocity magnitude. Uses actual measured speed from odometer.
         Returns: True if transitioning to decel, False otherwise
         '''
-        self._set_intent(
-            vx    = self._movement_direction.vx_direction,
-            vy    = self._movement_direction.vy_direction,
-            omega = 0.0
-        )
+        if self._movement_direction is not None:
+            self._set_intent(
+                vx    = self._movement_direction.vx_direction,
+                vy    = self._movement_direction.vy_direction,
+                omega = self._movement_direction.omega_direction
+            )
+        else:
+            self._set_intent(
+                vx    = self._movement_vector[0],
+                vy    = self._movement_vector[1],
+                omega = self._movement_vector[2]
+            )
+        _current_v                = self._get_primary_velocity()
+        _slew                     = self._motor_controller.slew_limiter
+        _actual_vx, _actual_vy, _ = self._odometer.velocity
+        _actual_speed             = sqrt(_actual_vx ** 2 + _actual_vy ** 2)
+        # for diagonal movements weight the effective slew rate by vector components
+        if self._movement_direction is not None:
+            _effective_rate    = _slew.max_vy_rate
+        else:
+            _vx_component      = abs(self._movement_vector[0])
+            _vy_component      = abs(self._movement_vector[1])
+            _total             = max(_vx_component + _vy_component, 1e-6)
+            _effective_rate    = (_vx_component * _slew.max_vx_rate \
+                                + _vy_component * _slew.max_vy_rate) / _total
+        _stopping_distance     = 0.5 * _current_v * _actual_speed / _effective_rate
+        _remaining             = self._total_target_distance - accumulated_distance
+        if _remaining <= _stopping_distance:
+            self._move_distance = accumulated_distance
+            prev_phase = self._movement_phase
+            self._movement_phase = MovementPhase.DECEL
+            self._log.info('starting deceleration at {:.1f}mm: remaining={:.1f}mm, stopping_distance={:.1f}mm, v={:.3f}, actual_speed={:.1f}mm/s'.format(
+                accumulated_distance, _remaining, _stopping_distance, _current_v, _actual_speed))
+            self._notify_phase_change(prev_phase, self._movement_phase)
+            return True
+        return False
+
+    def handle_decel_phase(self, accumulated_distance):
+        '''
+        Handle deceleration phase.
+        On each tick, computes the exact SlewLimiter rate required to stop at
+        the target distance, sets it, then sets intent to zero. The SlewLimiter
+        ramps down at precisely the rate needed to consume the remaining distance.
+        For diagonal movements both vx and vy rates are set proportionally so
+        both axes reach zero simultaneously, preserving the movement direction.
+        Phase completes when the odometer reports the robot has stopped, including
+        any rotational component.
+        Returns: True if deceleration complete, False otherwise
+        '''
+        _slew                     = self._motor_controller.slew_limiter
+        _actual_vx, _actual_vy, _ = self._odometer.velocity
+        _actual_speed             = sqrt(_actual_vx ** 2 + _actual_vy ** 2)
+        _remaining                = self._total_target_distance - accumulated_distance
+        if _remaining > 0.0 and _actual_speed > 0.0:
+            _v_norm        = self._get_primary_velocity()
+            _required_rate = (0.5 * _v_norm * _actual_speed) / _remaining
+            if self._movement_direction is not None:
+                _slew.max_vy_rate = _required_rate
+            else:
+                # weight decel rates by vector components so both axes stop together
+                _vx_component     = abs(self._movement_vector[0])
+                _vy_component     = abs(self._movement_vector[1])
+                _total            = max(_vx_component + _vy_component, 1e-6)
+                _slew.max_vx_rate = _required_rate * (_vx_component / _total)
+                _slew.max_vy_rate = _required_rate * (_vy_component / _total)
+        self._set_intent(0.0, 0.0, 0.0)
+        if not self._odometer.is_moving():
+            _slew.reset()
+            self._remove_intent_vector()
+            self._log.info('movement complete: accel={:.1f}mm, move={:.1f}mm, total={:.1f}mm (target={:.1f}mm, error={:.1f}mm)'.format(
+                self._accel_distance, self._move_distance, accumulated_distance,
+                self._total_target_distance, accumulated_distance - self._total_target_distance))
+            prev_phase = self._movement_phase
+            self._movement_phase = MovementPhase.IDLE
+            self._notify_phase_change(prev_phase, self._movement_phase)
+            return True
+        return False
+
+    def x_handle_move_phase(self, accumulated_distance, current_time):
+        '''
+        Handle constant velocity move phase.
+        Dynamically determines when to trigger DECEL based on remaining distance
+        and the distance required for the SlewLimiter to ramp down from current
+        translational velocity magnitude. Uses actual measured speed from odometer.
+        Returns: True if transitioning to decel, False otherwise
+        '''
+        if self._movement_direction is not None:
+            self._set_intent(
+                vx    = self._movement_direction.vx_direction,
+                vy    = self._movement_direction.vy_direction,
+                omega = self._movement_direction.omega_direction
+            )
+        else:
+            self._set_intent(
+                vx    = self._movement_vector[0],
+                vy    = self._movement_vector[1],
+                omega = self._movement_vector[2]
+            )
         _current_v             = self._get_primary_velocity()
         _slew                  = self._motor_controller.slew_limiter
         _actual_vx, _actual_vy, _ = self._odometer.velocity
@@ -363,7 +591,7 @@ class MovementController(Component):
             return True
         return False
 
-    def handle_decel_phase(self, accumulated_distance):
+    def x_handle_decel_phase(self, accumulated_distance):
         '''
         Handle deceleration phase.
         On each tick, computes the exact SlewLimiter rate required to stop at
@@ -393,6 +621,26 @@ class MovementController(Component):
             self._notify_phase_change(prev_phase, self._movement_phase)
             return True
         return False
+
+    def z_rotate(self, degrees, direction=Rotation.CLOCKWISE):
+        '''
+        Delegate rotation to RotationController if available.
+        Only callable when movement controller is IDLE.
+
+        :param degrees:   rotation angle in degrees
+        :param direction: Rotation.CLOCKWISE or Rotation.COUNTER_CLOCKWISE
+        '''
+        if self._rotation_controller is None:
+            raise ValueError('rotation_controller not available')
+        if self._movement_phase != MovementPhase.IDLE:
+            raise ValueError('cannot rotate - movement controller not idle (phase: {})'.format(
+                self._movement_phase.name))
+        self._log.info('starting rotation: {:.1f}° {}'.format(degrees, direction.label))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ROTATING
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._rotation_controller.rotate(degrees, direction)
+        self._log.info('rotation delegated to RotationController.')
 
     def cancel_movement(self):
         '''
