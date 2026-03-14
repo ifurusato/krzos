@@ -93,7 +93,6 @@ class MovementController(Component):
         self._movement_phase     = MovementPhase.INACTIVE
         self._movement_direction = Direction.STOPPED  # None when using raw vector
         self._movement_vector    = (0.0, 0.0, 0.0)   # raw vector for move_vector/run_vector
-        self._movement_vector    = (0.0, 0.0, 0.0)
         self._accel_vx_rate      = 0.0
         self._accel_vy_rate      = 0.0
         self._intent_vector      = (0.0, 0.0, 0.0)
@@ -270,6 +269,31 @@ class MovementController(Component):
         self._movement_vector       = (0.0, 0.0, 0.0)
         self._accel_distance        = 0.0
         self._move_distance         = 0.0
+        self._motor_controller.slew_limiter.reset()
+        self._target_speed = sqrt(
+            (direction.vx_direction * self._default_vx) ** 2 +
+            (direction.vy_direction * self._default_vy) ** 2
+        )
+        self._log.info(Fore.GREEN + 'initiating {:.1f}mm movement {} (target speed: {:.3f})'.format(
+                distance_mm, direction.label, self._target_speed))
+        prev_phase = self._movement_phase
+        self._movement_phase = MovementPhase.ACCEL
+        self._start_time = time.time()
+        self._reset_baseline()
+        self._register_intent_vector()
+        self._notify_phase_change(prev_phase, self._movement_phase)
+        self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
+
+    def x_move(self, distance_mm, direction=Direction.AHEAD):
+        '''
+        Initiate movement of exactly distance_mm in the given Direction.
+        Phase transitions are determined dynamically from odometer and slew state.
+        '''
+        self._total_target_distance = distance_mm
+        self._movement_direction    = direction
+        self._movement_vector       = (0.0, 0.0, 0.0)
+        self._accel_distance        = 0.0
+        self._move_distance         = 0.0
         self._target_speed = sqrt(
             (direction.vx_direction * self._default_vx) ** 2 +
             (direction.vy_direction * self._default_vy) ** 2
@@ -300,6 +324,7 @@ class MovementController(Component):
         )
         # compute proportional slew rates once from config defaults
         _slew         = self._motor_controller.slew_limiter
+        _slew.reset()
         _vx_component = abs(vector[0])
         _vy_component = abs(vector[1])
         _total        = max(_vx_component + _vy_component, 1e-6)
@@ -338,6 +363,19 @@ class MovementController(Component):
         self._register_intent_vector()
         self._notify_phase_change(prev_phase, self._movement_phase)
         self._log.info('baseline pose: x={:.1f}mm, y={:.1f}mm'.format(self._baseline_x, self._baseline_y))
+
+    def run_displacement(self, dx_mm, dy_mm, degrees=0.0, poll_rate_hz=None):
+        '''
+        Synchronously move to a target displacement relative to the current pose.
+        dx_mm:   lateral displacement in mm, positive to starboard
+        dy_mm:   longitudinal displacement in mm, positive ahead
+        degrees: rotational component in degrees, positive clockwise
+        '''
+        _distance_mm = sqrt(dx_mm ** 2 + dy_mm ** 2)
+        _vx          = dx_mm / _distance_mm
+        _vy          = dy_mm / _distance_mm
+        _omega       = degrees / 180.0   # normalise to -1.0–1.0 range
+        self.run_vector_sync(_distance_mm, (_vx, _vy, _omega), poll_rate_hz)
 
     def run(self, distance_mm, direction=Direction.AHEAD, poll_rate_hz=None):
         '''
