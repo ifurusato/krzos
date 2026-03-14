@@ -80,7 +80,11 @@ def main():
         _movement_controller.add_phase_change_callback(phase_changed)
 
         _log.info(Fore.YELLOW + 'moving ahead 2000mm…')
+
         _movement_controller.run(2000.0, Direction.AHEAD)
+#       _movement_controller.run(2000.0, Direction.STBD)
+#       _movement_controller.run(360.0,  Direction.CLOCKWISE)
+
         _log.info(Fore.GREEN + 'movement complete.')
 
         print_pose()

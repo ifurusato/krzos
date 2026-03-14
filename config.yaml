@@ -264,11 +264,14 @@ kros:
             max_omega_rate:                   0.3          # max rotation velocity change per second
     movement_controller:
         default_speed:                      200.0          # mm/sec
+        default_vx:                           1.0          # lateral intent vector magnitude
+        default_vy:                           1.0          # longitudinal intent vector magnitude
+        default_omega:                        1.0          # angular intent vector magnitude
         max_acceleration:                   150.0          # mm/sec_2
         accel_distance_mm:                  200.0          # mm
         decel_distance_mm:                  200.0          # mm
-        phase_ratio:                          0.10         # accel and decel each = 10% of total distance
         min_phase_mm:                       100.0          # minimum phase distance regardless of ratio
+        phase_ratio:                          0.10         # accel and decel each = 10% of total distance
         decel_min_speed:                     10.0          # mm/sec floor during decel to avoid zeroing intent too early
         poll_rate_hz:                        20            # poll rate for the run() loop
     rotation_controller:

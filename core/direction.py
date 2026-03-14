@@ -1,4 +1,4 @@
-#}!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # Copyright 2020-2026 by Ichiro Furusato. All rights reserved. This file is part
@@ -7,26 +7,26 @@
 #
 # author:   Ichiro Furusato
 # created:  2021-07-29
-# modified: 2025-11-20
+# modified: 2026-03-14
 
 from enum import Enum
 
 class Direction(Enum):
-    STOPPED           = ( 0, 'stopped',           'stop',  0.0,  0.0)
-    AHEAD             = ( 1, 'ahead',             'ahed',  0.0,  1.0)
-    ASTERN            = ( 2, 'astern',            'astn',  0.0, -1.0)
-    PORT              = ( 3, 'port',              'port', -1.0,  0.0)
-    STARBOARD         = ( 4, 'stbd',              'stbd',  1.0,  0.0)
-#   CLOCKWISE         = ( 5, 'clockwise',         'clws',  0.0,  0.0)
-#   COUNTER_CLOCKWISE = ( 6, 'counter-clockwise', 'ccwz',  0.0,  0.0)
-#   UNKNOWN           = ( 7, 'unknown',           'unkn',  0.0,  0.0) # n/a or indeterminate
+    STOPPED           = ( 0, 'stopped',           'stop',  0.0,  0.0,  0.0)
+    AHEAD             = ( 1, 'ahead',             'ahed',  0.0,  1.0,  0.0)
+    ASTERN            = ( 2, 'astern',            'astn',  0.0, -1.0,  0.0)
+    PORT              = ( 3, 'port',              'port', -1.0,  0.0,  0.0)
+    STBD              = ( 4, 'starboard',         'stbd',  1.0,  0.0,  0.0)
+    CLOCKWISE         = ( 5, 'clockwise',         'clws',  0.0,  0.0,  1.0)
+    COUNTER_CLOCKWISE = ( 6, 'counter-clockwise', 'ccwz',  0.0,  0.0, -1.0)
 
     # ignore the first param since it's already set by __new__
-    def __init__(self, num, name, label, vx_direction, vy_direction):
-        self._name  = name
-        self._label = label
-        self._vx_direction = vx_direction
-        self._vy_direction = vy_direction
+    def __init__(self, num, name, label, vx_direction, vy_direction, omega_direction):
+        self._name            = name
+        self._label           = label
+        self._vx_direction    = vx_direction
+        self._vy_direction    = vy_direction
+        self._omega_direction = omega_direction
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -51,6 +51,13 @@ class Direction(Enum):
         Returns the y-component direction multiplier (-1.0, 0.0, or 1.0)
         '''
         return self._vy_direction
+
+    @property
+    def omega_direction(self):
+        '''
+        Returns the omega-component direction multiplier (-1.0, 0.0, or 1.0)
+        '''
+        return self._omega_direction
 
     @staticmethod
     def get_direction_for(port_velocity, stbd_velocity):
