@@ -1,7 +1,7 @@
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 #              House floorplan model for robotic navigation
 #
-# generated: 2026-03-14 23:46:44
+# generated: 2026-03-15 00:44:59
 # source:    navigate/floorplan.svg
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -20,8 +20,7 @@ rooms:
       xmax: 8700
       ymin: 8184
       ymax: 12724
-    doors:
-      - D3
+    doors: []
 
   - id: Spare
     bounds:
@@ -29,8 +28,7 @@ rooms:
       xmax: 8700
       ymin: 0
       ymax: 2800
-    doors:
-      - D7
+    doors: []
 
   - id: Study
     bounds:
@@ -38,8 +36,7 @@ rooms:
       xmax: 4700
       ymin: 3900
       ymax: 6600
-    doors:
-      - D2
+    doors: []
 
   - id: Aux
     bounds:
@@ -65,7 +62,6 @@ rooms:
       ymin: 2800
       ymax: 5300
     doors:
-      - D7
       - D6
 
   - id: Master
@@ -74,8 +70,7 @@ rooms:
       xmax: 4700
       ymin: 0
       ymax: 3900
-    doors:
-      - D1
+    doors: []
 
   - id: Lounge
     bounds:
@@ -83,74 +78,80 @@ rooms:
       xmax: 5200
       ymin: 6600
       ymax: 12725
+    doors: []
+
+  - id: Hall
+    bounds:
+      - {xmin: 4700, xmax: 6200, ymin: 2800, ymax: 6600}
+      - {xmin: 5200, xmax: 6200, ymin: 6600, ymax: 8184}
     doors:
-      - D3
-      - D2
+      - D6
+      - D5
 
 doors:
   - id: D3
-    connects: [Kitchen, Lounge]  # TODO: verify
+    connects: [null, null]  # TODO: verify
     traversable: true
-    position: {x: 5199, y: 11648}
+    position: {x: -5199, y: 13452}
     width: 1802
     orientation: east  # TODO: verify
 
-  - id: D2
-    connects: [Study, Lounge]  # TODO: verify
-    traversable: true
-    position: {x: 4700, y: 6028}
-    width: 750
-    orientation: east  # TODO: verify
-
-  - id: D1
-    connects: [Master]  # TODO: verify
-    traversable: true
-    position: {x: 4702, y: 3226}
-    width: 747
-    orientation: east  # TODO: verify
-
-  - id: D7
-    connects: [Spare, Bath]  # TODO: verify
-    traversable: true
-    position: {x: 5826, y: 2797}
-    width: 749
-    orientation: north  # TODO: verify
-
   - id: D6
-    connects: [Bath]  # TODO: verify
+    connects: [Bath, Hall]  # TODO: verify
     traversable: true
     position: {x: 6194, y: 4025}
     width: 650
     orientation: east  # TODO: verify
 
   - id: D5
-    connects: [Stair]  # TODO: verify
+    connects: [Stair, Hall]  # TODO: verify
     traversable: true
     position: {x: 6200, y: 5852}
     width: 600
+    orientation: east  # TODO: verify
+
+  - id: D7
+    connects: [null, null]  # TODO: verify
+    traversable: true
+    position: {x: 9753, y: 18375}
+    width: 750
+    orientation: east  # TODO: verify
+
+  - id: D1
+    connects: [null, null]  # TODO: verify
+    traversable: true
+    position: {x: -4702, y: 21874}
+    width: 747
+    orientation: east  # TODO: verify
+
+  - id: D2
+    connects: [null, null]  # TODO: verify
+    traversable: true
+    position: {x: -4700, y: 19072}
+    width: 750
     orientation: east  # TODO: verify
 
 obstacles:
   - id: OBS_1
     bounds:
       xmin: 4700
-      xmax: 6200
-      ymin: 2800
-      ymax: 6600
-
-  - id: OBS_2
-    bounds:
-      xmin: 5200
-      xmax: 6200
-      ymin: 6600
-      ymax: 8184
-
-  - id: OBS_3
-    bounds:
-      xmin: 4700
       xmax: 5400
       ymin: 3
       ymax: 2800
+
+  - id: OBS_2
+    bounds:
+      xmin: 4788
+      xmax: 5629
+      ymin: 9749
+      ymax: 10749
+
+  - id: OBS_3
+    bounds:
+      xmin: 5200
+      xmax: 5400
+      ymin: 8084
+      ymax: 8184
 
   - id: OBS_4
     bounds:
@@ -187,20 +188,6 @@ obstacles:
       ymin: 6400
       ymax: 6600
 
-  - id: OBS_9
-    bounds:
-      xmin: 4788
-      xmax: 5629
-      ymin: 9749
-      ymax: 10749
-
-  - id: OBS_10
-    bounds:
-      xmin: 5200
-      xmax: 5400
-      ymin: 8084
-      ymax: 8184
-
 landmarks:
   - id: BEGIN
     position: {x: 5855, y: 3184}
@@ -216,10 +203,6 @@ landmarks:
 
   - id: CARPORT
     position: {x: 161, y: 12355}
-    room: null  # TODO: verify
-
-  - id: HALL
-    position: {x: -1325, y: 9972}
     room: null  # TODO: verify
 
   - id: KITCHEN_RUG

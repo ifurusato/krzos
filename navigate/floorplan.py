@@ -523,6 +523,10 @@ class SVGParser:
         tree = ET.parse(svg_path)
         root = tree.getroot()
 
+        for elem in root:
+            print('DEBUG top-level: tag={!r} id={!r}'.format(
+                elem.tag.split('}')[-1], elem.get('id')))
+
         vb = root.get('viewBox', '')
         w_attr = root.get('width', '')
         _, _, vb_w, vb_h = (float(p) for p in vb.strip().replace(',', ' ').split())
@@ -531,9 +535,6 @@ class SVGParser:
 
         def flip_y(ymin_svg, ymax_svg):
             return doc_h - ymax_svg, doc_h - ymin_svg
-
-        def r2_v0(v):
-            return round(v)
 
         def r2(v):
             '''round to nearest 50, then snap to nearest 100 if within 2'''
@@ -604,14 +605,19 @@ class SVGParser:
                     rw = float(child.get('width', 0))
                     rh = float(child.get('height', 0))
                     inner_t = child.get('transform', '')
-                    coords = resolve_rect(rx, ry, rw, rh, inner_t, group_t)
-                    if coords is None:
-                        continue
-                    sx0, sy0, sx1, sy1 = coords
-                    sx0 /= uu_per_mm
-                    sy0 /= uu_per_mm
-                    sx1 /= uu_per_mm
-                    sy1 /= uu_per_mm
+                    if group_t:
+                        coords = resolve_rect(rx, ry, rw, rh, inner_t, group_t)
+                        if coords is None:
+                            continue
+                        sx0, sy0, sx1, sy1 = coords
+                        sx0 /= uu_per_mm
+                        sy0 /= uu_per_mm
+                        sx1 /= uu_per_mm
+                        sy1 /= uu_per_mm
+                    else:
+                        # no group transform: coords are already in document mm units
+                        sx0, sy0 = rx, ry
+                        sx1, sy1 = rx + rw, ry + rh
                     ymin_fp, ymax_fp = flip_y(sy0, sy1)
                     rects.append((
                         r2(min(sx0, sx1)), r2(ymin_fp),
