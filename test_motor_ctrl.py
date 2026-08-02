@@ -30,18 +30,16 @@ def test_thunderborg():
 
     try:
         # setup ThunderBorg 1
-        TB1 = ThunderBorg()     # create new ThunderBorg object
-        TB1.i2cAddress = 0x15   # set to altered I2C address
-        TB1.Init()              # set the board up (checks the board is connected)
+        TB1 = ThunderBorg(orientation=Orientation.PORT, i2c_address=0x15)
+        TB1.Init()
         assert TB1.foundChip
         # disable the colour by battery level
         TB1.SetLedShowBattery(False)
         TB1.SetLeds(0.0, 0.0, 0.0)
 
         # setup ThunderBorg 2
-        TB2 = ThunderBorg()     # create new ThunderBorg object
-        TB2.i2cAddress = 0x16   # set to altered I2C address
-        TB2.Init()              # set the board up (checks the board is connected)
+        TB2 = ThunderBorg(orientation=Orientation.STBD, i2c_address=0x16)
+        TB2.Init()
         assert TB2.foundChip
         # disable color by battery level
         TB2.SetLedShowBattery(False)

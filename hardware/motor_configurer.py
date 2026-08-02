@@ -150,12 +150,11 @@ class MotorConfigurer(Component):
                 try:
                     if self._i2c_scanner.has_address([_thunderborg_address]):
                         self._log.debug('importing ThunderBorg at address 0x{:02X}…'.format(_thunderborg_address))
-                        _tb = ThunderBorg(Level.INFO)  # create a new ThunderBorg object
-                        _tb.i2cAddress = _thunderborg_address
+                        _tb = ThunderBorg(orientation=orientation, i2c_address=_thunderborg_address, level=Level.INFO)
+                        _tb.Init()
                         self._log.debug('instantiated thunderborg.')
                     else:
                         raise Exception('unable to instantiate ThunderBorg [1].')
-                    _tb.Init() # set the board up (checks the board is connected)
                     self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
                             orientation.name, _thunderborg_address))
                     if not _tb.foundChip:
@@ -175,9 +174,8 @@ class MotorConfigurer(Component):
                     raise Exception('{} error instantiating ThunderBorg [4]: {}\n{}'.format(type(e), e, traceback.format_exc()))
             else:
                 try:
-                    _tb = ThunderBorg(Level.INFO)  # create a new ThunderBorg object
-                    _tb.i2cAddress = _thunderborg_address
-                    _tb.Init() # set the board up (checks the board is connected)
+                    _tb = ThunderBorg(orientation=orientation, i2c_address=_thunderborg_address, level=Level.INFO)
+                    _tb.Init()
                     self._log.info('successfully instantiated ThunderBorg for orientation {} at address 0x{:02X}.'.format(
                             orientation.name, _thunderborg_address))
                 except Exception as e:

@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2024-05-19
-# modified: 2025-09-25
+# modified: 2026-08-03
 #
 # This module is designed to communicate with the ThunderBorg. It
 # is largely based on the original PyBorg source but has been
@@ -26,8 +26,8 @@
 #     import ThunderBorg
 #     TB1 = ThunderBorg.ThunderBorg()
 #     TB2 = ThunderBorg.ThunderBorg()
-#     TB1.i2cAddress = 0x15
-#     TB2.i2cAddress = 0x16
+#     TB1._i2cAddress = 0x15
+#     TB2._i2cAddress = 0x16
 #     TB1.Init()
 #     TB2.Init()
 #     # User code here, use TB1 and TB2 to control each board separately
@@ -46,6 +46,8 @@ from colorama import init, Fore, Style
 init()
 
 from core.logger import Level, Logger
+from core.component import Component
+from core.orientation import Orientation
 
 # Constants ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -206,34 +208,40 @@ def SetNewAddress(newAddress, oldAddress = -1, busNumber = 1):
     else:
         __log.error('failed to set new I2C address...')
 
-class ThunderBorg:
+class ThunderBorg(Component):
     '''
     This module is designed to communicate with the ThunderBorg.
 
     Args:
-        busNumber:      I2C bus on which the ThunderBorg is attached (Rev 1 is bus 0, Rev 2 is bus 1)
-        bus:            the smbus object used to talk to the I2C bus
-        i2cAddress:     The I2C address of the ThunderBorg chip to control
-        foundChip:      True if the ThunderBorg chip can be seen, False otherwise
-        printFunction:  Function reference to call when printing text, if None "print" is used
+        busNumber:   I2C bus on which the ThunderBorg is attached (Rev 1 is bus 0, Rev 2 is bus 1)
+        bus:         the smbus object used to talk to the I2C bus
+        i2cAddress:  The I2C address of the ThunderBorg chip to control
+        foundChip:   True if the ThunderBorg chip can be seen, False otherwise
     '''
 
-    # Shared values used by this class
-    busNumber               = 1                     # Check here for Rev 1 vs Rev 2 and select the correct bus
-    i2cAddress              = I2C_ID_THUNDERBORG    # I2C address, override for a different address
-    foundChip               = False
-    printFunction           = None
-    i2cWrite                = None
-    i2cRead                 = None
+    # shared values used by this class
+#   busNumber        = 1                     # check here for Rev 1 vs Rev 2 and select the correct bus
+#   i2cAddress       = I2C_ID_THUNDERBORG    # I2C address, override for a different address
 
-    def __init__(self, level=Level.INFO):
-        super().__init__()
-        self._log = Logger('thunderborg', level)
-        self._log.debug('ready.')
+    def __init__(self, orientation=None, busNumber=1, i2c_address=I2C_ID_THUNDERBORG, level=Level.INFO):
+        if orientation is None:
+            raise TypeError('no orientation argument.')
+        self._log = Logger('thunderborg-{}'.format(orientation.name), level)
+        Component.__init__(self, self._log, suppressed=False, enabled=False)
+        self._busNumber  = busNumber
+        self._i2cAddress = i2c_address
+        self._foundChip  = False
+        self._i2cWrite   = None
+        self._i2cRead    = None
+        self._log.info('ready.')
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
-    def InitBusOnly(self, busNumber, address):
+    @property
+    def foundChip(self):
+        return self._foundChip
+
+    def InitBusOnly(self, busNumber=1, address=0x15):
         '''
         InitBusOnly(busNumber, address)
 
@@ -241,68 +249,55 @@ class ThunderBorg:
         bus and I2C address. This call does not check the board is present or
         working, under most circumstances use Init() instead.
         '''
-        self.busNumber = busNumber
-        self.i2cAddress = address
-        self.i2cRead = io.open("/dev/i2c-" + str(self.busNumber), "rb", buffering = 0)
-        fcntl.ioctl(self.i2cRead, I2C_SLAVE, self.i2cAddress)
-        self.i2cWrite = io.open("/dev/i2c-" + str(self.busNumber), "wb", buffering = 0)
-        fcntl.ioctl(self.i2cWrite, I2C_SLAVE, self.i2cAddress)
+        self._busNumber = busNumber
+        self._i2cAddress = address
+        self._i2cRead = io.open("/dev/i2c-" + str(self._busNumber), "rb", buffering = 0)
+        fcntl.ioctl(self._i2cRead, I2C_SLAVE, self._i2cAddress)
+        self._i2cWrite = io.open("/dev/i2c-" + str(self._busNumber), "wb", buffering = 0)
+        fcntl.ioctl(self._i2cWrite, I2C_SLAVE, self._i2cAddress)
 
-    def Init(self, tryOtherBus = False):
+    def Init(self):
         '''
-        Init([tryOtherBus])
+        Init()
 
         Prepare the I2C driver for talking to the ThunderBorg
-
-        If tryOtherBus is True, this function will attempt to use the other bus
-        if the ThunderBorg devices can not be found on the current busNumber
-
-        This is only really useful for early Raspberry Pi models!
         '''
-        self._log.info('loading ThunderBorg on bus {:d}, address 0x{:02X}'.format(self.busNumber, self.i2cAddress))
+        self._log.info('loading ThunderBorg on bus {:d}, address 0x{:02X}'.format(self._busNumber, self._i2cAddress))
 
         # Open the bus
-        self.i2cRead = io.open("/dev/i2c-" + str(self.busNumber), "rb", buffering = 0)
-        fcntl.ioctl(self.i2cRead, I2C_SLAVE, self.i2cAddress)
-        self.i2cWrite = io.open("/dev/i2c-" + str(self.busNumber), "wb", buffering = 0)
-        fcntl.ioctl(self.i2cWrite, I2C_SLAVE, self.i2cAddress)
+        self._i2cRead = io.open("/dev/i2c-" + str(self._busNumber), "rb", buffering = 0)
+        fcntl.ioctl(self._i2cRead, I2C_SLAVE, self._i2cAddress)
+        self._i2cWrite = io.open("/dev/i2c-" + str(self._busNumber), "wb", buffering = 0)
+        fcntl.ioctl(self._i2cWrite, I2C_SLAVE, self._i2cAddress)
 
         # Check for ThunderBorg
         try:
             i2cRecv = self.RawRead(COMMAND_GET_ID, I2C_MAX_LEN)
             if len(i2cRecv) == I2C_MAX_LEN:
                 if i2cRecv[1] == I2C_ID_THUNDERBORG:
-                    self.foundChip = True
-                    self._log.info('found ThunderBorg at 0x{:02X}'.format(self.i2cAddress))
+                    self._foundChip = True
+                    self._log.info('found ThunderBorg at 0x{:02X}'.format(self._i2cAddress))
                 else:
-                    self.foundChip = False
+                    self._foundChip = False
                     self._log.info('found a device at 0x{:02X}, but it is not a ThunderBorg (ID 0x{:02X} instead of 0x{:02X})'.format(
-                            self.i2cAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
+                            self._i2cAddress, i2cRecv[1], I2C_ID_THUNDERBORG))
             else:
-                self.foundChip = False
-                self._log.error('missing ThunderBorg at 0x{:02X} [5]'.format(self.i2cAddress))
+                self._foundChip = False
+                self._log.error('missing ThunderBorg at 0x{:02X} [5]'.format(self._i2cAddress))
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            self.foundChip = False
-            self._log.error('{} raised initialising ThunderBorg at 0x{:02X}: {}\n{}'.format(type(e), self.i2cAddress, e, traceback.format_exc()))
-            self._log.error('missing ThunderBorg at 0x{:02X} [6]'.format(self.i2cAddress))
+            self._foundChip = False
+            self._log.error('{} raised initialising ThunderBorg at 0x{:02X}: {}\n{}'.format(type(e), self._i2cAddress, e, traceback.format_exc()))
+            self._log.error('missing ThunderBorg at 0x{:02X} [6]'.format(self._i2cAddress))
 
-        # See if we are missing chips
-        if not self.foundChip:
+        # see if we are missing chips
+        if not self._foundChip:
             self._log.error('ThunderBorg was not found.')
-            if tryOtherBus:
-                if self.busNumber == 1:
-                    self.busNumber = 0
-                else:
-                    self.busNumber = 1
-                self._log.info('trying bus %d instead'.format(self.busNumber))
-                self.Init(False)
-            else:
-                self._log.warning('are you sure your ThunderBorg is properly attached, the correct address is used, and the I2C drivers are running?')
-                self.bus = None
+            self._log.warning('are you sure your ThunderBorg is properly attached, the correct address is used, and the I2C drivers are running?')
+            self.bus = None
         else:
-            self._log.info('ThunderBorg loaded on bus {}'.format(self.busNumber))
+            self._log.info('ThunderBorg loaded on bus {}'.format(self._busNumber))
 
     # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -320,7 +315,7 @@ class ThunderBorg:
         rawOutput = [command]
         rawOutput.extend(data)
         rawOutput = bytes(rawOutput)
-        self.i2cWrite.write(rawOutput)
+        self._i2cWrite.write(rawOutput)
 
     def RawRead(self, command, length, retryCount = 3):
         '''
@@ -341,7 +336,7 @@ class ThunderBorg:
         while retryCount > 0:
             try:
                 self.RawWrite(command, [])
-                rawReply = self.i2cRead.read(length)
+                rawReply = self._i2cRead.read(length)
                 reply = list(rawReply)
                 if reply and command == reply[0]:
                     return reply
@@ -358,7 +353,7 @@ class ThunderBorg:
         '''
         For diagnostics only; not to be used directly.
         '''
-        return self.i2cAddress
+        return self._i2cAddress
 
     # Motors ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
 
@@ -460,7 +455,7 @@ class ThunderBorg:
             1     -> motor 1 moving forward at 100% power
         '''
         try:
-#           self._log.info("GetMotor1: address={}, i2cRead.fileno={}".format(self.i2cAddress, self.i2cRead.fileno()))
+#           self._log.info("GetMotor1: address={}, i2cRead.fileno={}".format(self._i2cAddress, self._i2cRead.fileno()))
             i2cRecv = self.RawRead(COMMAND_GET_A, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
@@ -532,7 +527,7 @@ class ThunderBorg:
             1     -> motor 2 moving forward at 100% power
         '''
         try:
-#           self._log.info("GetMotor2: address={}, i2cRead.fileno={}".format(self.i2cAddress, self.i2cRead.fileno()))
+#           self._log.info("GetMotor2: address={}, i2cRead.fileno={}".format(self._i2cAddress, self.i2cRead.fileno()))
             i2cRecv = self.RawRead(COMMAND_GET_B, I2C_MAX_LEN)
         except KeyboardInterrupt:
             raise
