@@ -257,7 +257,7 @@ class BehaviourManager(Subscriber):
         the BehaviourManager, those states will be restored, i.e., any behaviours
         suppressed by this method would then be released.
         '''
-        self._log.info('suppress all behaviours…')
+        self._log.info(Fore.WHITE + Style.BRIGHT + 'suppress all behaviours…')
         self._was_suppressed = {}
         for _behaviour in self.get_behaviours():
             if _behaviour is ballistic_behaviour:

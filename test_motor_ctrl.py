@@ -49,7 +49,8 @@ def test_thunderborg():
 
         for _ in range(1):
             for hue in range(300):
-                # Get hue into the 0 to 3 range
+                print(hue)
+                # get hue into the 0 to 3 range
                 hue /= 100.0
                 # decide which two channels we are between
                 if hue < 1.0: # red to green
@@ -66,7 +67,7 @@ def test_thunderborg():
                     blue  = 3.0 - hue
                 TB1.SetLeds(red, green, blue)
                 TB2.SetLeds(red, green, blue)
-                time.sleep(0.005)
+                time.sleep(0.01)
 
         __log.info(Fore.GREEN + "motor controllers are functional.")
 

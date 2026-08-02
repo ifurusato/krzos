@@ -112,8 +112,9 @@ class AsyncBehaviour(Behaviour):
         Register this behaviour's intent vector with the motor controller.
         '''
         if not self._motor_controller:
+            self._log.warning('did not register intent vector: no motor controller.')
             return
-        if self._intent_vector_registered:
+        elif self._intent_vector_registered:
             self._log.warning('intent vector already registered with motor controller.')
             return
         self._motor_controller.add_intent_vector(
@@ -129,9 +130,10 @@ class AsyncBehaviour(Behaviour):
         Unregister this Behaviour's intent vector from the motor controller.
         '''
         if not self._motor_controller:
+            self._log.warning('did not remove intent vector: no motor controller.')
             return
-        if not self._intent_vector_registered:
-            self._log.debug('intent vector not registered; nothing to remove.')
+        elif not self._intent_vector_registered:
+            self._log.warning('intent vector not registered; nothing to remove.')
             return
         self._motor_controller.remove_intent_vector(self.name)
         self._intent_vector_registered = False
@@ -209,7 +211,7 @@ class AsyncBehaviour(Behaviour):
         self._thread.start()
         if self._motor_controller and not self._intent_vector_registered:
             self._register_intent_vector()
-        self._log.debug('async loop started.')
+        self._log.info('async loop started.')
 
     def suppress(self):
         '''
@@ -225,7 +227,7 @@ class AsyncBehaviour(Behaviour):
             # stop the loop when suppressed
 #           if self._loop_instance:
 #               self._stop_loop()
-            self._log.info('suppressed.')
+            self._log.debug('suppressed.')
         else:
             self._log.warning("already suppressed.")
 
@@ -242,7 +244,7 @@ class AsyncBehaviour(Behaviour):
             # start the loop when released for the first time
             if not self._loop_instance:
                 self._start_loop()
-            self._log.info("released.")
+            self._log.debug("released.")
         else:
             self._log.warning("already released.")
 

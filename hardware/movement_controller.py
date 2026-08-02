@@ -81,6 +81,8 @@ class MovementController(Component):
         self._default_vx       = _cfg.get('default_vx',    1.0)
         self._default_vy       = _cfg.get('default_vy',    1.0)
         self._default_omega    = _cfg.get('default_omega', 1.0)
+        self._heading_correction_gain = _cfg.get('heading_correction_gain', 0.3)
+        self._max_heading_omega       = _cfg.get('max_heading_omega', 0.25)
         # phase distance is computed as this ratio of total distance, subject to minimum
         self._phase_ratio      = _cfg.get('phase_ratio',   0.10)      # 10% each for accel and decel
         self._min_phase_mm     = _cfg.get('min_phase_mm',  100.0)     # minimum phase distance in mm
@@ -481,6 +483,27 @@ class MovementController(Component):
         accumulated  = self._get_accumulated_distance()
         return (current_time, elapsed, accumulated)
 
+    def _compute_heading_correction(self, vector):
+        '''
+        Computes an omega correction to rotate the robot toward the direction
+        of travel. Uses the bearing of the (vx, vy) movement vector in the
+        robot body frame versus the current heading error. Returns a clamped
+        omega value, positive for clockwise correction.
+        '''
+        from math import atan2, pi as π
+        _vx, _vy, _ = vector
+        if sqrt(_vx ** 2 + _vy ** 2) < 1e-6:
+            return 0.0
+        _, _, _theta = self._odometer.pose
+        _target_bearing  = atan2(_vx, _vy)   # bearing of travel in body frame (north=0)
+        _heading_err     = _target_bearing - _theta
+        while _heading_err > π:
+            _heading_err -= 2.0 * π
+        while _heading_err < -π:
+            _heading_err += 2.0 * π
+        _omega = _heading_err * self._heading_correction_gain
+        return max(-self._max_heading_omega, min(self._max_heading_omega, _omega))
+
     def handle_accel_phase(self, accumulated_distance, current_time):
         '''
         Handle acceleration phase.
@@ -501,38 +524,11 @@ class MovementController(Component):
             _slew.max_vx_rate = self._accel_vx_rate
             _slew.max_vy_rate = self._accel_vy_rate
             _slew.max_omega_rate = self._accel_om_rate
+            _omega_correction = self._compute_heading_correction(self._movement_vector)
             self._set_intent(
                 vx    = self._movement_vector[0],
                 vy    = self._movement_vector[1],
-                omega = self._movement_vector[2]
-            )
-        if isclose(self._get_primary_velocity(), self._target_speed, abs_tol=0.02):
-            self._accel_distance = accumulated_distance
-            prev_phase = self._movement_phase
-            self._movement_phase = MovementPhase.MOVE
-            self._start_time = current_time
-            self._log.info('acceleration complete at {:.1f}mm, starting constant movement'.format(
-                self._accel_distance))
-            self._notify_phase_change(prev_phase, self._movement_phase)
-
-    def x_handle_accel_phase(self, accumulated_distance, current_time):
-        '''
-        Handle acceleration phase.
-        Sets intent to configured default magnitudes and lets the SlewLimiter
-        ramp up naturally. Transitions to MOVE when the translational velocity
-        magnitude reaches the target speed.
-        '''
-        if self._movement_direction is not None:
-            self._set_intent(
-                vx    = self._movement_direction.vx_direction,
-                vy    = self._movement_direction.vy_direction,
-                omega = self._movement_direction.omega_direction
-            )
-        else:
-            self._set_intent(
-                vx    = self._movement_vector[0],
-                vy    = self._movement_vector[1],
-                omega = self._movement_vector[2]
+                omega = _omega_correction
             )
         if isclose(self._get_primary_velocity(), self._target_speed, abs_tol=0.02):
             self._accel_distance = accumulated_distance
@@ -558,10 +554,11 @@ class MovementController(Component):
                 omega = self._movement_direction.omega_direction
             )
         else:
+            _omega_correction = self._compute_heading_correction(self._movement_vector)
             self._set_intent(
                 vx    = self._movement_vector[0],
                 vy    = self._movement_vector[1],
-                omega = self._movement_vector[2]
+                omega = _omega_correction
             )
         _current_v                = self._get_primary_velocity()
         _slew                     = self._motor_controller.slew_limiter

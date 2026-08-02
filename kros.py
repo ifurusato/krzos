@@ -150,11 +150,15 @@ class KROS(Component, FiniteStateMachine):
         # read YAML configuration
 
         _loader = ConfigLoader(self._level)
-        _config_filename = arguments.config_file
-        _filename = _config_filename if _config_filename is not None else 'config.yaml'
-        self._config = _loader.configure(_filename)
+        _config_path = arguments.config_path
+        if not _config_path:
+            _config_path = 'config.yaml'
+        self._config = _loader.configure(_config_path)
         if not isinstance(self._config, dict):
             raise ValueError('wrong type for config argument: {}'.format(type(name)))
+        self._component_registry = Component.get_registry()
+        if self._component_registry is None:
+            raise ValueError('no component registry available.')
 
         _i2c_scanner = I2CScanner(self._config, level=Level.INFO)
 
@@ -183,7 +187,7 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('write log enabled:    {}'.format(_args['log_enabled']))
 
         _args['motors_enabled'] = arguments.motors
-        self._log.info('motors enabled:      {}'.format(_args['motors_enabled']))
+        self._log.info('motors enabled:       {}'.format(_args['motors_enabled']))
 
         _args['json_dump_enabled'] = arguments.json
         self._log.info('json enabled:         {}'.format(_args['json_dump_enabled']))
@@ -201,7 +205,7 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('gamepad enabled:      {}'.format(self._gamepad_enabled))
 
         # print remaining arguments
-        self._log.info('argument config-file: {}'.format(arguments.config_file))
+        self._log.info('argument config-path: {}'.format(arguments.config_path))
         self._log.info('argument level:       {}'.format(arguments.level))
 
         # establish basic subsumption components
@@ -226,9 +230,6 @@ class KROS(Component, FiniteStateMachine):
         self._ttywriter.clear()
         self._ttywriter.write('CYAN starting…', colorise=True)
 
-        self._component_registry = Component.get_registry()
-        if self._component_registry is None:
-            raise ValueError('no component registry available.')
         _cfg = self._config['kros'].get('component')
 
         if _cfg.get('enable_queue_publisher'): # or 'q' in _pubs:
@@ -252,12 +253,17 @@ class KROS(Component, FiniteStateMachine):
         self._log.info('await pushbutton: {}'.format(self._await_pushbutton))
         _enable_pushbutton = _cfg.get('enable_pushbutton')
         if _enable_pushbutton:
-            self._button = Button(config=self._config, name='button', level=self._level)
-            if self._await_pushbutton:
-                self._button.add_callback(self._await_start)
+            if not arguments.daemon:
+                self._log.info('creating button…')
+                self._button = Button(config=self._config, name='button', level=self._level)
+                if self._await_pushbutton:
+                    self._button.add_callback(self._await_start)
+                else:
+                    # even if we don't await the start we still set up kill switch
+                    self._button.add_callback(self.shutdown)
             else:
-                # even if we don't await the start we still set up kill switch
-                self._button.add_callback(self.shutdown)
+                self._log.info('cannot create button (owned by krosd).')
+                self._button = None
 
         _enable_monitor = _cfg.get('enable_monitor')
         if _enable_monitor:
@@ -286,6 +292,7 @@ class KROS(Component, FiniteStateMachine):
             self._log.info('configure tinyfx controller…')
             self._tinyfx = TinyFxController(self._config, level=self._level)
             self._tinyfx.enable()
+            self._tinyfx.off() # ch3 off set by krosd
 
         # create subscribers
 
@@ -344,10 +351,11 @@ class KROS(Component, FiniteStateMachine):
         if self._data_log:
             self._data_log.data('STARTED')
         self._log.info('await start callback triggered…')
-        self._button.clear_callbacks()
-        self._button.add_callback(self.shutdown)
-#       self._button.close()
-        self._button = None
+        if self._button:
+            self._button.clear_callbacks()
+            self._button.add_callback(self.shutdown)
+#           self._button.close()
+            self._button = None
 
     def start(self, dummy=None):
         '''
@@ -433,7 +441,7 @@ class KROS(Component, FiniteStateMachine):
         if _route_file:
             from navigate.route_loader import RouteLoader
             from behave.navigator import Navigator
-            _navigator = Component.get_registry().get(Navigator.NAME)
+            _navigator = self._component_registry.get(Navigator.NAME)
             if _navigator is not None:
                 _waypoints = RouteLoader.load(_route_file)
                 _navigator.set_route(_waypoints, is_first_route=True)
@@ -773,6 +781,7 @@ def parse_args(passed_args=None):
     parser.add_argument('--docs',         '-d', action='store_true', help='show the documentation message and exit')
     parser.add_argument('--tests',        '-t', action='store_true', help='execute diagnostic tests prior to starting')
     parser.add_argument('--configure',    '-c', action='store_true', help='run configuration (included by -s)')
+    parser.add_argument('--daemon',       '-D', action='store_true', help='indicates kros was started by krosd')
     parser.add_argument('--start',        '-s', action='store_true', help='start kros')
     parser.add_argument('--motors',       '-m', action='store_true', help='enable motors')
     parser.add_argument('--json',         '-j', action='store_true', help='dump YAML configuration as JSON file')
@@ -781,7 +790,7 @@ def parse_args(passed_args=None):
     parser.add_argument('--subs',         '-S', help='enable subscribers as identified by first character')
     parser.add_argument('--behave',       '-b', help='override behaviour configuration (1, y, yes or true, otherwise false)')
     parser.add_argument('--route',        '-r', help='load initial route from YAML file')
-    parser.add_argument('--config-file',  '-f', help='use alternative configuration file')
+    parser.add_argument('--config-path',  '-f', help='use alternative configuration file path')
     parser.add_argument('--log',          '-L', action='store_true', help='write log to timestamped file')
     parser.add_argument('--level',        '-l', help='specify logging level \'DEBUG\'|\'INFO\'|\'WARN\'|\'ERROR\' (default: \'INFO\')')
 

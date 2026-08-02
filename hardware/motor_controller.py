@@ -74,7 +74,7 @@ class MotorController(Component):
         _cfg = config['kros'].get('motor_controller')
         _i2c_scanner = I2CScanner(config=config, i2c_bus_number=1, i2c_bus=None, level=level)
         # configuration
-        self._verbose        = _cfg.get('verbose')
+        self._verbose        = True #_cfg.get('verbose')
         self._loop_freq_hz   = _cfg.get('loop_freq_hz') # main loop frequency
         self._loop_delay_sec = 1 / self._loop_freq_hz
         self._accel_step     = _cfg.get('accel_step', 0.02)
@@ -402,10 +402,10 @@ class MotorController(Component):
         Remove a behaviour's intent vector lambda.
         '''
         if name in self._intent_vectors:
-            self._log.info('removing intent vector: {}'.format(name))
+            self._log.debug('removing intent vector: {}'.format(name))
             with self._intent_vectors_lock:
                 del self._intent_vectors[name]
-            self._log.info('removed intent vector: {}'.format(name))
+            self._log.debug('removed intent vector: {}'.format(name))
 
     def set_behavior_speed_multiplier(self, behavior_name, multiplier):
         '''

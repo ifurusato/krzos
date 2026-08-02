@@ -235,19 +235,19 @@ class Navigator(AsyncBehaviour):
         _vx    = (_dx * _cos_t - _dy * _sin_t) / _dist
         _vy    = (_dx * _sin_t + _dy * _cos_t) / _dist
         # omega: bearing change needed to face the next waypoint at end of this leg
-        if self._route_index + 1 < len(self._route):
-            _next_wp     = self._route[self._route_index + 1]
-            _next_bear   = atan2(_next_wp.position.x - _wp.position.x,
-                                 _next_wp.position.y - _wp.position.y)
-            _this_bear   = atan2(_dx, _dy)
-            _heading_err = _next_bear - _this_bear
-            while _heading_err > π:
-                _heading_err -= 2.0 * π
-            while _heading_err < -π:
-                _heading_err += 2.0 * π
-            _omega = _heading_err / π
-        else:
-            _omega = 0.0
+#       if self._route_index + 1 < len(self._route):
+#           _next_wp     = self._route[self._route_index + 1]
+#           _next_bear   = atan2(_next_wp.position.x - _wp.position.x,
+#                                _next_wp.position.y - _wp.position.y)
+#           _this_bear   = atan2(_dx, _dy)
+#           _heading_err = _next_bear - _this_bear
+#           while _heading_err > π:
+#               _heading_err -= 2.0 * π
+#           while _heading_err < -π:
+#               _heading_err += 2.0 * π
+#           _omega = _heading_err / π
+#       else:
+        _omega = 0.0
         self._log.info('navigating to waypoint {}: dist={:.1f}mm, vx={:.3f}, vy={:.3f}, omega={:.3f}'.format(
                 self._route_index, _dist, _vx, _vy, _omega))
         await self._movement_controller.run_vector(_dist, (_vx, _vy, _omega))

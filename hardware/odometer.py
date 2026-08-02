@@ -223,8 +223,7 @@ class Odometer(Component):
         self._last_time  = None
         _degrees = degrees(self._theta)
         _rad_pi  = self._theta / π
-        self._log.info(Style.BRIGHT + '🍓 initial pose: ' + Style.NORMAL
-            + Fore.GREEN + 'x={:d}mm; y={:d}mm; theta={:.2f}π ({:.1f}°)'.format(
+        self._log.info('initial pose: ' + Fore.GREEN + 'x={:d}mm; y={:d}mm; theta={:.2f}π ({:.1f}°)'.format(
                 round(x),
                 round(y),
                 _rad_pi,

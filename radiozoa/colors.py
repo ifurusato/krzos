@@ -30,6 +30,13 @@ class Color:
     def rgb(self):
         return self._rgb
 
+    @property
+    def rgbf(self):
+        '''
+        Return RGB values normalized to 0.0-1.0.
+        '''
+        return tuple(v / 255.0 for v in self._rgb)
+
     def __getitem__(self, index):
         return self._rgb[index]
 

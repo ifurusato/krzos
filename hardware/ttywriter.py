@@ -7,7 +7,7 @@
 #
 # author:   Ichiro Furusato
 # created:  2026-03-10
-# modified: 2026-03-10
+# modified: 2026-08-02
 
 import sys
 import re
@@ -19,7 +19,6 @@ init()
 
 from core.component import Component
 from core.logger import Logger, Level
-from hardware.backlight import Backlight
 
 class TtyWriter(Component):
     NAME = 'tty-writer'
@@ -39,18 +38,25 @@ class TtyWriter(Component):
         "RESET":   Style.RESET_ALL
     }
 
-    def __init__(self, tty='/dev/tty1', append=False, level=Level.INFO):
+    def __init__(self, tty='/dev/tty1', append=True, backlight_on=False, level=Level.INFO):
         '''
         Initialize the TtyWriter with the console device.
         '''
         self._log = Logger(TtyWriter.NAME, level=level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
         self._tty = tty
-        self._backlight = Backlight()
         self._mode = 'a' if append else 'w'
         self.clear()
-        self._backlight.on()
+        if backlight_on:
+            self._turn_on_backlight()
         self._log.info('ready.')
+
+    def _turn_on_backlight(self):
+        from hardware.backlight import Backlight
+
+        _backlight = Backlight()
+        _backlight.on()
+#       _backlight.close()
 
     def write(self, text, colorise=False):
         '''
@@ -88,7 +94,6 @@ class TtyWriter(Component):
         self.exec('clear')
 
     def close(self):
-        self._backlight.off()
         super().close()
 
 # ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈

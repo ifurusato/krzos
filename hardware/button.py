@@ -36,10 +36,12 @@ class Button(Component):
     :param name:          the optional button name
     :param level:         the log level
     '''
-    def __init__(self, config, name=None, callback=None, level=Level.INFO):
+    def __init__(self, config=None, name=None, callback=None, level=Level.INFO):
+        if config is None:
+            raise TypeError('no config argument.')
         if name is None:
             name = 'button'
-        _cfg = config['kros'].get('hardware').get('button')
+        _cfg = config['kros']['hardware']['button']
         self._pin = _cfg.get('pin')
         _log_name = 'btn-{}'.format(self._pin) if name is None else name
         self._log = Logger(_log_name, level)
@@ -116,13 +118,10 @@ class Button(Component):
                     self._button.when_released = None
             except Exception as e:
                 self._log.debug('{} raised clearing button callbacks: {}'.format(type(e), e))
-        # delay to let pending callbacks complete
-        time.sleep(0.2)
         try:
             self._button.close()
             if self._button.closed:
                 self._log.debug('closed.')
-            time.sleep(0.2)
         except Exception as f:
             self._log.warning(Fore.CYAN + Style.DIM + "{} raised closing button: {}".format(type(f), f))
         finally:

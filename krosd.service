@@ -1,0 +1,49 @@
+#
+# Copyright 2020-2026 by Murray Altheim. All rights reserved. This file is part
+# of the Robot Operating System project, released under the MIT License. Please
+# see the LICENSE file included as part of this package.
+#
+# author:   Murray Altheim
+# created:  2020-08-01
+# modified: 2026-08-02
+#
+# This krosd service configuration file should be copied to:
+#
+#   /lib/systemd/system/
+#
+# After copying the file you'll need to reload all daemons:
+#
+#   % sudo systemctl daemon-reload
+#
+# and to enable its use upon each startup:
+#
+#   % sudo systemctl enable krosd
+#
+# You can then use it like a service, e.g.,
+#
+#   % sudo systemctl status krosd
+#   % sudo systemctl start krosd
+#   % sudo systemctl stop krosd
+#
+# See: https://www.freedesktop.org/software/systemd/man/systemd.service.html
+# ..............................................................................
+
+[Unit]
+Description=KROS Daemon Service
+After=multi-user.target
+
+[Service]
+WorkingDirectory=/home/pi/workspaces/workspace-krzos/krzos
+User=pi
+Type=simple
+Environment="TERM=xterm-256color"
+ExecStart=/usr/bin/python3 -u /home/pi/workspaces/workspace-krzos/krzos/krosd.py
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

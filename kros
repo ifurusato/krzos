@@ -33,7 +33,9 @@
 #kros.py -s -g
 
 if [ -n "$1" ]; then
+    echo 'starting with route…'
     kros.py -s -m --route "$1"
 else
+    echo 'starting…'
     kros.py -s -m
 fi

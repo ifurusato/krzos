@@ -54,7 +54,7 @@ class Vl53l5cxSensor(Component):
             self._log.info('force loading firmware (skip=False)')
             _skip_init = False
             self._firmware_marker.mark()
-        elif skip is True:  # Explicitly skip
+        elif skip is True:  # explicitly skip
             self._log.info('skipping firmware load (skip=True)')
             _skip_init = True
         else:  # skip is None - use marker auto-detection

@@ -28,10 +28,12 @@ class TinyFxController(I2CMaster, Component):
     def __init__(self, config=None, i2c_address=None, timeset=True, level=Level.INFO):
         self._log = Logger(TinyFxController.NAME, level)
         Component.__init__(self, self._log, suppressed=False, enabled=False)
+        self._off_on_close = False
         if config:
             _cfg = config.get('kros').get('hardware').get('tinyfx-controller')
             _i2c_bus_id  = _cfg.get('i2c_bus_id')
             _i2c_address = _cfg.get('i2c_address')
+            self._off_on_close = _cfg.get('off_on_close')
         else:
             _i2c_bus_id  = TinyFxController.I2C_BUS_ID
             _i2c_address = TinyFxController.I2C_ADDRESS if i2c_address is None else i2c_address
@@ -68,6 +70,7 @@ class TinyFxController(I2CMaster, Component):
         '''
         Turn off all running lights.
         '''
+        self._log.info(Fore.YELLOW + 'off.')
         response = self.send_request('all off')
         self._log.debug('all off response: {}'.format(response))
 
@@ -116,7 +119,8 @@ class TinyFxController(I2CMaster, Component):
         Turn off the running lights and disable the TinyFxController.
         '''
         if self.enabled:
-            self.off()
+            if self._off_on_close:
+                self.off()
             super().disable()
         else:
             self._log.debug('already disabled.')

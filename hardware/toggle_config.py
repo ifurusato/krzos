@@ -37,7 +37,7 @@ class ToggleConfig(Component):
         if config is None:
             raise ValueError('no configuration provided.')
         self._config = config
-        Component.__init__(self, self._log, suppressed=False, enabled=False)
+        Component.__init__(self, self._log, suppressed=False, enabled=True)
         self._level = level
         # config ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
         _ioe_cfg = config.get('kros').get('hardware').get('io_expander')

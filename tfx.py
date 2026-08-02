@@ -20,14 +20,18 @@ def main():
     try:
         tfxc = TinyFxController()
         tfxc.enable()
+        last_user_msg = ''
         while True:
             user_msg = input('Enter command string to send ("quit" to exit): ')
             if user_msg.strip().lower() == 'quit' or user_msg.strip().lower() == 'exit':
                 break
             if len(user_msg) == 0:
                 continue
+            elif user_msg == 'r':
+                user_msg = last_user_msg
             response = tfxc.send_request(user_msg)
             print('response: {}'.format(response))
+            last_user_msg = user_msg
     except KeyboardInterrupt:
         print('Ctrl-C caught, exiting…')
     except Exception as e:
